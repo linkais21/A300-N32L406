@@ -7,10 +7,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* ── RX ring buffer (filled by USART3 RX interrupt) ──────────────────────── */
-static uint8_t           s_rx_buf[EC800M_RX_BUF_SIZE];
-static volatile uint16_t s_rx_wr = 0;   /* write index, advanced in ISR     */
-static uint16_t          s_rx_rd = 0;   /* read index, advanced in main loop */
+/* ── RX ring buffer (filled by DMA2_CH5) ─────────────────────────────────── */
+uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];  /* DMA circular buffer (global, used by hw_init.c) */
+static uint16_t s_rx_rd = 0;   /* read pointer (software-maintained); DMA write pointer is hardware-maintained */
 
 /* Set to 1 to echo every raw byte from the modem to the debug UART.
  * Invaluable for bring-up; set to 0 once the link is confirmed working. */
@@ -42,48 +41,37 @@ static tcp_channel_t s_tcp[EC800M_CH_MAX];
 /* Upper-layer receive callback */
 static ec800m_recv_cb_t s_recv_cb = NULL;
 
-/* ── RX init: enable USART3 RXNE interrupt (same proven path as GPS/debug) ── */
+/* ── RX init: DMA is configured in hw_init.c; only reset the read pointer here ─────────── */
 static void rx_irq_init(void)
 {
-    s_rx_wr = 0;
-    s_rx_rd = 0;
-
-    /* Disable USART3 DMA RX request (was enabled in hw_usart_init) and use IRQ */
-    USART_EnableDMA(EC800M_UART, USART_DMAREQ_RX, DISABLE);
-    USART_ConfigInt(EC800M_UART, USART_INT_RXDNE, ENABLE);
-
-    NVIC_InitType n;
-    n.NVIC_IRQChannel                   = USART3_IRQn;
-    n.NVIC_IRQChannelPreemptionPriority = 1;
-    n.NVIC_IRQChannelSubPriority        = 0;
-    n.NVIC_IRQChannelCmd                = ENABLE;
-    NVIC_Init(&n);
+    s_rx_rd = 0;  /* reset read pointer; DMA write pointer is hardware-maintained */
 }
 
-/* USART3 RX interrupt — store each byte into the ring buffer */
-void UART5_IRQHandler(void)
+/* DMA2_Channel5 RX interrupt — marks half-transfer and transfer-complete events */
+/* ── DMA interrupt handler (DMA_Channel5 for UART5 RX) ───────────────────── */
+void DMA_Channel5_IRQHandler(void)
 {
-    if (USART_GetIntStatus(EC800M_UART, USART_INT_RXDNE)) {
-        uint8_t b = (uint8_t)USART_ReceiveData(EC800M_UART);
-        uint16_t next = (uint16_t)((s_rx_wr + 1) % EC800M_RX_BUF_SIZE);
-        if (next != s_rx_rd) {        /* drop byte if buffer full */
-            s_rx_buf[s_rx_wr] = b;
-            s_rx_wr = next;
-        }
+    /* Half-transfer and transfer-complete interrupts — flag only; data processed in main loop */
+    if (DMA_GetFlagStatus(DMA_FLAG_HT5, DMA) != RESET) {
+        DMA_ClearFlag(DMA_FLAG_HT5, DMA);
+        dbg_printf("[DMA_HT]");  /* half transfer */
     }
-    /* Clear overrun if it occurred (reading STS then DAT clears ORE) */
-    if (USART_GetFlagStatus(EC800M_UART, USART_FLAG_OREF) != RESET) {
-        (void)USART_ReceiveData(EC800M_UART);
+    if (DMA_GetFlagStatus(DMA_FLAG_TC5, DMA) != RESET) {
+        DMA_ClearFlag(DMA_FLAG_TC5, DMA);
+        dbg_printf("[DMA_TC]");  /* transfer complete (wrapped to start of buffer) */
     }
 }
 
 /* ── Low-level send ───────────────────────────────────────────────────────── */
 static void usart_send_str(const char *s)
 {
+    dbg_printf(">> %s\r\n", s);  /* keep send log */
     while (*s) {
         while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXDE) == RESET);
         USART_SendData(EC800M_UART, (uint8_t)*s++);
     }
+    /* wait for transmit complete */
+    while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXC) == RESET);
 }
 
 static void usart_send_buf(const uint8_t *buf, uint16_t len)
@@ -95,10 +83,13 @@ static void usart_send_buf(const uint8_t *buf, uint16_t len)
 }
 
 /* ── Send AT command and wait for response (blocking, timeout ms) ─────────── */
+static uint16_t s_at_resp_len = 0;  /* actual byte count (including \0) */
+
 static bool at_send_wait(const char *cmd, const char *expect,
                           uint32_t timeout_ms)
 {
     memset(s_at_resp, 0, sizeof(s_at_resp));
+    s_at_resp_len = 0;
 
 #if EC800M_RX_ECHO
     if (cmd[0]) dbg_printf(">> %s\r\n", cmd);
@@ -110,18 +101,20 @@ static bool at_send_wait(const char *cmd, const char *expect,
     uint16_t resp_pos = 0;
 
     while ((TICK_MS() - start) < timeout_ms) {
-        /* Keep the watchdog fed during long blocking AT waits */
         IWDG_ReloadKey();
-        /* drain new bytes from the interrupt-filled ring buffer */
+        uint16_t dma_remain = DMA_GetCurrDataCounter(DMA_CH5);
+        uint16_t s_rx_wr = EC800M_RX_BUF_SIZE - dma_remain;
+
         while (s_rx_rd != s_rx_wr) {
-            uint8_t c = s_rx_buf[s_rx_rd];
+            uint8_t c = EC800M_RX_BUF[s_rx_rd];
             s_rx_rd = (uint16_t)((s_rx_rd + 1) % EC800M_RX_BUF_SIZE);
 #if EC800M_RX_ECHO
-            dbg_putchar((char)c);   /* echo raw modem byte to debug UART */
+            dbg_putchar((char)c);
 #endif
             if (resp_pos < AT_RESP_MAX - 1)
                 s_at_resp[resp_pos++] = (char)c;
         }
+        s_at_resp_len = resp_pos;
         s_at_resp[resp_pos] = '\0';
         if (expect[0] && strstr(s_at_resp, expect)) return true;
         if (strstr(s_at_resp, "ERROR")) return false;
@@ -130,19 +123,62 @@ static bool at_send_wait(const char *cmd, const char *expect,
 }
 
 /* ── Power control ────────────────────────────────────────────────────────── */
+
+/* Poll to detect if EC800M is already online; returns true if AT responded */
+static bool ec800m_is_alive(uint32_t timeout_ms)
+{
+    /* flush receive buffer */
+    while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_RXDNE) != RESET)
+        USART_ReceiveData(EC800M_UART);
+
+    const char *cmd = "AT\r\n";
+    for (const char *p = cmd; *p; p++) {
+        while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXDE) == RESET);
+        USART_SendData(EC800M_UART, (uint8_t)*p);
+    }
+    while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXC) == RESET);
+
+    uint32_t t0 = TICK_MS();
+    char buf[16]; uint8_t pos = 0;
+    while (TICK_MS() - t0 < timeout_ms) {
+        IWDG_ReloadKey();
+        if (USART_GetFlagStatus(EC800M_UART, USART_FLAG_RXDNE) != RESET) {
+            char c = (char)USART_ReceiveData(EC800M_UART);
+            if (pos < 15) buf[pos++] = c;
+            buf[pos] = '\0';
+            if (strstr(buf, "OK") || strstr(buf, "AT")) return true;
+        }
+    }
+    return false;
+}
+
 void ec800m_power_on(void)
 {
-    GPIO_SetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);
-    delay_ms(600);
+    /* 1. Ensure VBAT power enable */
+    GPIO_SetBits(EC800M_POWER_EN_PORT, EC800M_POWER_EN_PIN);
+    delay_ms(50);
+
+    /* 2. Check if already online */
+    dbg_printf("[4G] checking if already alive...\r\n");
+    if (ec800m_is_alive(1000)) {
+        dbg_printf("[4G] EC800M already online, skip PWRKEY\r\n");
+        return;
+    }
+
+    /* 3. PA8=LOW → pull PWRKEY low → trigger power-on (direct connection, no inversion) */
+    dbg_printf("[4G] PWRKEY trigger (PA8=LOW, 600ms)...\r\n");
     GPIO_ResetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);
-    delay_ms(2000);
-    dbg_printf("[4G] power on\r\n");
+    delay_ms(600);
+    GPIO_SetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);
+    dbg_printf("[4G] waiting 15s for boot...\r\n");
+    delay_ms(15000);
+    dbg_printf("[4G] power on complete\r\n");
 }
 
 void ec800m_power_off(void)
 {
     at_send_wait("AT+QPOWD=0", "POWERED DOWN", 5000);
-    GPIO_ResetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);
+    GPIO_SetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);  /* PA8=HIGH = idle */
     s_state = EC800M_STATE_OFF;
 }
 
@@ -189,12 +225,21 @@ static void state_machine_init(void)
     }
     case 6: /* read IMEI */
         if (at_send_wait("AT+CGSN", "OK", 2000)) {
-            char *p = strstr(s_at_resp, "\n");
-            if (p) {
-                p++;
-                uint8_t i = 0;
-                while (*p >= '0' && *p <= '9' && i < 15) s_imei[i++] = *p++;
-                s_imei[i] = '\0';
+            /* search directly for 15 consecutive digits, no newline dependency */
+            char *p = s_at_resp;
+            while (*p) {
+                if (*p >= '0' && *p <= '9') {
+                    char *start = p;
+                    uint8_t n = 0;
+                    while (*p >= '0' && *p <= '9') { n++; p++; }
+                    if (n == 15) {
+                        memcpy(s_imei, start, 15);
+                        s_imei[15] = '\0';
+                        break;
+                    }
+                } else {
+                    p++;
+                }
             }
         }
         s_init_step++;
@@ -204,6 +249,8 @@ static void state_machine_init(void)
             char *p = strstr(s_at_resp, "+QCCID: ");
             if (p) {
                 p += 8;
+                /* skip whitespace and non-digit characters */
+                while (*p && (*p < '0' || *p > '9')) p++;
                 uint8_t i = 0;
                 while (*p >= '0' && *p <= '9' && i < 20) s_iccid[i++] = *p++;
                 s_iccid[i] = '\0';
@@ -214,7 +261,7 @@ static void state_machine_init(void)
     case 8:
         s_state = EC800M_STATE_SIM_CHECK;
         s_state_enter_ms = TICK_MS();
-        dbg_printf("[4G] init done, IMEI=%s\r\n", s_imei);
+        dbg_printf("[4G] init done, IMEI=%s ICCID=%s\r\n", s_imei, s_iccid);
         break;
     }
 }
@@ -272,9 +319,24 @@ static void process_urc(const char *line)
 {
     int ch;
     /* +QIOPEN: ch,0  → open success */
-    if (sscanf(line, "+QIOPEN: %d,0", &ch) == 1 && ch < EC800M_CH_MAX) {
-        s_tcp[ch].state = TCP_STATE_OPEN;
-        dbg_printf("[4G] TCP ch%d open\r\n", ch);
+    /* +QIOPEN: ch,err */
+    int qiopen_ch, qiopen_err;
+    if (sscanf(line, "+QIOPEN: %d,%d", &qiopen_ch, &qiopen_err) == 2
+        && qiopen_ch >= 0 && qiopen_ch < EC800M_CH_MAX) {
+        if (qiopen_err == 0) {
+            s_tcp[qiopen_ch].state = TCP_STATE_OPEN;
+            dbg_printf("[4G] TCP ch%d open\r\n", qiopen_ch);
+        } else {
+            dbg_printf("[4G] TCP ch%d err=%d, closing\r\n", qiopen_ch, qiopen_err);
+            char cmd[32];
+            snprintf(cmd, sizeof(cmd), "AT+QICLOSE=%d", qiopen_ch);
+            at_send_wait(cmd, "OK", 3000);
+            /* flush DMA buffer after close to discard any trailing URCs */
+            delay_ms(200);
+            uint16_t dma_remain = DMA_GetCurrDataCounter(DMA_CH5);
+            s_rx_rd = EC800M_RX_BUF_SIZE - dma_remain;
+            s_tcp[qiopen_ch].state = TCP_STATE_CLOSED;
+        }
         return;
     }
     /* +QIURC: "recv",ch */
@@ -282,14 +344,25 @@ static void process_urc(const char *line)
         char cmd[32];
         snprintf(cmd, sizeof(cmd), "AT+QIRD=%d,1200", ch);
         if (at_send_wait(cmd, "+QIRD:", 2000) && s_recv_cb) {
-            char *p = strstr(s_at_resp, "+QIRD: ");
-            if (p) {
-                uint16_t dlen = (uint16_t)atoi(p + 7);
-                p = strstr(p, "\r\n");
-                if (p && dlen > 0)
-                    s_recv_cb((uint8_t)ch, (uint8_t *)(p + 2), dlen);
+            /* locate "+QIRD: " header, parse length, then read that many bytes (supports binary) */
+            char *hdr = strstr(s_at_resp, "+QIRD: ");
+            if (hdr) {
+                uint16_t dlen = (uint16_t)atoi(hdr + 7);
+                char *data_start = strstr(hdr, "\r\n");
+                if (data_start && dlen > 0) {
+                    data_start += 2;
+                    /* use pointer offset instead of strstr to correctly handle binary data */
+                    uint16_t offset = (uint16_t)(data_start - s_at_resp);
+                    if (offset + dlen <= s_at_resp_len)
+                        s_recv_cb((uint8_t)ch, (uint8_t *)data_start, dlen);
+                }
             }
         }
+        /* flush DMA read pointer and line buffer to discard any binary residue */
+        delay_ms(50);
+        uint16_t dma_remain = DMA_GetCurrDataCounter(DMA_CH5);
+        s_rx_rd = EC800M_RX_BUF_SIZE - dma_remain;
+        s_line_len = 0;
         return;
     }
     /* +QIURC: "closed",ch */
@@ -313,8 +386,12 @@ static void process_urc(const char *line)
 /* ── Drain RX ring and process complete lines (URCs) ─────────────────────── */
 static void drain_rx(void)
 {
+    /* DMA mode: calculate write pointer from DMA counter */
+    uint16_t dma_remain = DMA_GetCurrDataCounter(DMA_CH5);
+    uint16_t s_rx_wr = EC800M_RX_BUF_SIZE - dma_remain;
+
     while (s_rx_rd != s_rx_wr) {
-        char c = (char)s_rx_buf[s_rx_rd];
+        char c = (char)EC800M_RX_BUF[s_rx_rd];
         s_rx_rd = (uint16_t)((s_rx_rd + 1) % EC800M_RX_BUF_SIZE);
 
 #if EC800M_RX_ECHO
@@ -388,7 +465,7 @@ int ec800m_tcp_open(uint8_t ch, const char *ip, uint16_t port)
 
     char cmd[128];
     snprintf(cmd, sizeof(cmd),
-             "AT+QIOPEN=1,%d,\"TCP\",\"%s\",%u,0,1", ch, ip, port);
+             "AT+QIOPEN=1,%d,\"TCP\",\"%s\",%u,0,0", ch, ip, port);
     s_tcp[ch].state = TCP_STATE_OPENING;
     strncpy(s_tcp[ch].ip, ip, sizeof(s_tcp[ch].ip)-1);
     s_tcp[ch].port = port;

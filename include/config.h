@@ -8,7 +8,7 @@
 #define FW_MODEL_STR     "T663B"
 
 /* ── System clock ─────────────────────────────────────────────────────────── */
-#define SYS_CLOCK_HZ     64000000UL   /* SYSCLK = 64 MHz (HSI PLL x8) */
+#define SYS_CLOCK_HZ     48000000UL   /* SYSCLK = 48 MHz (原厂配置) */
 #define APB1_CLOCK_HZ    16000000UL   /* APB1 = 16 MHz (DIV4) — USART2/3 */
 #define APB2_CLOCK_HZ    32000000UL   /* APB2 = 32 MHz (DIV2) — USART1, SPI1 */
 
@@ -20,28 +20,32 @@ extern volatile uint32_t g_tick_ms;
  * GPIO PIN ASSIGNMENTS  (N32L406CDL7, LQFP-48)
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── 4G modem EC800M (UART5, not USART3!) ────────────────────────────────── */
-#define EC800M_UART         UART5             /* 改：实际硬件使用 UART5 */
-#define EC800M_UART_CLK     RCC_APB2_PERIPH_UART5  /* ⚠️ UART5 在 APB2 */
+/* ── 4G modem EC800M (UART5 on PB4/PB5) ───────────────────────────────────── */
+#define EC800M_UART         UART5             /* 原理图确认：UART5 (PB4/PB5) ⚠️ */
+#define EC800M_UART_CLK     RCC_APB2_PERIPH_UART5  /* UART5 在 APB2 */
 #define EC800M_BAUD         115200
 
 #define EC800M_TX_PORT      GPIOB
-#define EC800M_TX_PIN       GPIO_PIN_4        /* PB4 UART5_TX → EC800M RXD (AF6) */
+#define EC800M_TX_PIN       GPIO_PIN_4        /* PB4 UART5_TX → EC800M MAIN_RXD */
 #define EC800M_RX_PORT      GPIOB
-#define EC800M_RX_PIN       GPIO_PIN_5        /* PB5 UART5_RX ← EC800M TXD (AF7) */
+#define EC800M_RX_PIN       GPIO_PIN_5        /* PB5 UART5_RX ← EC800M MAIN_TXD */
+
 #define EC800M_PWRKEY_PORT  GPIOA
-#define EC800M_PWRKEY_PIN   GPIO_PIN_8        /* PA8  → EC800M PWRKEY (改：原PA9) */
+#define EC800M_PWRKEY_PIN   GPIO_PIN_8        /* PA8  4G_POWER_KEY (原理图确认) */
 #define EC800M_DTR_PORT     GPIOB
-#define EC800M_DTR_PIN      GPIO_PIN_7        /* PB7 → EC800M DTR (改：原PB13) */
+#define EC800M_DTR_PIN      GPIO_PIN_7        /* PB7 → EC800M DTR (引脚43) */
 
-/* 新增：模组电源使能（PA15=GPRS_POWER_EN，高电平使能） */
+/* 新增：模组电源使能 (PA15，高电平使能) */
 #define EC800M_POWER_EN_PORT  GPIOA
-#define EC800M_POWER_EN_PIN   GPIO_PIN_15
+#define EC800M_POWER_EN_PIN   GPIO_PIN_15     /* PA15 GPRS_POWER_EN (引脚38) */
 
-/* DMA for EC800M RX — UART5_RX → DMA_CH4 (查数据手册确认) */
-#define EC800M_DMA           DMA
-#define EC800M_DMA_CH_RX     DMA_CH4          /* 改：UART5 对应 CH4 */
+/* DMA for EC800M RX — UART5_RX → DMA2_CH5 */
+#define EC800M_DMA           DMA2
+#define EC800M_DMA_CH_RX     DMA2_CH5          /* UART5 对应 DMA2_CH5 */
 #define EC800M_RX_BUF_SIZE   1024
+
+/* 全局DMA接收缓冲区（定义在ec800m.c） */
+extern uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];
 
 /* ── GPS module TAU804M (USART2) ──────────────────────────────────────────── */
 #define GPS_UART             USART2
@@ -68,13 +72,13 @@ extern volatile uint32_t g_tick_ms;
 #define FLASH_SPI            SPI1
 #define FLASH_SPI_CLK        RCC_APB2_PERIPH_SPI1
 #define FLASH_SCK_PORT       GPIOA
-#define FLASH_SCK_PIN        GPIO_PIN_5        /* PA5 SPI1_SCK  (改：原PB3) */
+#define FLASH_SCK_PIN        GPIO_PIN_5        /* PA5 SPI1_SCK */
 #define FLASH_MISO_PORT      GPIOA
-#define FLASH_MISO_PIN       GPIO_PIN_6        /* PA6 SPI1_MISO (改：原PB4) */
+#define FLASH_MISO_PIN       GPIO_PIN_6        /* PA6 SPI1_MISO */
 #define FLASH_MOSI_PORT      GPIOA
-#define FLASH_MOSI_PIN       GPIO_PIN_7        /* PA7 SPI1_MOSI (改：原PB5) */
+#define FLASH_MOSI_PIN       GPIO_PIN_7        /* PA7 SPI1_MOSI */
 #define FLASH_CS_PORT        GPIOA
-#define FLASH_CS_PIN         GPIO_PIN_4        /* PA4 SPI1_NSS  (改：原PA15) */
+#define FLASH_CS_PIN         GPIO_PIN_4        /* PA4 SPI1_CS */
 
 #define FLASH_CS_LOW()   GPIO_ResetBits(FLASH_CS_PORT, FLASH_CS_PIN)
 #define FLASH_CS_HIGH()  GPIO_SetBits(FLASH_CS_PORT, FLASH_CS_PIN)
@@ -107,23 +111,23 @@ extern volatile uint32_t g_tick_ms;
 #define ACC_DET_PORT         GPIOA
 #define ACC_DET_PIN          GPIO_PIN_3        /* PA3  ACC ignition detect */
 #define SOS_PORT             GPIOA
-#define SOS_PIN              GPIO_PIN_4        /* PA4  SOS button (⚠️ 与 FLASH_CS 冲突，待核实) */
-#define DC_UP_PORT           GPIOA
-#define DC_UP_PIN            GPIO_PIN_8        /* PA8  external DC detect (⚠️ 与 EC800M_PWRKEY 冲突) */
+#define SOS_PIN              GPIO_PIN_4        /* PA4  M_SOS button (与 FLASH_CS 共用PA4) */
+#define DC_UP_PORT           GPIOB
+#define DC_UP_PIN            GPIO_PIN_15       /* PB15 DC_UP_EN (引脚28) 充电使能检测 */
 #define RELAY_PORT           GPIOA
-#define RELAY_PIN            GPIO_PIN_10       /* PA10 OIL_CTR relay out   */
+#define RELAY_PIN            GPIO_PIN_11       /* PA11 OIL_CTR relay out (原理图确认) */
 #define LIGHT_INT_PORT       GPIOB
-#define LIGHT_INT_PIN        GPIO_PIN_0        /* PB0  light sensor IRQ    */
-#define GPS_LED_PORT         GPIOD
-#define GPS_LED_PIN          GPIO_PIN_0        /* PD0 GPS status LED (blue) (改：原PB14) */
+#define LIGHT_INT_PIN        GPIO_PIN_0        /* PB0  GUANG_INT light sensor IRQ */
+#define GPS_LED_PORT         GPIOB
+#define GPS_LED_PIN          GPIO_PIN_14       /* PB14 GPS status LED (blue) */
 
 /* RS485 */
 #define RS485_TX_PORT        GPIOB
-#define RS485_TX_PIN         GPIO_PIN_8
+#define RS485_TX_PIN         GPIO_PIN_10       /* PB10 RS485_TX (原理图确认) */
 #define RS485_RX_PORT        GPIOB
-#define RS485_RX_PIN         GPIO_PIN_9
+#define RS485_RX_PIN         GPIO_PIN_11       /* PB11 RS485_RX (原理图确认) */
 #define RS485_CE_PORT        GPIOB
-#define RS485_CE_PIN         GPIO_PIN_12       /* high=TX, low=RX          */
+#define RS485_CE_PIN         GPIO_PIN_12       /* PB12 high=TX, low=RX */
 
 /* ── Watchdog ─────────────────────────────────────────────────────────────── */
 #define IWDG_RELOAD_MS       5000

@@ -1,4 +1,5 @@
 #include "config.h"
+#include "build_version.h"  /* Auto-generated version info */
 #include "hw_init.h"
 #include "debug_uart.h"
 #include "ec800m.h"
@@ -123,7 +124,7 @@ int main(void)
     hw_clock_init();   /* 64 MHz PLL from HSI */
     hw_nvic_init();
     hw_gpio_init();
-    hw_usart_init();   /* USART1=debug(PA9/PA10), USART2=GPS, UART5=EC800M */
+    hw_usart_init();   /* USART1=debug(PA9/PA10), USART2=GPS, UART5=EC800M(PB4/PB5) */
     hw_spi_init();
     hw_i2c_init();
     hw_adc_init();
@@ -135,8 +136,8 @@ int main(void)
     /* ── 2. First log output — confirms UART is alive ────────────────────── */
     dbg_printf("\r\n");
     dbg_printf("========================================\r\n");
-    dbg_printf("  A300-T9 / %s\r\n", FW_VERSION_STR);
-    dbg_printf("  Build: " __DATE__ " " __TIME__ "\r\n");
+    dbg_printf("  A300-T9 / %s\r\n", FW_FULL_VERSION);
+    dbg_printf("  Build: %s\r\n", FW_BUILD_DATE);
     dbg_printf("  DEBUG UART: PA9(TX) PA10(RX) 115200\r\n");
     dbg_printf("========================================\r\n");
 
@@ -189,6 +190,9 @@ int main(void)
     dbg_printf("[INIT] JT808 init  server=%s:%u\r\n",
                c->server_ip, c->server_port);
     jt808_init(&s_terminal);
+    jt808_set_server(c->server_ip, c->server_port, false);
+    jt808_set_server(c->backup_ip[0] ? c->backup_ip : c->server_ip,
+                     c->backup_port  ? c->backup_port : c->server_port, true);
     tcp_manager_init();
 
     /* ── 9. Power manager ────────────────────────────────────────────────── */

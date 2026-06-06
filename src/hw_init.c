@@ -1,6 +1,7 @@
 #include "hw_init.h"
 #include "config.h"
 #include "n32l40x.h"
+#include "debug_uart.h"  /* include debug UART header */
 
 volatile uint32_t g_tick_ms = 0;
 
@@ -31,8 +32,8 @@ static void gpio_out_pp(GPIO_Module *port, uint16_t pin)
     GPIO_InitStruct(&g);
     g.Pin            = pin;
     g.GPIO_Mode      = GPIO_Mode_Out_PP;
-    g.GPIO_Slew_Rate = GPIO_Slew_Rate_Low;
-    g.GPIO_Current   = GPIO_DC_4mA;
+    g.GPIO_Slew_Rate = GPIO_Slew_Rate_High;  /* set to high speed */
+    g.GPIO_Current   = GPIO_DC_12mA;         /* set to max 12mA drive */
     g.GPIO_Pull      = GPIO_No_Pull;
     GPIO_InitPeripheral(port, &g);
 }
@@ -57,16 +58,52 @@ void hw_gpio_init(void)
                              RCC_APB2_PERIPH_AFIO,
                              ENABLE);
 
+    /* ⚠️ Read PA15 initial state (after reset) */
+    uint32_t pmode_before = GPIOA->PMODE;
+    uint32_t pod_before = GPIOA->POD;
+    uint32_t pid_before = GPIOA->PID;
+
     /* Outputs */
+    /* EC800M module power enable (PA15, active high) */
+    /* N32L40x PA15 defaults to GPIO after reset, configure directly */
+    gpio_out_pp(EC800M_POWER_EN_PORT, EC800M_POWER_EN_PIN);
+
+    /* Read state after config */
+    uint32_t pmode_after = GPIOA->PMODE;
+    uint32_t pod_after_cfg = GPIOA->POD;
+    uint32_t pid_after_cfg = GPIOA->PID;
+
+    GPIO_SetBits(EC800M_POWER_EN_PORT, EC800M_POWER_EN_PIN);
+
+    /* Read state after SetBits */
+    uint32_t pod_after_set = GPIOA->POD;
+    uint32_t pid_after_set = GPIOA->PID;
+
+    /* Force delay and re-assert PA15 to ensure it takes effect */
+    for (int i = 0; i < 10; i++) {
+        GPIO_SetBits(EC800M_POWER_EN_PORT, EC800M_POWER_EN_PIN);
+        for (volatile int j = 0; j < 10000; j++);
+    }
+
+    uint32_t pod_final = GPIOA->POD;
+    uint32_t pid_final = GPIOA->PID;
+
+    /* These values are printed in main.c */
+    (void)pmode_before; (void)pod_before; (void)pid_before;
+    (void)pmode_after; (void)pod_after_cfg; (void)pid_after_cfg;
+    (void)pod_after_set; (void)pid_after_set;
+    (void)pod_final; (void)pid_final;
+
+    /* Verify PA15 is actually high (for debugging) */
+    for (volatile int i = 0; i < 100000; i++);  /* Small delay */
+    uint8_t pa15_state = GPIO_ReadOutputDataBit(EC800M_POWER_EN_PORT, EC800M_POWER_EN_PIN);
+    (void)pa15_state;  /* Will check this in debugger or set breakpoint */
+
     gpio_out_pp(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);
-    GPIO_ResetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);
+    GPIO_SetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);  /* PA8=HIGH = PWRKEY idle (direct connection, no inversion) */
 
     gpio_out_pp(EC800M_DTR_PORT, EC800M_DTR_PIN);
     GPIO_ResetBits(EC800M_DTR_PORT, EC800M_DTR_PIN);
-
-    /* EC800M 模组电源使能 (PA15, 高电平使能) */
-    gpio_out_pp(EC800M_POWER_EN_PORT, EC800M_POWER_EN_PIN);
-    GPIO_SetBits(EC800M_POWER_EN_PORT, EC800M_POWER_EN_PIN);
 
     gpio_out_pp(GPS_EN_PORT, GPS_EN_PIN);
     GPIO_ResetBits(GPS_EN_PORT, GPS_EN_PIN);
@@ -111,7 +148,7 @@ static void gpio_af_rx(GPIO_Module *port, uint16_t pin, uint8_t af)
     GPIO_InitType g;
     GPIO_InitStruct(&g);
     g.Pin               = pin;
-    g.GPIO_Mode         = GPIO_Mode_Input;
+    g.GPIO_Mode         = GPIO_Mode_AF_PP;  /* must be AF mode, not plain Input */
     g.GPIO_Slew_Rate    = GPIO_Slew_Rate_High;
     g.GPIO_Current      = GPIO_DC_4mA;
     g.GPIO_Pull         = GPIO_Pull_Up;
@@ -130,7 +167,7 @@ void hw_usart_init(void)
     u.HardwareFlowControl = USART_HFCTRL_NONE;
     u.Mode                = USART_MODE_RX | USART_MODE_TX;
 
-    /* ── USART1 debug (PB10=TX AF4, PA11=RX AF4) ─────────────────────────── */
+    /* ── USART1 debug (PA9=TX AF4, PA10=RX AF4) ──────────────────────────── */
     RCC_EnableAPB2PeriphClk(DBG_UART_CLK, ENABLE);
     gpio_af_tx(DBG_TX_PORT, DBG_TX_PIN, GPIO_AF4_USART1);
     gpio_af_rx(DBG_RX_PORT, DBG_RX_PIN, GPIO_AF4_USART1);
@@ -147,14 +184,43 @@ void hw_usart_init(void)
     USART_ConfigInt(GPS_UART, USART_INT_RXDNE, ENABLE);
     USART_Enable(GPS_UART, ENABLE);
 
-    /* ── UART5 EC800M (PB4=TX AF6, PB5=RX AF7 ⚠️不对称AF) ─────────────────── */
-    RCC_EnableAPB2PeriphClk(EC800M_UART_CLK, ENABLE);  /* UART5 在 APB2 */
-    gpio_af_tx(EC800M_TX_PORT, EC800M_TX_PIN, GPIO_AF6_UART5);  /* PB4 → AF6 */
-    gpio_af_rx(EC800M_RX_PORT, EC800M_RX_PIN, GPIO_AF7_UART5);  /* PB5 → AF7 ⚠️ */
+    /* ── UART5 EC800M (PB4=TX AF6, PB5=RX AF7) ⚠️ asymmetric AF ──────────────────── */
+    RCC_EnableAPB2PeriphClk(EC800M_UART_CLK, ENABLE);  /* UART5 is on APB2 */
+    gpio_af_tx(EC800M_TX_PORT, EC800M_TX_PIN, GPIO_AF6_UART5);  /* PB4 TX=AF6 */
+    gpio_af_rx(EC800M_RX_PORT, EC800M_RX_PIN, GPIO_AF7_UART5);  /* PB5 RX=AF7 */
     u.BaudRate = EC800M_BAUD;
     USART_Init(EC800M_UART, &u);
+
+    /* Configure DMA_Channel5 for UART5 RX (based on vendor firmware) */
+    RCC_EnableAHBPeriphClk(RCC_AHB_PERIPH_DMA, ENABLE);
+
+    /* ⚠️ Critical: configure DMA Remap to map UART5_RX to DMA_CH5 */
+    DMA_RequestRemap(DMA_REMAP_UART5_RX, DMA, DMA_CH5, ENABLE);
+
+    DMA_InitType dma;
+    DMA_DeInit(DMA_CH5);
+    dma.PeriphAddr     = (uint32_t)&(EC800M_UART->DAT);
+    dma.MemAddr        = (uint32_t)EC800M_RX_BUF;
+    dma.Direction      = DMA_DIR_PERIPH_SRC;
+    dma.BufSize        = EC800M_RX_BUF_SIZE;
+    dma.PeriphInc      = DMA_PERIPH_INC_DISABLE;
+    dma.DMA_MemoryInc  = DMA_MEM_INC_ENABLE;
+    dma.PeriphDataSize = DMA_PERIPH_DATA_SIZE_BYTE;
+    dma.MemDataSize    = DMA_MemoryDataSize_Byte;
+    dma.CircularMode   = DMA_MODE_CIRCULAR;
+    dma.Priority       = DMA_PRIORITY_HIGH;
+    dma.Mem2Mem        = DMA_M2M_DISABLE;
+    DMA_Init(DMA_CH5, &dma);
+
+    DMA_ConfigInt(DMA_CH5, DMA_INT_HTX | DMA_INT_TXC, ENABLE);
+    DMA_EnableChannel(DMA_CH5, ENABLE);
+
+    /* Enable UART5 DMA request */
     USART_EnableDMA(EC800M_UART, USART_DMAREQ_RX, ENABLE);
+
     USART_Enable(EC800M_UART, ENABLE);
+
+    dbg_printf("[UART5] DMA mode: DMA_CH5 circular buffer + DMA Remap\r\n");
 }
 
 /* ── SPI1 Flash (PA5=SCK AF5, PA6=MISO AF5, PA7=MOSI AF5, PA4=CS) ──────── */
@@ -306,8 +372,8 @@ void hw_nvic_init(void)
     n.NVIC_IRQChannelSubPriority        = 0;
     NVIC_Init(&n);
 
-    /* UART5 EC800M RX (priority 1) — NVIC enabled here, IRQ body in ec800m.c */
-    n.NVIC_IRQChannel                   = UART5_IRQn;
+    /* DMA Channel5 for UART5 RX (priority 1) — based on vendor firmware */
+    n.NVIC_IRQChannel                   = DMA_Channel5_IRQn;
     n.NVIC_IRQChannelPreemptionPriority = 1;
     n.NVIC_IRQChannelSubPriority        = 0;
     NVIC_Init(&n);

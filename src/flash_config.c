@@ -28,10 +28,10 @@ typedef struct __attribute__((packed)) {
 static device_config_t s_cfg;
 
 const device_config_t k_config_defaults = {
-    .server_ip          = "0.0.0.0",
-    .server_port        = 8898,
-    .backup_ip          = "0.0.0.0",
-    .backup_port        = 8898,
+    .server_ip          = "119.147.205.85",
+    .server_port        = 9999,
+    .backup_ip          = "119.147.205.85",
+    .backup_port        = 9999,
     .heartbeat_s        = 60,
     .report_moving_s    = 30,
     .report_stopped_s   = 60,

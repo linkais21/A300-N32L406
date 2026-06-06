@@ -74,10 +74,10 @@ void pwr_init(void)
                GPIOB_PORT_SOURCE, GPIO_PIN_SOURCE0,
                EXTI_Trigger_Rising, EXTI0_IRQn);
 
-    /* DC_UP (charge detect): PA8 both edges */
+    /* DC_UP (charge detect): PB15 both edges */
     exti_setup(DC_UP_PORT, DC_UP_PIN,
-               GPIOA_PORT_SOURCE, GPIO_PIN_SOURCE8,
-               EXTI_Trigger_Rising_Falling, EXTI9_5_IRQn);
+               GPIOB_PORT_SOURCE, GPIO_PIN_SOURCE15,
+               EXTI_Trigger_Rising_Falling, EXTI15_10_IRQn);
 
     s_state    = PWR_STATE_ACTIVE;
     s_state_ms = TICK_MS();

@@ -126,9 +126,18 @@ static void build_header(frame_t *f, uint16_t msg_id, uint16_t body_len)
 {
     frame_u16(f, msg_id);
     frame_u16(f, body_len & 0x03FF);   /* no fragmentation flag */
-    /* Phone number (BCD, 6 bytes) */
+    /* phone number rule: take last 11 digits of IMEI, left-pad with '0' to form 12 digits */
     uint8_t phone_bcd[6] = {0};
-    bcd_encode(s_term.phone, phone_bcd, 6);
+    char phone[13] = "000000000000";
+    char imei[16] = {0};
+    ec800m_get_imei(imei, sizeof(imei));
+    uint8_t ilen = (uint8_t)strlen(imei);
+    if (ilen >= 11) {
+        phone[0] = '0';
+        strncpy(phone + 1, imei + ilen - 11, 11);
+        phone[12] = '\0';
+    }
+    bcd_encode(phone, phone_bcd, 6);
     frame_bytes(f, phone_bcd, 6);
     frame_u16(f, ++s_msg_sn);
 }
@@ -367,13 +376,13 @@ void jt808_process(void)
 
     uint32_t now = TICK_MS();
 
-    /* Ensure primary TCP channel is open */
-    if (ec800m_tcp_state(TCP_CH_MAIN) == TCP_STATE_CLOSED) {
-        if (ec800m_tcp_open(TCP_CH_MAIN, s_cfg.server_ip, s_cfg.server_port) == 0)
-            s_reg = REG_STATE_REGISTERING;
+    /* TCP connection is managed by tcp_manager; wait for it to be open */
+    if (ec800m_tcp_state(TCP_CH_MAIN) != TCP_STATE_OPEN) {
+        /* reset reg state when connection drops so we re-register on reconnect */
+        if (s_reg == REG_STATE_ONLINE || s_reg == REG_STATE_AUTHENTICATING)
+            s_reg = REG_STATE_IDLE;
         return;
     }
-    if (ec800m_tcp_state(TCP_CH_MAIN) == TCP_STATE_OPENING) return;
 
     /* Registration flow */
     if (s_reg == REG_STATE_IDLE || s_reg == REG_STATE_REGISTERING) {
