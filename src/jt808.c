@@ -211,8 +211,8 @@ int jt808_send_location(void)
     uint16_t heading = (uint16_t)g->heading;
     uint16_t alt     = (uint16_t)g->altitude_m;
 
-    /* 强制字段(28字节) + 附加项0x30卫星颗数(3字节) */
-    uint8_t body[31];
+    /* 强制字段(28字节) + 附加项0x31卫星颗数(3字节) + 附加项0x30信号强度(3字节) */
+    uint8_t body[34];
     uint16_t p = 0;
     body[p++]=(alm>>24); body[p++]=(alm>>16); body[p++]=(alm>>8); body[p++]=alm;
     body[p++]=(status>>24); body[p++]=(status>>16); body[p++]=(status>>8); body[p++]=status;
@@ -249,6 +249,10 @@ int jt808_send_location(void)
     body[p++] = 0x31;
     body[p++] = 0x01;
     body[p++] = g->satellites;
+    /* 附加信息项 0x30: 无线通信网络信号强度(1字节) — CSQ值 */
+    body[p++] = 0x30;
+    body[p++] = 0x01;
+    body[p++] = (uint8_t)ec800m_get_csq();
 
     build_header(&f, MSG_LOCATION_REPORT, p);
     frame_bytes(&f, body, p);
