@@ -14,6 +14,10 @@ static char      s_nmea_buf[NMEA_BUF_SIZE];
 static uint8_t   s_nmea_pos = 0;
 static gps_data_t s_gps = {0};
 
+/* Print buffer: ISR copies one sentence here, main loop outputs it */
+static char    s_print_buf[NMEA_BUF_SIZE];
+static bool    s_print_ready = false;
+
 /* ── Helper: split NMEA sentence into fields ──────────────────────────────── */
 static uint8_t nmea_split(char *sentence, char **fields, uint8_t max_fields)
 {
@@ -61,7 +65,8 @@ static void parse_gga(char *s)
     s_gps.fix_quality = (uint8_t)atoi(f[6]);
     s_gps.satellites  = (uint8_t)atoi(f[7]);
     s_gps.hdop        = (float)atof(f[8]);
-    s_gps.altitude_m  = (float)atof(f[9]);
+    s_gps.altitude_m  = (float)atof(f[9]);   /* antenna height above MSL */
+    if (n >= 12) s_gps.geoid_sep_m = (float)atof(f[11]); /* geoid separation */
 
     if (s_gps.fix_quality == 0) return;
 
@@ -128,7 +133,7 @@ static void dispatch_nmea(char *sentence)
     /* GSV, GSA etc. can be added later */
 }
 
-/* ── Called from USART2 RX interrupt ─────────────────────────────────────── */
+/* ── Called from UART4 RX interrupt ──────────────────────────────────────── */
 void gps_rx_isr(uint8_t byte)
 {
     if (byte == '$') {
@@ -139,17 +144,28 @@ void gps_rx_isr(uint8_t byte)
     }
     if (byte == '\n' && s_nmea_pos > 4) {
         s_nmea_buf[s_nmea_pos] = '\0';
+        /* copy to print buffer BEFORE dispatch_nmea (which inserts \0 into buffer) */
+        if (!s_print_ready) {
+            const char *type = s_nmea_buf + 3;
+            if (strncmp(type, "GSV,", 4) != 0 && strncmp(type, "GSA,", 4) != 0) {
+                memcpy(s_print_buf, s_nmea_buf, s_nmea_pos + 1);
+                s_print_ready = true;
+            }
+        }
         dispatch_nmea(s_nmea_buf);
         s_nmea_pos = 0;
     }
 }
 
-/* USART2 IRQ handler */
-void USART2_IRQHandler(void)
+/* UART4 IRQ handler */
+void UART4_IRQHandler(void)
 {
-    if (USART_GetIntStatus(USART2, USART_INT_RXDNE)) {
-        uint8_t b = (uint8_t)USART_ReceiveData(USART2);
+    if (USART_GetIntStatus(GPS_UART, USART_INT_RXDNE)) {
+        uint8_t b = (uint8_t)USART_ReceiveData(GPS_UART);
         gps_rx_isr(b);
+    }
+    if (USART_GetFlagStatus(GPS_UART, USART_FLAG_OREF)) {
+        USART_ReceiveData(GPS_UART);
     }
 }
 
@@ -165,16 +181,43 @@ void gps_init(void)
 
 void gps_enable(bool en)
 {
+    GPIO_InitType g;
+    GPIO_InitStruct(&g);
+    g.Pin            = GPS_EN_PIN;
+    g.GPIO_Slew_Rate = GPIO_Slew_Rate_High;
+    g.GPIO_Current   = GPIO_DC_4mA;
+
     if (en) {
+        /* Drive HIGH as GPIO_PP to charge LDO EN input */
+        g.GPIO_Mode = GPIO_Mode_Out_PP;
+        g.GPIO_Pull = GPIO_No_Pull;
+        GPIO_InitPeripheral(GPS_EN_PORT, &g);
         GPIO_SetBits(GPS_EN_PORT, GPS_EN_PIN);
+        delay_ms(10);
+        /* Switch back to I2C1_SCL (AF_OD + R17 4.7K pull-up holds SCL HIGH
+         * during idle → LDO EN stays HIGH → GPS_VCC stays on) */
+        g.GPIO_Mode      = GPIO_Mode_AF_OD;
+        g.GPIO_Pull      = GPIO_Pull_Up;
+        g.GPIO_Alternate = GPIO_AF4_I2C1;
+        GPIO_InitPeripheral(GPS_EN_PORT, &g);
         delay_ms(100);
     } else {
+        /* Drive LOW to cut LDO power */
+        g.GPIO_Mode = GPIO_Mode_Out_PP;
+        g.GPIO_Pull = GPIO_No_Pull;
+        GPIO_InitPeripheral(GPS_EN_PORT, &g);
         GPIO_ResetBits(GPS_EN_PORT, GPS_EN_PIN);
     }
 }
 
 void gps_process(void)
 {
+    /* print one pending NMEA sentence per loop tick (safe, outside ISR) */
+    if (s_print_ready) {
+        dbg_puts(s_print_buf);
+        s_print_ready = false;
+    }
+
     /* If no update in 5 s → invalid */
     if (s_gps.valid && (TICK_MS() - s_gps.last_update_ms) > 5000)
         s_gps.valid = false;

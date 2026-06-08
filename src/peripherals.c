@@ -9,14 +9,9 @@
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * RS485
- * PB8=TX, PB9=RX, PB12=CE (high=TX, low=RX)
- * Uses USART1 remapped — NOTE: in full project USART1 is debug UART.
- * RS485 shares PB8/PB9 with RS232.  This implementation uses
- * GPIO bit-bang for RS485 or a separate peripheral assignment.
- * For now we implement over USART1 with GPIO direction control.
+ * Hardware RS485 is PB10/PB11/PB12 per CLAUDE.md. Do not use USART1 here:
+ * USART1 is reserved for the debug log on PA9/PA10.
  * ═══════════════════════════════════════════════════════════════════════════ */
-
-#define RS485_USART    USART1   /* remapped: PB8=TX, PB9=RX */
 
 static uint8_t s_rs485_rx_buf[256];
 static uint16_t s_rs485_rx_len = 0;
@@ -26,25 +21,15 @@ void rs485_init(uint32_t baud)
     /* CE pin already configured as output in hw_gpio_init */
     GPIO_ResetBits(RS485_CE_PORT, RS485_CE_PIN);  /* default receive */
 
-    /* Re-init USART1 for RS485 if needed */
-    (void)baud;  /* baud already set in hw_usart_init; can reconfigure here */
+    (void)baud;  /* RS485 UART is not enabled in this firmware yet. */
     s_rs485_rx_len = 0;
 }
 
 void rs485_send(const uint8_t *data, uint16_t len)
 {
-    GPIO_SetBits(RS485_CE_PORT, RS485_CE_PIN);   /* TX direction */
-    delay_us(10);
-
-    for (uint16_t i = 0; i < len; i++) {
-        while (USART_GetFlagStatus(RS485_USART, USART_FLAG_TXDE) == RESET);
-        USART_SendData(RS485_USART, data[i]);
-    }
-    /* Wait for last byte to finish transmitting */
-    while (USART_GetFlagStatus(RS485_USART, USART_FLAG_TXC) == RESET);
-    delay_us(10);
-
-    GPIO_ResetBits(RS485_CE_PORT, RS485_CE_PIN); /* back to RX */
+    (void)data;
+    (void)len;
+    dbg_printf("[RS485] disabled: USART1 reserved for debug\r\n");
 }
 
 uint16_t rs485_recv(uint8_t *buf, uint16_t max_len)

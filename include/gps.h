@@ -9,7 +9,8 @@ typedef struct {
     double   lon;           /* degrees, positive=E */
     float    speed_kmh;
     float    heading;       /* degrees true */
-    float    altitude_m;
+    float    altitude_m;    /* GGA f[9]: antenna height above MSL, metres */
+    float    geoid_sep_m;   /* GGA f[11]: geoid separation, metres */
     uint8_t  fix_quality;   /* 0=invalid 1=GPS 2=DGPS 4=RTK */
     uint8_t  satellites;
     float    hdop;
@@ -29,7 +30,7 @@ void gps_process(void);             /* call from main loop  */
 bool gps_is_valid(void);
 const gps_data_t *gps_get_data(void);
 
-/* Called from USART2_IRQHandler */
+/* Called from UART4_IRQHandler */
 void gps_rx_isr(uint8_t byte);
 
 /* Send CASIC command to GPS module */

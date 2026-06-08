@@ -22,11 +22,13 @@
 #define MSG_SET_POLYGON_AREA        0x8604
 #define MSG_PLATFORM_GENERAL_RESP   0x8001
 
-/* Location status flags (word 1) */
+/* Location status flags (word 1) — 808-2013 Table 4
+ * bit2: 0=East lon, 1=West lon
+ * bit3: 0=North lat, 1=South lat */
 #define LOC_FLAG_ACC_ON     (1u << 0)
 #define LOC_FLAG_GPS_FIXED  (1u << 1)
-#define LOC_FLAG_EAST_LON   (1u << 2)
-#define LOC_FLAG_NORTH_LAT  (1u << 3)
+#define LOC_FLAG_WEST_LON   (1u << 2)   /* 0=East(默认), 1=West */
+#define LOC_FLAG_SOUTH_LAT  (1u << 3)   /* 0=North(默认), 1=South */
 #define LOC_FLAG_OPERATING  (1u << 4)
 #define LOC_FLAG_ENCRYPTED  (1u << 5)
 

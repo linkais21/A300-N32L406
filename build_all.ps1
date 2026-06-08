@@ -9,7 +9,7 @@ $SDK = "sdk/Nations.N32L40x_Library.2.2.0/firmware"
 # Auto-generate build_version.h with current timestamp
 $now        = Get-Date
 $buildNum   = $now.ToString("yyyyMMdd_HHmmss")
-$buildDate  = $now.ToString("MMM dd yyyy - HH:mm:ss")
+$buildDate  = $now.ToString("yyyy-MM-dd HH:mm:ss")
 $fullVer    = "T663B_B409_$buildNum"
 
 @"
@@ -25,7 +25,7 @@ $fullVer    = "T663B_B409_$buildNum"
 
 Write-Host "Version: $fullVer"
 
-$CFLAGS = "-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -O2 -g3 -Wall -Wextra -ffunction-sections -fdata-sections -Iinclude -I$SDK/CMSIS/core -I$SDK/CMSIS/device -I$SDK/n32l40x_std_periph_driver/inc -DUSE_STDPERIPH_DRIVER -DN32L40X -DSYSCLK_SRC=3 -DSYSCLK_FREQ=48000000 -std=c99"
+$CFLAGS = "-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -O2 -g3 -Wall -Wextra -ffunction-sections -fdata-sections -Iinclude -I$SDK/CMSIS/core -I$SDK/CMSIS/device -I$SDK/n32l40x_std_periph_driver/inc -DUSE_STDPERIPH_DRIVER -DN32L40X -DSYSCLK_SRC=3 -DSYSCLK_FREQ=64000000 -std=c99"
 
 $sources = @(
     "src/main.c",
@@ -73,8 +73,8 @@ foreach ($src in $sources) {
         New-Item -ItemType Directory -Path $objDir -Force | Out-Null
     }
 
-    # main.c is always rebuilt to pick up the freshly generated build_version.h
-    $forceRebuild = ($src -eq "src/main.c")
+    # Rebuild every object to avoid stale or mixed-flag objects in firmware.
+    $forceRebuild = $true
 
     if ($forceRebuild -or -not (Test-Path $obj)) {
         Write-Host "Compiling $src..."

@@ -8,7 +8,7 @@
 #define FW_MODEL_STR     "T663B"
 
 /* ── System clock ─────────────────────────────────────────────────────────── */
-#define SYS_CLOCK_HZ     48000000UL   /* SYSCLK = 48 MHz (原厂配置) */
+#define SYS_CLOCK_HZ     64000000UL   /* SYSCLK = 64 MHz (HSI PLL, SDK-supported) */
 #define APB1_CLOCK_HZ    16000000UL   /* APB1 = 16 MHz (DIV4) — USART2/3 */
 #define APB2_CLOCK_HZ    32000000UL   /* APB2 = 32 MHz (DIV2) — USART1, SPI1 */
 
@@ -47,15 +47,16 @@ extern volatile uint32_t g_tick_ms;
 /* 全局DMA接收缓冲区（定义在ec800m.c） */
 extern uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];
 
-/* ── GPS module TAU804M (USART2) ──────────────────────────────────────────── */
-#define GPS_UART             USART2
-#define GPS_UART_CLK         RCC_APB1_PERIPH_USART2
-#define GPS_BAUD             9600
+/* ── GPS module TAU804M (UART4 on PB0/PB1) ───────────────────────────────── */
+#define GPS_UART             UART4
+#define GPS_UART_CLK         RCC_APB2_PERIPH_UART4   /* UART4 on APB2 */
+#define GPS_UART_IRQn        UART4_IRQn
+#define GPS_BAUD             115200
 
-#define GPS_TX_PORT          GPIOA
-#define GPS_TX_PIN           GPIO_PIN_2        /* PA2 USART2_TX → GPS RX */
-#define GPS_RX_PORT          GPIOA
-#define GPS_RX_PIN           GPIO_PIN_3        /* PA3 USART2_RX ← GPS TX */
+#define GPS_TX_PORT          GPIOB
+#define GPS_TX_PIN           GPIO_PIN_0        /* PB0 UART4_TX → GPS RX */
+#define GPS_RX_PORT          GPIOB
+#define GPS_RX_PIN           GPIO_PIN_1        /* PB1 UART4_RX ← GPS TX (MCU pin 19) */
 #define GPS_EN_PORT          GPIOB
 #define GPS_EN_PIN           GPIO_PIN_6        /* PB6 high = GPS LDO enable */
 
@@ -118,8 +119,8 @@ extern uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];
 #define RELAY_PIN            GPIO_PIN_11       /* PA11 OIL_CTR relay out (原理图确认) */
 #define LIGHT_INT_PORT       GPIOB
 #define LIGHT_INT_PIN        GPIO_PIN_0        /* PB0  GUANG_INT light sensor IRQ */
-#define GPS_LED_PORT         GPIOB
-#define GPS_LED_PIN          GPIO_PIN_14       /* PB14 GPS status LED (blue) */
+#define GPS_LED_PORT         GPIOD
+#define GPS_LED_PIN          GPIO_PIN_0        /* PD0 GPS status LED (blue) — 原理图确认 2026-06-05 */
 
 /* RS485 */
 #define RS485_TX_PORT        GPIOB

@@ -175,10 +175,10 @@ void hw_usart_init(void)
     USART_Init(DBG_UART, &u);
     USART_Enable(DBG_UART, ENABLE);
 
-    /* ── USART2 GPS (PA2=TX AF4, PA3=RX AF4) ─────────────────────────────── */
-    RCC_EnableAPB1PeriphClk(GPS_UART_CLK, ENABLE);
-    gpio_af_tx(GPS_TX_PORT, GPS_TX_PIN, GPIO_AF4_USART2);
-    gpio_af_rx(GPS_RX_PORT, GPS_RX_PIN, GPIO_AF4_USART2);
+    /* ── UART4 GPS (PB0=TX AF6, PB1=RX AF6) ────────────────────────────────── */
+    RCC_EnableAPB2PeriphClk(GPS_UART_CLK, ENABLE);   /* UART4 on APB2 */
+    gpio_af_tx(GPS_TX_PORT, GPS_TX_PIN, GPIO_AF6_UART4);
+    gpio_af_rx(GPS_RX_PORT, GPS_RX_PIN, GPIO_AF6_UART4);
     u.BaudRate = GPS_BAUD;
     USART_Init(GPS_UART, &u);
     USART_ConfigInt(GPS_UART, USART_INT_RXDNE, ENABLE);
@@ -219,8 +219,6 @@ void hw_usart_init(void)
     USART_EnableDMA(EC800M_UART, USART_DMAREQ_RX, ENABLE);
 
     USART_Enable(EC800M_UART, ENABLE);
-
-    dbg_printf("[UART5] DMA mode: DMA_CH5 circular buffer + DMA Remap\r\n");
 }
 
 /* ── SPI1 Flash (PA5=SCK AF5, PA6=MISO AF5, PA7=MOSI AF5, PA4=CS) ──────── */
@@ -366,8 +364,8 @@ void hw_nvic_init(void)
     NVIC_InitType n;
     n.NVIC_IRQChannelCmd = ENABLE;
 
-    /* USART2 GPS RX (priority 1) */
-    n.NVIC_IRQChannel                   = USART2_IRQn;
+    /* UART4 GPS RX (priority 1) */
+    n.NVIC_IRQChannel                   = UART4_IRQn;
     n.NVIC_IRQChannelPreemptionPriority = 1;
     n.NVIC_IRQChannelSubPriority        = 0;
     NVIC_Init(&n);

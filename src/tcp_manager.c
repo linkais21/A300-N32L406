@@ -52,7 +52,7 @@ static void start_connect(void)
         ch   = TCP_CH_BACKUP;
     }
 
-    dbg_printf("[TCP] connecting ch%u → %s:%u\r\n", ch, ip, port);
+    dbg_printf("[TCP] connecting ch%u -> %s:%u\r\n", ch, ip, port);
     ec800m_tcp_open(ch, ip, port);
     s_active_ch  = ch;
     s_state      = TM_STATE_CONNECTING;

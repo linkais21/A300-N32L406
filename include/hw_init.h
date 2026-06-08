@@ -5,7 +5,7 @@
 
 void hw_clock_init(void);    /* 64 MHz via HSI PLL */
 void hw_gpio_init(void);
-void hw_usart_init(void);    /* USART1(debug) USART2(GPS) USART3(EC800M) */
+void hw_usart_init(void);    /* USART1(debug/PA9/PA10) USART2(GPS/PA2/PA3) UART5(EC800M/PB4/PB5) */
 void hw_spi_init(void);      /* SPI1 for BY25Q16 flash */
 void hw_i2c_init(void);      /* I2C1 for DA218E + N32S003 */
 void hw_adc_init(void);      /* ADC1 ch1(car) ch2(bat) */

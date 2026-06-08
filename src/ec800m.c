@@ -13,7 +13,7 @@ static uint16_t s_rx_rd = 0;   /* read pointer (software-maintained); DMA write 
 
 /* Set to 1 to echo every raw byte from the modem to the debug UART.
  * Invaluable for bring-up; set to 0 once the link is confirmed working. */
-#define EC800M_RX_ECHO  1
+#define EC800M_RX_ECHO  0
 
 /* Line accumulation for AT response parsing */
 #define AT_LINE_MAX  256
@@ -54,23 +54,19 @@ void DMA_Channel5_IRQHandler(void)
     /* Half-transfer and transfer-complete interrupts — flag only; data processed in main loop */
     if (DMA_GetFlagStatus(DMA_FLAG_HT5, DMA) != RESET) {
         DMA_ClearFlag(DMA_FLAG_HT5, DMA);
-        dbg_printf("[DMA_HT]");  /* half transfer */
     }
     if (DMA_GetFlagStatus(DMA_FLAG_TC5, DMA) != RESET) {
         DMA_ClearFlag(DMA_FLAG_TC5, DMA);
-        dbg_printf("[DMA_TC]");  /* transfer complete (wrapped to start of buffer) */
     }
 }
 
 /* ── Low-level send ───────────────────────────────────────────────────────── */
 static void usart_send_str(const char *s)
 {
-    dbg_printf(">> %s\r\n", s);  /* keep send log */
     while (*s) {
         while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXDE) == RESET);
         USART_SendData(EC800M_UART, (uint8_t)*s++);
     }
-    /* wait for transmit complete */
     while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXC) == RESET);
 }
 
@@ -94,8 +90,10 @@ static bool at_send_wait(const char *cmd, const char *expect,
 #if EC800M_RX_ECHO
     if (cmd[0]) dbg_printf(">> %s\r\n", cmd);
 #endif
-    usart_send_str(cmd);
-    usart_send_str("\r\n");
+    if (cmd[0]) {
+        usart_send_str(cmd);
+        usart_send_str("\r\n");
+    }
 
     uint32_t start = TICK_MS();
     uint16_t resp_pos = 0;
@@ -159,20 +157,15 @@ void ec800m_power_on(void)
     delay_ms(50);
 
     /* 2. Check if already online */
-    dbg_printf("[4G] checking if already alive...\r\n");
     if (ec800m_is_alive(1000)) {
-        dbg_printf("[4G] EC800M already online, skip PWRKEY\r\n");
         return;
     }
 
-    /* 3. PA8=LOW → pull PWRKEY low → trigger power-on (direct connection, no inversion) */
-    dbg_printf("[4G] PWRKEY trigger (PA8=LOW, 600ms)...\r\n");
+    /* 3. PA8=LOW → pull PWRKEY low → trigger power-on */
     GPIO_ResetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);
     delay_ms(600);
     GPIO_SetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);
-    dbg_printf("[4G] waiting 15s for boot...\r\n");
     delay_ms(15000);
-    dbg_printf("[4G] power on complete\r\n");
 }
 
 void ec800m_power_off(void)
@@ -209,10 +202,8 @@ static void state_machine_init(void)
     case 0: /* basic AT test */
         ok = at_send_wait("AT", "OK", 1000);
         if (!ok) {
-            if (TICK_MS() - s_state_enter_ms > 15000) {
-                dbg_printf("[4G] no AT response, reset\r\n");
+            if (TICK_MS() - s_state_enter_ms > 15000)
                 ec800m_reset();
-            }
             return;
         }
         s_init_step++;
@@ -261,7 +252,7 @@ static void state_machine_init(void)
     case 8:
         s_state = EC800M_STATE_SIM_CHECK;
         s_state_enter_ms = TICK_MS();
-        dbg_printf("[4G] init done, IMEI=%s ICCID=%s\r\n", s_imei, s_iccid);
+        dbg_printf("[4G] IMEI=%s ICCID=%s\r\n", s_imei, s_iccid);
         break;
     }
 }
@@ -272,7 +263,6 @@ static void state_machine_sim(void)
         s_state = EC800M_STATE_NETWORK_REG;
         s_state_enter_ms = TICK_MS();
     } else if (TICK_MS() - s_state_enter_ms > 30000) {
-        dbg_printf("[4G] no SIM card\r\n");
         s_state = EC800M_STATE_ERROR;
     }
 }
@@ -292,9 +282,7 @@ static void state_machine_netreg(void)
     if (reg) {
         s_state = EC800M_STATE_PDP_ACTIVE;
         s_state_enter_ms = TICK_MS();
-        dbg_printf("[4G] network registered\r\n");
     } else if (TICK_MS() - s_state_enter_ms > 60000) {
-        dbg_printf("[4G] network reg timeout, reset\r\n");
         ec800m_reset();
     }
 }
@@ -306,9 +294,8 @@ static void state_machine_pdp(void)
     if (at_send_wait("AT+QIACT?", "+QIACT:", 3000)) {
         s_state = EC800M_STATE_READY;
         s_state_enter_ms = TICK_MS();
-        dbg_printf("[4G] PDP active, ready\r\n");
+        dbg_printf("[4G] ready\r\n");
     } else if (TICK_MS() - s_state_enter_ms > 30000) {
-        dbg_printf("[4G] PDP fail\r\n");
         s_state = EC800M_STATE_NETWORK_REG;
         s_state_enter_ms = TICK_MS();
     }
@@ -325,9 +312,7 @@ static void process_urc(const char *line)
         && qiopen_ch >= 0 && qiopen_ch < EC800M_CH_MAX) {
         if (qiopen_err == 0) {
             s_tcp[qiopen_ch].state = TCP_STATE_OPEN;
-            dbg_printf("[4G] TCP ch%d open\r\n", qiopen_ch);
         } else {
-            dbg_printf("[4G] TCP ch%d err=%d, closing\r\n", qiopen_ch, qiopen_err);
             char cmd[32];
             snprintf(cmd, sizeof(cmd), "AT+QICLOSE=%d", qiopen_ch);
             at_send_wait(cmd, "OK", 3000);
@@ -368,12 +353,10 @@ static void process_urc(const char *line)
     /* +QIURC: "closed",ch */
     if (sscanf(line, "+QIURC: \"closed\",%d", &ch) == 1 && ch < EC800M_CH_MAX) {
         s_tcp[ch].state = TCP_STATE_CLOSED;
-        dbg_printf("[4G] TCP ch%d closed\r\n", ch);
         return;
     }
     /* +QIURC: "pdpdeact",1 */
     if (strstr(line, "+QIURC: \"pdpdeact\"")) {
-        dbg_printf("[4G] PDP deact, re-register\r\n");
         s_state = EC800M_STATE_NETWORK_REG;
         s_state_enter_ms = TICK_MS();
         for (int i = 0; i < EC800M_CH_MAX; i++)

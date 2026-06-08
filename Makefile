@@ -22,11 +22,19 @@ C_SRCS := \
     src/ec800m.c         \
     src/gps.c            \
     src/jt808.c          \
+    src/jt808_params.c   \
     src/at_config.c      \
     src/adc_monitor.c    \
     src/spi_flash.c      \
     src/i2c_accel.c      \
     src/relay.c          \
+    src/flash_config.c   \
+    src/fota.c           \
+    src/geofence.c       \
+    src/mileage.c        \
+    src/peripherals.c    \
+    src/power_mgr.c      \
+    src/tcp_manager.c    \
     $(SDK)/CMSIS/device/system_n32l40x.c \
     $(SDK)/n32l40x_std_periph_driver/src/n32l40x_gpio.c   \
     $(SDK)/n32l40x_std_periph_driver/src/n32l40x_rcc.c    \

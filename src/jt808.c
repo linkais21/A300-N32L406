@@ -8,6 +8,8 @@
 #include "hw_init.h"
 #include "debug_uart.h"
 #include "relay.h"
+#include "flash_config.h"
+#include "tcp_manager.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -145,10 +147,11 @@ static void build_header(frame_t *f, uint16_t msg_id, uint16_t body_len)
 /* ── Message builders ─────────────────────────────────────────────────────── */
 int jt808_send_register(void)
 {
-    /* body: province(2)+city(2)+manuf(5)+model(8)+term_id(7)+color(1)+plate */
-    uint8_t model[8] = {0}, tid[7] = {0};
+    /* body: province(2)+city(2)+manuf(5)+model(20)+term_id(7)+color(1)+plate
+     * 808-2013 Table 7: 终端型号 BYTE[20], 终端ID BYTE[7] */
+    uint8_t model[20] = {0}, tid[7] = {0};
     memcpy(model, s_term.terminal_model,
-           strlen(s_term.terminal_model) < 8 ? strlen(s_term.terminal_model) : 8);
+           strlen(s_term.terminal_model) < 20 ? strlen(s_term.terminal_model) : 20);
     memcpy(tid,   s_term.terminal_id,
            strlen(s_term.terminal_id)    < 7 ? strlen(s_term.terminal_id)    : 7);
 
@@ -157,7 +160,7 @@ int jt808_send_register(void)
     body[pos++] = 0x00; body[pos++] = 0x01;   /* province */
     body[pos++] = 0x00; body[pos++] = 0x01;   /* city     */
     memcpy(&body[pos], s_term.manufacturer_id, 5); pos += 5;
-    memcpy(&body[pos], model, 8);              pos += 8;
+    memcpy(&body[pos], model, 20);             pos += 20;
     memcpy(&body[pos], tid,   7);              pos += 7;
     body[pos++] = s_term.color;
     /* plate number GBK; write ASCII for now */
@@ -192,11 +195,14 @@ int jt808_send_location(void)
     uint32_t alm = s_alarm_flags;
     uint32_t status = 0;
 
-    if (g->lat >= 0) status |= LOC_FLAG_NORTH_LAT;
-    if (g->lon >= 0) status |= LOC_FLAG_EAST_LON;
+    /* ACC状态：PA3 高电平=ACC ON */
+    if (GPIO_ReadInputDataBit(ACC_DET_PORT, ACC_DET_PIN) != Bit_RESET)
+        status |= LOC_FLAG_ACC_ON;
+    /* 808-2013: bit2=1表示西经(默认东经不置位), bit3=1表示南纬(默认北纬不置位) */
+    if (g->lon < 0) status |= LOC_FLAG_WEST_LON;
+    if (g->lat < 0) status |= LOC_FLAG_SOUTH_LAT;
     if (g->fix_quality > 0) status |= LOC_FLAG_GPS_FIXED;
 
-    /* Body: alarm(4)+status(4)+lat(4)+lon(4)+altitude(2)+speed(2)+heading(2)+time(6BCD) */
     frame_t f; frame_init(&f);
 
     uint32_t lat_deg = (uint32_t)(fabs(g->lat) * 1e6);
@@ -205,7 +211,8 @@ int jt808_send_location(void)
     uint16_t heading = (uint16_t)g->heading;
     uint16_t alt     = (uint16_t)g->altitude_m;
 
-    uint8_t body[28];
+    /* 强制字段(28字节) + 附加项0x30卫星颗数(3字节) */
+    uint8_t body[31];
     uint16_t p = 0;
     body[p++]=(alm>>24); body[p++]=(alm>>16); body[p++]=(alm>>8); body[p++]=alm;
     body[p++]=(status>>24); body[p++]=(status>>16); body[p++]=(status>>8); body[p++]=status;
@@ -214,18 +221,39 @@ int jt808_send_location(void)
     body[p++]=(alt>>8); body[p++]=alt;
     body[p++]=(speed>>8); body[p++]=speed;
     body[p++]=(heading>>8); body[p++]=heading;
-    /* BCD time: YY MM DD HH mm SS */
-    body[p++] = (uint8_t)(((g->year%100)/10)<<4 | (g->year%10));
-    body[p++] = (uint8_t)((g->month/10)<<4  | (g->month%10));
-    body[p++] = (uint8_t)((g->day/10)<<4    | (g->day%10));
-    body[p++] = (uint8_t)((g->hour/10)<<4   | (g->hour%10));
+    /* UTC+8 时区转换，处理日期进位 */
+    uint8_t t_hour  = g->hour + 8;
+    uint8_t t_day   = g->day;
+    uint8_t t_month = g->month;
+    uint16_t t_year = g->year;
+    if (t_hour >= 24) {
+        t_hour -= 24;
+        t_day++;
+        /* 简单月末处理：按31天月判断，闰年2月不单独处理 */
+        static const uint8_t days_in_month[] = {0,31,28,31,30,31,30,31,31,30,31,30,31};
+        uint8_t dim = (t_month == 2 && (t_year%4==0)) ? 29 : days_in_month[t_month];
+        if (t_day > dim) {
+            t_day = 1;
+            t_month++;
+            if (t_month > 12) { t_month = 1; t_year++; }
+        }
+    }
+    /* BCD时间: YY MM DD HH mm SS (北京时间) */
+    body[p++] = (uint8_t)(((t_year%100)/10)<<4 | (t_year%10));
+    body[p++] = (uint8_t)((t_month/10)<<4  | (t_month%10));
+    body[p++] = (uint8_t)((t_day/10)<<4    | (t_day%10));
+    body[p++] = (uint8_t)((t_hour/10)<<4   | (t_hour%10));
     body[p++] = (uint8_t)((g->minute/10)<<4 | (g->minute%10));
     body[p++] = (uint8_t)((g->second/10)<<4 | (g->second%10));
+    /* 附加信息项 0x31: GNSS定位卫星数(1字节) */
+    body[p++] = 0x31;
+    body[p++] = 0x01;
+    body[p++] = g->satellites;
 
     build_header(&f, MSG_LOCATION_REPORT, p);
     frame_bytes(&f, body, p);
 
-    s_alarm_flags = 0;   /* clear after reporting */
+    s_alarm_flags = 0;
     return send_frame(&f);
 }
 
@@ -283,21 +311,27 @@ static void process_frame(const uint8_t *raw, uint16_t raw_len)
 
     switch (msg_id) {
     case MSG_PLATFORM_GENERAL_RESP:
-        dbg_printf("[808] platform ack sn=%u\r\n", serial_no);
         break;
 
     case MSG_TERMINAL_REGISTER_RESP:
         if (body_len >= 3) {
             uint8_t result = body[2];
             if (result == 0) {
-                /* auth code follows */
                 uint8_t code_len = body_len - 3;
                 if (code_len > 0 && code_len < sizeof(s_cfg.auth_code)) {
                     memcpy(s_cfg.auth_code, &body[3], code_len);
                     s_cfg.auth_code[code_len] = '\0';
+                    device_config_t *c = cfg_get();
+                    strncpy(c->auth_code, s_cfg.auth_code, sizeof(c->auth_code) - 1);
+                    cfg_save();
                 }
                 jt808_send_auth(s_cfg.auth_code);
                 s_reg = REG_STATE_AUTHENTICATING;
+            } else if (result == 3) {
+                jt808_send_auth(s_cfg.auth_code);
+                s_reg = REG_STATE_AUTHENTICATING;
+            } else {
+                dbg_printf("[808] register rejected result=%u\r\n", result);
             }
         }
         break;
@@ -339,8 +373,10 @@ static void process_frame(const uint8_t *raw, uint16_t raw_len)
     }
 
     /* If we were authenticating, receiving any valid message means auth OK */
-    if (s_reg == REG_STATE_AUTHENTICATING && msg_id == MSG_PLATFORM_GENERAL_RESP)
+    if (s_reg == REG_STATE_AUTHENTICATING && msg_id == MSG_PLATFORM_GENERAL_RESP) {
         s_reg = REG_STATE_ONLINE;
+        dbg_printf("[808] online\r\n");
+    }
 }
 
 /* ── Called from EC800M receive callback ─────────────────────────────────── */
@@ -367,6 +403,9 @@ void jt808_init(const jt808_terminal_t *info)
     s_term = *info;
     s_msg_sn = 0;
     s_reg = REG_STATE_IDLE;
+    /* restore auth code from flash so reconnects skip re-registration */
+    if (info->auth_code[0])
+        strncpy(s_cfg.auth_code, info->auth_code, sizeof(s_cfg.auth_code) - 1);
     ec800m_register_recv(jt808_on_recv);
 }
 
@@ -376,21 +415,43 @@ void jt808_process(void)
 
     uint32_t now = TICK_MS();
 
-    /* TCP connection is managed by tcp_manager; wait for it to be open */
-    if (ec800m_tcp_state(TCP_CH_MAIN) != TCP_STATE_OPEN) {
-        /* reset reg state when connection drops so we re-register on reconnect */
+    /* TCP connection is managed by tcp_manager; wait for active channel. */
+    s_tcp_ch = tcp_manager_active_ch();
+    if (ec800m_tcp_state(s_tcp_ch) != TCP_STATE_OPEN) {
         if (s_reg == REG_STATE_ONLINE || s_reg == REG_STATE_AUTHENTICATING)
             s_reg = REG_STATE_IDLE;
         return;
     }
 
-    /* Registration flow */
-    if (s_reg == REG_STATE_IDLE || s_reg == REG_STATE_REGISTERING) {
+    /* Registration / authentication flow.
+     * Protocol rule: after each connection, authenticate immediately if we have
+     * an auth code from a previous successful registration.  Only send 0x0100
+     * register when no auth code is known. */
+    if (s_reg == REG_STATE_IDLE) {
+        if (s_cfg.auth_code[0]) {
+            dbg_printf("[808] auth -> %s\r\n", s_cfg.auth_code);
+            jt808_send_auth(s_cfg.auth_code);
+            s_reg = REG_STATE_AUTHENTICATING;
+        } else {
+            dbg_printf("[808] register\r\n");
+            jt808_send_register();
+            s_reg = REG_STATE_REGISTERING;
+        }
+        s_last_heartbeat_ms = now;
+        s_last_location_ms  = now;
+        return;
+    }
+    if (s_reg == REG_STATE_REGISTERING) {
         static uint32_t reg_sent_ms = 0;
+        if (reg_sent_ms == 0) reg_sent_ms = now;
         if (now - reg_sent_ms > 5000) {
+            dbg_printf("[808] register retry\r\n");
             jt808_send_register();
             reg_sent_ms = now;
         }
+        return;
+    }
+    if (s_reg == REG_STATE_AUTHENTICATING) {
         return;
     }
 
@@ -400,11 +461,14 @@ void jt808_process(void)
         s_last_heartbeat_ms = now;
     }
 
-    /* Location report */
+    /* Location report — GPS有效时按行驶/停车间隔上报，无效时按停车间隔上报 */
     const gps_data_t *g = gps_get_data();
-    uint16_t interval_s = (g->speed_kmh < 2.0f)
-                          ? s_cfg.report_stopped_s
-                          : s_cfg.report_moving_s;
+    uint16_t interval_s = s_cfg.report_stopped_s;
+    if (g->valid) {
+        interval_s = (g->speed_kmh < 2.0f)
+                     ? s_cfg.report_stopped_s
+                     : s_cfg.report_moving_s;
+    }
     if (now - s_last_location_ms > (uint32_t)interval_s * 1000) {
         jt808_send_location();
         s_last_location_ms = now;

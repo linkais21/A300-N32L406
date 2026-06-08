@@ -6,7 +6,11 @@
 
 void dbg_putchar(char c)
 {
-    while (USART_GetFlagStatus(DBG_UART, USART_FLAG_TXDE) == RESET);
+    uint32_t timeout = 100000;
+    while (USART_GetFlagStatus(DBG_UART, USART_FLAG_TXDE) == RESET) {
+        if (--timeout == 0)
+            return;
+    }
     USART_SendData(DBG_UART, (uint8_t)c);
 }
 

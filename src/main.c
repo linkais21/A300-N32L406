@@ -22,6 +22,57 @@
 /* ── Terminal info loaded from flash at runtime ───────────────────────────── */
 static jt808_terminal_t s_terminal;
 
+static void early_debug_uart_init(void)
+{
+    RCC_EnableAPB2PeriphClk(RCC_APB2_PERIPH_GPIOA |
+                             RCC_APB2_PERIPH_GPIOB |
+                             RCC_APB2_PERIPH_AFIO,
+                             ENABLE);
+
+    GPIO_InitType g;
+    USART_InitType u;
+    GPIO_InitStruct(&g);
+    g.GPIO_Mode      = GPIO_Mode_AF_PP;
+    g.GPIO_Slew_Rate = GPIO_Slew_Rate_High;
+    g.GPIO_Current   = GPIO_DC_4mA;
+    g.GPIO_Pull      = GPIO_Pull_Up;
+    g.GPIO_Alternate = GPIO_AF4_USART1;
+
+    g.Pin = DBG_TX_PIN;
+    GPIO_InitPeripheral(DBG_TX_PORT, &g);
+
+    g.Pin = DBG_RX_PIN;
+    GPIO_InitPeripheral(DBG_RX_PORT, &g);
+
+    RCC_EnableAPB2PeriphClk(DBG_UART_CLK, ENABLE);
+    USART_StructInit(&u);
+    u.BaudRate            = DBG_BAUD;
+    u.WordLength          = USART_WL_8B;
+    u.StopBits            = USART_STPB_1;
+    u.Parity              = USART_PE_NO;
+    u.HardwareFlowControl = USART_HFCTRL_NONE;
+    u.Mode                = USART_MODE_RX | USART_MODE_TX;
+    USART_Init(DBG_UART, &u);
+    USART_Enable(DBG_UART, ENABLE);
+}
+
+static void early_uart_raw_puts(const char *s)
+{
+    while (*s) {
+        while (USART_GetFlagStatus(DBG_UART, USART_FLAG_TXDE) == RESET);
+        USART_SendData(DBG_UART, (uint8_t)*s++);
+    }
+    while (USART_GetFlagStatus(DBG_UART, USART_FLAG_TXC) == RESET);
+}
+
+void HardFault_Handler(void)
+{
+    early_debug_uart_init();
+    early_uart_raw_puts("\r\n[FAULT] HardFault\r\n");
+    while (1) {
+    }
+}
+
 /* ── TIM8 update interrupt: 1 ms LED blink ───────────────────────────────── */
 void TIM8_UP_IRQHandler(void)
 {
@@ -31,8 +82,8 @@ void TIM8_UP_IRQHandler(void)
         static uint16_t led_cnt = 0;
         if (++led_cnt >= 500) {
             led_cnt = 0;
-            /* GPS LED: blink 1 Hz when searching, solid when fixed */
-            if (!gps_is_valid()) {
+            /* GPS LED: solid while searching, 1 Hz blink when fixed */
+            if (gps_is_valid()) {
                 uint8_t cur = GPIO_ReadOutputDataBit(GPS_LED_PORT, GPS_LED_PIN);
                 if (cur) GPIO_ResetBits(GPS_LED_PORT, GPS_LED_PIN);
                 else     GPIO_SetBits(GPS_LED_PORT, GPS_LED_PIN);
@@ -122,6 +173,10 @@ int main(void)
 {
     /* ── 1. Core hardware init ───────────────────────────────────────────── */
     hw_clock_init();   /* 64 MHz PLL from HSI */
+
+    /* Bring USART1 (debug) up FIRST, before nvic/gpio/everything else, so we
+     * can trace each init step. Needs GPIOA clock + USART1 clock only. */
+    early_debug_uart_init();
     hw_nvic_init();
     hw_gpio_init();
     hw_usart_init();   /* USART1=debug(PA9/PA10), USART2=GPS, UART5=EC800M(PB4/PB5) */
@@ -133,38 +188,23 @@ int main(void)
 
     enable_debug_rx_irq();
 
-    /* ── 2. First log output — confirms UART is alive ────────────────────── */
-    dbg_printf("\r\n");
-    dbg_printf("========================================\r\n");
+    dbg_printf("\r\n========================================\r\n");
     dbg_printf("  A300-T9 / %s\r\n", FW_FULL_VERSION);
     dbg_printf("  Build: %s\r\n", FW_BUILD_DATE);
-    dbg_printf("  DEBUG UART: PA9(TX) PA10(RX) 115200\r\n");
     dbg_printf("========================================\r\n");
 
     /* ── 3. Flash config ─────────────────────────────────────────────────── */
-    dbg_printf("[INIT] loading flash config...\r\n");
     spi_flash_init();
-    cfg_init();   /* load or apply defaults */
+    cfg_init();
     device_config_t *c = cfg_get();
-    dbg_printf("[CFG]  server=%s:%u  hb=%us  moving=%us  stopped=%us\r\n",
-               c->server_ip, c->server_port,
-               c->heartbeat_s, c->report_moving_s, c->report_stopped_s);
-    dbg_printf("[CFG]  mileage=%u m  plate=%s\r\n",
-               (unsigned)c->mileage_m, c->plate_no);
+    dbg_printf("[CFG] server=%s:%u hb=%us plate=%s\r\n",
+               c->server_ip, c->server_port, c->heartbeat_s, c->plate_no);
 
     /* ── 4. Peripheral drivers ───────────────────────────────────────────── */
-    dbg_printf("[INIT] accelerometer...\r\n");
     i2c_accel_init();
-
-    dbg_printf("[INIT] ADC monitor...\r\n");
     adc_monitor_init();
-
-    dbg_printf("[INIT] geofence...\r\n");
     geofence_init();
-
-    dbg_printf("[INIT] FOTA...\r\n");
     fota_init();
-
     at_config_init();
 
     /* ── 5. Build JT808 terminal info from flash config ─────────────────── */
@@ -178,17 +218,13 @@ int main(void)
     s_terminal.color = 1;
 
     /* ── 6. GPS ──────────────────────────────────────────────────────────── */
-    dbg_printf("[INIT] GPS (TAU804M) power on...\r\n");
     gps_enable(true);
     gps_init();
 
     /* ── 7. 4G modem ─────────────────────────────────────────────────────── */
-    dbg_printf("[INIT] EC800M power on...\r\n");
     ec800m_init();
 
     /* ── 8. JT808 + TCP manager ──────────────────────────────────────────── */
-    dbg_printf("[INIT] JT808 init  server=%s:%u\r\n",
-               c->server_ip, c->server_port);
     jt808_init(&s_terminal);
     jt808_set_server(c->server_ip, c->server_port, false);
     jt808_set_server(c->backup_ip[0] ? c->backup_ip : c->server_ip,
@@ -196,12 +232,9 @@ int main(void)
     tcp_manager_init();
 
     /* ── 9. Power manager ────────────────────────────────────────────────── */
-    dbg_printf("[INIT] power manager...\r\n");
     pwr_init();
 
-    dbg_printf("[INIT] all done - entering main loop\r\n");
-    dbg_printf("  Type commands via UART (e.g. CHECK, VERSION, POSITION)\r\n");
-    dbg_printf("----------------------------------------\r\n");
+    dbg_printf("[BOOT] ready\r\n");
 
     /* ── 10. Main loop ───────────────────────────────────────────────────── */
     while (1) {

@@ -84,7 +84,7 @@ static bool i2c_read_regs(uint8_t reg, uint8_t *buf, uint8_t len)
 /* ── Public ───────────────────────────────────────────────────────────────── */
 void i2c_accel_init(void)
 {
-    delay_ms(10);
+    delay_ms(50);   /* wait for I2C bus to stabilise after gpio/i2c init */
     uint8_t id = 0;
     if (!i2c_read_regs(DA218E_REG_CHIPID, &id, 1)) {
         /* try alternate address */
