@@ -13,7 +13,7 @@ $CFLAGS = "-mcpu=cortex-m4", "-mthumb", "-mfpu=fpv4-sp-d16", "-mfloat-abi=hard",
           "-Iinclude", "-I$SDK/CMSIS/core", "-I$SDK/CMSIS/device",
           "-I$SDK/n32l40x_std_periph_driver/inc",
           "-DUSE_STDPERIPH_DRIVER", "-DN32L40X", "-DSYSCLK_SRC=3",
-          "-DSYSCLK_FREQ=48000000", "-std=c99"
+          "-DSYSCLK_FREQ=64000000", "-std=c99"
 
 # Recompile main.c to pick up new version
 & arm-none-eabi-gcc.exe $CFLAGS -c src/main.c -o build/src/main.o

@@ -161,11 +161,11 @@ void ec800m_power_on(void)
         return;
     }
 
-    /* 3. PA8=LOW → pull PWRKEY low → trigger power-on */
+    /* 3. PA8=LOW → pull PWRKEY low → trigger power-on (≥700ms per datasheet) */
     GPIO_ResetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);
-    delay_ms(600);
+    delay_ms(750);
     GPIO_SetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);
-    delay_ms(15000);
+    delay_ms(10000);  /* UART ready ≥10s after PWRKEY release per datasheet Fig.12 */
 }
 
 void ec800m_power_off(void)
@@ -343,11 +343,6 @@ static void process_urc(const char *line)
                 }
             }
         }
-        /* flush DMA read pointer and line buffer to discard any binary residue */
-        delay_ms(50);
-        uint16_t dma_remain = DMA_GetCurrDataCounter(DMA_CH5);
-        s_rx_rd = EC800M_RX_BUF_SIZE - dma_remain;
-        s_line_len = 0;
         return;
     }
     /* +QIURC: "closed",ch */
@@ -427,9 +422,11 @@ void ec800m_process(void)
         state_machine_pdp();
         break;
     case EC800M_STATE_READY:
-        /* Periodic CSQ poll every 30 s */
-        if ((TICK_MS() % 30000) < 100)
-            at_send_wait("AT+CSQ", "OK", 1000);
+        /* CSQ: request every 30s, response comes as URC "+CSQ:" parsed in process_urc */
+        if (TICK_MS() - s_state_enter_ms > 30000 &&
+            (TICK_MS() % 30000) > 29900) {
+            usart_send_str("AT+CSQ\r\n");  /* non-blocking: just send, don't wait */
+        }
         break;
     case EC800M_STATE_ERROR:
         if (TICK_MS() - s_state_enter_ms > 60000) ec800m_reset();

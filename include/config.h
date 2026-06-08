@@ -92,8 +92,8 @@ extern uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];
 #define BSP_I2C_SDA_PORT     GPIOB
 #define BSP_I2C_SDA_PIN      GPIO_PIN_7        /* PB7 I2C1_SDA */
 
-/* DA218E accelerometer I2C address (SDO=GND → 0x26, SDO=VCC → 0x27) */
-#define DA218E_I2C_ADDR      0x26
+/* DA218E has no SDO pin — I2C address is fixed at 0x27 */
+#define DA218E_I2C_ADDR      0x27
 
 /* ── ADC ──────────────────────────────────────────────────────────────────── */
 /* PA0 CAR_ADC: R1(180K)+R2(5.6K) divider → V_car = adc_v * 33.2 */

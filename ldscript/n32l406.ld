@@ -1,20 +1,20 @@
 /* N32L406CDL7 linker script
- * Flash: 384K @ 0x08000000
- * RAM:    32K @ 0x20000000
- * Stack: top of RAM = 0x20008000
+ * Flash: 128K @ 0x08000000
+ * RAM:    24K @ 0x20000000  (SRAM1=16K + SRAM2=8K, per datasheet Table 1-1)
+ * Stack: top of RAM = 0x20006000
  */
 
 ENTRY(Reset_Handler)
 
-_estack = 0x20008000;
+_estack = 0x20006000;
 
 _Min_Heap_Size  = 0x400;
 _Min_Stack_Size = 0x800;
 
 MEMORY
 {
-  FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 384K
-  RAM   (xrw) : ORIGIN = 0x20000000, LENGTH = 32K
+  FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 128K
+  RAM   (xrw) : ORIGIN = 0x20000000, LENGTH = 24K
 }
 
 SECTIONS

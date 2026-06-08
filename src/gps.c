@@ -14,9 +14,6 @@ static char      s_nmea_buf[NMEA_BUF_SIZE];
 static uint8_t   s_nmea_pos = 0;
 static gps_data_t s_gps = {0};
 
-/* Print buffer: ISR copies one sentence here, main loop outputs it */
-static char    s_print_buf[NMEA_BUF_SIZE];
-static bool    s_print_ready = false;
 
 /* ── Helper: split NMEA sentence into fields ──────────────────────────────── */
 static uint8_t nmea_split(char *sentence, char **fields, uint8_t max_fields)
@@ -144,14 +141,6 @@ void gps_rx_isr(uint8_t byte)
     }
     if (byte == '\n' && s_nmea_pos > 4) {
         s_nmea_buf[s_nmea_pos] = '\0';
-        /* copy to print buffer BEFORE dispatch_nmea (which inserts \0 into buffer) */
-        if (!s_print_ready) {
-            const char *type = s_nmea_buf + 3;
-            if (strncmp(type, "GSV,", 4) != 0 && strncmp(type, "GSA,", 4) != 0) {
-                memcpy(s_print_buf, s_nmea_buf, s_nmea_pos + 1);
-                s_print_ready = true;
-            }
-        }
         dispatch_nmea(s_nmea_buf);
         s_nmea_pos = 0;
     }
@@ -211,14 +200,7 @@ void gps_enable(bool en)
 }
 
 void gps_process(void)
-{
-    /* print one pending NMEA sentence per loop tick (safe, outside ISR) */
-    if (s_print_ready) {
-        dbg_puts(s_print_buf);
-        s_print_ready = false;
-    }
-
-    /* If no update in 5 s → invalid */
+{    /* If no update in 5 s → invalid */
     if (s_gps.valid && (TICK_MS() - s_gps.last_update_ms) > 5000)
         s_gps.valid = false;
 }

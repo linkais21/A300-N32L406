@@ -5,21 +5,25 @@
 #include "n32l40x.h"
 #include <stdlib.h>
 
-/* DA218E register map */
-#define DA218E_REG_CHIPID    0x01
-#define DA218E_REG_ACC_X_LSB 0x02
-#define DA218E_REG_ACC_X_MSB 0x03
-#define DA218E_REG_ACC_Y_LSB 0x04
-#define DA218E_REG_ACC_Y_MSB 0x05
-#define DA218E_REG_ACC_Z_LSB 0x06
-#define DA218E_REG_ACC_Z_MSB 0x07
-#define DA218E_REG_RANGE     0x0F
-#define DA218E_REG_BW        0x10
-#define DA218E_REG_PWR_CTRL  0x11
-#define DA218E_REG_INT_EN    0x16
+/* DA218E register map (datasheet Table 14) */
+#define DA218E_REG_CHIPID      0x01
+#define DA218E_REG_ACC_X_LSB   0x02
+#define DA218E_REG_ACC_X_MSB   0x03
+#define DA218E_REG_ACC_Y_LSB   0x04
+#define DA218E_REG_ACC_Y_MSB   0x05
+#define DA218E_REG_ACC_Z_LSB   0x06
+#define DA218E_REG_ACC_Z_MSB   0x07
+#define DA218E_REG_RANGE       0x0F
+#define DA218E_REG_ODR_AXIS    0x10
+#define DA218E_REG_MODE_BW     0x11
+#define DA218E_REG_INT_EN      0x16
 
-#define DA218E_RANGE_2G  0x03
-#define DA218E_BW_125HZ  0x0B
+/* RANGE register fs[1:0]: 00=±2g 01=±4g 10=±8g (Table 31) */
+#define DA218E_RANGE_2G   0x00
+/* ODR_AXIS ODR[3:0]: 0111=125Hz (Table 33) */
+#define DA218E_ODR_125HZ  0x07
+/* MODE_BW: PWR_OFF=0 (normal), BW=00 (1/2 ODR), autosleep=0 (Table 35) */
+#define DA218E_MODE_NORMAL 0x00
 
 static uint8_t s_addr = DA218E_I2C_ADDR;
 static int16_t s_vib_threshold = 100;   /* raw units ≈ ±2g/4096 * threshold */
@@ -37,67 +41,110 @@ static bool i2c_wait_event(uint32_t event, uint32_t timeout_ms)
 static bool i2c_write_reg(uint8_t reg, uint8_t val)
 {
     I2C_GenerateStart(BSP_I2C, ENABLE);
-    if (!i2c_wait_event(I2C_EVT_MASTER_MODE_FLAG, 5)) return false;
+    if (!i2c_wait_event(I2C_EVT_MASTER_MODE_FLAG, 5)) goto fail;
 
     I2C_SendAddr7bit(BSP_I2C, s_addr, I2C_DIRECTION_SEND);
-    if (!i2c_wait_event(I2C_EVT_MASTER_TXMODE_FLAG, 5)) return false;
+    if (!i2c_wait_event(I2C_EVT_MASTER_TXMODE_FLAG, 5)) goto fail;
 
     I2C_SendData(BSP_I2C, reg);
-    if (!i2c_wait_event(I2C_EVT_MASTER_DATA_SENDING, 5)) return false;
+    if (!i2c_wait_event(I2C_EVT_MASTER_DATA_SENDING, 5)) goto fail;
 
     I2C_SendData(BSP_I2C, val);
-    if (!i2c_wait_event(I2C_EVT_MASTER_DATA_SENDED, 5)) return false;
+    if (!i2c_wait_event(I2C_EVT_MASTER_DATA_SENDED, 5)) goto fail;
 
     I2C_GenerateStop(BSP_I2C, ENABLE);
     return true;
+fail:
+    I2C_GenerateStop(BSP_I2C, ENABLE);
+    return false;
 }
 
 static bool i2c_read_regs(uint8_t reg, uint8_t *buf, uint8_t len)
 {
     I2C_GenerateStart(BSP_I2C, ENABLE);
-    if (!i2c_wait_event(I2C_EVT_MASTER_MODE_FLAG, 5)) return false;
+    if (!i2c_wait_event(I2C_EVT_MASTER_MODE_FLAG, 5)) goto fail;
 
     I2C_SendAddr7bit(BSP_I2C, s_addr, I2C_DIRECTION_SEND);
-    if (!i2c_wait_event(I2C_EVT_MASTER_TXMODE_FLAG, 5)) return false;
+    if (!i2c_wait_event(I2C_EVT_MASTER_TXMODE_FLAG, 5)) goto fail;
 
     I2C_SendData(BSP_I2C, reg);
-    if (!i2c_wait_event(I2C_EVT_MASTER_DATA_SENDED, 5)) return false;
+    if (!i2c_wait_event(I2C_EVT_MASTER_DATA_SENDED, 5)) goto fail;
 
     I2C_GenerateStart(BSP_I2C, ENABLE);
-    if (!i2c_wait_event(I2C_EVT_MASTER_MODE_FLAG, 5)) return false;
+    if (!i2c_wait_event(I2C_EVT_MASTER_MODE_FLAG, 5)) goto fail;
 
     I2C_SendAddr7bit(BSP_I2C, s_addr, I2C_DIRECTION_RECV);
-    if (!i2c_wait_event(I2C_EVT_MASTER_RXMODE_FLAG, 5)) return false;
+    if (!i2c_wait_event(I2C_EVT_MASTER_RXMODE_FLAG, 5)) goto fail;
 
     if (len == 1) I2C_ConfigAck(BSP_I2C, DISABLE);
 
     for (uint8_t i = 0; i < len; i++) {
         if (i == len - 2) I2C_ConfigAck(BSP_I2C, DISABLE);
-        if (!i2c_wait_event(I2C_EVT_MASTER_DATA_RECVD_FLAG, 5)) return false;
+        if (!i2c_wait_event(I2C_EVT_MASTER_DATA_RECVD_FLAG, 5)) goto fail;
         buf[i] = I2C_RecvData(BSP_I2C);
     }
     I2C_GenerateStop(BSP_I2C, ENABLE);
     I2C_ConfigAck(BSP_I2C, ENABLE);
     return true;
+fail:
+    I2C_GenerateStop(BSP_I2C, ENABLE);
+    I2C_ConfigAck(BSP_I2C, ENABLE);
+    return false;
 }
 
 /* ── Public ───────────────────────────────────────────────────────────────── */
 void i2c_accel_init(void)
 {
-    delay_ms(50);   /* wait for I2C bus to stabilise after gpio/i2c init */
-    uint8_t id = 0;
-    if (!i2c_read_regs(DA218E_REG_CHIPID, &id, 1)) {
-        /* try alternate address */
-        s_addr = 0x27;
-        if (!i2c_read_regs(DA218E_REG_CHIPID, &id, 1)) {
-            dbg_printf("[ACCEL] not found\r\n");
-            return;
-        }
+    delay_ms(50);
+
+    /* Step-by-step I2C diagnostic */
+    I2C_GenerateStart(BSP_I2C, ENABLE);
+    if (!i2c_wait_event(I2C_EVT_MASTER_MODE_FLAG, 5)) {
+        dbg_printf("[ACCEL] fail: START\r\n"); goto done; }
+
+    I2C_SendAddr7bit(BSP_I2C, s_addr, I2C_DIRECTION_SEND);
+    if (!i2c_wait_event(I2C_EVT_MASTER_TXMODE_FLAG, 5)) {
+        dbg_printf("[ACCEL] fail: ADDR 0x%02x (no ACK?)\r\n", s_addr);
+        I2C_GenerateStop(BSP_I2C, ENABLE); goto done; }
+
+    I2C_SendData(BSP_I2C, DA218E_REG_CHIPID);
+    if (!i2c_wait_event(I2C_EVT_MASTER_DATA_SENDED, 5)) {
+        dbg_printf("[ACCEL] fail: REG send\r\n");
+        I2C_GenerateStop(BSP_I2C, ENABLE); goto done; }
+
+    I2C_GenerateStart(BSP_I2C, ENABLE);
+    if (!i2c_wait_event(I2C_EVT_MASTER_MODE_FLAG, 5)) {
+        dbg_printf("[ACCEL] fail: RESTART\r\n");
+        I2C_GenerateStop(BSP_I2C, ENABLE); goto done; }
+
+    I2C_SendAddr7bit(BSP_I2C, s_addr, I2C_DIRECTION_RECV);
+    if (!i2c_wait_event(I2C_EVT_MASTER_RXMODE_FLAG, 5)) {
+        dbg_printf("[ACCEL] fail: ADDR RD\r\n");
+        I2C_GenerateStop(BSP_I2C, ENABLE); goto done; }
+
+    I2C_ConfigAck(BSP_I2C, DISABLE);
+    if (!i2c_wait_event(I2C_EVT_MASTER_DATA_RECVD_FLAG, 5)) {
+        dbg_printf("[ACCEL] fail: DATA recv\r\n");
+        I2C_GenerateStop(BSP_I2C, ENABLE); I2C_ConfigAck(BSP_I2C, ENABLE); goto done; }
+
+    {
+        uint8_t id = I2C_RecvData(BSP_I2C);
+        I2C_GenerateStop(BSP_I2C, ENABLE);
+        I2C_ConfigAck(BSP_I2C, ENABLE);
+        dbg_printf("[ACCEL] addr=0x%02x ID=0x%02x%s\r\n",
+                   s_addr, id, id == 0x13 ? " OK" : " WRONG(exp 0x13)");
+        if (id != 0x13) goto done;
+        i2c_write_reg(DA218E_REG_RANGE,    DA218E_RANGE_2G);
+        i2c_write_reg(DA218E_REG_ODR_AXIS, DA218E_ODR_125HZ);
+        i2c_write_reg(DA218E_REG_MODE_BW,  DA218E_MODE_NORMAL);
+        return;
     }
-    dbg_printf("[ACCEL] ID=0x%x\r\n", id);
+done:
+    dbg_printf("[ACCEL] not found\r\n");
+    /* Configure range and ODR first, then exit suspend mode last */
     i2c_write_reg(DA218E_REG_RANGE,    DA218E_RANGE_2G);
-    i2c_write_reg(DA218E_REG_BW,       DA218E_BW_125HZ);
-    i2c_write_reg(DA218E_REG_PWR_CTRL, 0x00);   /* normal mode */
+    i2c_write_reg(DA218E_REG_ODR_AXIS, DA218E_ODR_125HZ);
+    i2c_write_reg(DA218E_REG_MODE_BW,  DA218E_MODE_NORMAL);  /* clears PWR_OFF=1 default */
 }
 
 bool i2c_accel_read(accel_data_t *out)

@@ -320,6 +320,7 @@ static void process_frame(const uint8_t *raw, uint16_t raw_len)
     case MSG_TERMINAL_REGISTER_RESP:
         if (body_len >= 3) {
             uint8_t result = body[2];
+            dbg_printf("[808] reg_resp result=%u t=%us\r\n", result, (unsigned)(TICK_MS()/1000));
             if (result == 0) {
                 uint8_t code_len = body_len - 3;
                 if (code_len > 0 && code_len < sizeof(s_cfg.auth_code)) {
@@ -456,6 +457,13 @@ void jt808_process(void)
         return;
     }
     if (s_reg == REG_STATE_AUTHENTICATING) {
+        static uint32_t auth_sent_ms = 0;
+        if (auth_sent_ms == 0) auth_sent_ms = now;
+        if (now - auth_sent_ms > 3000) {
+            dbg_printf("[808] auth retry\r\n");
+            jt808_send_auth(s_cfg.auth_code);
+            auth_sent_ms = now;
+        }
         return;
     }
 

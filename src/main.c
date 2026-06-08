@@ -73,25 +73,11 @@ void HardFault_Handler(void)
     }
 }
 
-/* ── TIM8 update interrupt: 1 ms LED blink ───────────────────────────────── */
+/* ── TIM8 update interrupt: 1 ms tick ────────────────────────────────────── */
 void TIM8_UP_IRQHandler(void)
 {
-    if (TIM_GetIntStatus(TIM8, TIM_INT_UPDATE)) {
+    if (TIM_GetIntStatus(TIM8, TIM_INT_UPDATE))
         TIM_ClrIntPendingBit(TIM8, TIM_INT_UPDATE);
-
-        static uint16_t led_cnt = 0;
-        if (++led_cnt >= 500) {
-            led_cnt = 0;
-            /* GPS LED: solid while searching, 1 Hz blink when fixed */
-            if (gps_is_valid()) {
-                uint8_t cur = GPIO_ReadOutputDataBit(GPS_LED_PORT, GPS_LED_PIN);
-                if (cur) GPIO_ResetBits(GPS_LED_PORT, GPS_LED_PIN);
-                else     GPIO_SetBits(GPS_LED_PORT, GPS_LED_PIN);
-            } else {
-                GPIO_SetBits(GPS_LED_PORT, GPS_LED_PIN);
-            }
-        }
-    }
 }
 
 /* EC800M RX is now handled by UART5_IRQHandler() inside ec800m.c.
@@ -117,7 +103,32 @@ static void enable_debug_rx_irq(void)
     NVIC_Init(&n);
 }
 
+
+extern uint32_t _ebss;
+extern uint32_t _estack;
+
+static void stack_paint(void)
+{
+    uint32_t sp;
+    __asm volatile ("mov %0, sp" : "=r" (sp));
+    uint32_t *p = &_ebss;
+    while ((uint32_t)p < sp - 64u)
+        *p++ = 0xAAAAAAAAu;
+}
+
+static uint32_t stack_peak_bytes(void)
+{
+    const uint32_t *p = &_ebss;
+    while (p < (const uint32_t *)&_estack && *p == 0xAAAAAAAAu)
+        p++;
+    return (uint32_t)(&_estack) - (uint32_t)p;
+}
+
 /* ── Periodic log: every 5 s print status ───────────────────────────────── */
+#define RAM_STATIC  ((uint32_t)(&_ebss) - 0x20000000u)  /* data+bss, compile-time constant */
+#define RAM_TOTAL   (24u * 1024u)
+#define STACK_AVAIL (RAM_TOTAL - RAM_STATIC)             /* bytes available for heap+stack */
+
 static void periodic_status_log(void)
 {
     static uint32_t last_ms = 0;
@@ -128,14 +139,18 @@ static void periodic_status_log(void)
     float vcar = adc_get_car_voltage();
     float vbat = adc_get_bat_voltage();
 
+    uint32_t stk_peak = stack_peak_bytes();
     dbg_printf("[STATUS] t=%us 4G=%s GPS=%s lat=%.6f lon=%.6f spd=%.1f "
-               "vcar=%.1fV vbat=%.2fV csq=%d\r\n",
+               "vcar=%.1fV vbat=%.2fV csq=%d "
+               "ram: stc=%uB stk=%u/%uB(%u%%)\r\n",
                (unsigned)(TICK_MS() / 1000),
                ec800m_is_ready()  ? "RDY" : "---",
                g->valid           ? "FIX" : "SRH",
                g->lat, g->lon, g->speed_kmh,
                vcar, vbat,
-               ec800m_get_csq());
+               ec800m_get_csq(),
+               RAM_STATIC,
+               stk_peak, STACK_AVAIL, (stk_peak * 100u) / STACK_AVAIL);
 }
 
 /* ── Alarm scanning ──────────────────────────────────────────────────────── */
@@ -173,9 +188,7 @@ int main(void)
 {
     /* ── 1. Core hardware init ───────────────────────────────────────────── */
     hw_clock_init();   /* 64 MHz PLL from HSI */
-
-    /* Bring USART1 (debug) up FIRST, before nvic/gpio/everything else, so we
-     * can trace each init step. Needs GPIOA clock + USART1 clock only. */
+    stack_paint();     /* fill unused stack with 0xAAAAAAAA for watermark */
     early_debug_uart_init();
     hw_nvic_init();
     hw_gpio_init();
@@ -201,7 +214,6 @@ int main(void)
                c->server_ip, c->server_port, c->heartbeat_s, c->plate_no);
 
     /* ── 4. Peripheral drivers ───────────────────────────────────────────── */
-    i2c_accel_init();
     adc_monitor_init();
     geofence_init();
     fota_init();
@@ -217,8 +229,12 @@ int main(void)
     strncpy(s_terminal.auth_code,      c->auth_code,   sizeof(s_terminal.auth_code) - 1);
     s_terminal.color = 1;
 
-    /* ── 6. GPS ──────────────────────────────────────────────────────────── */
+    /* ── 6. GPS + DA218E (both on GPS_VCC, enable LDO first) ───────────────── */
     gps_enable(true);
+    /* gps_enable() temporarily drives PB6 as GPIO_OUT, leaving I2C1 BUSY.
+     * Re-init I2C before accessing DA218E. */
+    hw_i2c_init();
+    i2c_accel_init();  /* DA218E powered by GPS_VCC via SGM2019-3.3 LDO */
     gps_init();
 
     /* ── 7. 4G modem ─────────────────────────────────────────────────────── */
