@@ -1,4 +1,4 @@
-# Makefile for A300-first — T663B GPS Tracker (N32L406CDL7)
+# Makefile for A300_406 GPS Tracker (N32L406CDL7)
 
 TOOLCHAIN_DIR := D:/SofWare/STM32CubeIDE_2.1.1/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.14.3.rel1.win32_1.0.100.202602081740/tools/bin
 PROG_CLI      := D:/SofWare/STM32CubeIDE_2.1.1/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.win32_2.2.400.202601091506/tools/bin/STM32_Programmer_CLI.exe
@@ -84,7 +84,7 @@ LDFLAGS := $(CPU) \
             -lc -lgcc -lm
 
 # ── Build rules ────────────────────────────────────────────────────────────────
-.PHONY: all clean flash size
+.PHONY: all clean flash size release-guard
 
 all: $(BUILD)/$(TARGET).hex size
 
@@ -105,6 +105,9 @@ $(BUILD)/$(TARGET).hex: $(BUILD)/$(TARGET).elf
 
 size: $(BUILD)/$(TARGET).elf
 	$(SIZE) $<
+
+release-guard:
+	python tools/release_guard.py
 
 flash: $(BUILD)/$(TARGET).hex
 	"$(PROG_CLI)" -c port=SWD -w $< -v -rst
