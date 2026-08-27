@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "ext_flash_layout.h"
 
 /*
  * Flash config layout on BY25Q16 (2 MB):
@@ -13,8 +14,8 @@
  * Each slot: [magic(4)] [version(2)] [len(2)] [data(N)] [crc32(4)]
  */
 
-#define CFG_FLASH_ADDR_A    0x000000UL
-#define CFG_FLASH_ADDR_B    0x001000UL
+#define CFG_FLASH_ADDR_A    EXT_FLASH_CONFIG_SLOT_A_ADDR
+#define CFG_FLASH_ADDR_B    EXT_FLASH_CONFIG_SLOT_B_ADDR
 #define CFG_MAGIC           0xA3001406UL
 #define CFG_VERSION         1
 

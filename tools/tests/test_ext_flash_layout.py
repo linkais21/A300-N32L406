@@ -8,9 +8,9 @@ def val(name):
     m = re.search(rf"#define\s+{name}\s+([^\n]+)", layout)
     assert m, name
     expr = m.group(1).split("/*")[0].strip().replace("UL", "").replace("U", "")
-    env = {"FLASH_TOTAL_SIZE": 2 * 1024 * 1024}
-    for dep in ("EXT_FLASH_AGNSS_ADDR",):
-        if dep in expr:
+    env = {"FLASH_TOTAL_SIZE": 2 * 1024 * 1024, "FLASH_SECTOR_SIZE": 4096}
+    for dep in set(re.findall(r"EXT_FLASH_[A-Z0-9_]+", expr)):
+        if dep != name:
             env[dep] = val(dep)
     return eval(expr, {"__builtins__": {}}, env)
 
@@ -42,8 +42,25 @@ def test_timeout_and_owner_contracts_present():
     assert "FOTA_MAX_SIZE     EXT_FLASH_CANDIDATE_SIZE" in (ROOT / "include" / "fota.h").read_text(encoding="utf-8")
     assert "FOTA_PENDING_ADDR EXT_FLASH_RESUME_ADDR" in (ROOT / "include" / "fota.h").read_text(encoding="utf-8")
 
+def test_config_layout_and_owner_enforcement():
+    layout_h = (ROOT / "include" / "ext_flash_layout.h").read_text(encoding="utf-8")
+    cfg_h = (ROOT / "include" / "flash_config.h").read_text(encoding="utf-8")
+    store_h = (ROOT / "include" / "ext_flash_store.h").read_text(encoding="utf-8")
+    store_c = (ROOT / "src" / "ext_flash_store.c").read_text(encoding="utf-8")
+    assert "EXT_FLASH_CONFIG_SLOT_A_ADDR" in layout_h and "EXT_FLASH_CONFIG_SLOT_B_ADDR" in layout_h
+    assert "CFG_FLASH_ADDR_A    EXT_FLASH_CONFIG_SLOT_A_ADDR" in cfg_h
+    assert "ext_flash_read(ext_flash_owner_t owner" in store_h
+    assert "owner_ok(owner)" in store_c
+
+def test_agnss_alignment_and_exact_slots():
+    assert val("EXT_FLASH_AGNSS_META_SIZE") % 4096 == 0
+    assert val("EXT_FLASH_AGNSS_SLOT_SIZE") % 4096 == 0
+    assert val("EXT_FLASH_AGNSS_SLOT_B_ADDR") + val("EXT_FLASH_AGNSS_SLOT_SIZE") == 2 * 1024 * 1024
+
 if __name__ == "__main__":
     test_regions_non_overlapping_and_in_bounds()
     test_page_split_formula()
     test_timeout_and_owner_contracts_present()
+    test_config_layout_and_owner_enforcement()
+    test_agnss_alignment_and_exact_slots()
     print("test_ext_flash_layout: PASS")

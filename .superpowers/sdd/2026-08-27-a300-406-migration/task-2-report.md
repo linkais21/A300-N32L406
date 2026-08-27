@@ -55,3 +55,28 @@ be run.
   deadline (BY25Q16ES worst-case requirement), while read/program keep the
   shorter transaction deadline.
 - Host test entry point now executes timeout/owner/JEDEC/FOTA contract checks.
+
+## Second review follow-up
+
+- Defined the configuration region and both redundant slots in
+  `ext_flash_layout.h`; `flash_config.h` now aliases those constants instead
+  of embedding addresses that conflicted with Candidate/Factory semantics.
+- Changed all storage read/write/erase APIs to require the expected owner;
+  calls fail unless that owner currently holds the arbiter. Configuration
+  initialization and save paths hold CONFIG across complete slot operations.
+- Added executable host behavior coverage for owner exclusion, wrong-owner
+  rejection, range/alignment checks, and write-error propagation. The test
+  skips only when no C compiler is available.
+- Added compile-time sector-alignment and exact-boundary assertions for all
+  major regions and AGNSS metadata/slots, plus Python checks for AGNSS slot
+  sizing and FOTA/config address aliases.
+
+## Second review verification
+
+```text
+python tools/tests/test_ext_flash_layout.py
+test_ext_flash_layout: PASS
+python tools/tests/test_ext_flash_store_host.py
+test_ext_flash_store_host: PASS
+git diff --check
+```

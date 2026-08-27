@@ -72,10 +72,10 @@ const device_config_t k_config_defaults = {
 };
 
 /* ── Read and validate one flash slot ────────────────────────────────────── */
-static bool slot_read(uint32_t addr, device_config_t *out)
+static bool slot_read_locked(uint32_t addr, device_config_t *out)
 {
     uint8_t raw[SLOT_TOTAL];
-    if (!ext_flash_read(addr, raw, SLOT_TOTAL)) return false;
+    if (!ext_flash_read(EXT_FLASH_OWNER_CONFIG, addr, raw, SLOT_TOTAL)) return false;
 
     slot_hdr_t hdr;
     memcpy(&hdr, raw, sizeof(hdr));
@@ -94,7 +94,7 @@ static bool slot_read(uint32_t addr, device_config_t *out)
 }
 
 /* ── Write one flash slot ─────────────────────────────────────────────────── */
-static bool slot_write(uint32_t addr, const device_config_t *cfg)
+static bool slot_write_locked(uint32_t addr, const device_config_t *cfg)
 {
     uint8_t raw[SLOT_TOTAL];
     memset(raw, 0xFF, sizeof(raw));
@@ -110,17 +110,19 @@ static bool slot_write(uint32_t addr, const device_config_t *cfg)
     uint32_t crc = crc32(raw + sizeof(hdr), sizeof(device_config_t));
     memcpy(raw + sizeof(hdr) + sizeof(device_config_t), &crc, 4);
 
-    if (!ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG)) return false;
-    bool ok = ext_flash_erase(addr, FLASH_SECTOR_SIZE) && ext_flash_write_verified(addr, raw, SLOT_TOTAL);
-    ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
-    return ok;
+    return ext_flash_erase(EXT_FLASH_OWNER_CONFIG, addr, FLASH_SECTOR_SIZE) &&
+           ext_flash_write_verified(EXT_FLASH_OWNER_CONFIG, addr, raw, SLOT_TOTAL);
 }
 
 /* ── Public API ───────────────────────────────────────────────────────────── */
 void cfg_init(void)
 {
     device_config_t tmp;
-    bool ok_a = slot_read(CFG_FLASH_ADDR_A, &tmp);
+    if (!ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG)) {
+        s_cfg = k_config_defaults;
+        return;
+    }
+    bool ok_a = slot_read_locked(CFG_FLASH_ADDR_A, &tmp);
     bool ok_b = false;
 
     if (ok_a) {
@@ -128,27 +130,34 @@ void cfg_init(void)
         dbg_printf("[CFG] loaded from slot A\r\n");
         /* repair slot B if needed */
         device_config_t tmp_b;
-        ok_b = slot_read(CFG_FLASH_ADDR_B, &tmp_b);
-        if (!ok_b) (void)slot_write(CFG_FLASH_ADDR_B, &s_cfg);
+        ok_b = slot_read_locked(CFG_FLASH_ADDR_B, &tmp_b);
+        if (!ok_b) (void)slot_write_locked(CFG_FLASH_ADDR_B, &s_cfg);
+        ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
         return;
     }
 
-    ok_b = slot_read(CFG_FLASH_ADDR_B, &tmp);
+    ok_b = slot_read_locked(CFG_FLASH_ADDR_B, &tmp);
     if (ok_b) {
         s_cfg = tmp;
         dbg_printf("[CFG] loaded from slot B\r\n");
-        (void)slot_write(CFG_FLASH_ADDR_A, &s_cfg);
+        (void)slot_write_locked(CFG_FLASH_ADDR_A, &s_cfg);
+        ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
         return;
     }
 
     dbg_printf("[CFG] no valid config, applying defaults\r\n");
-    cfg_factory_reset();
+    s_cfg = k_config_defaults;
+    (void)slot_write_locked(CFG_FLASH_ADDR_A, &s_cfg);
+    (void)slot_write_locked(CFG_FLASH_ADDR_B, &s_cfg);
+    ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
 }
 
 void cfg_save(void)
 {
-    (void)slot_write(CFG_FLASH_ADDR_A, &s_cfg);
-    (void)slot_write(CFG_FLASH_ADDR_B, &s_cfg);
+    if (!ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG)) return;
+    (void)slot_write_locked(CFG_FLASH_ADDR_A, &s_cfg);
+    (void)slot_write_locked(CFG_FLASH_ADDR_B, &s_cfg);
+    ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
 }
 
 void cfg_factory_reset(void)
