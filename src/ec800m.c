@@ -40,6 +40,7 @@ static tcp_channel_t s_tcp[EC800M_CH_MAX];
 
 /* Upper-layer receive callback */
 static ec800m_recv_cb_t s_recv_cb = NULL;
+static ec800m_recv_cb_t s_ota_recv_cb = NULL;
 
 /* ── RX init: DMA is configured in hw_init.c; only reset the read pointer here ─────────── */
 static void rx_irq_init(void)
@@ -339,7 +340,10 @@ static void process_urc(const char *line)
                     /* use pointer offset instead of strstr to correctly handle binary data */
                     uint16_t offset = (uint16_t)(data_start - s_at_resp);
                     if (offset + dlen <= s_at_resp_len)
-                        s_recv_cb((uint8_t)ch, (uint8_t *)data_start, dlen);
+                        if (ch == EC800M_CH_OTA && s_ota_recv_cb)
+                            s_ota_recv_cb((uint8_t)ch, (uint8_t *)data_start, dlen);
+                        else if (s_recv_cb)
+                            s_recv_cb((uint8_t)ch, (uint8_t *)data_start, dlen);
                 }
             }
         }
@@ -502,6 +506,7 @@ void ec800m_sleep_disable(void)
 }
 
 void ec800m_register_recv(ec800m_recv_cb_t cb) { s_recv_cb = cb; }
+void ec800m_register_ota_recv(ec800m_recv_cb_t cb) { s_ota_recv_cb = cb; }
 
 /* Legacy no-op kept for API compatibility (RX now uses USART3 interrupt). */
 void ec800m_dma_rx_complete(void) { }
