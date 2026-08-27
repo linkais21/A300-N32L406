@@ -71,6 +71,7 @@ void ec800m_sleep_disable(void);
 void ec800m_register_recv(ec800m_recv_cb_t cb);
 /* Dedicated OTA stream callback; channel 1 is not delivered to JT808. */
 void ec800m_register_ota_recv(ec800m_recv_cb_t cb);
+void ec800m_register_agnss_recv(ec800m_recv_cb_t cb);
 
 /* Called from DMA IRQ */
 void ec800m_dma_rx_complete(void);

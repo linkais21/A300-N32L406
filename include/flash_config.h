@@ -28,6 +28,8 @@
 #define CFG_AUTH_LEN    32
 #define CFG_PLATE_LEN   16
 #define CFG_MOUNT_LEN   32
+#define CFG_AGNSS_USER_LEN 64
+#define CFG_AGNSS_PWD_LEN  64
 
 typedef struct {
     /* ── Server ──────────────────────────────────────────────────────────── */
@@ -51,6 +53,8 @@ typedef struct {
     uint8_t  agps_en;
     char     agps_ip[CFG_IP_LEN];
     uint16_t agps_port;
+    char     agnss_user[CFG_AGNSS_USER_LEN];
+    char     agnss_pwd[CFG_AGNSS_PWD_LEN];
 
     /* ── RTK / NTRIP ─────────────────────────────────────────────────────── */
     uint8_t  rtk_en;

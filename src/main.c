@@ -17,7 +17,6 @@
 #include "geofence.h"
 #include "fota.h"
 #include "agnss_manager.h"
-static bool agnss_safe_inject(gnss_type_t t, const uint8_t *d, uint16_t n){(void)t;(void)d;(void)n;return false;}
 #include "n32l40x.h"
 #include <string.h>
 
@@ -220,7 +219,7 @@ int main(void)
     geofence_init();
     fota_init();
     agnss_init(GNSS_TYPE_TAU804M);
-    agnss_set_inject_callback(agnss_safe_inject);
+    agnss_set_inject_callback(gnss_vendor_inject);
     at_config_init();
 
     /* ── 5. Build JT808 terminal info from flash config ─────────────────── */

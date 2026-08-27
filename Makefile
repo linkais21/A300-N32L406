@@ -33,6 +33,8 @@ C_SRCS := \
     src/fota.c           \
     src/agnss_storage.c  \
     src/agnss_manager.c  \
+    src/agnss_huada.c    \
+    src/agnss_zhongkewei.c \
     src/geofence.c       \
     src/mileage.c        \
     src/peripherals.c    \

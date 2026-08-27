@@ -5,6 +5,7 @@
 #include "relay.h"
 #include "debug_uart.h"
 #include "config.h"
+#include "flash_config.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -228,6 +229,12 @@ static void handle_cmd(char *line)
     if (strcmp(cmd, "AGPS") == 0) {
         dbg_printf("OK\r\n");
         return;
+    }
+    if (strcmp(cmd, "AGNSS") == 0 && argc >= 2) {
+        device_config_t *cfg = cfg_get();
+        if (!args[0][0] || !args[1][0] || strlen(args[0]) >= CFG_AGNSS_USER_LEN || strlen(args[1]) >= CFG_AGNSS_PWD_LEN) { dbg_printf("ERR:AUTH\r\n"); return; }
+        strncpy(cfg->agnss_user,args[0],CFG_AGNSS_USER_LEN-1); strncpy(cfg->agnss_pwd,args[1],CFG_AGNSS_PWD_LEN-1);
+        cfg->agnss_user[CFG_AGNSS_USER_LEN-1]='\0'; cfg->agnss_pwd[CFG_AGNSS_PWD_LEN-1]='\0'; cfg_save(); dbg_printf("OK\r\n"); return;
     }
 
     dbg_printf("ERR:UNKNOWN CMD\r\n");

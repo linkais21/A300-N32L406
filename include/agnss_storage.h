@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include "ext_flash_layout.h"
 
-typedef enum { GNSS_TYPE_UNKNOWN=0, GNSS_TYPE_TAU804M=1, GNSS_TYPE_ATGM332D=2 } gnss_type_t;
+typedef enum { GNSS_TYPE_UNKNOWN=0, GNSS_TYPE_TAU804M=1, GNSS_TYPE_ATGM332D_F7N=2, GNSS_TYPE_ATGM332D=2 } gnss_type_t;
 
 #define AGNSS_COMMIT_MARKER 0xA66A55AAUL
 #define AGNSS_MAX_DATA      (EXT_FLASH_AGNSS_SLOT_SIZE - 256UL)

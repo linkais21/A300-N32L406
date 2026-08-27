@@ -215,3 +215,15 @@ void gps_send_cmd(const char *cmd)
         USART_SendData(GPS_UART, (uint8_t)*cmd++);
     }
 }
+
+int gps_send_raw(const uint8_t *data, uint32_t len)
+{
+    if (!data || len == 0 || len > 65535UL) return -1;
+    for (uint32_t i = 0; i < len; ++i) {
+        uint32_t guard = 100000UL;
+        while (USART_GetFlagStatus(GPS_UART, USART_FLAG_TXDE) == RESET && guard--) { }
+        if (guard == 0) return -1;
+        USART_SendData(GPS_UART, data[i]);
+    }
+    return 0;
+}

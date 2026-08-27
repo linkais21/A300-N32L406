@@ -35,5 +35,7 @@ void gps_rx_isr(uint8_t byte);
 
 /* Send CASIC command to GPS module */
 void gps_send_cmd(const char *cmd);
+int gps_send_raw(const uint8_t *data, uint32_t len);
+typedef gps_data_t gps_context_t;
 
 #endif

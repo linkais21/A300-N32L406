@@ -1,5 +1,6 @@
 #include "agnss_manager.h"
 #include "agnss_storage.h"
+#include "agnss_vendor.h"
 #include "ec800m.h"
 #include "gps.h"
 #include "fota.h"
