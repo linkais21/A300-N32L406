@@ -19,6 +19,7 @@ typedef struct {
     uint32_t timestamp;
     uint32_t crc32;
     uint8_t  sha256[32];
+    uint32_t metadata_crc;
     uint32_t commit_marker;
 } agnss_meta_t;
 
