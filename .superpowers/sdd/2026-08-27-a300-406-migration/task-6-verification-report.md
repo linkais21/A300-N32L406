@@ -24,11 +24,17 @@ observable `gps_send_raw` call/byte counters.
   frame proving stream reset.
 - Huada fragmented frame: incomplete prefix waits and the completed frame is
   sent once.
-- Zhongkewei malformed and incomplete responses: classified without GPS
-  injection.
+- Zhongkewei malformed and incomplete responses: exercised through the
+  production `agnss_zhongkewei_request()` streaming entry point and confirmed
+  to return without GPS injection; AG-prefixed checksum/length errors clear the
+  buffered state.
 - Zhongkewei response fragmentation: prefix is buffered until complete.
 - Zhongkewei GPS send failure clears buffered state and a complete retry
   succeeds.
+
+The production-entry test also sends a valid response after incomplete and
+malformed input, confirming rejected garbage does not contaminate the next
+valid response.
 
 ## Verification output
 

@@ -127,17 +127,45 @@ int main(void) {
       assert(zhongkewei_parse_response((const uint8_t *)"A", 1, &p, &n) == ZK_RESP_INCOMPLETE);
       assert(zhongkewei_parse_response((const uint8_t *)"XX", 2, &p, &n) == ZK_RESP_MALFORMED);
     }
+    {
+      /* Exercise the production streaming entry point, not only the parser:
+       * incomplete data must wait without injecting GPS, and malformed
+       * AG-prefixed frames must be rejected and clear the buffered state. */
+      uint8_t response[14], bad_checksum[14], bad_length[5];
+      make_zhongkewei(response);
+      memcpy(bad_checksum, response, sizeof response);
+      bad_checksum[11] ^= 0x01;
+      bad_length[0] = 'A'; bad_length[1] = 'G';
+      bad_length[2] = 2; bad_length[3] = 0; bad_length[4] = 0;
+
+      assert(agnss_zhongkewei_request(
+          &(agnss_source_t){response, 4}, &(gps_context_t){0}) == 0);
+      assert(gps_calls == 4);
+
+      assert(agnss_zhongkewei_request(
+          &(agnss_source_t){bad_checksum, sizeof bad_checksum}, &(gps_context_t){0}) < 0);
+      assert(gps_calls == 4);
+
+      assert(agnss_zhongkewei_request(
+          &(agnss_source_t){bad_length, sizeof bad_length}, &(gps_context_t){0}) < 0);
+      assert(gps_calls == 4);
+
+      /* A valid response must still be accepted after the rejected garbage. */
+      assert(agnss_zhongkewei_request(
+          &(agnss_source_t){response, sizeof response}, &(gps_context_t){0}) == 0);
+      assert(gps_calls == 5);
+    }
     { uint8_t response[14]; make_zhongkewei(response);
       fail_uart = 0;
       assert(agnss_zhongkewei_request(&(agnss_source_t){response, 4}, &(gps_context_t){0}) == 0);
-      assert(gps_calls == 4);
+      assert(gps_calls == 5);
       fail_uart = 1;
       assert(agnss_zhongkewei_request(&(agnss_source_t){response + 4, 10}, &(gps_context_t){0}) < 0);
-      assert(gps_calls == 5);
+      assert(gps_calls == 6);
       fail_uart = 0;
       assert(agnss_zhongkewei_request(&(agnss_source_t){response, sizeof response}, &(gps_context_t){0}) == 0);
-      assert(gps_calls == 6);
-      assert(gps_bytes == 4 * 8 + 2 * 3);
+      assert(gps_calls == 7);
+      assert(gps_bytes == 4 * 8 + 3 * 3);
     }
     return 0;
 }
