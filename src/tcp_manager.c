@@ -4,180 +4,165 @@
 #include "debug_uart.h"
 #include "hw_init.h"
 #include "config.h"
+#include "fota.h"
 
 /*
- * Reconnect strategy:
- *   Attempt main server up to MAX_MAIN_FAILS times.
- *   On each failure, backoff doubles: 5s → 10s → 20s → 40s → cap at 120s.
- *   After MAX_MAIN_FAILS, try backup server with same backoff.
- *   After MAX_BACKUP_FAILS, reset modem and start over.
+ * Dual-server mode: both main and backup connect independently.
+ * Each channel retries with exponential backoff on its own.
+ * send_frame() in jt808.c broadcasts to all open channels.
  */
 
-#define MAX_MAIN_FAILS    3
-#define MAX_BACKUP_FAILS  3
 #define BACKOFF_INIT_MS   5000
 #define BACKOFF_MAX_MS    120000
+#define CONNECT_TIMEOUT_MS 15000
+#define MAX_FAILS          5
 
 typedef enum {
-    TM_STATE_WAIT_MODEM = 0,
-    TM_STATE_CONNECTING,
-    TM_STATE_ONLINE,
-    TM_STATE_BACKOFF,
-    TM_STATE_TRY_BACKUP,
-    TM_STATE_RESET_MODEM,
-} tm_state_t;
+    CS_WAIT_MODEM = 0,
+    CS_CONNECTING,
+    CS_ONLINE,
+    CS_BACKOFF,
+    CS_DISABLED,
+} ch_state_t;
 
-static tm_state_t s_state        = TM_STATE_WAIT_MODEM;
-static uint32_t   s_state_ms     = 0;
-static uint8_t    s_main_fails   = 0;
-static uint8_t    s_backup_fails = 0;
-static uint32_t   s_backoff_ms   = BACKOFF_INIT_MS;
-static bool       s_using_backup = false;
-static uint8_t    s_active_ch    = TCP_CH_MAIN;
+typedef struct {
+    ch_state_t state;
+    uint32_t   state_ms;
+    uint32_t   backoff_ms;
+    uint8_t    fails;
+    uint8_t    ch;
+} ch_ctx_t;
 
-static void start_connect(void)
+static ch_ctx_t s_ch[2];   /* [0]=main  [1]=backup */
+
+static void ch_init(ch_ctx_t *c, uint8_t ch)
 {
-    device_config_t *c = cfg_get();
-    const char *ip;
-    uint16_t port;
-    uint8_t ch;
-
-    if (!s_using_backup) {
-        ip   = c->server_ip;
-        port = c->server_port;
-        ch   = TCP_CH_MAIN;
-    } else {
-        ip   = c->backup_ip;
-        port = c->backup_port;
-        ch   = TCP_CH_BACKUP;
-    }
-
-    dbg_printf("[TCP] connecting ch%u -> %s:%u\r\n", ch, ip, port);
-    ec800m_tcp_open(ch, ip, port);
-    s_active_ch  = ch;
-    s_state      = TM_STATE_CONNECTING;
-    s_state_ms   = TICK_MS();
+    c->ch         = ch;
+    c->state      = CS_WAIT_MODEM;
+    c->state_ms   = TICK_MS();
+    c->backoff_ms = BACKOFF_INIT_MS;
+    c->fails      = 0;
 }
 
-static void on_connect_fail(void)
+static void ch_start_connect(ch_ctx_t *c)
 {
-    ec800m_tcp_close(s_active_ch);
+    device_config_t *cfg = cfg_get();
+    const char *ip   = (c->ch == TCP_CH_MAIN) ? cfg->server_ip  : cfg->backup_ip;
+    uint16_t    port = (c->ch == TCP_CH_MAIN) ? cfg->server_port : cfg->backup_port;
 
-    if (!s_using_backup) {
-        s_main_fails++;
-        dbg_printf("[TCP] main fail #%u\r\n", s_main_fails);
-        if (s_main_fails >= MAX_MAIN_FAILS) {
-            s_using_backup = true;
-            s_main_fails   = 0;
-            s_backoff_ms   = BACKOFF_INIT_MS;
-        }
-    } else {
-        s_backup_fails++;
-        dbg_printf("[TCP] backup fail #%u\r\n", s_backup_fails);
-        if (s_backup_fails >= MAX_BACKUP_FAILS) {
-            dbg_printf("[TCP] all servers failed, reset modem\r\n");
-            s_state        = TM_STATE_RESET_MODEM;
-            s_state_ms     = TICK_MS();
-            s_backup_fails = 0;
-            s_using_backup = false;
-            s_backoff_ms   = BACKOFF_INIT_MS;
-            return;
-        }
+    if (ip[0] == '\0' || ip[0] == '0') {
+        c->state = CS_DISABLED;
+        return;
     }
 
-    s_state    = TM_STATE_BACKOFF;
-    s_state_ms = TICK_MS();
-    dbg_printf("[TCP] backoff %u ms\r\n", (unsigned)s_backoff_ms);
+    dbg_printf("[TCP] ch%u connecting -> %s:%u\r\n", c->ch, ip, port);
+    ec800m_tcp_open(c->ch, ip, port);
+    c->state    = CS_CONNECTING;
+    c->state_ms = TICK_MS();
+}
+
+static void ch_on_fail(ch_ctx_t *c)
+{
+    ec800m_tcp_close(c->ch);
+    c->fails++;
+    dbg_printf("[TCP] ch%u fail #%u backoff %ums\r\n",
+               c->ch, c->fails, (unsigned)c->backoff_ms);
+    if (c->fails >= MAX_FAILS) {
+        /* after too many failures, keep retrying at max interval */
+        c->fails = 0;
+    }
+    c->state    = CS_BACKOFF;
+    c->state_ms = TICK_MS();
+}
+
+static void ch_process(ch_ctx_t *c)
+{
+    if (c->state == CS_DISABLED) return;
+
+    switch (c->state) {
+    case CS_WAIT_MODEM:
+        if (ec800m_is_ready())
+            ch_start_connect(c);
+        break;
+
+    case CS_CONNECTING: {
+        tcp_state_t st = ec800m_tcp_state(c->ch);
+        if (st == TCP_STATE_OPEN) {
+            dbg_printf("[TCP] ch%u online\r\n", c->ch);
+            c->state      = CS_ONLINE;
+            c->state_ms   = TICK_MS();
+            c->backoff_ms = BACKOFF_INIT_MS;
+            c->fails      = 0;
+        } else if (st == TCP_STATE_ERROR ||
+                   TICK_MS() - c->state_ms > CONNECT_TIMEOUT_MS) {
+            ch_on_fail(c);
+        }
+        break;
+    }
+
+    case CS_ONLINE: {
+        tcp_state_t st = ec800m_tcp_state(c->ch);
+        if (st != TCP_STATE_OPEN) {
+            dbg_printf("[TCP] ch%u dropped\r\n", c->ch);
+            ch_on_fail(c);
+        }
+        if (!ec800m_is_ready()) {
+            c->state    = CS_WAIT_MODEM;
+            c->state_ms = TICK_MS();
+        }
+        break;
+    }
+
+    case CS_BACKOFF:
+        if (TICK_MS() - c->state_ms >= c->backoff_ms) {
+            c->backoff_ms *= 2;
+            if (c->backoff_ms > BACKOFF_MAX_MS)
+                c->backoff_ms = BACKOFF_MAX_MS;
+            ch_start_connect(c);
+        }
+        break;
+
+    default:
+        break;
+    }
 }
 
 void tcp_manager_init(void)
 {
-    s_state        = TM_STATE_WAIT_MODEM;
-    s_state_ms     = TICK_MS();
-    s_main_fails   = 0;
-    s_backup_fails = 0;
-    s_backoff_ms   = BACKOFF_INIT_MS;
-    s_using_backup = false;
+    ch_init(&s_ch[0], TCP_CH_MAIN);
+    ch_init(&s_ch[1], TCP_CH_BACKUP);
 }
 
 void tcp_manager_process(void)
 {
-    switch (s_state) {
-    case TM_STATE_WAIT_MODEM:
-        if (ec800m_is_ready()) {
-            s_main_fails   = 0;
-            s_backup_fails = 0;
-            s_using_backup = false;
-            s_backoff_ms   = BACKOFF_INIT_MS;
-            start_connect();
-        }
-        break;
-
-    case TM_STATE_CONNECTING: {
-        tcp_state_t st = ec800m_tcp_state(s_active_ch);
-        if (st == TCP_STATE_OPEN) {
-            dbg_printf("[TCP] ch%u online\r\n", s_active_ch);
-            s_state      = TM_STATE_ONLINE;
-            s_state_ms   = TICK_MS();
-            s_backoff_ms = BACKOFF_INIT_MS;  /* reset on success */
-        } else if (st == TCP_STATE_ERROR ||
-                   TICK_MS() - s_state_ms > 15000) {
-            on_connect_fail();
-        }
-        break;
-    }
-
-    case TM_STATE_ONLINE: {
-        tcp_state_t st = ec800m_tcp_state(s_active_ch);
-        if (st != TCP_STATE_OPEN) {
-            dbg_printf("[TCP] ch%u dropped\r\n", s_active_ch);
-            on_connect_fail();
-        }
-        /* If modem lost network, restart registration */
-        if (!ec800m_is_ready()) {
-            s_state    = TM_STATE_WAIT_MODEM;
-            s_state_ms = TICK_MS();
-        }
-        break;
-    }
-
-    case TM_STATE_BACKOFF:
-        if (TICK_MS() - s_state_ms >= s_backoff_ms) {
-            /* Double backoff, capped */
-            s_backoff_ms *= 2;
-            if (s_backoff_ms > BACKOFF_MAX_MS)
-                s_backoff_ms = BACKOFF_MAX_MS;
-            start_connect();
-        }
-        break;
-
-    case TM_STATE_RESET_MODEM:
-        if (TICK_MS() - s_state_ms > 5000) {
-            dbg_printf("[TCP] resetting modem\r\n");
-            ec800m_reset();
-            s_state    = TM_STATE_WAIT_MODEM;
-            s_state_ms = TICK_MS();
-        }
-        break;
-
-    case TM_STATE_TRY_BACKUP:
-        /* Reserved state — failover is handled inline in on_connect_fail(). */
-        start_connect();
-        break;
-    }
+    ch_process(&s_ch[0]);
+    ch_process(&s_ch[1]);
 }
 
 void tcp_manager_reconnect(void)
 {
     ec800m_tcp_close(TCP_CH_MAIN);
     ec800m_tcp_close(TCP_CH_BACKUP);
-    s_using_backup = false;
-    s_main_fails   = 0;
-    s_backup_fails = 0;
-    s_backoff_ms   = BACKOFF_INIT_MS;
-    s_state        = TM_STATE_WAIT_MODEM;
-    s_state_ms     = TICK_MS();
+    ch_init(&s_ch[0], TCP_CH_MAIN);
+    ch_init(&s_ch[1], TCP_CH_BACKUP);
 }
 
-bool    tcp_manager_is_online(void)    { return s_state == TM_STATE_ONLINE; }
-uint8_t tcp_manager_active_ch(void)    { return s_active_ch; }
+bool tcp_manager_is_online(void)
+{
+    return s_ch[0].state == CS_ONLINE || s_ch[1].state == CS_ONLINE;
+}
+
+bool tcp_manager_ch_online(uint8_t ch)
+{
+    if (ch == TCP_CH_MAIN)   return s_ch[0].state == CS_ONLINE;
+    if (ch == TCP_CH_BACKUP) return s_ch[1].state == CS_ONLINE;
+    return false;
+}
+
+uint8_t tcp_manager_active_ch(void)
+{
+    if (s_ch[0].state == CS_ONLINE) return TCP_CH_MAIN;
+    if (s_ch[1].state == CS_ONLINE) return TCP_CH_BACKUP;
+    return TCP_CH_MAIN;
+}
+bool tcp_manager_ota_active(void){fota_state_t s=fota_get_state();return s==FOTA_STATE_CONNECTING||s==FOTA_STATE_DOWNLOADING||s==FOTA_STATE_VERIFYING;}

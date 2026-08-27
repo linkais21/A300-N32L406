@@ -31,6 +31,8 @@ C_SRCS := \
     src/relay.c          \
     src/flash_config.c   \
     src/fota.c           \
+    src/agnss_storage.c  \
+    src/agnss_manager.c  \
     src/geofence.c       \
     src/mileage.c        \
     src/peripherals.c    \

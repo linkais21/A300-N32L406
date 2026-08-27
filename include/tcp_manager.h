@@ -24,4 +24,8 @@ bool tcp_manager_is_online(void);
 /* The channel currently used for JT808 (main or backup) */
 uint8_t tcp_manager_active_ch(void);
 
+/* Returns true when the specified channel is connected and open */
+bool tcp_manager_ch_online(uint8_t ch);
+bool tcp_manager_ota_active(void);
+
 #endif

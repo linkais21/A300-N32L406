@@ -16,6 +16,7 @@
 #include "mileage.h"
 #include "geofence.h"
 #include "fota.h"
+#include "agnss_manager.h"
 #include "n32l40x.h"
 #include <string.h>
 
@@ -217,6 +218,7 @@ int main(void)
     adc_monitor_init();
     geofence_init();
     fota_init();
+    agnss_init(GNSS_TYPE_TAU804M);
     at_config_init();
 
     /* ── 5. Build JT808 terminal info from flash config ─────────────────── */
@@ -264,6 +266,7 @@ int main(void)
         adc_monitor_process();
         geofence_process();
         fota_process();
+        agnss_process();
         pwr_process();
         at_config_process();
         scan_alarms();
