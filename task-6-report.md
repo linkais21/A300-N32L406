@@ -21,6 +21,14 @@ active. The Zhongkewei binary response envelope remains intentionally
 fail-closed: its exact on-wire header/checksum layout has not been confirmed
 from original vendor material or a packet capture.
 
+Round 4 resets Huada state when a decoded frame has an invalid total length,
+and replaces the stream test with a compilable C harness using UART/config
+stubs. The harness covers retry after send failure, malformed/incomplete
+frames, and adapter behavior. GCC is optional in this environment, so the
+harness reports SKIP when unavailable. Zhongkewei remains fail-closed and is
+not claimed production-ready until the original binary response protocol is
+confirmed by the vendor or a packet capture.
+
 Round 3 ensures failed `gps_send_raw` operations clear Huada and Zhongkewei
 stream state before retry, preventing stale bytes and desynchronization. Added
 host stream-contract coverage for fragmented, malformed, and retry-reset cases.

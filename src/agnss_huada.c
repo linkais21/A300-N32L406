@@ -59,7 +59,7 @@ int agnss_huada_inject(const agnss_source_t *src, const gps_context_t *ctx)
     while (s_stream_len - i >= 8U) {
         if (s_stream[i] != 0xF1 || s_stream[i+1] != 0xD9) { ++i; continue; }
         uint16_t n=(uint16_t)s_stream[i+4] | ((uint16_t)s_stream[i+5]<<8); uint32_t total=(uint32_t)n+8U;
-        if (total > HUADA_STREAM_MAX || total < 8U) return -1;
+        if (total > HUADA_STREAM_MAX || total < 8U) { huada_reset_stream(); return -1; }
         if (s_stream_len - i < total) break;
         if (send_frame(s_stream+i,total)<0) { huada_reset_stream(); return -1; } i += total;
     }
