@@ -29,6 +29,11 @@ harness reports SKIP when unavailable. Zhongkewei remains fail-closed and is
 not claimed production-ready until the original binary response protocol is
 confirmed by the vendor or a packet capture.
 
+Round 5 repaired the C harness headers with include guards and declaration
+ordering, and added a malicious oversized Huada length-frame case proving
+stream cleanup before a subsequent valid frame. `REQUIRE_GCC=1` now turns an
+unavailable compiler into a hard failure; otherwise the harness safely skips.
+
 Round 3 ensures failed `gps_send_raw` operations clear Huada and Zhongkewei
 stream state before retry, preventing stale bytes and desynchronization. Added
 host stream-contract coverage for fragmented, malformed, and retry-reset cases.
