@@ -40,7 +40,7 @@ int agnss_zhongkewei_request(const agnss_source_t *src, const gps_context_t *ctx
         zhongkewei_resp_t st=zhongkewei_parse_response(s_rx,s_rx_len,&p,&n);
         if (st == ZK_RESP_INCOMPLETE) return 0;
         if (st == ZK_RESP_MALFORMED) { s_rx_len=0; return -1; }
-        while (n) { uint16_t k = n > 256U ? 256U : n; if (gps_send_raw(p,k)<0) return -1; p += k; n = (uint16_t)(n-k); }
+        while (n) { uint16_t k = n > 256U ? 256U : n; if (gps_send_raw(p,k)<0) { s_rx_len=0; return -1; } p += k; n = (uint16_t)(n-k); }
         s_rx_len=0;
         return 0;
     }

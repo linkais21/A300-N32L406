@@ -10,6 +10,7 @@ static uint8_t s_stream[HUADA_STREAM_MAX];
 static uint32_t s_stream_len;
 static bool s_stream_started;
 static bool agnss_ota_active(void){fota_state_t s=fota_get_state();return s==FOTA_STATE_CONNECTING||s==FOTA_STATE_DOWNLOADING||s==FOTA_STATE_VERIFYING;}
+static void huada_reset_stream(void){s_stream_len=0;s_stream_started=false;}
 
 static int send_frame(const uint8_t *frame, uint32_t len)
 {
@@ -50,9 +51,9 @@ static int inject_location(const gps_context_t *g)
 
 int agnss_huada_inject(const agnss_source_t *src, const gps_context_t *ctx)
 {
-    if (!s_stream_started) { if (inject_time(ctx)<0 || inject_location(ctx)<0) return -1; s_stream_started=true; s_stream_len=0; }
-    if (!src || !src->data || src->len == 0) { int ok = (s_stream_len==0); s_stream_started=false; s_stream_len=0; return ok ? 0 : -1; }
-    if (src->len > HUADA_STREAM_MAX - s_stream_len) { s_stream_started=false; s_stream_len=0; return -1; }
+    if (!s_stream_started) { if (inject_time(ctx)<0 || inject_location(ctx)<0) { huada_reset_stream(); return -1; } s_stream_started=true; s_stream_len=0; }
+    if (!src || !src->data || src->len == 0) { int ok = (s_stream_len==0); huada_reset_stream(); return ok ? 0 : -1; }
+    if (src->len > HUADA_STREAM_MAX - s_stream_len) { huada_reset_stream(); return -1; }
     memcpy(s_stream+s_stream_len, src->data, src->len); s_stream_len += src->len;
     uint32_t i=0;
     while (s_stream_len - i >= 8U) {
@@ -60,7 +61,7 @@ int agnss_huada_inject(const agnss_source_t *src, const gps_context_t *ctx)
         uint16_t n=(uint16_t)s_stream[i+4] | ((uint16_t)s_stream[i+5]<<8); uint32_t total=(uint32_t)n+8U;
         if (total > HUADA_STREAM_MAX || total < 8U) return -1;
         if (s_stream_len - i < total) break;
-        if (send_frame(s_stream+i,total)<0) return -1; i += total;
+        if (send_frame(s_stream+i,total)<0) { huada_reset_stream(); return -1; } i += total;
     }
     if (i) { memmove(s_stream,s_stream+i,s_stream_len-i); s_stream_len -= i; }
     return 0;

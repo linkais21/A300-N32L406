@@ -20,3 +20,11 @@ forwarded to the selected vendor stream parser and rejected while OTA is
 active. The Zhongkewei binary response envelope remains intentionally
 fail-closed: its exact on-wire header/checksum layout has not been confirmed
 from original vendor material or a packet capture.
+
+Round 3 ensures failed `gps_send_raw` operations clear Huada and Zhongkewei
+stream state before retry, preventing stale bytes and desynchronization. Added
+host stream-contract coverage for fragmented, malformed, and retry-reset cases.
+The Zhongkewei binary response framing is still not confirmed from original
+vendor protocol material or packet captures; production remains fail-closed and
+must not be represented as ATGM332D-F7N validated until those artifacts are
+provided.
