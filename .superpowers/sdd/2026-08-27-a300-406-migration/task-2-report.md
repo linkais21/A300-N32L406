@@ -80,3 +80,19 @@ python tools/tests/test_ext_flash_store_host.py
 test_ext_flash_store_host: PASS
 git diff --check
 ```
+
+## Third review follow-up
+
+- FOTA now records lock acquisition in `ota_locked` and only unlocks after a
+  successful acquisition; a failed lock cannot release another owner's lock.
+- Added host coverage for this failure path in `test_ext_flash_store_host.py`.
+
+## Third review verification
+
+```text
+python tools/tests/test_ext_flash_layout.py
+test_ext_flash_layout: PASS
+python tools/tests/test_ext_flash_store_host.py
+test_ext_flash_store_host: PASS
+git diff --check
+```

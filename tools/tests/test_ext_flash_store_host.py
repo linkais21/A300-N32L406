@@ -5,6 +5,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
 
+def test_failed_lock_does_not_unlock_owner():
+    fota = (ROOT / "src" / "fota.c").read_text(encoding="utf-8")
+    assert "if (!ota_locked) { s_state = FOTA_STATE_ERROR; return -1; }" in fota
+    assert "if (!ota_locked) { s_state = FOTA_STATE_ERROR; return; }" in fota
+
 def test_owner_bounds_alignment_and_error_propagation():
     cc = shutil.which("gcc") or shutil.which("clang") or shutil.which("cc")
     if not cc:
@@ -23,5 +28,6 @@ def test_owner_bounds_alignment_and_error_propagation():
         subprocess.run([str(exe)], check=True, capture_output=True, text=True)
 
 if __name__ == "__main__":
+    test_failed_lock_does_not_unlock_owner()
     test_owner_bounds_alignment_and_error_propagation()
     print("test_ext_flash_store_host: PASS")

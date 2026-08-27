@@ -144,8 +144,11 @@ int fota_start(const char *url)
     dbg_printf("[FOTA] starting: %s\r\n", url);
 
     /* Erase first 16 sectors of download area */
-    if (!ext_flash_try_lock(EXT_FLASH_OWNER_OTA) || !ext_flash_erase(EXT_FLASH_OWNER_OTA, FOTA_FLASH_ADDR, FOTA_MAX_SIZE)) { ext_flash_unlock(EXT_FLASH_OWNER_OTA); s_state = FOTA_STATE_ERROR; return -1; }
+    bool ota_locked = ext_flash_try_lock(EXT_FLASH_OWNER_OTA);
+    if (!ota_locked) { s_state = FOTA_STATE_ERROR; return -1; }
+    bool erase_ok = ext_flash_erase(EXT_FLASH_OWNER_OTA, FOTA_FLASH_ADDR, FOTA_MAX_SIZE);
     ext_flash_unlock(EXT_FLASH_OWNER_OTA);
+    if (!erase_ok) { s_state = FOTA_STATE_ERROR; return -1; }
 
     s_state       = FOTA_STATE_CONNECTING;
     s_received    = 0;
@@ -196,8 +199,11 @@ void fota_apply(void)
     memcpy(marker, &magic, 4);
     uint32_t size = s_received;
     memcpy(marker + 4, &size, 4);
-    if (!ext_flash_try_lock(EXT_FLASH_OWNER_OTA) || !ext_flash_erase(EXT_FLASH_OWNER_OTA, FOTA_PENDING_ADDR, FLASH_SECTOR_SIZE) || !ext_flash_write_verified(EXT_FLASH_OWNER_OTA, FOTA_PENDING_ADDR, marker, 8)) { ext_flash_unlock(EXT_FLASH_OWNER_OTA); s_state = FOTA_STATE_ERROR; return; }
+    bool ota_locked = ext_flash_try_lock(EXT_FLASH_OWNER_OTA);
+    if (!ota_locked) { s_state = FOTA_STATE_ERROR; return; }
+    bool marker_ok = ext_flash_erase(EXT_FLASH_OWNER_OTA, FOTA_PENDING_ADDR, FLASH_SECTOR_SIZE) && ext_flash_write_verified(EXT_FLASH_OWNER_OTA, FOTA_PENDING_ADDR, marker, 8);
     ext_flash_unlock(EXT_FLASH_OWNER_OTA);
+    if (!marker_ok) { s_state = FOTA_STATE_ERROR; return; }
 
     dbg_printf("[FOTA] marker written, rebooting...\r\n");
     delay_ms(200);
