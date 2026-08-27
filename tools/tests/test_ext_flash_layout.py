@@ -7,7 +7,7 @@ layout = (ROOT / "include" / "ext_flash_layout.h").read_text(encoding="utf-8")
 def val(name):
     m = re.search(rf"#define\s+{name}\s+([^\n]+)", layout)
     assert m, name
-    expr = m.group(1).split("/*")[0].strip().replace("UL", "").replace("U", "")
+    expr = m.group(1).split("/*")[0].strip().replace("UL", "").replace("U", "").replace("/", "//")
     env = {"FLASH_TOTAL_SIZE": 2 * 1024 * 1024, "FLASH_SECTOR_SIZE": 4096}
     for dep in set(re.findall(r"EXT_FLASH_[A-Z0-9_]+", expr)):
         if dep != name:
