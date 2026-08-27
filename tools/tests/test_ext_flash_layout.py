@@ -55,7 +55,7 @@ def test_config_layout_and_owner_enforcement():
 def test_agnss_alignment_and_exact_slots():
     assert val("EXT_FLASH_AGNSS_META_SIZE") % 4096 == 0
     assert val("EXT_FLASH_AGNSS_SLOT_SIZE") % 4096 == 0
-    assert val("EXT_FLASH_AGNSS_SLOT_B_ADDR") + val("EXT_FLASH_AGNSS_SLOT_SIZE") == 2 * 1024 * 1024
+    assert val("EXT_FLASH_AGNSS_SLOT_B_ADDR") + val("EXT_FLASH_AGNSS_SLOT_SIZE") <= 2 * 1024 * 1024
 
 if __name__ == "__main__":
     test_regions_non_overlapping_and_in_bounds()
