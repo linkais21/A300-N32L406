@@ -26,6 +26,7 @@ C_SRCS := \
     src/at_config.c      \
     src/adc_monitor.c    \
     src/spi_flash.c      \
+    src/ext_flash_store.c \
     src/i2c_accel.c      \
     src/relay.c          \
     src/flash_config.c   \

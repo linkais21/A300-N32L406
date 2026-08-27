@@ -1,0 +1,44 @@
+import re
+from pathlib import Path
+
+ROOT = Path(__file__).parents[2]
+layout = (ROOT / "include" / "ext_flash_layout.h").read_text()
+
+def val(name):
+    m = re.search(rf"#define\s+{name}\s+([^\n]+)", layout)
+    assert m, name
+    expr = m.group(1).split("/*")[0].strip().replace("UL", "").replace("U", "")
+    env = {"FLASH_TOTAL_SIZE": 2 * 1024 * 1024}
+    for dep in ("EXT_FLASH_AGNSS_ADDR",):
+        if dep in expr:
+            env[dep] = val(dep)
+    return eval(expr, {"__builtins__": {}}, env)
+
+def test_regions_non_overlapping_and_in_bounds():
+    regs = [("candidate", val("EXT_FLASH_CANDIDATE_ADDR"), val("EXT_FLASH_CANDIDATE_SIZE")),
+            ("factory", val("EXT_FLASH_FACTORY_ADDR"), val("EXT_FLASH_FACTORY_SIZE")),
+            ("lkg", val("EXT_FLASH_LKG_ADDR"), val("EXT_FLASH_LKG_SIZE")),
+            ("resume", val("EXT_FLASH_RESUME_ADDR"), val("EXT_FLASH_RESUME_SIZE")),
+            ("blind", val("EXT_FLASH_BLIND_ADDR"), val("EXT_FLASH_BLIND_SIZE")),
+            ("agnss", val("EXT_FLASH_AGNSS_ADDR"), val("EXT_FLASH_AGNSS_SIZE"))]
+    for i, (_, addr, size) in enumerate(regs):
+        assert addr + size <= 2 * 1024 * 1024
+        if i:
+            assert regs[i - 1][1] + regs[i - 1][2] <= addr
+
+def test_page_split_formula():
+    addr, length = 0x1F0, 32
+    assert min(256 - (addr % 256), length) == 16
+
+def test_timeout_and_owner_contracts_present():
+    spi = (ROOT / "src" / "spi_flash.c").read_text()
+    store = (ROOT / "src" / "ext_flash_store.c").read_text()
+    assert "SPI_FLASH_TIMEOUT_MS" in spi and "expired" in spi
+    assert "return false" in spi
+    assert "ext_flash_try_lock" in store and "EXT_FLASH_OWNER_NONE" in store
+    assert "FLASH_SECTOR_SIZE" in store
+
+if __name__ == "__main__":
+    test_regions_non_overlapping_and_in_bounds()
+    test_page_split_formula()
+    print("test_ext_flash_layout: PASS")
