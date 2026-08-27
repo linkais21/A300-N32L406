@@ -1,5 +1,7 @@
 #include "agnss_vendor.h"
 #include "debug_uart.h"
+#include "ec800m.h"
+#include "fota.h"
 #include <string.h>
 #include <math.h>
 
@@ -7,6 +9,7 @@
 static uint8_t s_stream[HUADA_STREAM_MAX];
 static uint32_t s_stream_len;
 static bool s_stream_started;
+static bool agnss_ota_active(void){fota_state_t s=fota_get_state();return s==FOTA_STATE_CONNECTING||s==FOTA_STATE_DOWNLOADING||s==FOTA_STATE_VERIFYING;}
 
 static int send_frame(const uint8_t *frame, uint32_t len)
 {
@@ -65,7 +68,14 @@ int agnss_huada_inject(const agnss_source_t *src, const gps_context_t *ctx)
 
 static gnss_type_t s_type = GNSS_TYPE_UNKNOWN;
 void gnss_vendor_set_type(gnss_type_t type) { s_type = type; }
-bool gnss_vendor_network_rx(uint8_t ch, const uint8_t *data, uint16_t len) { (void)ch; (void)data; (void)len; return true; }
+bool gnss_vendor_network_rx(uint8_t ch, const uint8_t *data, uint16_t len)
+{
+    if (ch != EC800M_CH_AGPS || !data || !len || agnss_ota_active()) return false;
+    agnss_source_t src={data,len};
+    if (s_type == GNSS_TYPE_TAU804M) return agnss_huada_inject(&src,gps_get_data()) == 0;
+    if (s_type == GNSS_TYPE_ATGM332D_F7N) return agnss_zhongkewei_request(&src,gps_get_data()) == 0;
+    return false;
+}
 
 bool gnss_vendor_inject(gnss_type_t type, const uint8_t *data, uint16_t len)
 {

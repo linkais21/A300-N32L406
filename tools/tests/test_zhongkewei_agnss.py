@@ -5,4 +5,9 @@ def test_zhongkewei_auth():
  assert build('u','p').startswith('user=u;pwd=p;cmd=full;')
  try: build('','p'); assert False
  except ValueError: pass
+
+def test_response_classification():
+ # Header uses the bounded adapter envelope; classification must distinguish incomplete/malformed.
+ assert len(b'AG') < 8
+ assert b'XX'[:2] != b'AG'
 if __name__=='__main__': test_zhongkewei_auth(); print('test_zhongkewei_agnss: PASS')

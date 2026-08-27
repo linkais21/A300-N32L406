@@ -15,14 +15,18 @@ int zhongkewei_build_request(char *out, uint32_t cap, const char *user, const ch
     return (n < 0 || (uint32_t)n >= cap) ? -1 : n;
 }
 
-int zhongkewei_parse_response(const uint8_t *buf, uint32_t len, const uint8_t **payload, uint16_t *payload_len)
+zhongkewei_resp_t zhongkewei_parse_response(const uint8_t *buf, uint32_t len, const uint8_t **payload, uint16_t *payload_len)
 {
-    if (!buf || !payload || !payload_len || len < 8U) return -1;
+    if (!buf || !payload || !payload_len) return ZK_RESP_MALFORMED;
+    if (len < 2U) return ZK_RESP_INCOMPLETE;
     /* Response is a length-prefixed binary envelope: 'A''G' + uint16 LE length + status + payload + checksum16. */
-    if (buf[0] != 'A' || buf[1] != 'G') return -1;
-    uint16_t n=(uint16_t)buf[2] | ((uint16_t)buf[3]<<8); if (n == 0 || (uint32_t)n + 8U != len || buf[4] != 0) return -1;
-    uint8_t c1=0,c2=0; for(uint32_t i=2;i<5U+n;i++){c1=(uint8_t)(c1+buf[i]);c2=(uint8_t)(c2+c1);} if(buf[5U+n]!=c1||buf[6U+n]!=c2)return -1;
-    *payload=buf+5; *payload_len=(uint16_t)(n-3U); return 0;
+    if (buf[0] != 'A' || buf[1] != 'G') return ZK_RESP_MALFORMED;
+    if (len < 5U) return ZK_RESP_INCOMPLETE;
+    uint16_t n=(uint16_t)buf[2] | ((uint16_t)buf[3]<<8); if (n < 3U || n > ZK_STREAM_MAX-8U) return ZK_RESP_MALFORMED;
+    uint32_t total=(uint32_t)n+8U; if (len < total) return ZK_RESP_INCOMPLETE; if (len != total) return ZK_RESP_MALFORMED;
+    if (buf[4] != 0) return ZK_RESP_MALFORMED;
+    uint8_t c1=0,c2=0; for(uint32_t i=2;i<5U+n;i++){c1=(uint8_t)(c1+buf[i]);c2=(uint8_t)(c2+c1);} if(buf[5U+n]!=c1||buf[6U+n]!=c2)return ZK_RESP_MALFORMED;
+    *payload=buf+5; *payload_len=(uint16_t)(n-3U); return ZK_RESP_OK;
 }
 
 int agnss_zhongkewei_request(const agnss_source_t *src, const gps_context_t *ctx)
@@ -33,7 +37,9 @@ int agnss_zhongkewei_request(const agnss_source_t *src, const gps_context_t *ctx
         if (src->len > ZK_STREAM_MAX-s_rx_len) { s_rx_len=0; return -1; }
         memcpy(s_rx+s_rx_len,src->data,src->len); s_rx_len += src->len;
         const uint8_t *p; uint16_t n;
-        if (zhongkewei_parse_response(s_rx,s_rx_len,&p,&n)<0) return 0; /* await more bytes */
+        zhongkewei_resp_t st=zhongkewei_parse_response(s_rx,s_rx_len,&p,&n);
+        if (st == ZK_RESP_INCOMPLETE) return 0;
+        if (st == ZK_RESP_MALFORMED) { s_rx_len=0; return -1; }
         while (n) { uint16_t k = n > 256U ? 256U : n; if (gps_send_raw(p,k)<0) return -1; p += k; n = (uint16_t)(n-k); }
         s_rx_len=0;
         return 0;
