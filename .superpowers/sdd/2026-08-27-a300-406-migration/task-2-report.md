@@ -81,6 +81,25 @@ test_ext_flash_store_host: PASS
 git diff --check
 ```
 
+## Fourth review follow-up
+
+- Replaced the previous source-string-only lock regression check with an
+  executable host test. The harness compiles the production FOTA and storage
+  arbiter sources, holds the CONFIG owner, invokes the actual `fota_start()`
+  acquisition-failure path, and verifies CONFIG remains held afterward.
+- The test then releases CONFIG and confirms OTA can acquire the arbiter,
+  proving the failure path did not leak or incorrectly transfer ownership.
+
+## Fourth review verification
+
+```text
+python tools/tests/test_ext_flash_layout.py
+test_ext_flash_layout: PASS
+python tools/tests/test_ext_flash_store_host.py
+test_ext_flash_store_host: PASS
+git diff --check
+```
+
 ## Third review follow-up
 
 - FOTA now records lock acquisition in `ota_locked` and only unlocks after a
