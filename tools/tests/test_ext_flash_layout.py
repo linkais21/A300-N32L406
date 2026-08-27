@@ -1,4 +1,7 @@
 import re
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
@@ -55,7 +58,33 @@ def test_config_layout_and_owner_enforcement():
 def test_agnss_alignment_and_exact_slots():
     assert val("EXT_FLASH_AGNSS_META_SIZE") % 4096 == 0
     assert val("EXT_FLASH_AGNSS_SLOT_SIZE") % 4096 == 0
-    assert val("EXT_FLASH_AGNSS_SLOT_B_ADDR") + val("EXT_FLASH_AGNSS_SLOT_SIZE") <= 2 * 1024 * 1024
+    tail_addr = val("EXT_FLASH_AGNSS_RESERVED_TAIL_ADDR")
+    tail_size = val("EXT_FLASH_AGNSS_RESERVED_TAIL_SIZE")
+    assert tail_size == 4096
+    assert tail_addr % 4096 == 0
+    assert val("EXT_FLASH_AGNSS_SLOT_B_ADDR") + val("EXT_FLASH_AGNSS_SLOT_SIZE") <= tail_addr
+    assert tail_addr + tail_size == val("EXT_FLASH_AGNSS_ADDR") + val("EXT_FLASH_AGNSS_SIZE")
+    assert tail_addr + tail_size <= 2 * 1024 * 1024
+
+def test_layout_header_preprocesses_and_compiles():
+    gcc = shutil.which("gcc")
+    assert gcc, "gcc is required for the layout header compile check"
+    with tempfile.TemporaryDirectory() as td:
+        src = Path(td) / "layout_check.c"
+        obj = Path(td) / "layout_check.o"
+        src.write_text(
+            '#include "ext_flash_layout.h"\n'
+            'int layout_check(void) {\n'
+            '    return (int)(EXT_FLASH_AGNSS_RESERVED_TAIL_ADDR + EXT_FLASH_AGNSS_RESERVED_TAIL_SIZE);\n'
+            '}\n',
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [gcc, "-std=c11", "-Wall", "-Werror", "-I", str(ROOT / "include"), "-c", str(src), "-o", str(obj)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
 
 if __name__ == "__main__":
     test_regions_non_overlapping_and_in_bounds()
