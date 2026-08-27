@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "ext_flash_layout.h"
 
 /*
  * FOTA flash layout on BY25Q16:
@@ -19,9 +20,9 @@
  * copying from SPI flash to internal flash on next boot.
  */
 
-#define FOTA_FLASH_ADDR   0x010000UL   /* SPI flash download area start */
-#define FOTA_MAX_SIZE     (1024*1024)  /* 1 MB */
-#define FOTA_PENDING_ADDR 0x00002000UL /* flag sector: pending upgrade marker */
+#define FOTA_FLASH_ADDR   EXT_FLASH_CANDIDATE_ADDR
+#define FOTA_MAX_SIZE     EXT_FLASH_CANDIDATE_SIZE
+#define FOTA_PENDING_ADDR EXT_FLASH_RESUME_ADDR
 #define FOTA_PENDING_MAGIC 0xF07AF07AUL
 
 typedef enum {

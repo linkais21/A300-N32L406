@@ -10,6 +10,7 @@
 #ifndef SPI_FLASH_TIMEOUT_MS
 #define SPI_FLASH_TIMEOUT_MS 100U
 #endif
+#define SPI_FLASH_ERASE_TIMEOUT_MS 500U
 
 void     spi_flash_init(void);
 uint16_t spi_flash_read_id(void);

@@ -1,6 +1,7 @@
 #include "fota.h"
 #include "ec800m.h"
 #include "spi_flash.h"
+#include "ext_flash_store.h"
 #include "flash_config.h"
 #include "debug_uart.h"
 #include "hw_init.h"
@@ -104,7 +105,10 @@ void fota_on_data(const uint8_t *data, uint16_t len)
         return;
     }
 
-    spi_flash_write(s_flash_wr, data, len);
+    if (!ext_flash_try_lock(EXT_FLASH_OWNER_OTA)) { s_state = FOTA_STATE_ERROR; return; }
+    bool write_ok = ext_flash_write_verified(s_flash_wr, data, len);
+    ext_flash_unlock(EXT_FLASH_OWNER_OTA);
+    if (!write_ok) { s_state = FOTA_STATE_ERROR; return; }
     s_flash_wr += len;
     s_received += len;
     s_crc_accum = crc32_update(s_crc_accum, data, len);
@@ -140,8 +144,8 @@ int fota_start(const char *url)
     dbg_printf("[FOTA] starting: %s\r\n", url);
 
     /* Erase first 16 sectors of download area */
-    for (int i = 0; i < 16; i++)
-        spi_flash_erase_sector(FOTA_FLASH_ADDR + i * FLASH_SECTOR_SIZE);
+    if (!ext_flash_try_lock(EXT_FLASH_OWNER_OTA) || !ext_flash_erase(FOTA_FLASH_ADDR, FOTA_MAX_SIZE)) { ext_flash_unlock(EXT_FLASH_OWNER_OTA); s_state = FOTA_STATE_ERROR; return -1; }
+    ext_flash_unlock(EXT_FLASH_OWNER_OTA);
 
     s_state       = FOTA_STATE_CONNECTING;
     s_received    = 0;
@@ -192,8 +196,8 @@ void fota_apply(void)
     memcpy(marker, &magic, 4);
     uint32_t size = s_received;
     memcpy(marker + 4, &size, 4);
-    spi_flash_erase_sector(FOTA_PENDING_ADDR);
-    spi_flash_write(FOTA_PENDING_ADDR, marker, 8);
+    if (!ext_flash_try_lock(EXT_FLASH_OWNER_OTA) || !ext_flash_erase(FOTA_PENDING_ADDR, FLASH_SECTOR_SIZE) || !ext_flash_write_verified(FOTA_PENDING_ADDR, marker, 8)) { ext_flash_unlock(EXT_FLASH_OWNER_OTA); s_state = FOTA_STATE_ERROR; return; }
+    ext_flash_unlock(EXT_FLASH_OWNER_OTA);
 
     dbg_printf("[FOTA] marker written, rebooting...\r\n");
     delay_ms(200);

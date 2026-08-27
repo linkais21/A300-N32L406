@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
-layout = (ROOT / "include" / "ext_flash_layout.h").read_text()
+layout = (ROOT / "include" / "ext_flash_layout.h").read_text(encoding="utf-8")
 
 def val(name):
     m = re.search(rf"#define\s+{name}\s+([^\n]+)", layout)
@@ -33,12 +33,17 @@ def test_page_split_formula():
 def test_timeout_and_owner_contracts_present():
     spi = (ROOT / "src" / "spi_flash.c").read_text()
     store = (ROOT / "src" / "ext_flash_store.c").read_text()
-    assert "SPI_FLASH_TIMEOUT_MS" in spi and "expired" in spi
+    assert "SPI_FLASH_TIMEOUT_MS" in spi and "ready" in spi
     assert "return false" in spi
     assert "ext_flash_try_lock" in store and "EXT_FLASH_OWNER_NONE" in store
     assert "FLASH_SECTOR_SIZE" in store
+    assert "SPI_FLASH_ERASE_TIMEOUT_MS" in (ROOT / "include" / "spi_flash.h").read_text(encoding="utf-8")
+    assert "0x684015" in spi
+    assert "FOTA_MAX_SIZE     EXT_FLASH_CANDIDATE_SIZE" in (ROOT / "include" / "fota.h").read_text(encoding="utf-8")
+    assert "FOTA_PENDING_ADDR EXT_FLASH_RESUME_ADDR" in (ROOT / "include" / "fota.h").read_text(encoding="utf-8")
 
 if __name__ == "__main__":
     test_regions_non_overlapping_and_in_bounds()
     test_page_split_formula()
+    test_timeout_and_owner_contracts_present()
     print("test_ext_flash_layout: PASS")

@@ -44,3 +44,14 @@ be run.
 - Existing OTA/configuration/blind-zone modules still call the legacy SPI API;
   migration to explicit owner acquisition should be completed by their future
   tasks while this service remains the common arbitration primitive.
+
+## Review follow-up
+
+- FOTA now uses the Candidate region constants (448 KiB), Resume/BCR pending
+  marker, owner lock, verified writes, and propagates storage failures.
+- Configuration reads/writes now propagate storage failures and use the config
+  owner lock.
+- JEDEC ID is validated as `68 40 15`; erase polling uses a separate 500 ms
+  deadline (BY25Q16ES worst-case requirement), while read/program keep the
+  shorter transaction deadline.
+- Host test entry point now executes timeout/owner/JEDEC/FOTA contract checks.
