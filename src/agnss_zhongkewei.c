@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#define ZK_STREAM_MAX 4096U
+static uint8_t s_rx[ZK_STREAM_MAX]; static uint32_t s_rx_len;
+
 int zhongkewei_build_request(char *out, uint32_t cap, const char *user, const char *pwd, const gps_context_t *ctx)
 {
     if (!out || cap == 0 || !user || !pwd || !*user || !*pwd || !ctx) return -1;
@@ -27,9 +30,12 @@ int agnss_zhongkewei_request(const agnss_source_t *src, const gps_context_t *ctx
     device_config_t *cfg=cfg_get(); char req[256];
     if (!cfg || zhongkewei_build_request(req,sizeof req,cfg->agnss_user,cfg->agnss_pwd,ctx)<0) return -1;
     if (src && src->data && src->len) {
+        if (src->len > ZK_STREAM_MAX-s_rx_len) { s_rx_len=0; return -1; }
+        memcpy(s_rx+s_rx_len,src->data,src->len); s_rx_len += src->len;
         const uint8_t *p; uint16_t n;
-        if (zhongkewei_parse_response(src->data,src->len,&p,&n)<0) return -1;
+        if (zhongkewei_parse_response(s_rx,s_rx_len,&p,&n)<0) return 0; /* await more bytes */
         while (n) { uint16_t k = n > 256U ? 256U : n; if (gps_send_raw(p,k)<0) return -1; p += k; n = (uint16_t)(n-k); }
+        s_rx_len=0;
         return 0;
     }
     if (!ec800m_is_ready() || ec800m_tcp_state(EC800M_CH_AGPS) != TCP_STATE_OPEN) return -1;

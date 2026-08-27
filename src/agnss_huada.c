@@ -3,6 +3,11 @@
 #include <string.h>
 #include <math.h>
 
+#define HUADA_STREAM_MAX 4096U
+static uint8_t s_stream[HUADA_STREAM_MAX];
+static uint32_t s_stream_len;
+static bool s_stream_started;
+
 static int send_frame(const uint8_t *frame, uint32_t len)
 {
     if (!frame || len < 8 || len > 65543UL || frame[0] != 0xF1 || frame[1] != 0xD9) return -1;
@@ -42,19 +47,27 @@ static int inject_location(const gps_context_t *g)
 
 int agnss_huada_inject(const agnss_source_t *src, const gps_context_t *ctx)
 {
-    if (inject_time(ctx) < 0 || inject_location(ctx) < 0) return -1;
-    if (!src || !src->data || src->len == 0) return 0;
+    if (!s_stream_started) { if (inject_time(ctx)<0 || inject_location(ctx)<0) return -1; s_stream_started=true; s_stream_len=0; }
+    if (!src || !src->data || src->len == 0) { int ok = (s_stream_len==0); s_stream_started=false; s_stream_len=0; return ok ? 0 : -1; }
+    if (src->len > HUADA_STREAM_MAX - s_stream_len) { s_stream_started=false; s_stream_len=0; return -1; }
+    memcpy(s_stream+s_stream_len, src->data, src->len); s_stream_len += src->len;
     uint32_t i=0;
-    while (i + 8U <= src->len) {
-        if (src->data[i] != 0xF1 || src->data[i+1] != 0xD9) { ++i; continue; }
-        uint16_t n=(uint16_t)src->data[i+4] | ((uint16_t)src->data[i+5]<<8);
-        uint32_t total=(uint32_t)n+8U; if (total > src->len-i || total < 8U) return -1;
-        if (send_frame(src->data+i,total) < 0) return -1; i += total;
+    while (s_stream_len - i >= 8U) {
+        if (s_stream[i] != 0xF1 || s_stream[i+1] != 0xD9) { ++i; continue; }
+        uint16_t n=(uint16_t)s_stream[i+4] | ((uint16_t)s_stream[i+5]<<8); uint32_t total=(uint32_t)n+8U;
+        if (total > HUADA_STREAM_MAX || total < 8U) return -1;
+        if (s_stream_len - i < total) break;
+        if (send_frame(s_stream+i,total)<0) return -1; i += total;
     }
-    return (i == src->len) ? 0 : -1;
+    if (i) { memmove(s_stream,s_stream+i,s_stream_len-i); s_stream_len -= i; }
+    return 0;
 }
 
-int gnss_vendor_inject(gnss_type_t type, const uint8_t *data, uint16_t len)
+static gnss_type_t s_type = GNSS_TYPE_UNKNOWN;
+void gnss_vendor_set_type(gnss_type_t type) { s_type = type; }
+bool gnss_vendor_network_rx(uint8_t ch, const uint8_t *data, uint16_t len) { (void)ch; (void)data; (void)len; return true; }
+
+bool gnss_vendor_inject(gnss_type_t type, const uint8_t *data, uint16_t len)
 {
     agnss_source_t src = { data, len };
     const gps_context_t *ctx = gps_get_data();

@@ -17,11 +17,16 @@
 #include "geofence.h"
 #include "fota.h"
 #include "agnss_manager.h"
+#include "agnss_vendor.h"
 #include "n32l40x.h"
 #include <string.h>
 
 /* ── Terminal info loaded from flash at runtime ───────────────────────────── */
 static jt808_terminal_t s_terminal;
+static void agnss_network_rx(uint8_t ch, const uint8_t *data, uint16_t len)
+{
+    (void)gnss_vendor_network_rx(ch, data, len);
+}
 
 static void early_debug_uart_init(void)
 {
@@ -218,7 +223,7 @@ int main(void)
     adc_monitor_init();
     geofence_init();
     fota_init();
-    agnss_init(GNSS_TYPE_TAU804M);
+    agnss_init(cfg_get()->gnss_type);
     agnss_set_inject_callback(gnss_vendor_inject);
     at_config_init();
 
@@ -242,6 +247,7 @@ int main(void)
 
     /* ── 7. 4G modem ─────────────────────────────────────────────────────── */
     ec800m_init();
+    ec800m_register_agnss_recv(agnss_network_rx);
 
     /* ── 8. JT808 + TCP manager ──────────────────────────────────────────── */
     jt808_init(&s_terminal);

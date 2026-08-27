@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "ext_flash_layout.h"
+#include "agnss_storage.h"
 
 /*
  * Flash config layout on BY25Q16 (2 MB):
@@ -32,6 +33,7 @@
 #define CFG_AGNSS_PWD_LEN  64
 
 typedef struct {
+    gnss_type_t gnss_type;
     /* ── Server ──────────────────────────────────────────────────────────── */
     char     server_ip[CFG_IP_LEN];
     uint16_t server_port;
