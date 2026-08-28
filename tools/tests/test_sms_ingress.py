@@ -28,13 +28,18 @@ def run():
         sms_ingress_process(); assert(count==2 && !strcmp(phone,"13900139000") && !strcmp(last,"RELAY=ON"));
         sms_ingress_feed_line("+CMT: \"13700137000\",\"\",\"\""); sms_ingress_feed_line("APN=net#");
         sms_ingress_process(); assert(count==3 && !strcmp(phone,"13700137000") && !strcmp(last,"APN=net"));
+        sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("RESET#");
+        sms_ingress_process(); assert(count==4 && !strcmp(last,"RESET"));
+        sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("PARAM?#");
+        sms_ingress_process(); assert(count==5 && !strcmp(last,"PARAM?"));
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("OK");
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("ERROR");
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("RDY");
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("+CSQ: 20,99");
+        sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("PARAM?x#");
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("VIBSENS=1#");
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("IP=1");
-        sms_ingress_process(); assert(count==3); return 0;
+        sms_ingress_process(); assert(count==5); return 0;
       }
     '''
     with tempfile.TemporaryDirectory() as td:

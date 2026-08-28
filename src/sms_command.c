@@ -37,14 +37,21 @@ bool sms_command_allowed(const char *cmd)
     }
     return root_ok(cmd, root) && valid_suffix(cmd + root);
 }
+bool sms_command_copy_allowed(const uint8_t *data, uint16_t len, char *out, uint16_t out_size)
+{
+    if (!data || !out || len == 0 || len >= out_size || len >= SMS_COMMAND_MAX_LEN) return false;
+    memcpy(out, data, len);
+    out[len] = '\0';
+    return sms_command_allowed(out);
+}
 bool sms_queue_push(const char *from, const uint8_t *data, uint16_t len) {
     sms_queue_entry_t *e;
     uint16_t from_len = 0;
     uint8_t local[SMS_COMMAND_MAX_LEN];
     if (!from || !data || !len || len >= SMS_COMMAND_MAX_LEN || s_count >= SMS_QUEUE_DEPTH) return false;
-    memcpy(local, data, len); local[len] = '\0';
+    if (!sms_command_copy_allowed(data, len, (char *)local, sizeof(local))) return false;
     while (from_len < SMS_PHONE_MAX_LEN && from[from_len]) ++from_len;
-    if (from_len == 0 || from_len == SMS_PHONE_MAX_LEN || !sms_command_allowed((const char *)local)) return false;
+    if (from_len == 0 || from_len == SMS_PHONE_MAX_LEN) return false;
     e = &s_queue[s_tail];
     memcpy(e->from, from, from_len + 1);
     memcpy(e->data, local, len + 1); e->len = len;

@@ -24,7 +24,7 @@ void sms_ingress_feed_line(const char *line)
         return;
     }
     if (!s_pending) return;
-    if (line[0] == '+' || strcmp(line, "OK") == 0 || strcmp(line, "ERROR") == 0 || strcmp(line, "RDY") == 0 || !sms_command_allowed(line)) { s_pending = false; return; }
+    if (line[0] == '+' || strcmp(line, "OK") == 0 || strcmp(line, "ERROR") == 0 || strcmp(line, "RDY") == 0) { s_pending = false; return; }
     while (len < SMS_COMMAND_MAX_LEN && line[len] != '\0') ++len;
     /* SMS command text is terminated by '#'; reject unframed modem chatter. */
     if (len >= 2 && len < SMS_COMMAND_MAX_LEN && line[len - 1] == '#')
