@@ -1,0 +1,428 @@
+#!/usr/bin/env python3
+"""Host contract test for persisted configuration v1-to-v2 migration."""
+
+import os
+import pathlib
+import shutil
+import subprocess
+import sys
+import tempfile
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+HARNESS = r'''
+#include <assert.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "flash_config.h"
+#include "ext_flash_store.h"
+
+typedef struct __attribute__((packed)) {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t data_len;
+} test_slot_hdr_t;
+
+#define SLOT_BYTES FLASH_SECTOR_SIZE
+#define V1_LEN ((uint16_t)offsetof(device_config_t, pid))
+#define DEPLOYED_V1_LEN 684U
+
+static uint8_t flash_image[2U * SLOT_BYTES];
+static int lock_available;
+static uint32_t fail_write_addr;
+static uint32_t writes[8];
+static size_t write_count;
+
+static uint8_t *slot_at(uint32_t addr)
+{
+    assert(addr == CFG_FLASH_ADDR_A || addr == CFG_FLASH_ADDR_B);
+    return &flash_image[addr];
+}
+
+static uint32_t test_crc32(const uint8_t *data, uint32_t len)
+{
+    uint32_t crc = 0xFFFFFFFFUL;
+    while (len-- != 0U) {
+        int i;
+        crc ^= *data++;
+        for (i = 0; i < 8; ++i) {
+            crc = (crc >> 1) ^ ((crc & 1U) ? 0xEDB88320UL : 0U);
+        }
+    }
+    return ~crc;
+}
+
+static void reset_fake_flash(void)
+{
+    memset(flash_image, 0xFF, sizeof(flash_image));
+    lock_available = 1;
+    fail_write_addr = UINT32_MAX;
+    write_count = 0U;
+}
+
+static device_config_t legacy_fixture(const char *server, const char *phone,
+                                      gnss_type_t gnss)
+{
+    device_config_t cfg;
+    memset(&cfg, 0xA5, sizeof(cfg));
+    memcpy(&cfg, &k_config_defaults, V1_LEN);
+    memset(cfg.server_ip, 0, sizeof(cfg.server_ip));
+    memcpy(cfg.server_ip, server, strlen(server));
+    memset(cfg.phone, 0, sizeof(cfg.phone));
+    memcpy(cfg.phone, phone, strlen(phone));
+    cfg.gnss_type = gnss;
+    cfg._reserved[0] = 0x3CU;
+    return cfg;
+}
+
+static device_config_t native_fixture(const char *server, const char *model,
+                                      uint16_t speed)
+{
+    device_config_t cfg = k_config_defaults;
+    memset(cfg.server_ip, 0, sizeof(cfg.server_ip));
+    memcpy(cfg.server_ip, server, strlen(server));
+    memset(cfg.terminal_model, 0, sizeof(cfg.terminal_model));
+    memcpy(cfg.terminal_model, model, strlen(model));
+    cfg.speed_limit_kmh = speed;
+    cfg.sleep_report_mode = 1U;
+    cfg.gpsbds_mode = 3U;
+    return cfg;
+}
+
+static void seed_slot(uint32_t addr, uint16_t version, uint16_t data_len,
+                      const device_config_t *cfg, int valid_crc)
+{
+    test_slot_hdr_t hdr = { CFG_MAGIC, version, data_len };
+    uint8_t *raw = slot_at(addr);
+    uint32_t crc;
+
+    assert((uint32_t)sizeof(hdr) + data_len + 4U <= SLOT_BYTES);
+    memset(raw, 0xFF, SLOT_BYTES);
+    memcpy(raw, &hdr, sizeof(hdr));
+    memcpy(raw + sizeof(hdr), cfg, data_len);
+    crc = test_crc32(raw + sizeof(hdr), data_len);
+    if (!valid_crc) {
+        crc ^= 1U;
+    }
+    memcpy(raw + sizeof(hdr) + data_len, &crc, sizeof(crc));
+}
+
+static void assert_native_slot(uint32_t addr, const device_config_t *want)
+{
+    const uint8_t *raw = slot_at(addr);
+    test_slot_hdr_t hdr;
+    uint32_t stored_crc;
+
+    memcpy(&hdr, raw, sizeof(hdr));
+    assert(hdr.magic == CFG_MAGIC);
+    assert(hdr.version == 2U);
+    assert(hdr.data_len == sizeof(device_config_t));
+    memcpy(&stored_crc, raw + sizeof(hdr) + hdr.data_len, sizeof(stored_crc));
+    assert(stored_crc == test_crc32(raw + sizeof(hdr), hdr.data_len));
+    assert(memcmp(raw + sizeof(hdr), want, sizeof(*want)) == 0);
+}
+
+bool ext_flash_try_lock(ext_flash_owner_t owner)
+{
+    assert(owner == EXT_FLASH_OWNER_CONFIG);
+    if (!lock_available) {
+        return false;
+    }
+    lock_available = 0;
+    return true;
+}
+
+void ext_flash_unlock(ext_flash_owner_t owner)
+{
+    assert(owner == EXT_FLASH_OWNER_CONFIG);
+    assert(!lock_available);
+    lock_available = 1;
+}
+
+bool ext_flash_read(ext_flash_owner_t owner, uint32_t addr, void *buf,
+                    uint32_t len)
+{
+    assert(owner == EXT_FLASH_OWNER_CONFIG);
+    assert(!lock_available);
+    assert(len <= SLOT_BYTES);
+    memcpy(buf, slot_at(addr), len);
+    return true;
+}
+
+bool ext_flash_erase(ext_flash_owner_t owner, uint32_t addr, uint32_t len)
+{
+    assert(owner == EXT_FLASH_OWNER_CONFIG);
+    assert(!lock_available);
+    assert(len == FLASH_SECTOR_SIZE);
+    memset(slot_at(addr), 0xFF, SLOT_BYTES);
+    return true;
+}
+
+bool ext_flash_write_verified(ext_flash_owner_t owner, uint32_t addr,
+                              const void *buf, uint32_t len)
+{
+    assert(owner == EXT_FLASH_OWNER_CONFIG);
+    assert(!lock_available);
+    assert(len <= SLOT_BYTES);
+    assert(write_count < sizeof(writes) / sizeof(writes[0]));
+    writes[write_count++] = addr;
+    if (addr == fail_write_addr) {
+        return false;
+    }
+    memcpy(slot_at(addr), buf, len);
+    return memcmp(slot_at(addr), buf, len) == 0;
+}
+
+void dbg_printf(const char *fmt, ...)
+{
+    (void)fmt;
+}
+
+static void assert_default_suffix(const device_config_t *cfg)
+{
+    assert(cfg->pid[0] == '\0');
+    assert(strcmp(cfg->terminal_model, "A300_406") == 0);
+    assert(cfg->speed_limit_kmh == 120U);
+    assert(cfg->sleep_report_mode == 0U);
+    assert(cfg->gpsbds_mode == 2U);
+}
+
+static void test_v1_a_migrates_other_slot_first(void)
+{
+    device_config_t old = legacy_fixture("legacy-a", "123456789012",
+                                         GNSS_TYPE_ATGM332D_F7N);
+    device_config_t want = k_config_defaults;
+    memcpy(&want, &old, V1_LEN);
+    reset_fake_flash();
+    seed_slot(CFG_FLASH_ADDR_A, 1U, V1_LEN, &old, 1);
+
+    cfg_init();
+
+    assert(memcmp(cfg_get(), &old, V1_LEN) == 0);
+    assert_default_suffix(cfg_get());
+    assert(write_count == 2U);
+    assert(writes[0] == CFG_FLASH_ADDR_B);
+    assert(writes[1] == CFG_FLASH_ADDR_A);
+    assert_native_slot(CFG_FLASH_ADDR_A, &want);
+    assert_native_slot(CFG_FLASH_ADDR_B, &want);
+}
+
+static void test_v1_b_migrates_other_slot_first(void)
+{
+    device_config_t old = legacy_fixture("legacy-b", "210987654321",
+                                         GNSS_TYPE_TAU804M);
+    device_config_t want = k_config_defaults;
+    memcpy(&want, &old, V1_LEN);
+    reset_fake_flash();
+    seed_slot(CFG_FLASH_ADDR_B, 1U, V1_LEN, &old, 1);
+
+    cfg_init();
+
+    assert(strcmp(cfg_get()->server_ip, "legacy-b") == 0);
+    assert_default_suffix(cfg_get());
+    assert(write_count == 2U);
+    assert(writes[0] == CFG_FLASH_ADDR_A);
+    assert(writes[1] == CFG_FLASH_ADDR_B);
+    assert_native_slot(CFG_FLASH_ADDR_A, &want);
+    assert_native_slot(CFG_FLASH_ADDR_B, &want);
+}
+
+static void test_native_v2_is_preferred_over_v1(void)
+{
+    device_config_t old = legacy_fixture("legacy-a", "123456789012",
+                                         GNSS_TYPE_TAU804M);
+    device_config_t native = native_fixture("native-b", "MODEL-B", 88U);
+    reset_fake_flash();
+    seed_slot(CFG_FLASH_ADDR_A, 1U, V1_LEN, &old, 1);
+    seed_slot(CFG_FLASH_ADDR_B, 2U, (uint16_t)sizeof(native), &native, 1);
+
+    cfg_init();
+
+    assert(memcmp(cfg_get(), &native, sizeof(native)) == 0);
+    assert(write_count == 1U);
+    assert(writes[0] == CFG_FLASH_ADDR_A);
+    assert_native_slot(CFG_FLASH_ADDR_A, &native);
+}
+
+static void test_same_format_keeps_a_before_b_precedence(void)
+{
+    device_config_t native_a = native_fixture("native-a", "MODEL-A", 66U);
+    device_config_t native_b = native_fixture("native-b", "MODEL-B", 77U);
+    device_config_t legacy_a = legacy_fixture("legacy-a", "123456789012",
+                                              GNSS_TYPE_TAU804M);
+    device_config_t legacy_b = legacy_fixture("legacy-b", "210987654321",
+                                              GNSS_TYPE_ATGM332D_F7N);
+    reset_fake_flash();
+    seed_slot(CFG_FLASH_ADDR_A, 2U, (uint16_t)sizeof(native_a), &native_a, 1);
+    seed_slot(CFG_FLASH_ADDR_B, 2U, (uint16_t)sizeof(native_b), &native_b, 1);
+    cfg_init();
+    assert(memcmp(cfg_get(), &native_a, sizeof(native_a)) == 0);
+
+    reset_fake_flash();
+    seed_slot(CFG_FLASH_ADDR_A, 1U, V1_LEN, &legacy_a, 1);
+    seed_slot(CFG_FLASH_ADDR_B, 1U, V1_LEN, &legacy_b, 1);
+    cfg_init();
+    assert(memcmp(cfg_get(), &legacy_a, V1_LEN) == 0);
+}
+
+static void test_corrupt_and_illegal_shapes_are_rejected(void)
+{
+    device_config_t corrupt = native_fixture("corrupt", "BADCRC", 1U);
+    device_config_t illegal = native_fixture("illegal", "BADLEN", 2U);
+    reset_fake_flash();
+    seed_slot(CFG_FLASH_ADDR_A, 2U, (uint16_t)sizeof(corrupt), &corrupt, 0);
+    seed_slot(CFG_FLASH_ADDR_B, 1U, (uint16_t)(V1_LEN - 1U), &illegal, 1);
+
+    cfg_init();
+
+    assert(memcmp(cfg_get(), &k_config_defaults, sizeof(*cfg_get())) == 0);
+    assert(write_count == 2U);
+    assert(writes[0] == CFG_FLASH_ADDR_B);
+    assert(writes[1] == CFG_FLASH_ADDR_A);
+
+    reset_fake_flash();
+    seed_slot(CFG_FLASH_ADDR_A, 1U, (uint16_t)sizeof(illegal), &illegal, 1);
+    seed_slot(CFG_FLASH_ADDR_B, 2U, V1_LEN, &illegal, 1);
+    cfg_init();
+    assert(memcmp(cfg_get(), &k_config_defaults, sizeof(*cfg_get())) == 0);
+
+    reset_fake_flash();
+    seed_slot(CFG_FLASH_ADDR_A, 3U, (uint16_t)sizeof(illegal), &illegal, 1);
+    cfg_init();
+    assert(memcmp(cfg_get(), &k_config_defaults, sizeof(*cfg_get())) == 0);
+}
+
+static void test_failed_other_slot_preserves_v1_source(void)
+{
+    device_config_t old = legacy_fixture("survivor", "123456789012",
+                                         GNSS_TYPE_TAU804M);
+    uint8_t source_before[SLOT_BYTES];
+    reset_fake_flash();
+    seed_slot(CFG_FLASH_ADDR_A, 1U, V1_LEN, &old, 1);
+    memcpy(source_before, slot_at(CFG_FLASH_ADDR_A), sizeof(source_before));
+    fail_write_addr = CFG_FLASH_ADDR_B;
+
+    cfg_init();
+
+    assert(write_count == 1U);
+    assert(writes[0] == CFG_FLASH_ADDR_B);
+    assert(memcmp(slot_at(CFG_FLASH_ADDR_A), source_before,
+                  sizeof(source_before)) == 0);
+}
+
+static void test_candidate_store_contract(void)
+{
+    device_config_t live_seed = native_fixture("live", "LIVE", 77U);
+    device_config_t candidate = native_fixture("candidate", "NEXT", 99U);
+    device_config_t live_before;
+
+    reset_fake_flash();
+    seed_slot(CFG_FLASH_ADDR_A, 2U, (uint16_t)sizeof(live_seed), &live_seed, 1);
+    seed_slot(CFG_FLASH_ADDR_B, 2U, (uint16_t)sizeof(live_seed), &live_seed, 1);
+    cfg_init();
+    live_before = *cfg_get();
+
+    lock_available = 0;
+    assert(!cfg_store_candidate(&candidate));
+    assert(memcmp(cfg_get(), &live_before, sizeof(live_before)) == 0);
+    assert(write_count == 0U);
+    lock_available = 1;
+    assert(!cfg_store_candidate(NULL));
+    assert(write_count == 0U);
+
+    fail_write_addr = CFG_FLASH_ADDR_B;
+    assert(!cfg_store_candidate(&candidate));
+    assert(write_count == 1U && writes[0] == CFG_FLASH_ADDR_B);
+    assert(memcmp(cfg_get(), &live_before, sizeof(live_before)) == 0);
+
+    reset_fake_flash();
+    fail_write_addr = CFG_FLASH_ADDR_A;
+    assert(!cfg_store_candidate(&candidate));
+    assert(write_count == 2U);
+    assert(writes[0] == CFG_FLASH_ADDR_B && writes[1] == CFG_FLASH_ADDR_A);
+    assert(memcmp(cfg_get(), &live_before, sizeof(live_before)) == 0);
+    assert_native_slot(CFG_FLASH_ADDR_B, &candidate);
+
+    reset_fake_flash();
+    assert(cfg_store_candidate(&candidate));
+    assert(write_count == 2U);
+    assert(writes[0] == CFG_FLASH_ADDR_B && writes[1] == CFG_FLASH_ADDR_A);
+    assert_native_slot(CFG_FLASH_ADDR_A, &candidate);
+    assert_native_slot(CFG_FLASH_ADDR_B, &candidate);
+    assert(memcmp(cfg_get(), &live_before, sizeof(live_before)) == 0);
+}
+
+int main(void)
+{
+    assert(CFG_VERSION == 2U);
+    assert(CFG_PID_LEN == 12U);
+    assert(CFG_MODEL_LEN == 21U);
+    assert(V1_LEN == DEPLOYED_V1_LEN);
+    test_v1_a_migrates_other_slot_first();
+    test_v1_b_migrates_other_slot_first();
+    test_native_v2_is_preferred_over_v1();
+    test_same_format_keeps_a_before_b_precedence();
+    test_corrupt_and_illegal_shapes_are_rejected();
+    test_failed_other_slot_preserves_v1_source();
+    test_candidate_store_contract();
+    return 0;
+}
+'''
+
+
+def find_compiler():
+    for candidate in ("gcc", "cc"):
+        found = shutil.which(candidate)
+        if found:
+            return found
+        for directory in os.environ.get("PATH", "").split(os.pathsep):
+            executable = pathlib.Path(directory) / (candidate + ".exe")
+            if executable.is_file():
+                return str(executable)
+    return None
+
+
+def main():
+    compiler = find_compiler()
+    if compiler is None:
+        if os.environ.get("REQUIRE_GCC") == "1":
+            print("test_flash_config_migration: FAIL (no C compiler available)")
+            return 1
+        print("test_flash_config_migration: SKIP (no C compiler available)")
+        return 0
+
+    with tempfile.TemporaryDirectory(prefix="flash_config_migration_") as temp_dir:
+        temp = pathlib.Path(temp_dir)
+        harness = temp / "flash_config_migration_harness.c"
+        binary = temp / "flash_config_migration_harness.exe"
+        harness.write_text(HARNESS, encoding="utf-8")
+        command = [
+            compiler, "-std=c99", "-Wall", "-Wextra", "-Werror",
+            "-I", str(ROOT / "include"), str(harness),
+            str(ROOT / "src" / "flash_config.c"), "-o", str(binary),
+        ]
+        build = subprocess.run(command, cwd=ROOT, text=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if build.returncode != 0:
+            print(build.stdout, end="")
+            print("test_flash_config_migration: FAIL (C harness did not compile)")
+            return build.returncode
+        run = subprocess.run([str(binary)], cwd=ROOT, text=True,
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if run.returncode != 0:
+            print(run.stdout, end="")
+            print("test_flash_config_migration: FAIL (C harness assertion)")
+            return run.returncode
+
+    print("test_flash_config_migration: C99 -Wall -Wextra -Werror PASS")
+    print("test_flash_config_migration: PASS")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

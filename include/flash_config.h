@@ -18,7 +18,7 @@
 #define CFG_FLASH_ADDR_A    EXT_FLASH_CONFIG_SLOT_A_ADDR
 #define CFG_FLASH_ADDR_B    EXT_FLASH_CONFIG_SLOT_B_ADDR
 #define CFG_MAGIC           0xA3001406UL
-#define CFG_VERSION         1
+#define CFG_VERSION         2
 
 /* String field max lengths */
 #define CFG_IP_LEN      64
@@ -30,6 +30,8 @@
 #define CFG_PLATE_LEN   16
 #define CFG_AGNSS_USER_LEN 64
 #define CFG_AGNSS_PWD_LEN  64
+#define CFG_PID_LEN         12
+#define CFG_MODEL_LEN       21
 
 typedef struct {
     gnss_type_t gnss_type;
@@ -94,6 +96,13 @@ typedef struct {
     uint32_t fota_size;         /* expected size, 0=unknown */
 
     uint8_t  _reserved[32];
+
+    /* v2 F39 settings; append-only after the complete v1 prefix */
+    char     pid[CFG_PID_LEN];
+    char     terminal_model[CFG_MODEL_LEN];
+    uint16_t speed_limit_kmh;
+    uint8_t  sleep_report_mode;
+    uint8_t  gpsbds_mode;
 } device_config_t;
 
 /* Default values applied on factory reset */
@@ -101,6 +110,7 @@ extern const device_config_t k_config_defaults;
 
 void     cfg_init(void);                /* load from flash; apply defaults if invalid */
 void     cfg_save(void);                /* write to both slots */
+bool     cfg_store_candidate(const device_config_t *candidate);
 void     cfg_factory_reset(void);       /* restore defaults and save */
 
 device_config_t *cfg_get(void);         /* pointer to live RAM copy */
