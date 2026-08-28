@@ -10,6 +10,7 @@
 #include "relay.h"
 #include "flash_config.h"
 #include "tcp_manager.h"
+#include "terminal_identity.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -52,6 +53,8 @@ typedef enum {
     REG_STATE_ONLINE,
 } reg_state_t;
 static reg_state_t s_reg = REG_STATE_IDLE;
+static bool s_force_registration;
+static uint32_t s_register_sent_ms;
 
 static uint32_t s_last_heartbeat_ms = 0;
 static uint32_t s_last_location_ms  = 0;
@@ -144,8 +147,16 @@ static void build_header(frame_t *f, uint16_t msg_id, uint16_t body_len)
     frame_u16(f, ++s_msg_sn);
 }
 
+static bool refresh_terminal_identity(void)
+{
+    char terminal_id[8];
+    if (!terminal_identity_load(terminal_id)) return false;
+    memcpy(s_term.terminal_id, terminal_id, sizeof(s_term.terminal_id));
+    return true;
+}
+
 /* ── Message builders ─────────────────────────────────────────────────────── */
-int jt808_send_register(void)
+static int send_register_current_identity(void)
 {
     /* body: province(2)+city(2)+manuf(5)+model(20)+term_id(7)+color(1)+plate
      * 808-2013 Table 7: 终端型号 BYTE[20], 终端ID BYTE[7] */
@@ -171,6 +182,20 @@ int jt808_send_register(void)
     build_header(&f, MSG_TERMINAL_REGISTER, pos);
     frame_bytes(&f, body, pos);
     return send_frame(&f);
+}
+
+int jt808_send_register(void)
+{
+    if (!refresh_terminal_identity()) return -1;
+    return send_register_current_identity();
+}
+
+void jt808_request_reregister(void)
+{
+    s_force_registration = true;
+    s_reg = REG_STATE_IDLE;
+    s_register_sent_ms = 0U;
+    s_term.terminal_id[0] = '\0';
 }
 
 int jt808_send_auth(const char *code)
@@ -408,6 +433,8 @@ void jt808_init(const jt808_terminal_t *info)
     s_term = *info;
     s_msg_sn = 0;
     s_reg = REG_STATE_IDLE;
+    s_force_registration = false;
+    s_register_sent_ms = 0U;
     /* restore auth code from flash so reconnects skip re-registration */
     if (info->auth_code[0])
         strncpy(s_cfg.auth_code, info->auth_code, sizeof(s_cfg.auth_code) - 1);
@@ -433,26 +460,41 @@ void jt808_process(void)
      * an auth code from a previous successful registration.  Only send 0x0100
      * register when no auth code is known. */
     if (s_reg == REG_STATE_IDLE) {
-        if (s_cfg.auth_code[0]) {
+        static uint32_t identity_log_ms;
+        static bool identity_logged;
+        if (!refresh_terminal_identity()) {
+            if (!identity_logged || now - identity_log_ms >= 5000U) {
+                dbg_printf("[808] identity invalid\r\n");
+                identity_log_ms = now;
+                identity_logged = true;
+            }
+            return;
+        }
+        identity_logged = false;
+        if (s_cfg.auth_code[0] && !s_force_registration) {
             dbg_printf("[808] auth -> %s\r\n", s_cfg.auth_code);
             jt808_send_auth(s_cfg.auth_code);
             s_reg = REG_STATE_AUTHENTICATING;
         } else {
             dbg_printf("[808] register\r\n");
-            jt808_send_register();
-            s_reg = REG_STATE_REGISTERING;
+            if (send_register_current_identity() == 0) {
+                s_reg = REG_STATE_REGISTERING;
+                s_force_registration = false;
+                s_register_sent_ms = now;
+            }
         }
         s_last_heartbeat_ms = now;
         s_last_location_ms  = now;
         return;
     }
     if (s_reg == REG_STATE_REGISTERING) {
-        static uint32_t reg_sent_ms = 0;
-        if (reg_sent_ms == 0) reg_sent_ms = now;
-        if (now - reg_sent_ms > 5000) {
+        if (now - s_register_sent_ms >= 5000U) {
             dbg_printf("[808] register retry\r\n");
-            jt808_send_register();
-            reg_sent_ms = now;
+            if (jt808_send_register() != 0) {
+                s_register_sent_ms = now;
+                return;
+            }
+            s_register_sent_ms = now;
         }
         return;
     }

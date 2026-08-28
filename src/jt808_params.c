@@ -4,6 +4,7 @@
 #include "ec800m.h"
 #include "debug_uart.h"
 #include "config.h"
+#include "terminal_identity.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -195,8 +196,15 @@ void jt808_params_handle_query(const uint8_t *body, uint16_t len, uint16_t sn)
 /* ── 0x8107 Terminal info query ───────────────────────────────────────────── */
 void jt808_params_handle_info_query(uint16_t sn)
 {
-    uint8_t body[80];   /* total payload = 70 bytes; padded for safety */
+    uint8_t body[96];
     uint16_t pos = 0;
+    char tid[8];
+
+    if (!terminal_identity_load(tid)) {
+        jt808_send_general_resp(sn, MSG_QUERY_TERMINAL_INFO, 1U);
+        dbg_printf("[808] 0x8107 identity invalid\r\n");
+        return;
+    }
 
     /* Terminal type flags */
     body[pos++] = 0x00; body[pos++] = 0x07;  /* passenger + dangerous goods + bus */
@@ -208,17 +216,19 @@ void jt808_params_handle_info_query(uint16_t sn)
     strncpy(model, FW_MODEL_STR, 19);
     memcpy(body + pos, model, 20); pos += 20;
     /* Terminal ID (7 bytes) */
-    char tid[7]; memset(tid, 0, 7);
-    strncpy(tid, "T663B01", 7);
     memcpy(body + pos, tid, 7); pos += 7;
     /* ICCID (10 bytes BCD) */
     memset(body + pos, 0, 10); pos += 10;
-    /* HW version (12 bytes) */
-    memset(body + pos, 0, 12); pos += 12;
-    /* FW version (12 bytes) */
-    char fwv[12]; memset(fwv, 0, 12);
-    strncpy(fwv, FW_VERSION_STR, 11);
-    memcpy(body + pos, fwv, 12); pos += 12;
+    /* HW version length + bytes (no separate hardware version configured). */
+    body[pos++] = 0U;
+    /* FW version length + complete release version. */
+    size_t fwv_len = strlen(FW_VERSION_STR);
+    if (fwv_len > 255U || pos + 1U + fwv_len + 2U > sizeof(body)) {
+        jt808_send_general_resp(sn, MSG_QUERY_TERMINAL_INFO, 1U);
+        return;
+    }
+    body[pos++] = (uint8_t)fwv_len;
+    memcpy(body + pos, FW_VERSION_STR, fwv_len); pos += (uint16_t)fwv_len;
     /* GNSS properties: BDS+GPS+GLONASS */
     body[pos++] = 0x07;
     /* Communication properties: LTE */

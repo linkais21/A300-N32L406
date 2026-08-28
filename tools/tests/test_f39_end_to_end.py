@@ -58,7 +58,7 @@ int dbg_printf(const char *fmt, ...) { (void)fmt; return 0; }
 void tcp_manager_reconnect(void) { effect('N'); }
 void gnss_vendor_set_type(gnss_type_t t) { (void)t; }
 void agnss_init(gnss_type_t t) { (void)t; }
-int jt808_send_register(void) { effect('J'); return 0; }
+void jt808_request_reregister(void) { effect('J'); }
 void relay_set(bool on) { (void)on; }
 bool relay_get(void) { return false; }
 bool gps_is_valid(void) { return true; }
@@ -215,7 +215,7 @@ void jt808_set_server(const char *ip, uint16_t p, bool backup) { (void)ip; (void
 void tcp_manager_reconnect(void) { ++network_calls; }
 void gnss_vendor_set_type(gnss_type_t t) { (void)t; ++gnss_calls; }
 void agnss_init(gnss_type_t t) { (void)t; ++gnss_calls; }
-int jt808_send_register(void) { ++jt808_register_calls; return 0; }
+void jt808_request_reregister(void) { ++jt808_register_calls; }
 void relay_set(bool on) { relay_state = on ? 1U : 0U; ++relay_calls; }
 bool relay_get(void) { return relay_state != 0U; }
 bool gps_is_valid(void) { return true; }
@@ -277,6 +277,9 @@ int main(void) {
     feed_cmt("13900000001", "GPSBDS,2#");
     modem_step(); sms_process(); modem_step(); complete_sms(true);
     assert(config.gpsbds_mode == 2 && gps_cmd_calls > 0 && gnss_calls > 0);
+    feed_cmt("13900000001", "PID,76543210987#");
+    modem_step(); sms_process(); modem_step(); complete_sms(true);
+    assert(!strcmp(config.pid, "76543210987") && jt808_register_calls > 0);
     feed_cmt("13900000001", "RELAY,1#");
     modem_step(); sms_process(); modem_step(); complete_sms(true);
     assert(relay_state == 1 && relay_calls > 0);

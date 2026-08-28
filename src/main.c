@@ -227,7 +227,7 @@ int main(void)
     memset(&s_terminal, 0, sizeof(s_terminal));
     memcpy(s_terminal.manufacturer_id, "CYHLL", 5);
     strncpy(s_terminal.terminal_model, FW_MODEL_STR,   sizeof(s_terminal.terminal_model) - 1);
-    strncpy(s_terminal.terminal_id,    "T663B01",      sizeof(s_terminal.terminal_id) - 1);
+    s_terminal.terminal_id[0] = '\0';
     strncpy(s_terminal.plate_no,       c->plate_no,    sizeof(s_terminal.plate_no) - 1);
     strncpy(s_terminal.phone,          c->phone,       sizeof(s_terminal.phone) - 1);
     strncpy(s_terminal.auth_code,      c->auth_code,   sizeof(s_terminal.auth_code) - 1);

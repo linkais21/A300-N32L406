@@ -49,7 +49,7 @@ static void f39_gnss_mode(gnss_type_t type, uint8_t mode, void *context)
     (void)context; gnss_vendor_set_type(type);
     if (mode >= 1U && mode <= 3U) gps_send_cmd(commands[mode]);
 }
-static void f39_jt808_reregister(void *context) { (void)context; (void)jt808_send_register(); }
+static void f39_jt808_reregister(void *context) { (void)context; jt808_request_reregister(); }
 static void f39_remaining_refresh(void *context) { (void)context; agnss_init(cfg_get()->gnss_type); }
 static bool f39_relay(bool cut, void *context) { (void)context; relay_set(cut); return true; }
 static bool f39_gps_valid(void *context) { (void)context; return gps_is_valid(); }

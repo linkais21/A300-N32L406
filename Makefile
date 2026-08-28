@@ -23,6 +23,7 @@ C_SRCS := \
     src/gps.c            \
     src/jt808.c          \
     src/jt808_params.c   \
+    src/terminal_identity.c \
     src/at_config.c      \
     src/adc_monitor.c    \
     src/spi_flash.c      \

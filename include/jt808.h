@@ -62,6 +62,7 @@ void jt808_on_recv(uint8_t ch, const uint8_t *data, uint16_t len);
 
 /* Build and send messages */
 int jt808_send_register(void);
+void jt808_request_reregister(void);
 int jt808_send_auth(const char *code);
 int jt808_send_heartbeat(void);
 int jt808_send_location(void);

@@ -2,7 +2,7 @@
 $BUILD_DATE = Get-Date -Format "yyyyMMdd"
 $BUILD_TIME = Get-Date -Format "HHmmss"
 $BUILD_DATETIME = Get-Date -Format "MMM dd yyyy - HH:mm:ss"
-$FW_VERSION = "T663B_B409_${BUILD_DATE}_${BUILD_TIME}"
+$FW_VERSION = "T360-A300_406_20260823000000,V3.000"
 
 $versionHeader = @"
 /* Auto-generated build version - DO NOT EDIT */

@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 FORBIDDEN = ("T663B", "A300_202511", "V1.274")
+TARGET_VERSION = "T360-A300_406_20260823000000,V3.000"
 DEFAULT_PATHS = (
     "src",
     "include",
@@ -19,7 +20,33 @@ DEFAULT_PATHS = (
     "manifest.yaml",
     "manifest.yml",
     "packaging",
+    "gen_version.ps1",
 )
+
+IDENTITY_CONSUMERS = (
+    "src/main.c", "src/jt808.c", "src/jt808_params.c", "src/terminal_identity.c",
+)
+SEVEN_BYTE_LITERAL = re.compile(r'"([A-Za-z0-9]{7})"')
+
+
+def strip_c_comments(text: str) -> str:
+    return re.sub(r"/\*.*?\*/|//[^\r\n]*", "", text, flags=re.DOTALL)
+
+
+def fixed_identity_findings(text: str):
+    """Return seven-byte alphanumeric literals from an identity consumer."""
+    return [match.group(1) for match in SEVEN_BYTE_LITERAL.finditer(strip_c_comments(text))]
+
+
+def generated_version_is_target(text: str) -> bool:
+    """Require the generator's release version source to be the approved target."""
+    match = re.search(r'(?m)^\s*\$FW_VERSION\s*=\s*"([^"]+)"\s*$', text)
+    return match is not None and match.group(1) == TARGET_VERSION
+
+
+def c_define_is_target(text: str, name: str) -> bool:
+    match = re.search(rf'(?m)^\s*#define\s+{re.escape(name)}\s+"([^"]+)"\s*$', text)
+    return match is not None and match.group(1) == TARGET_VERSION
 
 
 def iter_release_files(root: Path, paths: tuple[str, ...] = DEFAULT_PATHS):
@@ -49,6 +76,16 @@ def scan(root: Path, paths: tuple[str, ...] = DEFAULT_PATHS):
             for token, pattern in patterns:
                 if pattern.search(line):
                     findings.append((path, number, token, line.strip()))
+        relative = path.relative_to(root).as_posix()
+        if relative in IDENTITY_CONSUMERS:
+            for terminal_id in fixed_identity_findings("\n".join(lines)):
+                findings.append((path, 0, "<fixed-terminal-id>", terminal_id))
+        if path.name.casefold() == "gen_version.ps1" and not generated_version_is_target("\n".join(lines)):
+            findings.append((path, 0, "<target-version>", f"expected {TARGET_VERSION}"))
+        if relative == "include/config.h" and not c_define_is_target("\n".join(lines), "FW_VERSION_STR"):
+            findings.append((path, 0, "<target-version>", f"FW_VERSION_STR must be {TARGET_VERSION}"))
+        if relative == "include/build_version.h" and not c_define_is_target("\n".join(lines), "FW_FULL_VERSION"):
+            findings.append((path, 0, "<target-version>", f"FW_FULL_VERSION must be {TARGET_VERSION}"))
     return findings
 
 
