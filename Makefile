@@ -41,6 +41,7 @@ C_SRCS := \
     src/sms_command.c    \
     src/f39_command.c    \
     src/f39_config_adapter.c \
+    src/f39_reply.c      \
     src/sms_ingress.c    \
     src/power_mgr.c      \
     src/tcp_manager.c    \
