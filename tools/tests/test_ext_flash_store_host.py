@@ -1,4 +1,6 @@
-import shutil, subprocess, tempfile
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
@@ -8,7 +10,8 @@ def _compiler():
 
 def test_fota_failed_lock_does_not_unlock_owner():
     cc = _compiler()
-    if not cc: return
+    if not cc:
+        return
     with tempfile.TemporaryDirectory() as td:
         t = Path(td)
         (t / "spi_flash.h").write_text("""#ifndef SPI_FLASH_H
@@ -47,7 +50,15 @@ typedef struct { uint32_t fota_size; } config_t;
 const config_t *cfg_get(void);
 #endif
 """, encoding="utf-8")
-        (t / "flash_config.h").write_text("#ifndef FLASH_CONFIG_H\n#define FLASH_CONFIG_H\n#include \"config.h\"\n#include \"ext_flash_layout.h\"\n#endif\n", encoding="utf-8")
+        (t / "flash_config.h").write_text(
+            """#ifndef FLASH_CONFIG_H
+#define FLASH_CONFIG_H
+#include "config.h"
+#include "ext_flash_layout.h"
+#endif
+""",
+            encoding="utf-8",
+        )
         (t / "fota.h").write_text("""#ifndef FOTA_H
 #define FOTA_H
 #include <stdint.h>
@@ -61,7 +72,13 @@ typedef struct { fota_state_t state; uint32_t offset; uint32_t expected_length; 
 void fota_init(void); int fota_start(const char *); void fota_on_http_header(const char *); void fota_on_chunk(const uint8_t *, uint16_t, uint32_t);
 #endif
 """, encoding="utf-8")
-        for name, body in {"ec800m.h":"#include <stdint.h>\n#define EC800M_CH_OTA 1\nint ec800m_tcp_open(int,const char*,uint16_t);\nvoid ec800m_tcp_send(int,const uint8_t*,uint16_t);\n", "debug_uart.h":"void dbg_printf(const char *, ...);\n", "hw_init.h":"void delay_ms(unsigned);\n", "n32l40x.h":"void NVIC_SystemReset(void);\n"}.items(): (t / name).write_text(body, encoding="utf-8")
+        for name, body in {
+            "ec800m.h": "#include <stdint.h>\n#define EC800M_CH_OTA 1\nint ec800m_tcp_open(int, const char *, uint16_t);\nvoid ec800m_tcp_send(int, const uint8_t *, uint16_t);\n",
+            "debug_uart.h": "void dbg_printf(const char *, ...);\n",
+            "hw_init.h": "void delay_ms(unsigned);\n",
+            "n32l40x.h": "void NVIC_SystemReset(void);\n",
+        }.items():
+            (t / name).write_text(body, encoding="utf-8")
         (t / "harness.c").write_text("""#include <assert.h>
 #include <string.h>
 #include "config.h"
@@ -85,16 +102,54 @@ int main(void){assert(ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG));assert(fota_st
         subprocess.run([str(exe)],check=True,capture_output=True,text=True)
 
 def test_owner_bounds_alignment_and_error_propagation():
-    cc=_compiler()
-    if not cc:return
+    cc = _compiler()
+    if not cc:
+        return
     with tempfile.TemporaryDirectory() as td:
-        t=Path(td)
-        (t/"spi_flash.h").write_text("#include <stdint.h>\n#include <stdbool.h>\n#define FLASH_SECTOR_SIZE 4096\n#define FLASH_TOTAL_SIZE (2*1024*1024)\nbool spi_flash_read(uint32_t,uint8_t*,uint32_t); bool spi_flash_write(uint32_t,const uint8_t*,uint32_t); bool spi_flash_erase_sector(uint32_t);\n",encoding="utf-8")
-        (t/"config.h").write_text("#include <stdint.h>\nextern volatile uint32_t g_tick_ms;\n#define TICK_MS() g_tick_ms\n#define SPI_FLASH_TIMEOUT_MS 2U\n",encoding="utf-8")
-        (t/"ext_flash_layout.h").write_text("#include <stdint.h>\n#include \"spi_flash.h\"\ntypedef enum { EXT_FLASH_OWNER_NONE=0, EXT_FLASH_OWNER_OTA, EXT_FLASH_OWNER_AGNSS, EXT_FLASH_OWNER_BLIND_ZONE, EXT_FLASH_OWNER_CONFIG } ext_flash_owner_t;\n",encoding="utf-8")
-        (t/"ext_flash_store.h").write_text("#include <stdint.h>\n#include <stdbool.h>\n#include \"ext_flash_layout.h\"\nbool ext_flash_read(ext_flash_owner_t,uint32_t,void*,uint32_t); bool ext_flash_write_verified(ext_flash_owner_t,uint32_t,const void*,uint32_t); bool ext_flash_erase(ext_flash_owner_t,uint32_t,uint32_t); bool ext_flash_try_lock(ext_flash_owner_t); void ext_flash_unlock(ext_flash_owner_t);\n",encoding="utf-8")
-        (t/"harness.c").write_text("#include <assert.h>\n#include <string.h>\n#include \"ext_flash_store.h\"\nvolatile uint32_t g_tick_ms; static int fail_write;\nbool spi_flash_read(uint32_t a,uint8_t*b,uint32_t n){memset(b,0x5a,n);return a+n<=FLASH_TOTAL_SIZE;} bool spi_flash_write(uint32_t a,const uint8_t*b,uint32_t n){(void)b;return !fail_write&&a+n<=FLASH_TOTAL_SIZE;} bool spi_flash_erase_sector(uint32_t a){return a<FLASH_TOTAL_SIZE&&!(a%FLASH_SECTOR_SIZE);}\nint main(void){uint8_t b[4],d[4]={1,2,3,4};assert(ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG));assert(!ext_flash_try_lock(EXT_FLASH_OWNER_OTA));assert(!ext_flash_read(EXT_FLASH_OWNER_OTA,0,b,1));assert(ext_flash_read(EXT_FLASH_OWNER_CONFIG,0,b,1));assert(!ext_flash_erase(EXT_FLASH_OWNER_CONFIG,1,FLASH_SECTOR_SIZE));assert(ext_flash_erase(EXT_FLASH_OWNER_CONFIG,0,FLASH_SECTOR_SIZE));fail_write=1;assert(!ext_flash_write_verified(EXT_FLASH_OWNER_CONFIG,0,d,sizeof d));ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);assert(ext_flash_try_lock(EXT_FLASH_OWNER_OTA));ext_flash_unlock(EXT_FLASH_OWNER_OTA);return 0;}\n",encoding="utf-8")
-        exe=t/"host_test.exe"; subprocess.run([cc,"-std=c99","-I",str(t),str(ROOT/"src"/"ext_flash_store.c"),str(t/"harness.c"),"-o",str(exe)],check=True,capture_output=True,text=True); subprocess.run([str(exe)],check=True,capture_output=True,text=True)
+        t = Path(td)
+        (t / "spi_flash.h").write_text("""#ifndef SPI_FLASH_H
+#define SPI_FLASH_H
+#include <stdint.h>
+#include <stdbool.h>
+#define FLASH_PAGE_SIZE 256
+#define FLASH_SECTOR_SIZE 4096
+#define FLASH_TOTAL_SIZE (2*1024*1024)
+bool spi_flash_read(uint32_t,uint8_t*,uint32_t);
+bool spi_flash_write(uint32_t,const uint8_t*,uint32_t);
+bool spi_flash_erase_sector(uint32_t);
+#endif
+""", encoding="utf-8")
+        (t / "config.h").write_text("#include <stdint.h>\nextern volatile uint32_t g_tick_ms;\n#define TICK_MS() g_tick_ms\n#define SPI_FLASH_TIMEOUT_MS 2U\n", encoding="utf-8")
+        (t / "ext_flash_layout.h").write_text("""#include <stdint.h>
+#include "spi_flash.h"
+typedef enum { EXT_FLASH_OWNER_NONE=0, EXT_FLASH_OWNER_OTA, EXT_FLASH_OWNER_AGNSS, EXT_FLASH_OWNER_BLIND_ZONE, EXT_FLASH_OWNER_CONFIG } ext_flash_owner_t;
+""", encoding="utf-8")
+        (t / "ext_flash_store.h").write_text("""#include <stdint.h>
+#include <stdbool.h>
+#include "ext_flash_layout.h"
+bool ext_flash_read(ext_flash_owner_t,uint32_t,void*,uint32_t);
+bool ext_flash_write_verified(ext_flash_owner_t,uint32_t,const void*,uint32_t);
+bool ext_flash_erase(ext_flash_owner_t,uint32_t,uint32_t);
+bool ext_flash_try_lock(ext_flash_owner_t);
+void ext_flash_unlock(ext_flash_owner_t);
+""", encoding="utf-8")
+        (t / "harness.c").write_text("""#include <assert.h>
+#include <stdint.h>
+#include <string.h>
+#include "ext_flash_store.h"
+volatile uint32_t g_tick_ms;
+static int fail_write;
+bool spi_flash_read(uint32_t a,uint8_t*b,uint32_t n){ memset(b,0x5a,n); return a+n<=FLASH_TOTAL_SIZE; }
+bool spi_flash_write(uint32_t a,const uint8_t*b,uint32_t n){ (void)b; return !fail_write && a+n<=FLASH_TOTAL_SIZE; }
+bool spi_flash_erase_sector(uint32_t a){ return a<FLASH_TOTAL_SIZE && !(a%FLASH_SECTOR_SIZE); }
+int main(void){ uint8_t b[4],d[4]={1,2,3,4}; assert(ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG)); assert(!ext_flash_try_lock(EXT_FLASH_OWNER_OTA)); assert(!ext_flash_read(EXT_FLASH_OWNER_OTA,0,b,1)); assert(ext_flash_read(EXT_FLASH_OWNER_CONFIG,0,b,1)); assert(!ext_flash_erase(EXT_FLASH_OWNER_CONFIG,1,FLASH_SECTOR_SIZE)); assert(ext_flash_erase(EXT_FLASH_OWNER_CONFIG,0,FLASH_SECTOR_SIZE)); fail_write=1; assert(!ext_flash_write_verified(EXT_FLASH_OWNER_CONFIG,0,d,sizeof d)); ext_flash_unlock(EXT_FLASH_OWNER_CONFIG); assert(ext_flash_try_lock(EXT_FLASH_OWNER_OTA)); ext_flash_unlock(EXT_FLASH_OWNER_OTA); return 0;}
+""", encoding="utf-8")
+        exe = t / "host_test.exe"
+        cmd = [cc, "-std=c99", "-I", str(t), str(ROOT / "src" / "ext_flash_store.c"), str(t / "harness.c"), "-o", str(exe)]
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        subprocess.run([str(exe)], check=True, capture_output=True, text=True)
 
 if __name__ == "__main__":
-    test_fota_failed_lock_does_not_unlock_owner(); test_owner_bounds_alignment_and_error_propagation(); print("test_ext_flash_store_host: PASS")
+    test_fota_failed_lock_does_not_unlock_owner()
+    test_owner_bounds_alignment_and_error_propagation()
+    print("test_ext_flash_store_host: PASS")
