@@ -41,6 +41,34 @@ bool ext_flash_write_verified(ext_flash_owner_t owner, uint32_t addr, const void
     }
     return true;
 }
+ext_flash_program_result_t ext_flash_write_result(
+    ext_flash_owner_t owner, uint32_t addr, const void *buf, uint32_t len)
+{
+    spi_flash_program_result_t programmed;
+    uint8_t verify[256];
+    const uint8_t *src = (const uint8_t *)buf;
+    uint32_t remaining = len;
+    if (!owner_ok(owner) || !buf || !range_ok(addr, len))
+        return EXT_FLASH_PROGRAM_NOT_ISSUED;
+    programmed = spi_flash_write_result(addr, src, len);
+    if (programmed == SPI_FLASH_PROGRAM_NOT_ISSUED)
+        return EXT_FLASH_PROGRAM_NOT_ISSUED;
+    if (programmed != SPI_FLASH_PROGRAM_COMPLETED)
+        return EXT_FLASH_PROGRAM_ISSUED_UNCERTAIN;
+    while (remaining != 0U) {
+        uint32_t n = remaining > sizeof(verify) ? sizeof(verify) : remaining;
+        uint32_t i;
+        if (!owner_ok(owner) || !spi_flash_read(addr, verify, n))
+            return EXT_FLASH_PROGRAM_ISSUED_UNCERTAIN;
+        for (i = 0U; i < n; ++i)
+            if (verify[i] != src[i])
+                return EXT_FLASH_PROGRAM_ISSUED_UNCERTAIN;
+        addr += n;
+        src += n;
+        remaining -= n;
+    }
+    return EXT_FLASH_PROGRAM_VERIFIED;
+}
 bool ext_flash_erase(ext_flash_owner_t owner, uint32_t addr, uint32_t len)
 {
     if (!owner_ok(owner) || !range_ok(addr, len) || (addr % FLASH_SECTOR_SIZE) != 0 || (len % FLASH_SECTOR_SIZE) != 0) return false;

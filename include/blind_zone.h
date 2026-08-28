@@ -7,6 +7,7 @@
 #define BLIND_ZONE_LOCATION_MAX       40U
 #define BLIND_ZONE_LOGICAL_CAPACITY   10000UL
 #define BLIND_ZONE_PHYSICAL_SLOTS     10240UL
+#define BLIND_ZONE_PEEK_MAX           11U
 
 typedef enum {
     BLIND_ZONE_OK = 0,
@@ -44,7 +45,13 @@ uint8_t blind_zone_peek(blind_zone_record_t *records, uint8_t capacity,
 blind_zone_result_t blind_zone_consume(uint32_t first_sequence, uint8_t count);
 void blind_zone_get_diagnostics(blind_zone_diagnostics_t *out);
 #ifdef BLIND_ZONE_TEST
+typedef enum {
+    BLIND_ZONE_TEST_RECOVERY_OTHER = 0,
+    BLIND_ZONE_TEST_RECOVERY_ROLLOVER_SCAN,
+    BLIND_ZONE_TEST_RECOVERY_ROLLOVER_ERASE,
+} blind_zone_test_recovery_state_t;
 void blind_zone_test_set_diagnostics(const blind_zone_diagnostics_t *value);
+blind_zone_test_recovery_state_t blind_zone_test_recovery_state(void);
 #endif
 
 #endif

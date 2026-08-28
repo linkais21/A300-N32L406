@@ -55,6 +55,11 @@ static blind_zone_record_t s_queue[32];
 static uint8_t s_queue_count;
 static uint32_t s_queue_sequence = 1U;
 static unsigned s_append_count;
+static blind_zone_result_t s_append_script[4];
+static uint8_t s_append_script_count;
+static uint8_t s_append_script_index;
+static bool s_append_event_pending;
+static blind_zone_record_t s_append_pending_record;
 static unsigned s_consume_count;
 static bool s_consume_pending_once;
 static bool s_consume_stale_once;
@@ -114,10 +119,22 @@ void blind_zone_recovery_process(void) {}
 bool blind_zone_ready(void) { return true; }
 blind_zone_result_t blind_zone_append(const blind_zone_record_t *record)
 {
+    blind_zone_result_t result = BLIND_ZONE_OK;
     assert(record != NULL && s_queue_count < 32U);
-    s_queue[s_queue_count++] = *record;
     ++s_append_count;
-    return BLIND_ZONE_OK;
+    if (s_append_event_pending)
+        assert(memcmp(record, &s_append_pending_record, sizeof(*record)) == 0);
+    if (s_append_script_index < s_append_script_count)
+        result = s_append_script[s_append_script_index++];
+    if (result == BLIND_ZONE_PENDING) {
+        if (!s_append_event_pending) s_append_pending_record = *record;
+        s_append_event_pending = true;
+        return result;
+    }
+    if (result != BLIND_ZONE_OK) return result;
+    s_queue[s_queue_count++] = *record;
+    s_append_event_pending = false;
+    return result;
 }
 uint8_t blind_zone_peek(blind_zone_record_t *records, uint8_t capacity,
                         uint32_t *first_sequence)
@@ -315,6 +332,31 @@ int main(void)
     assert(s_append_count == 0U && s_send_count == 0U);
     jt808_set_report_interval(1U, 4U);
     jt808_set_report_interval(30U, 60U);
+
+    /* A definite never-issued store attempt retains and retries the exact event. */
+    s_append_script[0] = BLIND_ZONE_IO_ERROR;
+    s_append_script[1] = BLIND_ZONE_OK;
+    s_append_script_count = 2U; s_append_script_index = 0U;
+    s_tcp_online = false;
+    assert(jt808_send_location() == -2);
+    s_gps.lat += 1.0;
+    assert(jt808_send_location() == 0);
+    assert(s_queue_count == 1U && s_append_script_index == 2U);
+    s_queue_count = 0U; s_queue_sequence = 1U;
+
+    /* Issued-but-uncertain remains pending until reconciliation confirms one copy. */
+    s_append_script[0] = BLIND_ZONE_PENDING;
+    s_append_script[1] = BLIND_ZONE_PENDING;
+    s_append_script[2] = BLIND_ZONE_OK;
+    s_append_script_count = 3U; s_append_script_index = 0U;
+    assert(jt808_send_location() == -2);
+    s_gps.lon += 1.0;
+    assert(jt808_send_location() == -2);
+    assert(jt808_send_location() == 0);
+    assert(s_queue_count == 1U && s_append_script_index == 3U);
+    s_queue_count = 0U; s_queue_sequence = 1U;
+    s_append_script_count = 0U; s_append_script_index = 0U;
+    s_append_count = 0U;
 
     /* A live report that cannot reach an authenticated session is stored once. */
     s_tcp_online = false;

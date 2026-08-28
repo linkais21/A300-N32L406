@@ -72,6 +72,8 @@ static bool s_auth_active;
 static uint32_t s_last_heartbeat_ms = 0;
 static uint32_t s_last_location_ms  = 0;
 static uint32_t s_alarm_flags       = 0;
+static bool s_append_pending;
+static blind_zone_record_t s_append_pending_record;
 
 /* RX reassembly */
 #define JT808_RX_MAX  512
@@ -368,6 +370,16 @@ int jt808_send_location(void)
     frame_t f;
     int result = -1;
 
+    if (s_append_pending) {
+        blind_zone_result_t stored = blind_zone_append(&s_append_pending_record);
+        if (stored == BLIND_ZONE_OK) {
+            s_append_pending = false;
+            s_alarm_flags = 0;
+            return 0;
+        }
+        return -2;
+    }
+
     record.length = (uint8_t)encode_location_body(record.location);
     if (jt808_is_online()) {
         frame_init(&f);
@@ -382,11 +394,16 @@ int jt808_send_location(void)
 
     {
         blind_zone_result_t stored = blind_zone_append(&record);
-        if (stored == BLIND_ZONE_OK || stored == BLIND_ZONE_PENDING) {
+        if (stored == BLIND_ZONE_OK) {
             s_alarm_flags = 0;
             return 0;
         }
-        if (stored == BLIND_ZONE_BUSY) return -2;
+        if (stored == BLIND_ZONE_PENDING || stored == BLIND_ZONE_BUSY ||
+            stored == BLIND_ZONE_IO_ERROR) {
+            s_append_pending_record = record;
+            s_append_pending = true;
+            return -2;
+        }
     }
     return result;
 }
@@ -633,6 +650,7 @@ void jt808_init(const jt808_terminal_t *info)
     s_auth_serial = 0U;
     s_auth_channel = TCP_CH_MAIN;
     s_auth_generation = 0U;
+    s_append_pending = false;
     memset(s_rx, 0, sizeof(s_rx));
     blind_zone_replay_reset();
     /* restore auth code from flash so reconnects skip re-registration */

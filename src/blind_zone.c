@@ -17,7 +17,7 @@
 #define BZ_RECOVERY_READS      16U
 #define BZ_RECORD_ACTIVE       0xffffffffUL
 #define BZ_RECORD_CONSUMED     0x00000000UL
-#define BZ_PEEK_SNAPSHOT_MAX   12U
+#define BZ_PEEK_SNAPSHOT_MAX   BLIND_ZONE_PEEK_MAX
 
 #if (EXT_FLASH_BLIND_SIZE != (FLASH_SECTOR_SIZE + BZ_DATA_SIZE))
 #error "blind-zone layout must be one metadata sector plus 640 KiB data"
@@ -80,6 +80,12 @@ typedef enum {
 } bz_recovery_state_t;
 
 typedef enum { BZ_META_ERROR = 0, BZ_META_OK, BZ_META_PENDING } bz_meta_result_t;
+typedef enum {
+    BZ_APPEND_NONE = 0,
+    BZ_APPEND_UNCERTAIN,
+    BZ_APPEND_COMMITTED,
+    BZ_APPEND_NOT_COMMITTED,
+} bz_append_state_t;
 
 typedef struct {
     bool valid;
@@ -129,6 +135,9 @@ static bool s_old_format_seen;
 static uint32_t s_peek_slots[BZ_PEEK_SNAPSHOT_MAX];
 static uint32_t s_peek_first_sequence, s_peek_after_slot, s_peek_used_slots;
 static uint8_t s_peek_count;
+static bz_append_state_t s_append_state;
+static blind_zone_record_t s_append_record;
+static uint32_t s_append_sequence;
 static blind_zone_diagnostics_t s_diagnostics;
 
 static bz_meta_result_t commit_meta_locked(uint32_t head, uint32_t count,
@@ -150,7 +159,36 @@ void blind_zone_test_set_diagnostics(const blind_zone_diagnostics_t *value)
 {
     if (value != NULL) s_diagnostics = *value;
 }
+
+blind_zone_test_recovery_state_t blind_zone_test_recovery_state(void)
+{
+    if (s_recovery == BZ_RECOVERY_ROLLOVER_SCAN)
+        return BLIND_ZONE_TEST_RECOVERY_ROLLOVER_SCAN;
+    if (s_recovery == BZ_RECOVERY_ROLLOVER_ERASE)
+        return BLIND_ZONE_TEST_RECOVERY_ROLLOVER_ERASE;
+    return BLIND_ZONE_TEST_RECOVERY_OTHER;
+}
 #endif
+
+static bool same_append_record(const blind_zone_record_t *record)
+{
+    return record->length == s_append_record.length &&
+           memcmp(record->location, s_append_record.location, record->length) == 0;
+}
+
+static void begin_append_transaction(const blind_zone_record_t *record)
+{
+    s_append_record = *record;
+    s_append_sequence = s_next_sequence;
+    s_append_state = BZ_APPEND_UNCERTAIN;
+}
+
+static void confirm_append_if_sequence(uint32_t next_sequence)
+{
+    if (s_append_state == BZ_APPEND_UNCERTAIN &&
+        next_sequence == s_append_sequence + 1U)
+        s_append_state = BZ_APPEND_COMMITTED;
+}
 
 static void begin_reconcile(void)
 {
@@ -500,6 +538,8 @@ bool blind_zone_init(void)
     s_resume_reconcile = false;
     s_old_format_seen = false;
     s_peek_count = 0U;
+    s_append_state = BZ_APPEND_NONE;
+    s_append_sequence = 0U;
     apply_state(0U, 0U, 0U, 0U, 1U);
     s_generation = 0U;
     return true;
@@ -575,7 +615,10 @@ void blind_zone_recovery_process(void)
                 adopted_span <= BLIND_ZONE_PHYSICAL_SLOTS) {
                 bz_meta_result_t adopted =
                     adopt_record_locked(s_reconcile_cursor, adopted_span);
-                if (adopted == BZ_META_OK) begin_reconcile();
+                if (adopted == BZ_META_OK) {
+                    confirm_append_if_sequence(s_next_sequence);
+                    begin_reconcile();
+                }
                 else if (adopted == BZ_META_PENDING) {
                     s_resume_reconcile = true;
                     saturating_increment(&s_diagnostics.pending_reconciliation);
@@ -587,8 +630,11 @@ void blind_zone_recovery_process(void)
             ++s_reconcile_scanned;
             ++reads;
         }
-        if (s_reconcile_scanned == BLIND_ZONE_PHYSICAL_SLOTS)
+        if (s_reconcile_scanned == BLIND_ZONE_PHYSICAL_SLOTS) {
+            if (s_append_state == BZ_APPEND_UNCERTAIN)
+                s_append_state = BZ_APPEND_NOT_COMMITTED;
             s_recovery = BZ_RECOVERY_READY;
+        }
     } else if (s_recovery == BZ_RECOVERY_FINALIZE) {
         bz_meta_result_t committed =
             commit_meta_locked(s_head_slot, s_count, s_span,
@@ -626,6 +672,7 @@ void blind_zone_recovery_process(void)
             uint32_t consumed = BZ_RECORD_CONSUMED;
             uint32_t target = s_consume_targets[s_consume_target_index];
             if (!read_record_locked(target, &record)) {
+                saturating_increment(&s_diagnostics.consume_io);
                 saturating_increment(&s_diagnostics.recovery_retry);
                 break;
             }
@@ -634,6 +681,7 @@ void blind_zone_recovery_process(void)
                     record_addr(target) + offsetof(bz_flash_record_t, state),
                     &consumed, sizeof(consumed)))
             {
+                saturating_increment(&s_diagnostics.consume_io);
                 saturating_increment(&s_diagnostics.recovery_retry);
                 break;
             }
@@ -686,6 +734,7 @@ void blind_zone_recovery_process(void)
                                   s_pending_next, s_pending_next_sequence) == BZ_META_OK) {
                 apply_state(s_pending_head, s_pending_count, s_pending_span,
                             s_pending_next, s_pending_next_sequence);
+                confirm_append_if_sequence(s_pending_next_sequence);
                 if (s_consume_count != 0U &&
                     s_pending_head == s_consume_head &&
                     s_pending_count == s_consume_remaining) {
@@ -714,6 +763,19 @@ blind_zone_result_t blind_zone_append(const blind_zone_record_t *record)
     uint32_t write_slot;
     if (record == NULL || record->length > BLIND_ZONE_LOCATION_MAX)
         return BLIND_ZONE_INVALID;
+    if (s_append_state != BZ_APPEND_NONE) {
+        if (!same_append_record(record)) {
+            saturating_increment(&s_diagnostics.busy);
+            return BLIND_ZONE_BUSY;
+        }
+        if (s_append_state == BZ_APPEND_COMMITTED && blind_zone_ready()) {
+            s_append_state = BZ_APPEND_NONE;
+            return BLIND_ZONE_OK;
+        }
+        if (s_append_state == BZ_APPEND_UNCERTAIN || !blind_zone_ready())
+            return BLIND_ZONE_PENDING;
+        s_append_state = BZ_APPEND_NONE;
+    }
     if (!blind_zone_ready()) {
         saturating_increment(&s_diagnostics.busy);
         return BLIND_ZONE_BUSY;
@@ -779,25 +841,25 @@ blind_zone_result_t blind_zone_append(const blind_zone_record_t *record)
         ext_flash_unlock(EXT_FLASH_OWNER_BLIND_ZONE);
         return BLIND_ZONE_IO_ERROR;
     }
-    if (!ext_flash_write_verified(EXT_FLASH_OWNER_BLIND_ZONE,
-                                  record_addr(write_slot) +
-                                      offsetof(bz_flash_record_t, commit_marker),
-                                  &commit, sizeof(commit))) {
-        uint32_t observed_marker;
-        if (ext_flash_read(EXT_FLASH_OWNER_BLIND_ZONE,
-                           record_addr(write_slot) +
-                               offsetof(bz_flash_record_t, commit_marker),
-                           &observed_marker, sizeof(observed_marker)) &&
-            observed_marker != BZ_COMMIT_MARKER) {
+    {
+        ext_flash_program_result_t marker_result = ext_flash_write_result(
+            EXT_FLASH_OWNER_BLIND_ZONE,
+            record_addr(write_slot) +
+                offsetof(bz_flash_record_t, commit_marker),
+            &commit, sizeof(commit));
+        if (marker_result == EXT_FLASH_PROGRAM_NOT_ISSUED) {
             saturating_increment(&s_diagnostics.io_precommit_drop);
             saturating_increment(&s_diagnostics.append_io);
             ext_flash_unlock(EXT_FLASH_OWNER_BLIND_ZONE);
             return BLIND_ZONE_IO_ERROR;
         }
-        begin_reconcile();
-        saturating_increment(&s_diagnostics.pending_reconciliation);
-        ext_flash_unlock(EXT_FLASH_OWNER_BLIND_ZONE);
-        return BLIND_ZONE_PENDING;
+        if (marker_result == EXT_FLASH_PROGRAM_ISSUED_UNCERTAIN) {
+            begin_append_transaction(record);
+            begin_reconcile();
+            saturating_increment(&s_diagnostics.pending_reconciliation);
+            ext_flash_unlock(EXT_FLASH_OWNER_BLIND_ZONE);
+            return BLIND_ZONE_PENDING;
+        }
     }
 
     head = s_head_slot;
@@ -808,6 +870,7 @@ blind_zone_result_t blind_zone_append(const blind_zone_record_t *record)
         uint32_t new_head = advance_to_sequence_locked(
             head, span, s_next_sequence - count + 1U, &skipped);
         if (new_head >= BLIND_ZONE_PHYSICAL_SLOTS) {
+            begin_append_transaction(record);
             begin_reconcile();
             saturating_increment(&s_diagnostics.pending_reconciliation);
             ext_flash_unlock(EXT_FLASH_OWNER_BLIND_ZONE);
@@ -824,6 +887,7 @@ blind_zone_result_t blind_zone_append(const blind_zone_record_t *record)
             head, count, span, (write_slot + 1U) % BLIND_ZONE_PHYSICAL_SLOTS,
             s_next_sequence + 1U);
         if (committed != BZ_META_OK) {
+            begin_append_transaction(record);
             if (committed == BZ_META_ERROR) begin_reconcile();
             saturating_increment(&s_diagnostics.pending_reconciliation);
             ext_flash_unlock(EXT_FLASH_OWNER_BLIND_ZONE);
@@ -840,10 +904,13 @@ uint8_t blind_zone_peek(blind_zone_record_t *records, uint8_t capacity,
     uint8_t copied = 0U;
     uint32_t slot;
     uint32_t scanned = 0U;
+    uint32_t copied_after_slot = 0U;
+    uint32_t copied_used_slots = 0U;
     uint32_t expected;
     bool read_failed = false;
     if (!blind_zone_ready() || records == NULL || first_sequence == NULL || capacity == 0U)
         return 0U;
+    if (capacity > BZ_PEEK_SNAPSHOT_MAX) capacity = BZ_PEEK_SNAPSHOT_MAX;
     if (!ext_flash_try_lock_now(EXT_FLASH_OWNER_BLIND_ZONE)) {
         saturating_increment(&s_diagnostics.busy);
         return 0U;
@@ -870,12 +937,14 @@ uint8_t blind_zone_peek(blind_zone_record_t *records, uint8_t capacity,
         if (copied < BZ_PEEK_SNAPSHOT_MAX) s_peek_slots[copied] =
             (slot + BLIND_ZONE_PHYSICAL_SLOTS - 1U) % BLIND_ZONE_PHYSICAL_SLOTS;
         ++copied;
+        copied_after_slot = slot;
+        copied_used_slots = scanned;
     }
     if (copied != 0U && copied <= BZ_PEEK_SNAPSHOT_MAX) {
         s_peek_first_sequence = *first_sequence;
         s_peek_count = copied;
-        s_peek_after_slot = slot;
-        s_peek_used_slots = scanned;
+        s_peek_after_slot = copied_after_slot;
+        s_peek_used_slots = copied_used_slots;
     }
     if (copied == 0U && s_count != 0U && !read_failed) {
         uint32_t old_head = s_head_slot;
