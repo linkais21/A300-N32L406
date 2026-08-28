@@ -40,3 +40,24 @@ Verification (`REQUIRE_GCC=1`): end-to-end, SMS ingress/whitelist/boundary, pars
 
 - CMGS prompt and result phases now fail immediately on exact `ERROR`/`+CMS ERROR:` lines.
 - Retry exhaustion clears retained sender/reply and reset handoff state, preventing stale RESET scheduling.
+
+## Re-review fix round 4/5
+
+- Added a real production-chain host harness linking `ec800m.c`, `peripherals.c`,
+  `at_config.c`, and F39 modules.  It drives the DMA UART5 ring through
+  `ec800m_process()`, verifies sender-preserving `+CMT` ingress, CMGS prompt,
+  `+CMGS` success, plain `ERROR` failure, retry exhaustion and RESET handoff,
+  and injects a TCP-payload/SMS owner race.
+- Extended AT ownership across the complete TCP `QISEND` prompt, payload and
+  `SEND OK` transaction using a dedicated TCP owner.  SMS admission now fails
+  boundedly while any AT owner is active.
+- Consolidated EC800M UART TX paths behind a length-aware 100 ms stall margin
+  (plus wire-time budget) with watchdog reloads, including modem-alive probe
+  and SMS/TCP payloads.
+
+Verification (`REQUIRE_GCC=1`): `python tools/tests/test_f39_end_to_end.py`
+PASS (unit and real production-chain harness).  The brief-mandated SMS/F39
+ingress, whitelist, execution boundary, parser, config, DUALSET and action
+checks also pass under `REQUIRE_GCC=1`; `git diff --check` is clean.  The broad
+`tools/tests` run is 33 passed / 1 unrelated pre-existing host-shim compile
+failure in `test_ext_flash_store_host.py` (missing shim headers/macros).

@@ -50,12 +50,27 @@ static char s_sms_text[192];
 static bool s_sms_prompt;
 static bool s_sms_prompt_line_start;
 static uint32_t s_sms_deadline_ms;
-typedef enum { AT_OWNER_NONE, AT_OWNER_BLOCKING, AT_OWNER_SMS } at_owner_t;
+typedef enum { AT_OWNER_NONE, AT_OWNER_BLOCKING, AT_OWNER_SMS, AT_OWNER_TCP } at_owner_t;
 static at_owner_t s_at_owner;
 static void sms_tx_process(void);
-static bool sms_tx_send(const uint8_t *data, uint16_t len)
+
+static bool at_owner_acquire(at_owner_t owner)
 {
-    uint32_t deadline = TICK_MS() + 100U;
+    if (owner == AT_OWNER_NONE || s_at_owner != AT_OWNER_NONE) return false;
+    s_at_owner = owner;
+    return true;
+}
+
+static void at_owner_release(at_owner_t owner)
+{
+    if (s_at_owner == owner) s_at_owner = AT_OWNER_NONE;
+}
+
+static bool usart_send_buf(const uint8_t *data, uint16_t len)
+{
+    /* 115200 baud needs about 87 us/byte on the wire.  Keep a 100 ms
+     * hardware-stall margin without rejecting a valid 1200-byte payload. */
+    uint32_t deadline = TICK_MS() + 100U + (((uint32_t)len + 7U) / 8U);
     uint16_t i;
     for (i = 0U; i < len; ++i) {
         while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXDE) == RESET) {
@@ -69,6 +84,11 @@ static bool sms_tx_send(const uint8_t *data, uint16_t len)
         if ((int32_t)(TICK_MS() - deadline) >= 0) return false;
     }
     return true;
+}
+
+static bool usart_send_str(const char *s)
+{
+    return usart_send_buf((const uint8_t *)s, (uint16_t)strlen(s));
 }
 
 /* ── RX init: DMA is configured in hw_init.c; only reset the read pointer here ─────────── */
@@ -91,31 +111,12 @@ void DMA_Channel5_IRQHandler(void)
 }
 
 /* ── Low-level send ───────────────────────────────────────────────────────── */
-static void usart_send_str(const char *s)
-{
-    while (*s) {
-        while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXDE) == RESET);
-        USART_SendData(EC800M_UART, (uint8_t)*s++);
-    }
-    while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXC) == RESET);
-}
-
-static void usart_send_buf(const uint8_t *buf, uint16_t len)
-{
-    for (uint16_t i = 0; i < len; i++) {
-        while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXDE) == RESET);
-        USART_SendData(EC800M_UART, buf[i]);
-    }
-}
-
 /* ── Send AT command and wait for response (blocking, timeout ms) ─────────── */
 static uint16_t s_at_resp_len = 0;  /* actual byte count (including \0) */
 
-static bool at_send_wait(const char *cmd, const char *expect,
-                          uint32_t timeout_ms)
+static bool at_send_wait_owned(const char *cmd, const char *expect,
+                               uint32_t timeout_ms)
 {
-    if (s_at_owner != AT_OWNER_NONE) return false;
-    s_at_owner = AT_OWNER_BLOCKING;
     memset(s_at_resp, 0, sizeof(s_at_resp));
     s_at_resp_len = 0;
 
@@ -123,8 +124,7 @@ static bool at_send_wait(const char *cmd, const char *expect,
     if (cmd[0]) dbg_printf(">> %s\r\n", cmd);
 #endif
     if (cmd[0]) {
-        usart_send_str(cmd);
-        usart_send_str("\r\n");
+        if (!usart_send_str(cmd) || !usart_send_str("\r\n")) return false;
     }
 
     uint32_t start = TICK_MS();
@@ -146,11 +146,20 @@ static bool at_send_wait(const char *cmd, const char *expect,
         }
         s_at_resp_len = resp_pos;
         s_at_resp[resp_pos] = '\0';
-        if (expect[0] && strstr(s_at_resp, expect)) { s_at_owner = AT_OWNER_NONE; return true; }
-        if (strstr(s_at_resp, "ERROR")) { s_at_owner = AT_OWNER_NONE; return false; }
+        if (expect[0] && strstr(s_at_resp, expect)) return true;
+        if (strstr(s_at_resp, "ERROR")) return false;
     }
-    s_at_owner = AT_OWNER_NONE;
     return false;
+}
+
+static bool at_send_wait(const char *cmd, const char *expect,
+                         uint32_t timeout_ms)
+{
+    bool ok;
+    if (!at_owner_acquire(AT_OWNER_BLOCKING)) return false;
+    ok = at_send_wait_owned(cmd, expect, timeout_ms);
+    at_owner_release(AT_OWNER_BLOCKING);
+    return ok;
 }
 
 /* ── Power control ────────────────────────────────────────────────────────── */
@@ -158,16 +167,23 @@ static bool at_send_wait(const char *cmd, const char *expect,
 /* Poll to detect if EC800M is already online; returns true if AT responded */
 static bool ec800m_is_alive(uint32_t timeout_ms)
 {
-    /* flush receive buffer */
-    while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_RXDNE) != RESET)
+    bool alive = false;
+    if (!at_owner_acquire(AT_OWNER_BLOCKING)) return false;
+    /* Flush receive buffer, but never let a stuck status bit spin forever. */
+    uint32_t flush_deadline = TICK_MS() + timeout_ms;
+    while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_RXDNE) != RESET) {
+        IWDG_ReloadKey();
+        if ((int32_t)(TICK_MS() - flush_deadline) >= 0) {
+            at_owner_release(AT_OWNER_BLOCKING);
+            return false;
+        }
         USART_ReceiveData(EC800M_UART);
-
-    const char *cmd = "AT\r\n";
-    for (const char *p = cmd; *p; p++) {
-        while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXDE) == RESET);
-        USART_SendData(EC800M_UART, (uint8_t)*p);
     }
-    while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXC) == RESET);
+
+    if (!usart_send_str("AT\r\n")) {
+        at_owner_release(AT_OWNER_BLOCKING);
+        return false;
+    }
 
     uint32_t t0 = TICK_MS();
     char buf[16]; uint8_t pos = 0;
@@ -177,10 +193,11 @@ static bool ec800m_is_alive(uint32_t timeout_ms)
             char c = (char)USART_ReceiveData(EC800M_UART);
             if (pos < 15) buf[pos++] = c;
             buf[pos] = '\0';
-            if (strstr(buf, "OK") || strstr(buf, "AT")) return true;
+            if (strstr(buf, "OK") || strstr(buf, "AT")) { alive = true; break; }
         }
     }
-    return false;
+    at_owner_release(AT_OWNER_BLOCKING);
+    return alive;
 }
 
 void ec800m_power_on(void)
@@ -345,10 +362,10 @@ static void process_urc(const char *line)
     int qiopen_ch, qiopen_err;
     sms_process_urc(line);
     if (s_at_owner == AT_OWNER_SMS && (s_sms_tx_state == SMS_TX_WAIT_RESULT || s_sms_tx_state == SMS_TX_WAIT_PROMPT) && (strncmp(line, "+CMGS:", 6) == 0 || strncmp(line, "+CMS ERROR:", 11) == 0 || strcmp(line, "ERROR") == 0)) {
-        s_sms_tx_state = SMS_TX_IDLE; s_at_owner = AT_OWNER_NONE;
+        s_sms_tx_state = SMS_TX_IDLE; at_owner_release(AT_OWNER_SMS);
         sms_send_complete(strncmp(line, "+CMGS:", 6) == 0);
     } else if (s_sms_tx_state != SMS_TX_IDLE && strncmp(line, "+CMS ERROR:", 11) == 0) {
-        s_sms_tx_state = SMS_TX_IDLE; s_at_owner = AT_OWNER_NONE;
+        s_sms_tx_state = SMS_TX_IDLE; at_owner_release(AT_OWNER_SMS);
         sms_send_complete(false);
     }
     if (sscanf(line, "+QIOPEN: %d,%d", &qiopen_ch, &qiopen_err) == 2
@@ -491,22 +508,31 @@ void ec800m_process(void)
 ec800m_state_t ec800m_get_state(void) { return s_state; }
 bool ec800m_is_ready(void)            { return s_state == EC800M_STATE_READY; }
 
+#ifdef EC800M_HOST_TEST
+/* Host-only controls used by the production-chain harness.  They are not
+ * part of the target API or firmware build. */
+void ec800m_test_set_state(ec800m_state_t state) { s_state = state; }
+void ec800m_test_set_tcp_open(uint8_t ch)
+{
+    if (ch < EC800M_CH_MAX) s_tcp[ch].state = TCP_STATE_OPEN;
+}
+#endif
+
 static void sms_tx_process(void)
 {
     char command[48];
     if (!ec800m_is_ready()) return;
     if (s_sms_tx_state == SMS_TX_QUEUED) {
-        if (s_at_owner != AT_OWNER_NONE) return;
-        s_at_owner = AT_OWNER_SMS;
+        if (!at_owner_acquire(AT_OWNER_SMS)) return;
         (void)snprintf(command, sizeof command, "AT+CMGS=\"%s\"", s_sms_phone);
-        if (!sms_tx_send((const uint8_t *)command, (uint16_t)strlen(command)) || !sms_tx_send((const uint8_t *)"\r\n",2U)) { s_sms_tx_state=SMS_TX_IDLE; s_at_owner=AT_OWNER_NONE; sms_send_complete(false); return; }
+        if (!usart_send_buf((const uint8_t *)command, (uint16_t)strlen(command)) || !usart_send_buf((const uint8_t *)"\r\n",2U)) { s_sms_tx_state=SMS_TX_IDLE; at_owner_release(AT_OWNER_SMS); sms_send_complete(false); return; }
         s_sms_prompt = false; s_sms_prompt_line_start = true; s_sms_tx_state = SMS_TX_WAIT_PROMPT; s_sms_deadline_ms = TICK_MS() + 5000U;
     } else if (s_sms_tx_state == SMS_TX_WAIT_PROMPT && s_sms_prompt) {
-        if (!sms_tx_send((const uint8_t *)s_sms_text, (uint16_t)strlen(s_sms_text)) || !sms_tx_send((const uint8_t *)"\x1A", 1U)) { s_sms_tx_state=SMS_TX_IDLE; s_at_owner=AT_OWNER_NONE; sms_send_complete(false); return; }
+        if (!usart_send_buf((const uint8_t *)s_sms_text, (uint16_t)strlen(s_sms_text)) || !usart_send_buf((const uint8_t *)"\x1A", 1U)) { s_sms_tx_state=SMS_TX_IDLE; at_owner_release(AT_OWNER_SMS); sms_send_complete(false); return; }
         s_sms_tx_state = SMS_TX_WAIT_RESULT; s_sms_deadline_ms = TICK_MS() + 30000U;
     } else if (s_sms_tx_state != SMS_TX_IDLE && s_sms_tx_state != SMS_TX_QUEUED &&
                (int32_t)(TICK_MS() - s_sms_deadline_ms) >= 0) {
-        s_sms_tx_state = SMS_TX_IDLE; s_at_owner = AT_OWNER_NONE;
+        s_sms_tx_state = SMS_TX_IDLE; at_owner_release(AT_OWNER_SMS);
         sms_send_complete(false);
     }
 }
@@ -515,7 +541,7 @@ int ec800m_sms_send(const char *phone, const char *text)
 {
     size_t n;
     if (!phone || !text || !ec800m_is_ready()) return -1;
-    if (s_sms_tx_state != SMS_TX_IDLE) return -2;
+    if (s_sms_tx_state != SMS_TX_IDLE || s_at_owner != AT_OWNER_NONE) return -2;
     n = strlen(text);
     if (strlen(phone) == 0U || strlen(phone) >= 20U || n == 0U || n >= 192U) return -3;
     (void)strcpy(s_sms_phone, phone); (void)strcpy(s_sms_text, text);
@@ -545,13 +571,17 @@ int ec800m_tcp_open(uint8_t ch, const char *ip, uint16_t port)
 
 int ec800m_tcp_send(uint8_t ch, const uint8_t *data, uint16_t len)
 {
+    int result = -1;
     if (ch >= EC800M_CH_MAX || s_tcp[ch].state != TCP_STATE_OPEN) return -1;
+    if (!data || len == 0U || !at_owner_acquire(AT_OWNER_TCP)) return -2;
 
     char cmd[32];
     snprintf(cmd, sizeof(cmd), "AT+QISEND=%d,%u", ch, len);
-    if (!at_send_wait(cmd, ">", 3000)) return -1;
-    usart_send_buf(data, len);
-    return at_send_wait("", "SEND OK", 5000) ? 0 : -1;
+    if (at_send_wait_owned(cmd, ">", 3000) &&
+        usart_send_buf(data, len) &&
+        at_send_wait_owned("", "SEND OK", 5000)) result = 0;
+    at_owner_release(AT_OWNER_TCP);
+    return result;
 }
 
 void ec800m_tcp_close(uint8_t ch)

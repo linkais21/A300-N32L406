@@ -161,5 +161,266 @@ def test_f39_end_to_end():
         subprocess.run([str(exe)], check=True, cwd=ROOT)
 
 
+PRODUCTION_HARNESS = r'''
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include "at_config.h"
+#include "config.h"
+#include "ec800m.h"
+#include "f39_reply.h"
+#include "gps.h"
+#include "peripherals.h"
+#include "sms_ingress.h"
+
+volatile uint32_t g_tick_ms;
+static device_config_t config;
+static unsigned saves, reset_scheduled, system_resets;
+char tx_log[4096];
+unsigned tx_len;
+unsigned modem_write_phase;
+int race_sms_result;
+int tx_stuck;
+
+void ec800m_test_set_state(ec800m_state_t state);
+void ec800m_test_set_tcp_open(uint8_t ch);
+
+/* The modem shim writes every UART5 byte into tx_log and advances the DMA
+ * producer.  Responses are injected by the harness after each process step. */
+void host_uart_tx(uint8_t b);
+void host_feed_rx(const char *s);
+
+device_config_t *cfg_get(void) { return &config; }
+bool cfg_store_candidate(const device_config_t *c) { config = *c; ++saves; return true; }
+void cfg_save(void) { ++saves; }
+void jt808_set_heartbeat_s(uint16_t s) { (void)s; }
+void jt808_set_report_interval(uint16_t a, uint16_t b) { (void)a; (void)b; }
+void jt808_set_server(const char *ip, uint16_t p, bool backup) { (void)ip; (void)p; (void)backup; }
+void tcp_manager_reconnect(void) { }
+void gnss_vendor_set_type(gnss_type_t t) { (void)t; }
+void agnss_init(gnss_type_t t) { (void)t; }
+int jt808_send_register(void) { return 0; }
+void relay_set(bool on) { (void)on; }
+bool relay_get(void) { return false; }
+bool gps_is_valid(void) { return true; }
+const gps_data_t *gps_get_data(void) { static gps_data_t g = { .valid = true }; return &g; }
+void gps_send_cmd(const char *c) { (void)c; }
+int dbg_printf(const char *fmt, ...) { (void)fmt; return 0; }
+void NVIC_SystemReset(void) { ++system_resets; }
+void delay_ms(uint32_t ms) { g_tick_ms += ms; }
+void delay_us(uint32_t us) { (void)us; }
+void GPIO_SetBits(void *p, unsigned pin) { (void)p; (void)pin; }
+void GPIO_ResetBits(void *p, unsigned pin) { (void)p; (void)pin; }
+int GPIO_ReadInputDataBit(void *p, unsigned pin) { (void)p; (void)pin; return 1; }
+
+static void sms_dispatch(const char *from, const char *text) {
+    uint16_t n = (uint16_t)strlen(text);
+    (void)at_config_execute_sms(from, (const uint8_t *)text, n);
+}
+static bool persist(const device_config_t *c, void *ctx) { (void)ctx; config = *c; ++saves; return true; }
+static void reset_schedule(uint32_t delay, void *ctx) { (void)ctx; assert(delay == F39_RESET_DELAY_MS); ++reset_scheduled; }
+
+static void feed_cmt(const char *from, const char *body) {
+    char line[64];
+    snprintf(line, sizeof line, "+CMT: \"%s\",\"\",\"\"", from);
+    host_feed_rx(line); host_feed_rx("\r\n"); host_feed_rx(body); host_feed_rx("\r\n");
+}
+static void modem_step(void) { ec800m_process(); }
+static void complete_sms(bool ok) {
+    host_feed_rx(">\r\n"); modem_step();
+    if (ok) host_feed_rx("\r\n+CMGS: 1\r\n");
+    else host_feed_rx("\r\nERROR\r\n");
+    modem_step();
+}
+
+int main(void) {
+    f39_platform_t platform;
+    memset(&config, 0, sizeof config);
+    config.gnss_type = GNSS_TYPE_TAU804M;
+    ec800m_test_set_state(EC800M_STATE_READY);
+    sms_set_recv_cb(sms_dispatch);
+    memset(&platform, 0, sizeof platform);
+    platform.config = &config; platform.persist = persist;
+    platform.version = "V3"; platform.version_len = 2;
+    platform.imei = "123456789012345"; platform.imei_len = 15;
+    platform.gps_valid = 0; platform.gps_speed_kmh = 0; platform.relay_get = 0;
+    at_config_bind_f39(&platform, NULL, reset_schedule, NULL);
+    /* NULL send is invalid, so defaults are used by at_config_init(). */
+    at_config_bind_f39(NULL, NULL, NULL, NULL);
+    at_config_init();
+
+    /* Two senders traverse the real DMA -> +CMT -> ingress FIFO path. */
+    feed_cmt("13800000001", "PARAM#");
+    feed_cmt("13800000002", "PARAM#");
+    modem_step(); sms_process(); modem_step();
+    assert(strstr(tx_log, "AT+CMGS=\"13800000001\"") != NULL);
+    complete_sms(true);
+    sms_process(); modem_step();
+    assert(strstr(tx_log, "AT+CMGS=\"13800000002\"") != NULL);
+    complete_sms(true);
+
+    /* Plain ERROR while waiting for the prompt must fail immediately. */
+    assert(ec800m_sms_send("13800000003", "X") == 0);
+    modem_step();
+    host_feed_rx("\r\nERROR\r\n"); modem_step();
+    assert(ec800m_sms_send("13800000003", "Y") == 0);
+    modem_step(); complete_sms(true);
+
+    /* A failed RESET reply must not leave stale reset handoff state. */
+    feed_cmt("13800000004", "RESET#");
+    modem_step(); sms_process(); modem_step(); complete_sms(false);
+    ec800m_test_set_state(EC800M_STATE_OFF);
+    for (unsigned i = 0; i < 3; ++i) { g_tick_ms += 1000; at_config_process(); }
+    ec800m_test_set_state(EC800M_STATE_READY);
+    assert(ec800m_sms_send("13800000005", "X") == 0);
+    modem_step(); complete_sms(true);
+    g_tick_ms += F39_RESET_DELAY_MS;
+    at_config_process();
+    assert(reset_scheduled == 0 && system_resets == 0);
+
+    /* TCP payload and CMGS share one owner: the injected race is rejected. */
+    ec800m_test_set_tcp_open(0);
+    race_sms_result = -99;
+    modem_write_phase = 1;
+    assert(ec800m_tcp_send(0, (const uint8_t *)"abc", 3) == 0);
+    assert(race_sms_result == -2);
+
+    /* A stuck UART advances the tick through watchdog reloads and returns. */
+    tx_stuck = 1;
+    assert(ec800m_sms_send("13800000006", "X") == 0);
+    modem_step();
+    tx_stuck = 0;
+    assert(ec800m_sms_send("13800000006", "Y") == 0);
+    puts("PASS"); return 0;
+}
+'''
+
+
+def test_f39_production_chain():
+    cc = compiler()
+    if not cc:
+        print("SKIP: gcc not found")
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = pathlib.Path(tmp)
+        (tmp / "harness.c").write_text(PRODUCTION_HARNESS, encoding="ascii")
+        (tmp / "n32l40x.h").write_text(r'''
+#ifndef N32L40X_H
+#define N32L40X_H
+#include <stdint.h>
+typedef struct { uint32_t DAT; } usart_t;
+typedef struct { uint32_t DUMMY; } dma_t;
+extern usart_t host_uart5;
+#define UART5 (&host_uart5)
+#define USART1 (&host_uart5)
+#define UART4 (&host_uart5)
+#define DMA2 ((dma_t *)0)
+#define DMA_CH5 ((dma_t *)5)
+#define DMA DMA2
+#define DMA_FLAG_HT5 0x01
+#define DMA_FLAG_TC5 0x02
+#define USART_FLAG_TXDE 0x01
+#define USART_FLAG_TXC 0x02
+#define USART_FLAG_RXDNE 0x04
+#define RESET 0
+#define SET 1
+#define ENABLE 1
+#define DISABLE 0
+#define Bit_RESET 0
+#define GPIOA ((void *)0)
+#define GPIOB ((void *)1)
+#define GPIOD ((void *)2)
+#define GPIO_PIN_0 0
+#define GPIO_PIN_1 1
+#define GPIO_PIN_3 3
+#define GPIO_PIN_4 4
+#define GPIO_PIN_5 5
+#define GPIO_PIN_6 6
+#define GPIO_PIN_7 7
+#define GPIO_PIN_8 8
+#define GPIO_PIN_9 9
+#define GPIO_PIN_10 10
+#define GPIO_PIN_11 11
+#define GPIO_PIN_12 12
+#define GPIO_PIN_15 15
+#define RCC_APB2_PERIPH_UART5 0
+#define RCC_APB2_PERIPH_UART4 0
+#define RCC_APB2_PERIPH_USART1 0
+#define RCC_APB1_PERIPH_I2C1 0
+#define RCC_APB2_PERIPH_SPI1 0
+#define ADC_CH_1 1
+#define ADC_CH_2 2
+typedef int BitAction;
+uint32_t DMA_GetCurrDataCounter(dma_t *d);
+int DMA_GetFlagStatus(uint32_t f, dma_t *d);
+void DMA_ClearFlag(uint32_t f, dma_t *d);
+int USART_GetFlagStatus(usart_t *u, uint32_t f);
+void USART_SendData(usart_t *u, uint8_t b);
+uint8_t USART_ReceiveData(usart_t *u);
+void IWDG_ReloadKey(void);
+void GPIO_SetBits(void *p, unsigned pin);
+void GPIO_ResetBits(void *p, unsigned pin);
+int GPIO_ReadInputDataBit(void *p, unsigned pin);
+void NVIC_SystemReset(void);
+#endif
+''', encoding="ascii")
+        (tmp / "stub.c").write_text(r'''
+#include <stdint.h>
+#include <string.h>
+#include "n32l40x.h"
+#include "config.h"
+usart_t host_uart5;
+static uint16_t wr;
+extern uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];
+extern volatile uint32_t g_tick_ms;
+extern int race_sms_result;
+extern unsigned modem_write_phase;
+extern char tx_log[4096];
+extern unsigned tx_len;
+extern int tx_stuck;
+extern int ec800m_sms_send(const char *, const char *);
+void host_feed_rx(const char *s);
+void host_uart_tx(uint8_t b) {
+    if (tx_len + 1 < 4096U) { tx_log[tx_len++] = (char)b; tx_log[tx_len] = '\0'; }
+    if (modem_write_phase == 1 && strstr(tx_log, "AT+QISEND=0,3\r\n") != 0) {
+        host_feed_rx(">\r\n");
+        modem_write_phase = 2;
+    }
+    if (modem_write_phase == 2 && b == 'a') {
+        race_sms_result = ec800m_sms_send("1", "RACE");
+        modem_write_phase = 3;
+    } else if (modem_write_phase == 3 && b == 'c') {
+        host_feed_rx("\r\nSEND OK\r\n");
+        modem_write_phase = 4;
+    }
+}
+void host_feed_rx(const char *s) {
+    size_t n = strlen(s);
+    for (size_t i = 0; i < n; ++i) { EC800M_RX_BUF[wr++] = (uint8_t)s[i]; if (wr == EC800M_RX_BUF_SIZE) wr = 0; }
+}
+uint32_t DMA_GetCurrDataCounter(dma_t *d) { (void)d; return (uint32_t)(EC800M_RX_BUF_SIZE - wr); }
+int DMA_GetFlagStatus(uint32_t f, dma_t *d) { (void)f; (void)d; return RESET; }
+void DMA_ClearFlag(uint32_t f, dma_t *d) { (void)f; (void)d; }
+int USART_GetFlagStatus(usart_t *u, uint32_t f) { (void)u; (void)f; return tx_stuck ? RESET : SET; }
+void USART_SendData(usart_t *u, uint8_t b) { (void)u; host_uart_tx(b); }
+uint8_t USART_ReceiveData(usart_t *u) { (void)u; return 0; }
+void IWDG_ReloadKey(void) { ++g_tick_ms; }
+''', encoding="ascii")
+        cmd = [
+            cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-Wno-dangling-else", "-DEC800M_HOST_TEST",
+            "-I", str(tmp), "-I", str(ROOT / "include"), str(tmp / "harness.c"), str(tmp / "stub.c"),
+            str(ROOT / "src" / "ec800m.c"), str(ROOT / "src" / "peripherals.c"),
+            str(ROOT / "src" / "at_config.c"), str(ROOT / "src" / "sms_command.c"),
+            str(ROOT / "src" / "sms_ingress.c"), str(ROOT / "src" / "f39_command.c"),
+            str(ROOT / "src" / "f39_config_adapter.c"), str(ROOT / "src" / "f39_reply.c"),
+            "-Wl,--gc-sections", "-lm", "-o", str(tmp / "production.exe"),
+        ]
+        subprocess.run(cmd, check=True, cwd=ROOT)
+        subprocess.run([str(tmp / "production.exe")], check=True, cwd=ROOT)
+
+
 if __name__ == "__main__":
     test_f39_end_to_end()
+    test_f39_production_chain()
