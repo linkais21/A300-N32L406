@@ -31,7 +31,8 @@ Implemented in `include/f39_reply.h`, `src/f39_reply.c` and
   credential fields.
 - Relay cut requires a valid fix and speed strictly below 20 km/h; restore is
   always permitted.
-- RESET emits the success reply before invoking a bounded delayed-reset callback.
+- RESET only sets `reply.reset_pending` and `reply.reset_delay_ms`; Task 5 must
+  schedule the reset after successful SMS delivery/handoff.
 - GPSBDS changes validate the configured TAU804M/ATGM332D-F7N receiver before
   persistence and dispatch the selected mode after commit.
 
@@ -42,8 +43,14 @@ environment.
 
 ## Fix round 1 review closure
 
+TDD RED evidence: the expanded action harness was run before the fix and failed
+to compile with `-Werror`, reporting the missing `reset_pending`/
+`reset_delay_ms` fields, missing platform `version_len`/`imei_len` and GNSS
+status fields, and the incompatible GNSS callback signature. No production
+changes were retained from that failing run.
+
 - Replies now carry `reset_pending`/`reset_delay_ms`; `f39_execute` never
-  schedules a reset before SMS handoff.
+  schedules a reset. Task 5 owns scheduling after SMS handoff succeeds.
 - Required effect callbacks are preflighted before persistence. Post-commit
   effects are delivered as non-failing callbacks, avoiding false rollback
   reports after a successful save.
