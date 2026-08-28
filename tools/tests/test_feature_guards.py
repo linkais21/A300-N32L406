@@ -3,7 +3,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = [ROOT / "src", ROOT / "include", ROOT / "Makefile"]
-REMOVED = ("TCP_CH_NTRIP", "EC800M_CH_NTRIP", "tts_speak", "tts_stop", "GEOFENCE_MAX_ZONES", "point_in_polygon", "RTKINFO", "RTKSW")
+REMOVED = (
+    "TCP_CH_NTRIP", "EC800M_CH_NTRIP", "tts_speak", "tts_stop",
+    "GEOFENCE_MAX_ZONES", "point_in_polygon", "RTKINFO", "RTKSW",
+    "ALM_VIBRATION", "WAKE_SRC_VIBRATION", "pwr_vibration_isr",
+    "Baler", "BALESTAT", "BALEIDLE", "BALECLEAR", "CMCC", "C21", "Polaris",
+)
 
 
 def text_files():

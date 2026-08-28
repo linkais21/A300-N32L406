@@ -38,7 +38,6 @@
 #define ALM_FATIGUE_DRIVING (1u << 2)
 #define ALM_GNSS_FAULT      (1u << 4)
 #define ALM_FUEL_CUTOFF     (1u << 9)
-#define ALM_VIBRATION       (1u << 19)
 #define ALM_POWER_LOW       (1u << 27)
 #define ALM_POWER_CUT       (1u << 28)
 

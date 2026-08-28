@@ -8,7 +8,6 @@
 #include "at_config.h"
 #include "adc_monitor.h"
 #include "spi_flash.h"
-#include "i2c_accel.h"
 #include "relay.h"
 #include "flash_config.h"
 #include "tcp_manager.h"
@@ -142,41 +141,25 @@ static uint32_t stack_peak_bytes(void)
 #define RAM_STATIC  ((uint32_t)(&_ebss) - 0x20000000u)  /* data+bss, compile-time constant */
 #define RAM_TOTAL   (24u * 1024u)
 #define STACK_AVAIL (RAM_TOTAL - RAM_STATIC)             /* bytes available for heap+stack */
+#define STACK_MARGIN_MIN (4u * 1024u)
+static volatile uint32_t s_stack_margin_fault;
 
 static void periodic_status_log(void)
 {
     static uint32_t last_ms = 0;
-    if (TICK_MS() - last_ms < 5000) return;
+    if (TICK_MS() - last_ms < 60000) return;
     last_ms = TICK_MS();
 
-    const gps_data_t *g = gps_get_data();
-    float vcar = adc_get_car_voltage();
-    float vbat = adc_get_bat_voltage();
-
     uint32_t stk_peak = stack_peak_bytes();
-    dbg_printf("[STATUS] t=%us 4G=%s GPS=%s lat=%.6f lon=%.6f spd=%.1f "
-               "vcar=%.1fV vbat=%.2fV csq=%d "
-               "ram: stc=%uB stk=%u/%uB(%u%%)\r\n",
-               (unsigned)(TICK_MS() / 1000),
-               ec800m_is_ready()  ? "RDY" : "---",
-               g->valid           ? "FIX" : "SRH",
-               g->lat, g->lon, g->speed_kmh,
-               vcar, vbat,
-               ec800m_get_csq(),
-               RAM_STATIC,
-               stk_peak, STACK_AVAIL, (stk_peak * 100u) / STACK_AVAIL);
+    if (STACK_AVAIL < STACK_MARGIN_MIN || stk_peak > STACK_AVAIL - STACK_MARGIN_MIN)
+        s_stack_margin_fault = 1;
+    dbg_printf("[HEALTH] 4G=%u GPS=%u STK=%u F=%u\r\n",
+               ec800m_is_ready(), gps_get_data()->valid, stk_peak, s_stack_margin_fault);
 }
 
 /* ── Alarm scanning ──────────────────────────────────────────────────────── */
 static void scan_alarms(void)
 {
-    static uint32_t last_vib_ms = 0;
-    if (TICK_MS() - last_vib_ms > 200) {
-        last_vib_ms = TICK_MS();
-        if (i2c_accel_detect_vibration())
-            jt808_trigger_alarm(ALM_VIBRATION);
-    }
-
     static bool sos_prev = false;
     bool sos_now = (GPIO_ReadInputDataBit(SOS_PORT, SOS_PIN) == Bit_RESET);
     if (sos_now && !sos_prev) {

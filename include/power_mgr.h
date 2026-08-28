@@ -14,7 +14,6 @@ typedef enum {
 typedef enum {
     WAKE_SRC_NONE      = 0,
     WAKE_SRC_RTC       = (1 << 0),
-    WAKE_SRC_VIBRATION = (1 << 1),
     WAKE_SRC_LIGHT     = (1 << 2),
     WAKE_SRC_ACC       = (1 << 3),
     WAKE_SRC_SOS       = (1 << 4),
@@ -29,7 +28,6 @@ void        pwr_request_sleep(void);     /* request idle/sleep transition */
 void        pwr_wake(wake_src_t src);    /* force wake from ISR or event */
 
 /* Called from EXTI handlers */
-void pwr_vibration_isr(void);
 void pwr_acc_isr(void);
 void pwr_sos_isr(void);
 void pwr_charge_isr(void);

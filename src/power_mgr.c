@@ -194,7 +194,6 @@ void pwr_wake(wake_src_t src)
 }
 
 /* ── EXTI ISR handlers ────────────────────────────────────────────────────── */
-void pwr_vibration_isr(void)  { pwr_wake(WAKE_SRC_VIBRATION); }
 void pwr_acc_isr(void)        { pwr_wake(WAKE_SRC_ACC); }
 void pwr_sos_isr(void)        { pwr_wake(WAKE_SRC_SOS); }
 void pwr_charge_isr(void)     { pwr_wake(WAKE_SRC_CHARGE); }
