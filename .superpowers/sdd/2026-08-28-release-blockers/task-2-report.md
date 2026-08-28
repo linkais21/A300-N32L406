@@ -328,3 +328,47 @@ trigraph-plus-splice ordering, and quoted comment delimiters were incorporated.
 Per final review direction, the guard no longer attempts to accept arbitrary
 equivalent consumer C: digest-pinned canonical bodies and dependencies are the
 release boundary, and deviations require human review.
+
+## Fix Round 4
+
+Fixed the clean-checkout release-guard failure reported by
+`task-2-rereview-3.md`. The `include/build_version.h` dependency digest now
+normalizes only the exact generator banner plus the already-volatile
+`FW_BUILD_NUMBER` and `FW_BUILD_DATE` values. The committed clean-checkout form
+and the normal generator-shaped form therefore share one pinned semantic
+digest, while `FW_FULL_VERSION` remains byte-for-byte target checked and the
+identity consumer body/dependency digests remain strict.
+
+The release-guard test now builds a complete temporary release tree twice:
+once with `git show HEAD:include/build_version.h`, and once with a normal
+`gen_version.ps1`-shaped header using different generated number/date values.
+Both forms must pass. Each form is then mutated from
+`T360-A300_406_20260823000000,V3.000` to
+`T360-A300_406_20260823000001,V3.000` and must produce a
+`<target-version>` failure.
+
+TDD RED evidence before the production change:
+
+```text
+$env:REQUIRE_GCC='1'; python tools/tests/test_terminal_identity.py
+AssertionError: committed build_version.h release tree must pass
+exit 1
+```
+
+GREEN and scoped gate evidence:
+
+```text
+$env:REQUIRE_GCC='1'; python tools/tests/test_terminal_identity.py
+test_terminal_identity: C99 -Wall -Wextra -Werror PASS
+test_terminal_identity: PASS
+
+python tools/release_guard.py
+release-guard: PASS
+
+python tools/tests/test_feature_guards.py
+test_feature_guards: PASS
+
+git diff --check -- tools/release_guard.py tools/tests/test_terminal_identity.py \
+  .superpowers/sdd/2026-08-28-release-blockers/task-2-report.md
+exit 0 (line-ending warnings only)
+```

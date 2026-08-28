@@ -121,7 +121,7 @@ CANONICAL_CONSUMER_SHA256 = {
 }
 CANONICAL_IDENTITY_FILE_SHA256 = {
     "include/config.h": "72653c500dbdb46a823ccb691a07948d32de933bd83561a8e1ac8d2dbf94271f",
-    "include/build_version.h": "7780ada5e1977ebe83228b87d90bc8b44363c110131dcf36df370b90ad921199",
+    "include/build_version.h": "cb8e276f477eb946903af3eb1260d58f3f266e9631f55ee2fb77e08ceec2c484",
     "include/f39_reply.h": "5809ee23562052f428c5fecc385df768fa549bf7c2793632c8b98245d45ec98c",
     "include/jt808.h": "cf4e1a15bd56b434cdfff3a39167d3e81bde3e05d8b010c87471fabb6517ee20",
 }
@@ -323,9 +323,14 @@ def canonical_body_digest(body: str) -> str:
 
 
 def canonical_file_digest(text: str, relative: str) -> str:
-    """Hash reviewed dependency text, ignoring generated build timestamps only."""
+    """Hash reviewed dependency text, ignoring generator-only volatile fields."""
     normalized = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
     if relative == "include/build_version.h":
+        normalized = re.sub(
+            r"\A/\* Auto-generated build version - DO NOT EDIT \*/\n",
+            "",
+            normalized,
+        )
         normalized = re.sub(
             r'(?m)^(\s*#define\s+FW_BUILD_(?:NUMBER|DATE)\s+)"[^"\r\n]*"\s*$',
             r'\1"<generated>"',

@@ -654,7 +654,39 @@ def test_release_guard_behavior() -> None:
             destination = root / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / relative, destination)
-        assert not release_guard.scan(root), "unmodified release identity consumers must pass"
+        build_version_path = root / "include/build_version.h"
+        committed_build_version = subprocess.run(
+            ["git", "show", "HEAD:include/build_version.h"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        ).stdout.decode("utf-8")
+        generated_build_version = (
+            "/* Auto-generated build version - DO NOT EDIT */\n"
+            "#ifndef BUILD_VERSION_H\n"
+            "#define BUILD_VERSION_H\n\n"
+            "#define FW_BUILD_NUMBER  \"20991231_235959\"\n"
+            "#define FW_BUILD_DATE    \"Dec 31 2099 - 23:59:59\"\n"
+            f"#define FW_FULL_VERSION  \"{target}\"\n\n"
+            "#endif /* BUILD_VERSION_H */\n"
+        )
+
+        for form_name, build_version in (
+            ("committed", committed_build_version),
+            ("generated", generated_build_version),
+        ):
+            build_version_path.write_text(build_version, encoding="utf-8")
+            assert not release_guard.scan(root), (
+                f"{form_name} build_version.h release tree must pass"
+            )
+            build_version_path.write_text(
+                build_version.replace(target, "T360-A300_406_20260823000001,V3.000"),
+                encoding="utf-8",
+            )
+            findings = release_guard.scan(root)
+            assert any(item[2] == "<target-version>" for item in findings), form_name
+
+        build_version_path.write_text(generated_build_version, encoding="utf-8")
 
         mutations = {
             "src/main.c": '\nstrcpy(s_terminal.terminal_id, "1234567");\n',
