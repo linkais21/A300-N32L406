@@ -2,6 +2,7 @@
 #include "config.h"
 #include "hw_init.h"
 #include "debug_uart.h"
+#include "peripherals.h"
 #include "n32l40x.h"
 #include <string.h>
 #include <stdio.h>
@@ -310,6 +311,7 @@ static void process_urc(const char *line)
     /* +QIOPEN: ch,0  → open success */
     /* +QIOPEN: ch,err */
     int qiopen_ch, qiopen_err;
+    sms_process_urc(line);
     if (sscanf(line, "+QIOPEN: %d,%d", &qiopen_ch, &qiopen_err) == 2
         && qiopen_ch >= 0 && qiopen_ch < EC800M_CH_MAX) {
         if (qiopen_err == 0) {

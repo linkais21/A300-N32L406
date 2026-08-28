@@ -7,5 +7,6 @@
 bool sms_command_allowed(const char *cmd);
 bool sms_queue_push(const uint8_t *data, uint16_t len);
 bool sms_queue_pop(uint8_t *out, uint16_t out_size, uint16_t *out_len);
+bool sms_queue_dispatch(void (*executor)(const uint8_t *cmd, uint16_t len));
 void sms_queue_reset(void);
 #endif

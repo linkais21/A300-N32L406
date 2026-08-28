@@ -18,6 +18,7 @@
 #include "fota.h"
 #include "agnss_manager.h"
 #include "agnss_vendor.h"
+#include "peripherals.h"
 #include "n32l40x.h"
 #include <string.h>
 
@@ -26,6 +27,13 @@ static jt808_terminal_t s_terminal;
 static void agnss_network_rx(uint8_t ch, const uint8_t *data, uint16_t len)
 {
     (void)gnss_vendor_network_rx(ch, data, len);
+}
+static void sms_command_execute(const char *from, const char *text)
+{
+    uint16_t len = 0;
+    (void)from;
+    while (len < SMS_COMMAND_MAX_LEN && text[len] != '\0') ++len;
+    (void)at_config_execute_sms((const uint8_t *)text, len);
 }
 
 static void early_debug_uart_init(void)
@@ -248,6 +256,7 @@ int main(void)
     /* ── 7. 4G modem ─────────────────────────────────────────────────────── */
     ec800m_init();
     ec800m_register_agnss_recv(agnss_network_rx);
+    sms_set_recv_cb(sms_command_execute);
 
     /* ── 8. JT808 + TCP manager ──────────────────────────────────────────── */
     jt808_init(&s_terminal);
@@ -276,6 +285,7 @@ int main(void)
         agnss_process();
         pwr_process();
         at_config_process();
+        sms_process();
         scan_alarms();
         periodic_status_log();
     }

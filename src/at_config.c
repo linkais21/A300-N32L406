@@ -235,3 +235,13 @@ void at_config_process(void)
     strncpy(local, s_cmd_buf, CMD_BUF_SIZE - 1);
     handle_cmd(local);
 }
+
+bool at_config_execute_sms(const uint8_t *text, uint16_t len)
+{
+    char local[SMS_COMMAND_MAX_LEN];
+    if (!text || len == 0 || len >= sizeof(local)) return false;
+    memcpy(local, text, len);
+    local[len] = '\0';
+    handle_cmd(local);
+    return true;
+}

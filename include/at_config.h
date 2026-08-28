@@ -8,5 +8,7 @@ void at_config_init(void);
 void at_config_feed(uint8_t byte);
 /* Process pending command (call from main loop) */
 void at_config_process(void);
+/* SMS invokes this bounded entry; serial feed remains independently permissive. */
+bool at_config_execute_sms(const uint8_t *text, uint16_t len);
 
 #endif

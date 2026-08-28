@@ -13,6 +13,13 @@ static bool root_ok(const char *s, uint16_t n)
         if (eq(s, n, roots[i])) return true;
     return false;
 }
+
+static bool valid_suffix(const char *suffix)
+{
+    if (*suffix == '\0' || *suffix == '=' || *suffix == ':') return true;
+    return *suffix == '?' && suffix[1] == '\0';
+}
+
 bool sms_command_allowed(const char *cmd)
 {
     uint16_t n=0, root=0, nested=0;
@@ -25,10 +32,10 @@ bool sms_command_allowed(const char *cmd)
         const char *p;
         if (cmd[root] != '=') return false;
         p = cmd + root + 1;
-        while (nested < n - root - 1 && p[nested] != '=' && p[nested] != ':' && p[nested] != '?') ++nested;
-        return nested && root_ok(p, nested);
+        while (nested < n - root - 1 && p[nested] != '=' && p[nested] != '?' && p[nested] != ':' && p[nested] != ',') ++nested;
+        return nested && root_ok(p, nested) && valid_suffix(p + nested);
     }
-    return root_ok(cmd, root);
+    return root_ok(cmd, root) && valid_suffix(cmd + root);
 }
 bool sms_queue_push(const uint8_t *data, uint16_t len) {
     sms_queue_entry_t *e; if(!data || !len || len>=SMS_COMMAND_MAX_LEN || s_count>=SMS_QUEUE_DEPTH) return false;
@@ -36,5 +43,13 @@ bool sms_queue_push(const uint8_t *data, uint16_t len) {
 }
 bool sms_queue_pop(uint8_t *out, uint16_t size, uint16_t *len) {
     sms_queue_entry_t *e; if(!out || !len || !s_count) return false; e=&s_queue[s_head]; if(size<e->len) return false; memcpy(out,e->data,e->len); *len=e->len; s_head=(uint8_t)((s_head+1)%SMS_QUEUE_DEPTH); --s_count; return true;
+}
+bool sms_queue_dispatch(void (*executor)(const uint8_t *cmd, uint16_t len))
+{
+    uint8_t cmd[SMS_COMMAND_MAX_LEN];
+    uint16_t len;
+    if (!executor || !sms_queue_pop(cmd, sizeof(cmd), &len)) return false;
+    executor(cmd, len);
+    return true;
 }
 void sms_queue_reset(void) { s_head=s_tail=s_count=0; }

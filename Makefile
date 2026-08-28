@@ -39,6 +39,7 @@ C_SRCS := \
     src/mileage.c        \
     src/peripherals.c    \
     src/sms_command.c    \
+    src/sms_ingress.c    \
     src/power_mgr.c      \
     src/tcp_manager.c    \
     $(SDK)/CMSIS/device/system_n32l40x.c \
@@ -90,7 +91,7 @@ LDFLAGS := $(CPU) \
             -lc -lgcc -lm
 
 # ── Build rules ────────────────────────────────────────────────────────────────
-.PHONY: all clean flash size release-guard
+.PHONY: all clean flash size release-guard ram-guard release-gate
 
 all: $(BUILD)/$(TARGET).hex size
 
@@ -114,6 +115,11 @@ size: $(BUILD)/$(TARGET).elf
 
 release-guard:
 	python tools/release_guard.py
+
+ram-guard: $(BUILD)/$(TARGET).map
+	python tools/map_ram_guard.py $<
+
+release-gate: release-guard ram-guard
 
 flash: $(BUILD)/$(TARGET).hex
 	"$(PROG_CLI)" -c port=SWD -w $< -v -rst
