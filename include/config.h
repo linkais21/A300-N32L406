@@ -142,6 +142,5 @@ extern uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];
 #define TCP_CH_OTA           1   /* OTA / FOTA server      */
 #define TCP_CH_AGPS          2   /* AGPS server            */
 #define TCP_CH_BACKUP        3   /* backup JT808 server    */
-#define TCP_CH_NTRIP         4   /* NTRIP RTK              */
 
 #endif /* CONFIG_H */

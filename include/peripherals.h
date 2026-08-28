@@ -2,6 +2,7 @@
 #define PERIPHERALS_H
 #include <stdint.h>
 #include <stdbool.h>
+#include "sms_command.h"
 
 /* ── RS485 ────────────────────────────────────────────────────────────────── */
 void     rs485_init(uint32_t baud);
@@ -14,10 +15,5 @@ int  sms_send(const char *phone, const char *text);
 typedef void (*sms_recv_cb_t)(const char *from, const char *text);
 void sms_set_recv_cb(sms_recv_cb_t cb);
 void sms_process_urc(const char *urc_line); /* feed URC lines from EC800M */
-
-/* ── TTS (EC800M Quectel QTTS / iFLYTEK) ─────────────────────────────────── */
-int  tts_speak(const char *text);          /* UTF-8 or GBK text string */
-void tts_stop(void);
-bool tts_is_busy(void);
 
 #endif

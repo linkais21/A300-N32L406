@@ -9,8 +9,7 @@
 #define EC800M_CH_OTA     1
 #define EC800M_CH_AGPS    2
 #define EC800M_CH_BACKUP  3
-#define EC800M_CH_NTRIP   4
-#define EC800M_CH_MAX     5
+#define EC800M_CH_MAX     4
 
 typedef enum {
     EC800M_STATE_OFF = 0,

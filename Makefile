@@ -38,6 +38,7 @@ C_SRCS := \
     src/geofence.c       \
     src/mileage.c        \
     src/peripherals.c    \
+    src/sms_command.c    \
     src/power_mgr.c      \
     src/tcp_manager.c    \
     $(SDK)/CMSIS/device/system_n32l40x.c \

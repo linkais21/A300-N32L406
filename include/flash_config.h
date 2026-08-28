@@ -28,7 +28,6 @@
 #define CFG_PHONE_LEN   12
 #define CFG_AUTH_LEN    32
 #define CFG_PLATE_LEN   16
-#define CFG_MOUNT_LEN   32
 #define CFG_AGNSS_USER_LEN 64
 #define CFG_AGNSS_PWD_LEN  64
 
@@ -58,20 +57,7 @@ typedef struct {
     char     agnss_user[CFG_AGNSS_USER_LEN];
     char     agnss_pwd[CFG_AGNSS_PWD_LEN];
 
-    /* ── RTK / NTRIP ─────────────────────────────────────────────────────── */
-    uint8_t  rtk_en;
-    uint8_t  rtk_interval;      /* 1–20 s */
-    char     rtk_ip[CFG_IP_LEN];
-    uint16_t rtk_port;
-    char     rtk_user[CFG_USER_LEN];
-    char     rtk_pass[CFG_PASS_LEN];
-    char     rtk_mount[CFG_MOUNT_LEN];
-
     /* ── Alarms ──────────────────────────────────────────────────────────── */
-    uint8_t  vibrate_alm_en;
-    uint8_t  vibrate_mode;      /* 0=continuous 1=once */
-    uint8_t  vibrate_sensitivity; /* A: 1–255 */
-    uint8_t  vibrate_debounce;    /* B: 1–50 */
     uint8_t  power_alm_en;
     uint8_t  sos_alm_en;
     uint8_t  sos_mode;          /* 0–3 */

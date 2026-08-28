@@ -148,17 +148,6 @@ static void handle_cmd(char *line)
         NVIC_SystemReset();
         return;
     }
-    /* ── RTKINFO=ip,port,user,pass,mountpoint ─────────────────────────────── */
-    if (strcmp(cmd, "RTKINFO") == 0 && argc >= 5) {
-        /* Stored in config; applied on next NTRIP connection */
-        dbg_printf("OK\r\n");
-        return;
-    }
-    /* ── RTKSW=ON|OFF ─────────────────────────────────────────────────────── */
-    if (strcmp(cmd, "RTKSW") == 0 && argc >= 1) {
-        dbg_printf("OK\r\n");
-        return;
-    }
     /* ── MODULECMD=<at command> ───────────────────────────────────────────── */
     if (strcmp(cmd, "MODULECMD") == 0 && argc >= 1) {
         /* Pass raw AT command through to EC800M via debug loopback */
@@ -172,11 +161,6 @@ static void handle_cmd(char *line)
     }
     /* ── HASACC=YES|NO ────────────────────────────────────────────────────── */
     if (strcmp(cmd, "HASACC") == 0) {
-        dbg_printf("OK\r\n");
-        return;
-    }
-    /* ── VIBRATEALM=ON|OFF,mode ───────────────────────────────────────────── */
-    if (strcmp(cmd, "VIBRATEALM") == 0) {
         dbg_printf("OK\r\n");
         return;
     }
