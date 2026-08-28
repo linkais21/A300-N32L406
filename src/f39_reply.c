@@ -177,9 +177,8 @@ static f39_result_t query(const f39_request_t *r, f39_platform_t *p,
             !external_text(p->imei, p->imei_len, F39_IMEI_MAX_LENGTH) ||
             !device_id(c, p, &pid, &pid_len) ||
             !reply_append(out,
-                          "PARAM,VER=%.*s,MODEL=%.*s,IMEI=%.*s,PID=%.*s,IP=%.*s:%u,"
-                          "FIP=%.*s:%u,HBT=%u,FREQ=%u/%u,GPSBDS=%u,ACC=%u,"
-                          "CSQ=%d,APN=%.*s",
+                          "PARAM,V=%.*s,M=%.*s,I=%.*s,P=%.*s,S=%.*s:%u,"
+                          "B=%.*s:%u,H=%u,F=%u/%u,G=%u,A=%u,Q=%d,N=%.*s",
                           (int)p->version_len, p->version != NULL ? p->version : "",
                           (int)CFG_MODEL_LEN, c->terminal_model,
                           (int)p->imei_len, p->imei != NULL ? p->imei : "",
@@ -189,7 +188,7 @@ static f39_result_t query(const f39_request_t *r, f39_platform_t *p,
                           (unsigned)c->heartbeat_s, (unsigned)c->report_moving_s,
                           (unsigned)c->report_stopped_s, (unsigned)c->gpsbds_mode,
                           p->acc_on ? 1U : 0U, p->csq, (int)CFG_APN_LEN, c->apn) ||
-            !reply_append(out, ",GPS=%u,FIX=%u,HDOP=%u.%u,Success!\r\n",
+            !reply_append(out, ",SV=%u,X=%u,D=%u.%u,Success!\r\n",
                           (unsigned)p->gps_satellites,
                           (unsigned)p->gps_fix_quality,
                           (unsigned)(p->gps_hdop_x10 / 10U),

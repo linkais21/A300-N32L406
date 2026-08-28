@@ -1,0 +1,266 @@
+"""Host contract for EC800M URC demultiplexing during owned AT waits."""
+
+from __future__ import annotations
+
+import os
+import pathlib
+import shutil
+import subprocess
+import tempfile
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+
+HEADERS = {
+    "n32l40x.h": r'''
+#ifndef N32L40X_H
+#define N32L40X_H
+#include <stdint.h>
+typedef struct { uint32_t DAT; } usart_module_t;
+typedef struct { uint32_t DUMMY; } dma_t;
+typedef void GPIO_Module;
+#define UART5 (&host_uart5)
+#define EC800M_UART UART5
+#define DMA_CH5 ((dma_t *)5)
+#define DMA ((dma_t *)0)
+#define DMA_FLAG_HT5 0x01U
+#define DMA_FLAG_TC5 0x02U
+#define USART_FLAG_TXDE 0x01U
+#define USART_FLAG_TXC 0x02U
+#define USART_FLAG_RXDNE 0x04U
+#define USART_INT_RXDNE 0x08U
+#define USART_FLAG_OREF 0x10U
+#define RESET 0
+#define SET 1
+#define ENABLE 1
+#define DISABLE 0
+#define GPIOA ((GPIO_Module *)0x10)
+#define GPIOB ((GPIO_Module *)0x11)
+#define GPIO_PIN_7 7U
+#define GPIO_PIN_8 8U
+#define GPIO_PIN_15 15U
+#define RCC_APB2_PERIPH_UART5 0U
+extern usart_module_t host_uart5;
+typedef int FlagStatus;
+typedef int INTStatus;
+uint32_t DMA_GetCurrDataCounter(dma_t *d);
+FlagStatus DMA_GetFlagStatus(uint32_t flag, dma_t *d);
+void DMA_ClearFlag(uint32_t flag, dma_t *d);
+FlagStatus USART_GetFlagStatus(usart_module_t *u, uint16_t flag);
+void USART_SendData(usart_module_t *u, uint16_t data);
+uint16_t USART_ReceiveData(usart_module_t *u);
+INTStatus USART_GetIntStatus(usart_module_t *u, uint16_t flag);
+void IWDG_ReloadKey(void);
+void GPIO_SetBits(GPIO_Module *p, uint16_t pin);
+void GPIO_ResetBits(GPIO_Module *p, uint16_t pin);
+int GPIO_ReadInputDataBit(GPIO_Module *p, uint16_t pin);
+void delay_ms(uint32_t ms);
+void delay_us(uint32_t us);
+#endif
+''',
+    "config.h": r'''
+#ifndef CONFIG_H
+#define CONFIG_H
+#include "n32l40x.h"
+extern volatile uint32_t g_tick_ms;
+#define TICK_MS() (g_tick_ms)
+#define EC800M_RX_BUF_SIZE 1024U
+#define EC800M_POWER_EN_PORT GPIOA
+#define EC800M_POWER_EN_PIN GPIO_PIN_15
+#define EC800M_PWRKEY_PORT GPIOA
+#define EC800M_PWRKEY_PIN GPIO_PIN_8
+#define EC800M_DTR_PORT GPIOB
+#define EC800M_DTR_PIN GPIO_PIN_7
+#endif
+''',
+    "hw_init.h": r'''
+#ifndef HW_INIT_H
+#define HW_INIT_H
+#include "n32l40x.h"
+#endif
+''',
+    "debug_uart.h": r'''
+#ifndef DEBUG_UART_H
+#define DEBUG_UART_H
+int dbg_printf(const char *fmt, ...);
+void dbg_putchar(char c);
+#endif
+''',
+    "peripherals.h": r'''
+#ifndef PERIPHERALS_H
+#define PERIPHERALS_H
+#include <stdbool.h>
+void sms_process_urc(const char *line);
+void sms_send_complete(bool success);
+#endif
+''',
+}
+
+
+HARNESS = r'''
+#include <assert.h>
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include "n32l40x.h"
+#include "config.h"
+#include "ec800m.h"
+#include "sms_ingress.h"
+
+volatile uint32_t g_tick_ms;
+usart_module_t host_uart5;
+static uint16_t wr;
+static unsigned injection;
+static char tx_log[256];
+static unsigned tx_len;
+static char sms_from[32];
+static char sms_body[192];
+static unsigned sms_calls;
+
+extern uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];
+void ec800m_test_set_state(ec800m_state_t state);
+void ec800m_test_set_tcp_open(uint8_t ch);
+
+static void host_feed_rx(const char *text)
+{
+    size_t n = strlen(text);
+    for (size_t i = 0U; i < n; ++i) {
+        EC800M_RX_BUF[wr++] = (uint8_t)text[i];
+        if (wr == EC800M_RX_BUF_SIZE) wr = 0U;
+    }
+}
+
+void host_uart_tx(uint8_t byte)
+{
+    if (tx_len + 1U < sizeof tx_log) {
+        tx_log[tx_len++] = (char)byte;
+        tx_log[tx_len] = '\0';
+    }
+    if (injection == 0U && byte == '\n' && strstr(tx_log, "AT+QISEND=0,3\r\n") != NULL) {
+        host_feed_rx(">\r\n+CMT: \"13900000004\",\"\",\"\"\r\nPARAM#\r\n+QIURC: \"closed\",0\r\n");
+        injection = 1U;
+    } else if (injection == 1U && byte == 'c') {
+        host_feed_rx("\r\nSEND OK\r\n");
+        injection = 2U;
+    }
+}
+
+uint32_t DMA_GetCurrDataCounter(dma_t *d)
+{
+    (void)d;
+    return (uint32_t)(EC800M_RX_BUF_SIZE - wr);
+}
+FlagStatus DMA_GetFlagStatus(uint32_t flag, dma_t *d)
+{
+    (void)flag; (void)d; return RESET;
+}
+void DMA_ClearFlag(uint32_t flag, dma_t *d) { (void)flag; (void)d; }
+FlagStatus USART_GetFlagStatus(usart_module_t *u, uint16_t flag)
+{
+    (void)u;
+    return (flag == USART_FLAG_TXDE || flag == USART_FLAG_TXC) ? SET : RESET;
+}
+void USART_SendData(usart_module_t *u, uint16_t data) { (void)u; host_uart_tx((uint8_t)data); }
+uint16_t USART_ReceiveData(usart_module_t *u) { (void)u; return 0U; }
+INTStatus USART_GetIntStatus(usart_module_t *u, uint16_t flag) { (void)u; (void)flag; return RESET; }
+void IWDG_ReloadKey(void) { ++g_tick_ms; }
+void GPIO_SetBits(GPIO_Module *p, uint16_t pin) { (void)p; (void)pin; }
+void GPIO_ResetBits(GPIO_Module *p, uint16_t pin) { (void)p; (void)pin; }
+int GPIO_ReadInputDataBit(GPIO_Module *p, uint16_t pin) { (void)p; (void)pin; return SET; }
+void delay_ms(uint32_t ms) { g_tick_ms += ms; }
+void delay_us(uint32_t us) { (void)us; }
+int dbg_printf(const char *fmt, ...) { (void)fmt; return 0; }
+void dbg_putchar(char c) { (void)c; }
+void sms_send_complete(bool success) { (void)success; }
+void sms_process_urc(const char *line) { sms_ingress_feed_line(line); }
+
+static void sms_cb(const char *from, const uint8_t *cmd, uint16_t len)
+{
+    assert(len < sizeof sms_body);
+    strncpy(sms_from, from, sizeof sms_from - 1U);
+    sms_from[sizeof sms_from - 1U] = '\0';
+    memcpy(sms_body, cmd, len);
+    sms_body[len] = '\0';
+    ++sms_calls;
+}
+
+int main(void)
+{
+    ec800m_test_set_state(EC800M_STATE_READY);
+    ec800m_test_set_tcp_open(0U);
+    sms_ingress_set_callback(sms_cb);
+    assert(ec800m_tcp_send(0U, (const uint8_t *)"abc", 3U) == 0);
+
+    /* +CMT survives the TCP owner and is available through the real FIFO. */
+    sms_ingress_process();
+    assert(sms_calls == 1U);
+    assert(strcmp(sms_from, "13900000004") == 0);
+    assert(strcmp(sms_body, "PARAM") == 0);
+
+    /* QIURC work was deferred while TCP owned the AT channel. */
+    assert(ec800m_tcp_state(0U) == TCP_STATE_OPEN);
+    ec800m_process();
+    assert(ec800m_tcp_state(0U) == TCP_STATE_CLOSED);
+
+    puts("test_ec800m_urc_demux: PASS");
+    return 0;
+}
+'''
+
+
+def compiler() -> str | None:
+    return os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc")
+
+
+def main() -> None:
+    cc = compiler()
+    if not cc:
+        if os.environ.get("REQUIRE_GCC") == "1":
+            raise AssertionError("REQUIRE_GCC=1 but no gcc/cc found")
+        print("test_ec800m_urc_demux: SKIP (gcc/cc unavailable)")
+        return
+    with tempfile.TemporaryDirectory() as td:
+        directory = pathlib.Path(td)
+        for name, content in HEADERS.items():
+            (directory / name).write_text(content, encoding="ascii")
+        harness = directory / "harness.c"
+        output = directory / "harness.exe"
+        harness.write_text(HARNESS, encoding="ascii")
+        command = [
+            cc,
+            "-std=c99",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wno-dangling-else",
+            "-ffunction-sections",
+            "-fdata-sections",
+            "-DEC800M_HOST_TEST",
+            "-I",
+            str(directory),
+            "-I",
+            str(ROOT / "include"),
+            str(harness),
+            str(ROOT / "src" / "ec800m.c"),
+            str(ROOT / "src" / "sms_ingress.c"),
+            str(ROOT / "src" / "sms_command.c"),
+            "-Wl,--gc-sections",
+            "-o",
+            str(output),
+        ]
+        build = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+        if build.returncode:
+            raise AssertionError("C harness compile failed:\n" + build.stderr)
+        run = subprocess.run([str(output)], cwd=ROOT, capture_output=True, text=True)
+        if run.returncode:
+            raise AssertionError(
+                "C harness failed (exit %d):\n%s\n%s"
+                % (run.returncode, run.stdout, run.stderr)
+            )
+        print(run.stdout.strip())
+
+
+if __name__ == "__main__":
+    main()

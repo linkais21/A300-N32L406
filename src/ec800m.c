@@ -20,6 +20,13 @@ static uint16_t s_rx_rd = 0;   /* read pointer (software-maintained); DMA write 
 #define AT_LINE_MAX  256
 static char    s_line_buf[AT_LINE_MAX];
 static uint16_t s_line_len = 0;
+#define AT_DEFERRED_URC_MAX 4U
+static char s_deferred_urc[AT_DEFERRED_URC_MAX][AT_LINE_MAX];
+static uint8_t s_deferred_urc_head;
+static uint8_t s_deferred_urc_tail;
+static uint8_t s_deferred_urc_count;
+static bool s_cmt_body_pending;
+static bool s_deferred_urc_processing;
 
 /* AT command send/wait */
 #define AT_RESP_MAX  512
@@ -113,6 +120,100 @@ void DMA_Channel5_IRQHandler(void)
 /* ── Low-level send ───────────────────────────────────────────────────────── */
 /* ── Send AT command and wait for response (blocking, timeout ms) ─────────── */
 static uint16_t s_at_resp_len = 0;  /* actual byte count (including \0) */
+static uint16_t *s_at_resp_pos_ref;
+static uint16_t s_at_resp_line_start;
+static void process_rx_byte(char c);
+static void process_urc(const char *line);
+static void process_deferred_urc_one(void);
+
+static bool is_deferred_urc(const char *line)
+{
+    return line && (strncmp(line, "+QIURC:", 7) == 0 ||
+                    strncmp(line, "+QIOPEN:", 8) == 0);
+}
+
+static void defer_urc(const char *line)
+{
+    char *slot;
+    if (!line || !is_deferred_urc(line) ||
+        s_deferred_urc_count >= AT_DEFERRED_URC_MAX) return;
+    slot = s_deferred_urc[s_deferred_urc_tail];
+    (void)strncpy(slot, line, AT_LINE_MAX - 1U);
+    slot[AT_LINE_MAX - 1U] = '\0';
+    s_deferred_urc_tail = (uint8_t)((s_deferred_urc_tail + 1U) % AT_DEFERRED_URC_MAX);
+    ++s_deferred_urc_count;
+}
+
+static void process_deferred_urc_one(void)
+{
+    char line[AT_LINE_MAX];
+
+    if (s_at_owner != AT_OWNER_NONE || s_deferred_urc_count == 0U ||
+        s_deferred_urc_processing) return;
+    s_deferred_urc_processing = true;
+    (void)strncpy(line, s_deferred_urc[s_deferred_urc_head], sizeof(line) - 1U);
+    line[sizeof(line) - 1U] = '\0';
+    s_deferred_urc_head = (uint8_t)((s_deferred_urc_head + 1U) % AT_DEFERRED_URC_MAX);
+    --s_deferred_urc_count;
+    process_urc(line);
+    s_deferred_urc_processing = false;
+}
+
+static void process_rx_line(void)
+{
+    bool cmt_header;
+    bool cmt_body;
+
+    s_line_buf[s_line_len] = '\0';
+    if (s_line_len == 0U) {
+        if (s_cmt_body_pending) {
+            sms_process_urc(s_line_buf);
+            s_cmt_body_pending = false;
+        }
+        return;
+    }
+
+    cmt_header = strncmp(s_line_buf, "+CMT:", 5) == 0;
+    cmt_body = s_cmt_body_pending;
+    if ((cmt_header || cmt_body) && s_at_resp_pos_ref != NULL)
+        *s_at_resp_pos_ref = s_at_resp_line_start;
+    if (cmt_header || cmt_body)
+        sms_process_urc(s_line_buf);
+
+    /* +CMT is a two-line URC.  Consume both lines here so a blocking AT
+     * transaction cannot mistake the SMS body for an AT response/URC. */
+    if (cmt_header) {
+        s_cmt_body_pending = true;
+        return;
+    }
+    if (cmt_body) {
+        s_cmt_body_pending = false;
+        return;
+    }
+
+    if (s_at_owner != AT_OWNER_NONE && is_deferred_urc(s_line_buf))
+        defer_urc(s_line_buf);
+    else
+        process_urc(s_line_buf);
+}
+
+static void process_rx_byte(char c)
+{
+    if (c == '>' && s_sms_tx_state == SMS_TX_WAIT_PROMPT &&
+        s_line_len == 0U && s_sms_prompt_line_start) {
+        s_sms_prompt = true;
+    }
+    if (c == '\r') return;
+    if (c == '\n') {
+        process_rx_line();
+        s_line_len = 0U;
+        s_sms_prompt_line_start = true;
+        return;
+    }
+    if (c != ' ' && c != '>') s_sms_prompt_line_start = false;
+    if (s_line_len < AT_LINE_MAX - 1U)
+        s_line_buf[s_line_len++] = c;
+}
 
 static bool at_send_wait_owned(const char *cmd, const char *expect,
                                uint32_t timeout_ms)
@@ -141,9 +242,14 @@ static bool at_send_wait_owned(const char *cmd, const char *expect,
 #if EC800M_RX_ECHO
             dbg_putchar((char)c);
 #endif
+            if (s_line_len == 0U)
+                s_at_resp_line_start = resp_pos;
             if (resp_pos < AT_RESP_MAX - 1)
                 s_at_resp[resp_pos++] = (char)c;
+            s_at_resp_pos_ref = &resp_pos;
+            process_rx_byte((char)c);
         }
+        s_at_resp_pos_ref = NULL;
         s_at_resp_len = resp_pos;
         s_at_resp[resp_pos] = '\0';
         if (expect[0] && strstr(s_at_resp, expect)) return true;
@@ -159,6 +265,8 @@ static bool at_send_wait(const char *cmd, const char *expect,
     if (!at_owner_acquire(AT_OWNER_BLOCKING)) return false;
     ok = at_send_wait_owned(cmd, expect, timeout_ms);
     at_owner_release(AT_OWNER_BLOCKING);
+    /* URCs observed while the owner was held can now start their own AT work. */
+    process_deferred_urc_one();
     return ok;
 }
 
@@ -357,6 +465,10 @@ static void state_machine_pdp(void)
 static void process_urc(const char *line)
 {
     int ch;
+    if (s_at_owner != AT_OWNER_NONE && is_deferred_urc(line)) {
+        defer_urc(line);
+        return;
+    }
     /* +QIOPEN: ch,0  → open success */
     /* +QIOPEN: ch,err */
     int qiopen_ch, qiopen_err;
@@ -440,17 +552,7 @@ static void drain_rx(void)
 #if EC800M_RX_ECHO
         dbg_putchar(c);
 #endif
-        if (c == '>' && s_sms_tx_state == SMS_TX_WAIT_PROMPT && s_line_len == 0U && s_sms_prompt_line_start) s_sms_prompt = true;
-        if (c == '\r') continue;
-        if (c == '\n') {
-            s_line_buf[s_line_len] = '\0';
-            if (s_line_len > 0) process_urc(s_line_buf);
-            s_line_len = 0; s_sms_prompt_line_start = true;
-        } else {
-            if (c != ' ' && c != '>') s_sms_prompt_line_start = false;
-            if (s_line_len < AT_LINE_MAX - 1)
-                s_line_buf[s_line_len++] = c;
-        }
+        process_rx_byte(c);
     }
 }
 
@@ -459,6 +561,9 @@ void ec800m_init(void)
 {
     if (s_sms_tx_state != SMS_TX_IDLE) sms_send_complete(false);
     s_sms_tx_state=SMS_TX_IDLE; s_at_owner=AT_OWNER_NONE; s_sms_prompt=false;
+    s_line_len = 0U; s_sms_prompt_line_start = true; s_cmt_body_pending = false;
+    s_deferred_urc_head = 0U; s_deferred_urc_tail = 0U; s_deferred_urc_count = 0U;
+    s_deferred_urc_processing = false;
     rx_irq_init();
     memset(s_tcp, 0, sizeof(s_tcp));
     s_state = EC800M_STATE_BOOTING;
@@ -471,6 +576,7 @@ void ec800m_process(void)
 {
     drain_rx();
     sms_tx_process();
+    process_deferred_urc_one();
 
     switch (s_state) {
     case EC800M_STATE_BOOTING:
@@ -512,6 +618,12 @@ bool ec800m_is_ready(void)            { return s_state == EC800M_STATE_READY; }
 /* Host-only controls used by the production-chain harness.  They are not
  * part of the target API or firmware build. */
 void ec800m_test_set_state(ec800m_state_t state) { s_state = state; }
+void ec800m_test_set_imei(const char *imei)
+{
+    if (imei == NULL) return;
+    (void)strncpy(s_imei, imei, sizeof(s_imei) - 1U);
+    s_imei[sizeof(s_imei) - 1U] = '\0';
+}
 void ec800m_test_set_tcp_open(uint8_t ch)
 {
     if (ch < EC800M_CH_MAX) s_tcp[ch].state = TCP_STATE_OPEN;

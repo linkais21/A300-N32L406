@@ -208,22 +208,39 @@ void gps_process(void)
 bool gps_is_valid(void)               { return s_gps.valid; }
 const gps_data_t *gps_get_data(void)  { return &s_gps; }
 
+static bool gps_tx_write(const uint8_t *data, uint32_t len)
+{
+    uint32_t timeout_ms = 100U + ((len + 7U) / 8U);
+    uint32_t start_ms = TICK_MS();
+    uint32_t guard = timeout_ms * 1024U + 1U;
+
+    for (uint32_t i = 0U; i < len; ++i) {
+        while (USART_GetFlagStatus(GPS_UART, USART_FLAG_TXDE) == RESET) {
+            if ((uint32_t)(TICK_MS() - start_ms) >= timeout_ms || guard == 0U)
+                return false;
+            --guard;
+            IWDG_ReloadKey();
+        }
+        USART_SendData(GPS_UART, data[i]);
+    }
+
+    while (USART_GetFlagStatus(GPS_UART, USART_FLAG_TXC) == RESET) {
+        if ((uint32_t)(TICK_MS() - start_ms) >= timeout_ms || guard == 0U)
+            return false;
+        --guard;
+        IWDG_ReloadKey();
+    }
+    return true;
+}
+
 void gps_send_cmd(const char *cmd)
 {
-    while (*cmd) {
-        while (USART_GetFlagStatus(GPS_UART, USART_FLAG_TXDE) == RESET);
-        USART_SendData(GPS_UART, (uint8_t)*cmd++);
-    }
+    if (!cmd || !*cmd) return;
+    (void)gps_tx_write((const uint8_t *)cmd, (uint32_t)strlen(cmd));
 }
 
 int gps_send_raw(const uint8_t *data, uint32_t len)
 {
-    if (!data || len == 0 || len > 65535UL) return -1;
-    for (uint32_t i = 0; i < len; ++i) {
-        uint32_t guard = 100000UL;
-        while (USART_GetFlagStatus(GPS_UART, USART_FLAG_TXDE) == RESET && guard--) { }
-        if (guard == 0) return -1;
-        USART_SendData(GPS_UART, data[i]);
-    }
-    return 0;
+    if (!data || len == 0U || len > 65535UL) return -1;
+    return gps_tx_write(data, len) ? 0 : -1;
 }

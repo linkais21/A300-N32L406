@@ -70,11 +70,17 @@ static void early_debug_uart_init(void)
 
 static void early_uart_raw_puts(const char *s)
 {
+    uint32_t guard;
     while (*s) {
-        while (USART_GetFlagStatus(DBG_UART, USART_FLAG_TXDE) == RESET);
+        guard = 100000U;
+        while (USART_GetFlagStatus(DBG_UART, USART_FLAG_TXDE) == RESET && guard-- != 0U) {
+        }
+        if (guard == 0U) return;
         USART_SendData(DBG_UART, (uint8_t)*s++);
     }
-    while (USART_GetFlagStatus(DBG_UART, USART_FLAG_TXC) == RESET);
+    guard = 100000U;
+    while (USART_GetFlagStatus(DBG_UART, USART_FLAG_TXC) == RESET && guard-- != 0U) {
+    }
 }
 
 void HardFault_Handler(void)
