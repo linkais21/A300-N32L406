@@ -35,3 +35,8 @@ Verification (`REQUIRE_GCC=1`): end-to-end, SMS ingress/whitelist/boundary, pars
 - Power-off, reset and init cancel pending SMS state, release AT ownership and signal failure.
 - Periodic CSQ uses the shared AT owner instead of raw UART writes.
 - Default replies retain bounded sender/text state and retry asynchronous failures twice with fixed backoff; terminal failure is diagnosed, and RESET schedules only after confirmed send completion.
+
+## Re-review fix round 3
+
+- CMGS prompt and result phases now fail immediately on exact `ERROR`/`+CMS ERROR:` lines.
+- Retry exhaustion clears retained sender/reply and reset handoff state, preventing stale RESET scheduling.

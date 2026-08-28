@@ -344,7 +344,7 @@ static void process_urc(const char *line)
     /* +QIOPEN: ch,err */
     int qiopen_ch, qiopen_err;
     sms_process_urc(line);
-    if (s_at_owner == AT_OWNER_SMS && s_sms_tx_state == SMS_TX_WAIT_RESULT && (strncmp(line, "+CMGS:", 6) == 0 || strncmp(line, "+CMS ERROR:", 11) == 0 || strcmp(line, "ERROR") == 0)) {
+    if (s_at_owner == AT_OWNER_SMS && (s_sms_tx_state == SMS_TX_WAIT_RESULT || s_sms_tx_state == SMS_TX_WAIT_PROMPT) && (strncmp(line, "+CMGS:", 6) == 0 || strncmp(line, "+CMS ERROR:", 11) == 0 || strcmp(line, "ERROR") == 0)) {
         s_sms_tx_state = SMS_TX_IDLE; s_at_owner = AT_OWNER_NONE;
         sms_send_complete(strncmp(line, "+CMGS:", 6) == 0);
     } else if (s_sms_tx_state != SMS_TX_IDLE && strncmp(line, "+CMS ERROR:", 11) == 0) {

@@ -59,7 +59,7 @@ static void f39_sms_result(bool success)
 {
     if (!success && s_retry_pending && s_retry_count < 2U) { ++s_retry_count; s_retry_due_ms=TICK_MS()+1000U; dbg_printf("[SMS] retry %u\r\n",s_retry_count); return; }
     if (!success && s_retry_pending) dbg_printf("[SMS] reply failed after retries\r\n");
-    s_retry_pending=false;
+    if (!success) { s_retry_pending=false; s_retry_count=0U; s_retry_sender[0]='\0'; s_retry_reply[0]='\0'; s_reset_waiting_handoff=false; }
     if (!s_reset_waiting_handoff) return;
     s_reset_waiting_handoff = false;
     if (success) f39_default_reset(s_reset_handoff_delay_ms, NULL);
@@ -295,7 +295,7 @@ void at_config_init(void) { f39_bind_defaults(); }
 void at_config_process(void)
 {
     if (s_retry_pending && s_f39_uses_defaults && (int32_t)(TICK_MS()-s_retry_due_ms)>=0) {
-        if (sms_send(s_retry_sender,s_retry_reply)!=0) { ++s_retry_count; s_retry_due_ms=TICK_MS()+1000U; if(s_retry_count>2U){s_retry_pending=false;dbg_printf("[SMS] reply dropped\r\n");} }
+        if (sms_send(s_retry_sender,s_retry_reply)!=0) { ++s_retry_count; s_retry_due_ms=TICK_MS()+1000U; if(s_retry_count>2U){s_retry_pending=false; s_reset_waiting_handoff=false; s_retry_sender[0]='\0'; s_retry_reply[0]='\0'; dbg_printf("[SMS] reply dropped\r\n");} }
     }
     if (s_reset_pending && (int32_t)(TICK_MS() - s_reset_due_ms) >= 0) {
         s_reset_pending = false;
