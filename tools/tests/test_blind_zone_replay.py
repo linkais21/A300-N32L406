@@ -40,11 +40,15 @@ HARNESS = r'''
 
 volatile uint32_t g_tick_ms;
 static bool s_tcp_online = true;
+static bool s_main_online = true;
+static bool s_backup_online;
 static uint32_t s_session_generation = 1U;
 static int s_send_result;
 static uint8_t s_sent[1024];
 static uint16_t s_sent_length;
 static unsigned s_send_count;
+static uint8_t s_last_send_channel;
+static unsigned s_param_set_count;
 static blind_zone_record_t s_queue[32];
 static uint8_t s_queue_count;
 static uint32_t s_queue_sequence = 1U;
@@ -70,7 +74,7 @@ bool ec800m_is_ready(void) { return true; }
 void ec800m_register_recv(ec800m_recv_cb_t cb) { (void)cb; }
 int ec800m_tcp_send(uint8_t ch, const uint8_t *data, uint16_t length)
 {
-    (void)ch;
+    s_last_send_channel = ch;
     assert(length <= sizeof(s_sent));
     memcpy(s_sent, data, length);
     s_sent_length = length;
@@ -80,10 +84,12 @@ int ec800m_tcp_send(uint8_t ch, const uint8_t *data, uint16_t length)
 int ec800m_get_csq(void) { return 19; }
 bool tcp_manager_is_online(void) { return s_tcp_online; }
 bool tcp_manager_ch_online(uint8_t ch)
-{ return s_tcp_online && ch == EC800M_CH_MAIN; }
-uint8_t tcp_manager_active_ch(void) { return EC800M_CH_MAIN; }
+{ return s_tcp_online && ((ch == EC800M_CH_MAIN && s_main_online) ||
+                          (ch == EC800M_CH_BACKUP && s_backup_online)); }
+uint8_t tcp_manager_active_ch(void)
+{ return s_main_online ? EC800M_CH_MAIN : EC800M_CH_BACKUP; }
 uint32_t tcp_manager_session_generation(uint8_t ch)
-{ return ch == EC800M_CH_MAIN ? s_session_generation : 0U; }
+{ return ch <= EC800M_CH_BACKUP ? s_session_generation : 0U; }
 tcp_state_t ec800m_tcp_state(uint8_t ch)
 { (void)ch; return s_tcp_online ? TCP_STATE_OPEN : TCP_STATE_CLOSED; }
 const gps_data_t *gps_get_data(void) { return &s_gps; }
@@ -94,7 +100,7 @@ void relay_set(bool cut) { (void)cut; }
 void geofence_handle_jt808(const uint8_t *body, uint16_t length, uint16_t sn)
 { (void)body; (void)length; (void)sn; }
 void jt808_params_handle_set(const uint8_t *body, uint16_t length, uint16_t sn)
-{ (void)body; (void)length; (void)sn; }
+{ (void)body; (void)length; (void)sn; ++s_param_set_count; }
 void jt808_params_handle_query(const uint8_t *body, uint16_t length, uint16_t sn)
 { (void)body; (void)length; (void)sn; }
 void jt808_params_handle_info_query(uint16_t sn) { (void)sn; }
@@ -122,10 +128,6 @@ uint8_t blind_zone_peek(blind_zone_record_t *records, uint8_t capacity,
 blind_zone_result_t blind_zone_consume(uint32_t sequence, uint8_t count)
 {
     assert(sequence == s_queue_sequence && count <= s_queue_count);
-    memmove(s_queue, s_queue + count,
-            (s_queue_count - count) * sizeof(s_queue[0]));
-    s_queue_count -= count;
-    s_queue_sequence += count;
     ++s_consume_count;
     s_last_consumed = count;
     s_last_consumed_sequence = sequence;
@@ -133,6 +135,10 @@ blind_zone_result_t blind_zone_consume(uint32_t sequence, uint8_t count)
         s_consume_pending_once = false;
         return BLIND_ZONE_PENDING;
     }
+    memmove(s_queue, s_queue + count,
+            (s_queue_count - count) * sizeof(s_queue[0]));
+    s_queue_count -= count;
+    s_queue_sequence += count;
     return BLIND_ZONE_OK;
 }
 
@@ -193,20 +199,37 @@ static void inject_location_query(void)
     jt808_on_recv(EC800M_CH_MAIN, frame, sizeof(frame));
 }
 
+static void inject_empty_command(uint8_t channel, uint16_t message)
+{
+    uint8_t frame[15] = {
+        0x7eU, (uint8_t)(message >> 8), (uint8_t)message, 0U, 0U,
+        0U, 0U, 0U, 0U, 0U, 0U, 0x12U, 0x34U, 0U, 0x7eU
+    };
+    uint8_t checksum = 0U;
+    uint16_t i;
+    for (i = 1U; i < 13U; ++i) checksum ^= frame[i];
+    frame[13] = checksum;
+    jt808_on_recv(channel, frame, sizeof(frame));
+}
+
 static void authenticate(void)
 {
     uint16_t auth_serial;
+    uint8_t auth_channel, other_channel;
     s_tcp_online = true;
     s_send_result = 0;
     jt808_process();
     auth_serial = sent_serial();
+    auth_channel = tcp_manager_active_ch();
+    other_channel = auth_channel == EC800M_CH_MAIN ?
+                    EC800M_CH_BACKUP : EC800M_CH_MAIN;
     inject_ack(auth_serial, MSG_TERMINAL_AUTH, 1U, 5U);
     assert(!jt808_is_online());
     inject_ack(auth_serial, MSG_LOCATION_REPORT, 0U, 5U);
     assert(!jt808_is_online());
-    inject_ack_ch(EC800M_CH_BACKUP, auth_serial, MSG_TERMINAL_AUTH, 0U, 5U);
+    inject_ack_ch(other_channel, auth_serial, MSG_TERMINAL_AUTH, 0U, 5U);
     assert(!jt808_is_online());
-    inject_ack(auth_serial, MSG_TERMINAL_AUTH, 0U, 5U);
+    inject_ack_ch(auth_channel, auth_serial, MSG_TERMINAL_AUTH, 0U, 5U);
     assert(jt808_is_online());
 }
 
@@ -276,6 +299,22 @@ int main(void)
     for (uint8_t i = 1U; i < 20U; ++i) push_record((uint8_t)(0x20U + i));
 
     authenticate();
+    /* Ordinary traffic stays on the authenticated backup session even when
+     * main opens later, and main-channel commands are rejected. */
+    jt808_init(&terminal);
+    s_main_online = false; s_backup_online = true; s_tcp_online = true;
+    authenticate();
+    s_main_online = true;
+    reset_capture();
+    assert(jt808_send_heartbeat() == 0);
+    assert(s_send_count == 1U && s_last_send_channel == EC800M_CH_BACKUP);
+    inject_empty_command(EC800M_CH_MAIN, MSG_SET_TERMINAL_PARAM);
+    assert(s_param_set_count == 0U);
+    inject_empty_command(EC800M_CH_BACKUP, MSG_SET_TERMINAL_PARAM);
+    assert(s_param_set_count == 1U);
+    jt808_init(&terminal);
+    s_main_online = true; s_backup_online = false;
+    authenticate();
     s_send_result = -1;
     {
         unsigned appends = s_append_count;
@@ -308,9 +347,12 @@ int main(void)
     s_consume_pending_once = true;
     blind_zone_replay_process();
     assert(s_consume_count == 1U && s_last_consumed == first_batch &&
-           s_last_consumed_sequence == 1U && s_queue_count == 21U - first_batch);
+           s_last_consumed_sequence == 1U && s_queue_count == 21U);
 
     reset_capture();
+    blind_zone_replay_process();
+    assert(s_send_count == 0U && s_consume_count == 2U &&
+           s_queue_count == 21U - first_batch);
     blind_zone_replay_process();
     assert(s_send_count == 1U);
     replay_serial2 = sent_serial();
@@ -320,7 +362,7 @@ int main(void)
     assert(!jt808_is_online());
     inject_ack(replay_serial2, 0x0704U, 0U, 5U);
     blind_zone_replay_process();
-    assert(s_consume_count == 1U);
+    assert(s_consume_count == 2U);
     authenticate();
     reset_capture();
     blind_zone_replay_process();
@@ -331,28 +373,28 @@ int main(void)
     reboot_replay_state();
     reset_capture();
     blind_zone_replay_process();
-    assert(s_send_count == 1U && s_consume_count == 1U);
+    assert(s_send_count == 1U && s_consume_count == 2U);
     replay_serial2 = sent_serial();
 
     /* Timeout, send failure, and disconnect all retain the exact batch. */
     sends = s_send_count;
     g_tick_ms += BLIND_ZONE_REPLAY_ACK_TIMEOUT_MS + 1U;
     blind_zone_replay_process();
-    assert(s_send_count == sends + 1U && s_consume_count == 1U);
+    assert(s_send_count == sends + 1U && s_consume_count == 2U);
     s_tcp_online = false;
     blind_zone_replay_process();
-    assert(s_consume_count == 1U);
+    assert(s_consume_count == 2U);
     s_tcp_online = true;
     s_send_result = -1;
     sends = s_send_count;
     blind_zone_replay_process();
-    assert(s_send_count == sends + 1U && s_consume_count == 1U);
+    assert(s_send_count == sends + 1U && s_consume_count == 2U);
     s_send_result = 0;
     blind_zone_replay_process();
     replay_serial2 = sent_serial();
     inject_ack(replay_serial2, 0x0704U, 0U, 5U);
     blind_zone_replay_process();
-    assert(s_queue_count == 0U && s_consume_count == 2U);
+    assert(s_queue_count == 0U && s_consume_count == 3U);
 
     puts("test_blind_zone_replay: PASS");
     return 0;

@@ -22,6 +22,10 @@ typedef struct {
     uint32_t corrupt_quarantine;
     uint32_t oldest_overwrite;
     uint32_t pending_reconciliation;
+    uint32_t append_io;
+    uint32_t consume_io;
+    uint32_t recovery_retry;
+    uint32_t format_rejected;
 } blind_zone_diagnostics_t;
 
 typedef struct {
@@ -37,5 +41,8 @@ uint8_t blind_zone_peek(blind_zone_record_t *records, uint8_t capacity,
                         uint32_t *first_sequence);
 blind_zone_result_t blind_zone_consume(uint32_t first_sequence, uint8_t count);
 void blind_zone_get_diagnostics(blind_zone_diagnostics_t *out);
+#ifdef BLIND_ZONE_TEST
+void blind_zone_test_set_diagnostics(const blind_zone_diagnostics_t *value);
+#endif
 
 #endif

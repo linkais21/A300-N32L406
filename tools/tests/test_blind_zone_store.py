@@ -60,6 +60,7 @@ static int fail_after = -1;
 static unsigned erase_count;
 static uint32_t fail_read_address = 0xffffffffUL;
 static bool fail_read_once;
+static bool fail_commit_verify_after_program;
 
 bool ext_flash_try_lock(ext_flash_owner_t requested)
 {
@@ -102,6 +103,12 @@ bool ext_flash_write_verified(ext_flash_owner_t requested, uint32_t address,
         if ((flash_mem[address + i] & source[i]) != source[i]) return false;
         flash_mem[address + i] &= source[i];
         if (fail_after > 0) --fail_after;
+    }
+    if (fail_commit_verify_after_program &&
+        address >= BLIND_DATA_ADDR &&
+        ((address - BLIND_DATA_ADDR) % RECORD_BYTES) == 60U) {
+        fail_commit_verify_after_program = false;
+        return false;
     }
     return memcmp(flash_mem + address, data, length) == 0;
 }
@@ -438,6 +445,110 @@ static void test_corrupt_head_and_middle_are_quarantined(void)
     assert(record_value(&records[0]) == 403U);
 }
 
+static void test_structural_middle_corruption_does_not_stall_suffix(void)
+{
+    blind_zone_record_t record, out;
+    uint32_t sequence = 0U;
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    record = make_record(701U); append_accepted(&record);
+    record = make_record(702U); append_accepted(&record);
+    record = make_record(703U); append_accepted(&record);
+    flash_mem[BLIND_DATA_ADDR + RECORD_BYTES] &= 0x2fU; /* corrupt magic */
+    assert(blind_zone_peek(&out, 1U, &sequence) == 1U && sequence == 1U);
+    consume_accepted(1U, 1U);
+    assert(blind_zone_peek(&out, 1U, &sequence) == 0U);
+    maintenance_ready();
+    assert(blind_zone_peek(&out, 1U, &sequence) == 1U && sequence == 3U);
+    assert(record_value(&out) == 703U);
+}
+
+static void test_transient_head_read_failure_never_quarantines_valid_head(void)
+{
+    blind_zone_record_t record;
+    uint32_t sequence = 0U;
+    blind_zone_diagnostics_t before, after;
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    record = make_record(711U); append_accepted(&record);
+    blind_zone_get_diagnostics(&before);
+    fail_read_address = BLIND_DATA_ADDR;
+    fail_read_once = true;
+    assert(blind_zone_peek(&record, 1U, &sequence) == 0U);
+    blind_zone_get_diagnostics(&after);
+    assert(after.corrupt_quarantine == before.corrupt_quarantine);
+    expect_front(711U, 1U);
+}
+
+static void test_consume_tombstones_precede_metadata_and_survive_each_cut(void)
+{
+    unsigned cut;
+    for (cut = 1U; cut <= 3U; ++cut) {
+        blind_zone_record_t record, out[4];
+        uint32_t sequence = 0U;
+        unsigned i;
+        memset(flash_mem, 0xff, sizeof(flash_mem));
+        owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+        for (i = 1U; i <= 4U; ++i) {
+            record = make_record(720U + i); append_accepted(&record);
+        }
+        assert(blind_zone_consume(1U, 3U) == BLIND_ZONE_PENDING);
+        fail_after = (int)(cut * sizeof(uint32_t));
+        blind_zone_recovery_process();
+        fail_after = -1;
+        owner = EXT_FLASH_OWNER_NONE;
+        recover();
+        assert(blind_zone_peek(out, 4U, &sequence) <= (uint8_t)(4U - cut));
+        if (blind_zone_peek(out, 4U, &sequence) != 0U)
+            assert(sequence > cut);
+    }
+}
+
+static void test_commit_marker_verify_uncertainty_is_pending(void)
+{
+    blind_zone_record_t record;
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    record = make_record(731U);
+    fail_commit_verify_after_program = true;
+    fail_read_address = BLIND_DATA_ADDR;
+    fail_read_once = true;
+    assert(blind_zone_append(&record) == BLIND_ZONE_PENDING);
+    assert(blind_zone_append(&record) == BLIND_ZONE_BUSY);
+    maintenance_ready();
+    expect_front(731U, 1U);
+}
+
+static void test_v1_media_fails_closed_and_counts_diagnostic(void)
+{
+    blind_zone_diagnostics_t before, after;
+    unsigned calls = 0U;
+    uint32_t magic = 0x425a4d31UL, commit = 0x434d4954UL;
+    uint16_t version = 1U;
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    memcpy(flash_mem + BLIND_META_ADDR, &magic, sizeof(magic));
+    memcpy(flash_mem + BLIND_META_ADDR + 4U, &version, sizeof(version));
+    memcpy(flash_mem + BLIND_META_ADDR + META_COMMIT_OFFSET, &commit, sizeof(commit));
+    blind_zone_get_diagnostics(&before);
+    assert(blind_zone_init());
+    while (calls++ < 100U) blind_zone_recovery_process();
+    assert(!blind_zone_ready());
+    blind_zone_get_diagnostics(&after);
+    assert(after.format_rejected == before.format_rejected + 1U);
+}
+
+static void test_diagnostic_counters_saturate(void)
+{
+    blind_zone_diagnostics_t value, after;
+    memset(&value, 0xff, sizeof(value));
+    blind_zone_test_set_diagnostics(&value);
+    owner = EXT_FLASH_OWNER_CONFIG;
+    assert(blind_zone_append(&(blind_zone_record_t){0}) == BLIND_ZONE_BUSY);
+    blind_zone_get_diagnostics(&after);
+    assert(after.busy == 0xffffffffUL);
+    owner = EXT_FLASH_OWNER_NONE;
+}
+
 static void test_consumed_tombstone_prevents_raw_resurrection(void)
 {
     blind_zone_record_t record;
@@ -499,6 +610,12 @@ int main(void)
     test_two_cut_hole_then_committed_record_recovery();
     test_diagnostics_contract();
     test_corrupt_head_and_middle_are_quarantined();
+    test_structural_middle_corruption_does_not_stall_suffix();
+    test_transient_head_read_failure_never_quarantines_valid_head();
+    test_consume_tombstones_precede_metadata_and_survive_each_cut();
+    test_commit_marker_verify_uncertainty_is_pending();
+    test_v1_media_fails_closed_and_counts_diagnostic();
+    test_diagnostic_counters_saturate();
     test_consumed_tombstone_prevents_raw_resurrection();
     test_reconcile_adopts_three_unjournaled_records();
     test_full_queue_postcommit_head_read_fault_is_pending();
@@ -516,6 +633,7 @@ def main() -> None:
         subprocess.run(
             [
                 compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror",
+                "-DBLIND_ZONE_TEST",
                 "-I", str(ROOT / "include"),
                 str(ROOT / "src" / "blind_zone.c"), str(tmp / "harness.c"),
                 "-o", str(executable),

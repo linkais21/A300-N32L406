@@ -138,7 +138,15 @@ static int send_frame(frame_t *body)
     else out[o++] = cs;
     out[o++] = FRAME_FLAG;
 
-    return ec800m_tcp_send(tcp_manager_active_ch(), out, o);
+    if (s_reg == REG_STATE_ONLINE) {
+        if (!jt808_is_online()) return -1;
+        return ec800m_tcp_send(s_auth_channel, out, o);
+    }
+    {
+        uint8_t channel = tcp_manager_active_ch();
+        if (!tcp_manager_ch_online(channel)) return -1;
+        return ec800m_tcp_send(channel, out, o);
+    }
 }
 
 static int send_frame_channel(frame_t *body, uint8_t channel)
@@ -472,6 +480,9 @@ static void process_frame(uint8_t channel, uint32_t generation,
     uint16_t serial_no  = ((uint16_t)frame[10] << 8) | frame[11];
     const uint8_t *body = &frame[12];
     if ((body_prop & 0x2000U) != 0U || body_len != flen - 13U) return;
+    if (s_reg == REG_STATE_ONLINE &&
+        (channel != s_auth_channel || generation != s_auth_generation))
+        return;
 
     switch (msg_id) {
     case MSG_PLATFORM_GENERAL_RESP:
