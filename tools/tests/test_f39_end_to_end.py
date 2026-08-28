@@ -340,6 +340,21 @@ int main(void) {
     g_tick_ms += F39_RESET_DELAY_MS; at_config_process();
     assert(system_resets == 1);
 
+    /* A stale +CMGS from the failed attempt must not complete the retry
+     * while it is still waiting for the new prompt. */
+    {
+        unsigned reset_before = system_resets;
+        feed_cmt("13900000006", "RESET#");
+        modem_step(); sms_process(); modem_step(); complete_sms(false);
+        g_tick_ms += 1000U; at_config_process(); modem_step();
+        host_feed_rx("\r\n+CMGS: 77\r\n"); modem_step();
+        g_tick_ms += F39_RESET_DELAY_MS; at_config_process();
+        assert(system_resets == reset_before);
+        complete_sms(true);
+        g_tick_ms += F39_RESET_DELAY_MS; at_config_process();
+        assert(system_resets == reset_before + 1U);
+    }
+
     /* A CMT arriving during a blocking TCP wait must survive into FIFO. */
     tx_len = 0; tx_log[0] = '\0';
     inject_cmt_during_tcp_wait = 1;

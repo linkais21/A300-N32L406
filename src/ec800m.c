@@ -26,6 +26,7 @@ static uint8_t s_deferred_urc_head;
 static uint8_t s_deferred_urc_tail;
 static uint8_t s_deferred_urc_count;
 static bool s_cmt_body_pending;
+static bool s_cmt_line_active;
 static bool s_deferred_urc_processing;
 
 /* AT command send/wait */
@@ -208,8 +209,13 @@ static void process_rx_byte(char c)
         process_rx_line();
         s_line_len = 0U;
         s_sms_prompt_line_start = true;
+        s_cmt_line_active = false;
         return;
     }
+    if (s_cmt_body_pending) s_cmt_line_active = true;
+    if (!s_cmt_line_active && s_line_len == 4U &&
+        memcmp(s_line_buf, "+CMT", 4U) == 0 && c == ':')
+        s_cmt_line_active = true;
     if (c != ' ' && c != '>') s_sms_prompt_line_start = false;
     if (s_line_len < AT_LINE_MAX - 1U)
         s_line_buf[s_line_len++] = c;
@@ -242,12 +248,18 @@ static bool at_send_wait_owned(const char *cmd, const char *expect,
 #if EC800M_RX_ECHO
             dbg_putchar((char)c);
 #endif
+            bool cmt_byte = s_cmt_line_active || s_cmt_body_pending;
             if (s_line_len == 0U)
                 s_at_resp_line_start = resp_pos;
-            if (resp_pos < AT_RESP_MAX - 1)
+            if (!cmt_byte && resp_pos < AT_RESP_MAX - 1)
                 s_at_resp[resp_pos++] = (char)c;
             s_at_resp_pos_ref = &resp_pos;
             process_rx_byte((char)c);
+            /* The first four +CMT header bytes are provisional.  Once the
+             * colon confirms the header, remove that whole line from the
+             * AT-response matcher and suppress the rest of header/body. */
+            if (!cmt_byte && s_cmt_line_active)
+                resp_pos = s_at_resp_line_start;
         }
         s_at_resp_pos_ref = NULL;
         s_at_resp_len = resp_pos;
@@ -473,7 +485,10 @@ static void process_urc(const char *line)
     /* +QIOPEN: ch,err */
     int qiopen_ch, qiopen_err;
     sms_process_urc(line);
-    if (s_at_owner == AT_OWNER_SMS && (s_sms_tx_state == SMS_TX_WAIT_RESULT || s_sms_tx_state == SMS_TX_WAIT_PROMPT) && (strncmp(line, "+CMGS:", 6) == 0 || strncmp(line, "+CMS ERROR:", 11) == 0 || strcmp(line, "ERROR") == 0)) {
+    if (s_at_owner == AT_OWNER_SMS &&
+        ((s_sms_tx_state == SMS_TX_WAIT_RESULT && strncmp(line, "+CMGS:", 6) == 0) ||
+         (s_sms_tx_state != SMS_TX_IDLE &&
+          (strncmp(line, "+CMS ERROR:", 11) == 0 || strcmp(line, "ERROR") == 0)))) {
         s_sms_tx_state = SMS_TX_IDLE; at_owner_release(AT_OWNER_SMS);
         sms_send_complete(strncmp(line, "+CMGS:", 6) == 0);
     } else if (s_sms_tx_state != SMS_TX_IDLE && strncmp(line, "+CMS ERROR:", 11) == 0) {
@@ -561,7 +576,7 @@ void ec800m_init(void)
 {
     if (s_sms_tx_state != SMS_TX_IDLE) sms_send_complete(false);
     s_sms_tx_state=SMS_TX_IDLE; s_at_owner=AT_OWNER_NONE; s_sms_prompt=false;
-    s_line_len = 0U; s_sms_prompt_line_start = true; s_cmt_body_pending = false;
+    s_line_len = 0U; s_sms_prompt_line_start = true; s_cmt_body_pending = false; s_cmt_line_active = false;
     s_deferred_urc_head = 0U; s_deferred_urc_tail = 0U; s_deferred_urc_count = 0U;
     s_deferred_urc_processing = false;
     rx_irq_init();

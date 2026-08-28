@@ -113,6 +113,7 @@ volatile uint32_t g_tick_ms;
 usart_module_t host_uart5;
 static uint16_t wr;
 static unsigned injection;
+static unsigned fragment_body_mode;
 static char tx_log[256];
 static unsigned tx_len;
 static char sms_from[32];
@@ -138,9 +139,17 @@ void host_uart_tx(uint8_t byte)
         tx_log[tx_len++] = (char)byte;
         tx_log[tx_len] = '\0';
     }
-    if (injection == 0U && byte == '\n' && strstr(tx_log, "AT+QISEND=0,3\r\n") != NULL) {
+    if (fragment_body_mode == 1U && byte == '\n' && strstr(tx_log, "AT+QISEND=0,3\r\n") != NULL) {
+        host_feed_rx(">\r\n");
+        fragment_body_mode = 2U;
+    } else if (injection == 0U && byte == '\n' && strstr(tx_log, "AT+QISEND=0,3\r\n") != NULL) {
         host_feed_rx(">\r\n+CMT: \"13900000004\",\"\",\"\"\r\nPARAM#\r\n+QIURC: \"closed\",0\r\n");
         injection = 1U;
+    } else if (fragment_body_mode == 2U && byte == 'c') {
+        /* This body is deliberately unterminated: it must never satisfy the
+         * subsequent TCP SEND OK expectation while the AT owner is held. */
+        host_feed_rx("\r\n+CMT: \"13900000005\",\"\",\"\"\r\nSEND OK");
+        fragment_body_mode = 3U;
     } else if (injection == 1U && byte == 'c') {
         host_feed_rx("\r\nSEND OK\r\n");
         injection = 2U;
@@ -203,6 +212,12 @@ int main(void)
     assert(ec800m_tcp_state(0U) == TCP_STATE_OPEN);
     ec800m_process();
     assert(ec800m_tcp_state(0U) == TCP_STATE_CLOSED);
+
+    /* An unterminated +CMT body containing SEND OK cannot complete a TCP
+     * wait before its line boundary arrives. */
+    ec800m_test_set_tcp_open(0U);
+    fragment_body_mode = 1U;
+    assert(ec800m_tcp_send(0U, (const uint8_t *)"abc", 3U) != 0);
 
     puts("test_ec800m_urc_demux: PASS");
     return 0;

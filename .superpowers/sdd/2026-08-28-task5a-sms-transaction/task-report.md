@@ -48,6 +48,18 @@ its temporary FOTA stub because that fixture omits the `config_t` definition;
 no Task5A file is involved. No target ARM build or hardware modem behavior is
 claimed from these host tests.
 
+## Follow-up hardening
+
+The post-check review identified two race/fragmentation cases and added
+regressions for both. During a blocking AT wait, bytes belonging to a
+fragmented `+CMT` header/body are now excluded from the AT response matcher
+as soon as the header colon is recognized; an unterminated body containing
+`SEND OK` or `>` therefore cannot complete a TCP/SMS wait. A `+CMGS:` result
+is accepted only after the current SMS body has been submitted
+(`SMS_TX_WAIT_RESULT`); a late result from a prior attempt is ignored while a
+retry is waiting for its prompt. The focused demux and production-chain
+harnesses exercise these cases.
+
 ## Scope and safety
 
 Only Task5A production/test files are staged for this change. The six
