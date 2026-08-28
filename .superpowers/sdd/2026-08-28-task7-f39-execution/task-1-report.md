@@ -91,5 +91,5 @@ test_f39_parser: C harness PASS
 test_f39_parser: PASS
 ```
 
-`git diff --check` passed.  The commit for this fix round is recorded after
-creation.
+`git diff --check` passed.  The test fix is `90b717d`; this evidence update is
+`29fd3e4`.
