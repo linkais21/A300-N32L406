@@ -46,7 +46,7 @@ ending notices for user-owned dirty files.
 
 ## Commit
 
-Recorded after the implementation commit is created.
+`9faafb7 feat: add bounded F39 command parser`
 
 ## Concerns
 
@@ -55,3 +55,41 @@ Recorded after the implementation commit is created.
   SMS, and hardware actions are owned by later tasks.
 - The parser's argument spans reference its bounded copy in `f39_request_t`,
   so consumers must use `raw + offset` rather than retain ingress data.
+
+## Fix round 1/5
+
+Independent review found that the original harness did not explicitly protect
+the complete query/set matrix and omitted valid maximum-length acceptance.
+Those findings were verified against the test source.  The parser already
+accepted bare query forms; this round adds contract vectors for each normal
+root's bare and comma-setting form, retains the bare-only and set-required
+exception vectors, and adds a hand-constructed valid `CAR,` command exactly
+191 bytes long alongside the existing 192-byte rejection.
+
+### RED evidence
+
+The new 191-byte command was added first.  A temporary boundary mutation from
+`len > F39_COMMAND_MAX_LENGTH` to `len >= F39_COMMAND_MAX_LENGTH` produced:
+
+```text
+Assertion failed: f39_parse(data, len, &req) == F39_RESULT_OK
+test_f39_parser: FAIL (C harness assertion)
+```
+
+This demonstrates that the new test catches the off-by-one regression.  The
+correct limit was then restored.
+
+### GREEN verification
+
+```text
+python tools/tests/test_f39_parser.py
+test_f39_parser: C harness PASS
+test_f39_parser: PASS
+
+REQUIRE_GCC=1 python tools/tests/test_f39_parser.py
+test_f39_parser: C harness PASS
+test_f39_parser: PASS
+```
+
+`git diff --check` passed.  The commit for this fix round is recorded after
+creation.
