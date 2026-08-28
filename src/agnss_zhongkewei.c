@@ -77,6 +77,8 @@ static void stream_drop(uint32_t n)
 static int csip_feed(const uint8_t *data, uint32_t len)
 {
     uint32_t i;
+    bool delivered = false;
+    bool rejected = false;
     if (!data || !len || len > ZK_STREAM_MAX - s_rx_len) { s_rx_len = 0; return -1; }
     memcpy(s_rx + s_rx_len, data, len);
     s_rx_len += len;
@@ -88,16 +90,23 @@ static int csip_feed(const uint8_t *data, uint32_t len)
         if (i + 1U >= s_rx_len) {
             if (s_rx[s_rx_len - 1U] == 0xbaU) { s_rx[0] = 0xbaU; s_rx_len = 1U; }
             else s_rx_len = 0;
-            return 0;
+            return rejected && !delivered ? -1 : 0;
         }
         if (i) stream_drop(i);
         st = zhongkewei_parse_csip_frame(s_rx, s_rx_len, &frame, &frame_len);
         if (st == ZK_RESP_INCOMPLETE) return 0;
-        if (st == ZK_RESP_MALFORMED) { s_rx_len = 0; return -1; }
+        if (st == ZK_RESP_MALFORMED) {
+            /* The candidate may be followed by a complete CSIP frame in this
+             * TCP block. Drop one byte, resynchronize, and keep scanning. */
+            stream_drop(1U);
+            rejected = true;
+            continue;
+        }
         if (gps_send_raw(frame, frame_len) < 0) { s_rx_len = 0; return -1; }
+        delivered = true;
         stream_drop(frame_len);
     }
-    return 0;
+    return rejected && !delivered ? -1 : 0;
 }
 
 int agnss_zhongkewei_request(const agnss_source_t *src, const gps_context_t *ctx)

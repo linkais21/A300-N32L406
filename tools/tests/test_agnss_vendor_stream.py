@@ -191,6 +191,14 @@ int main(void) {
       assert(agnss_zhongkewei_request(&(agnss_source_t){response_a, n_a}, &(gps_context_t){0}) == 0);
       assert(gps_calls == 8);
       assert(gps_last_len == n_a && memcmp(gps_last, response_a, n_a) == 0);
+      /* An invalid candidate must not discard a following valid frame in the
+       * same TCP receive block. A delivered valid frame makes this feed a
+       * success even though the invalid candidate was dropped. */
+      memcpy(bad, response_a, n_a); bad[n_a - 1] ^= 1;
+      memcpy(concat, bad, n_a); memcpy(concat + n_a, response_b, n_b);
+      assert(agnss_zhongkewei_request(&(agnss_source_t){concat, (uint32_t)(n_a + n_b)}, &(gps_context_t){0}) == 0);
+      assert(gps_calls == 9);
+      assert(gps_last_len == n_b && memcmp(gps_last, response_b, n_b) == 0);
       make_csip(bad, 0x06, 0x00, payload_a, sizeof payload_a);
       assert(agnss_zhongkewei_request(&(agnss_source_t){bad, n_a}, &(gps_context_t){0}) < 0);
       make_csip(bad, 0x08, 0x02, payload_b, sizeof payload_b);
@@ -201,13 +209,13 @@ int main(void) {
     { static const uint8_t payload[20] = {0}; uint8_t response[64]; uint16_t n = make_csip(response, 0x08, 0x00, payload, sizeof payload);
       fail_uart = 0;
       assert(agnss_zhongkewei_request(&(agnss_source_t){response, 4}, &(gps_context_t){0}) == 0);
-      assert(gps_calls == 8);
+      assert(gps_calls == 9);
       fail_uart = 1;
       assert(agnss_zhongkewei_request(&(agnss_source_t){response + 4, n - 4}, &(gps_context_t){0}) < 0);
-      assert(gps_calls == 9);
+      assert(gps_calls == 10);
       fail_uart = 0;
       assert(agnss_zhongkewei_request(&(agnss_source_t){response, n}, &(gps_context_t){0}) == 0);
-      assert(gps_calls == 10);
+      assert(gps_calls == 11);
     }
     {
       static const uint8_t payload[20] = {0}; uint8_t response[64]; uint16_t n = make_csip(response, 0x08, 0x00, payload, sizeof payload);
