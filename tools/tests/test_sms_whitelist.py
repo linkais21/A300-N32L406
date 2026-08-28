@@ -27,6 +27,9 @@ def run() -> None:
           for (i = 0; i < sizeof(ok)/sizeof(ok[0]); ++i) assert(sms_command_allowed(ok[i]));
           for (i = 0; i < sizeof(bad)/sizeof(bad[0]); ++i) assert(!sms_command_allowed(bad[i]));
           sms_queue_reset();
+          { uint8_t raw[] = {'I','P','=','1'}; assert(sms_queue_push("0", raw, 4)); }
+          { uint8_t raw[] = {'I','P','X'}; assert(!sms_queue_push("0", raw, 3)); }
+          sms_queue_reset();
           char phone[SMS_PHONE_MAX_LEN];
           assert(sms_queue_push("1", (const uint8_t *)"IP=1", 4));
           assert(sms_queue_push("2", (const uint8_t *)"RELAY=ON", 8));
@@ -36,6 +39,7 @@ def run() -> None:
           assert(!sms_queue_pop(phone, sizeof(phone), cmd, sizeof(cmd), &len));
           memset(cmd, 'A', sizeof(cmd));
           assert(!sms_queue_push("1", cmd, SMS_COMMAND_MAX_LEN));
+          assert(!sms_command_allowed("PARAM?junk"));
           return 0;
         }
     '''

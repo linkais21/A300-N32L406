@@ -21,18 +21,19 @@ def run():
       }
       int main(void) {
         sms_ingress_set_callback(sink);
-        sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("IP=1");
-        sms_ingress_feed_line("+CMT: \"13900139000\",\"\",\"\""); sms_ingress_feed_line("RELAY=ON");
-        sms_ingress_feed_line("+CMT: \"13700137000\",\"\",\"\""); sms_ingress_feed_line("APN=net");
+        sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("IP=1#");
+        sms_ingress_feed_line("+CMT: \"13900139000\",\"\",\"\""); sms_ingress_feed_line("RELAY=ON#");
+        sms_ingress_feed_line("+CMT: \"13700137000\",\"\",\"\""); sms_ingress_feed_line("APN=net#");
         sms_ingress_process(); assert(count==1 && !strcmp(phone,"13800138000") && !strcmp(last,"IP=1"));
         sms_ingress_process(); assert(count==2 && !strcmp(phone,"13900139000") && !strcmp(last,"RELAY=ON"));
-        sms_ingress_feed_line("+CMT: \"13700137000\",\"\",\"\""); sms_ingress_feed_line("APN=net");
+        sms_ingress_feed_line("+CMT: \"13700137000\",\"\",\"\""); sms_ingress_feed_line("APN=net#");
         sms_ingress_process(); assert(count==3 && !strcmp(phone,"13700137000") && !strcmp(last,"APN=net"));
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("OK");
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("ERROR");
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("RDY");
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("+CSQ: 20,99");
-        sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("VIBSENS=1");
+        sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("VIBSENS=1#");
+        sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("IP=1");
         sms_ingress_process(); assert(count==3); return 0;
       }
     '''

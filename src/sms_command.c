@@ -40,12 +40,14 @@ bool sms_command_allowed(const char *cmd)
 bool sms_queue_push(const char *from, const uint8_t *data, uint16_t len) {
     sms_queue_entry_t *e;
     uint16_t from_len = 0;
+    uint8_t local[SMS_COMMAND_MAX_LEN];
     if (!from || !data || !len || len >= SMS_COMMAND_MAX_LEN || s_count >= SMS_QUEUE_DEPTH) return false;
+    memcpy(local, data, len); local[len] = '\0';
     while (from_len < SMS_PHONE_MAX_LEN && from[from_len]) ++from_len;
-    if (from_len == 0 || from_len == SMS_PHONE_MAX_LEN || !sms_command_allowed((const char *)data)) return false;
+    if (from_len == 0 || from_len == SMS_PHONE_MAX_LEN || !sms_command_allowed((const char *)local)) return false;
     e = &s_queue[s_tail];
     memcpy(e->from, from, from_len + 1);
-    memcpy(e->data, data, len); e->data[len] = 0; e->len = len;
+    memcpy(e->data, local, len + 1); e->len = len;
     s_tail = (uint8_t)((s_tail + 1) % SMS_QUEUE_DEPTH); ++s_count; return true;
 }
 bool sms_queue_pop(char *from, uint16_t from_size, uint8_t *out, uint16_t size, uint16_t *len) {
