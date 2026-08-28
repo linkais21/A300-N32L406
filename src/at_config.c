@@ -32,6 +32,11 @@ static volatile bool s_reset_pending;
 static uint32_t s_reset_due_ms;
 static bool s_reset_waiting_handoff;
 static uint32_t s_reset_handoff_delay_ms;
+static char s_retry_sender[SMS_PHONE_MAX_LEN];
+static char s_retry_reply[F39_REPLY_MAX_LENGTH];
+static uint8_t s_retry_count;
+static uint32_t s_retry_due_ms;
+static bool s_retry_pending;
 
 static bool f39_persist(const device_config_t *candidate, void *context) { (void)context; return cfg_store_candidate(candidate); }
 static void f39_timer_refresh(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_heartbeat_s(c->heartbeat_s); jt808_set_report_interval(c->report_moving_s, c->report_stopped_s); }
@@ -52,6 +57,9 @@ static void f39_default_reset(uint32_t delay_ms, void *context) { (void)context;
 static int f39_default_sms_send(const char *to, const char *text, void *context) { (void)context; return sms_send(to, text); }
 static void f39_sms_result(bool success)
 {
+    if (!success && s_retry_pending && s_retry_count < 2U) { ++s_retry_count; s_retry_due_ms=TICK_MS()+1000U; dbg_printf("[SMS] retry %u\r\n",s_retry_count); return; }
+    if (!success && s_retry_pending) dbg_printf("[SMS] reply failed after retries\r\n");
+    s_retry_pending=false;
     if (!s_reset_waiting_handoff) return;
     s_reset_waiting_handoff = false;
     if (success) f39_default_reset(s_reset_handoff_delay_ms, NULL);
@@ -286,6 +294,9 @@ void at_config_init(void) { f39_bind_defaults(); }
 
 void at_config_process(void)
 {
+    if (s_retry_pending && s_f39_uses_defaults && (int32_t)(TICK_MS()-s_retry_due_ms)>=0) {
+        if (sms_send(s_retry_sender,s_retry_reply)!=0) { ++s_retry_count; s_retry_due_ms=TICK_MS()+1000U; if(s_retry_count>2U){s_retry_pending=false;dbg_printf("[SMS] reply dropped\r\n");} }
+    }
     if (s_reset_pending && (int32_t)(TICK_MS() - s_reset_due_ms) >= 0) {
         s_reset_pending = false;
         NVIC_SystemReset();
@@ -335,6 +346,7 @@ bool at_config_execute_sms(const char *sender, const uint8_t *text, uint16_t len
     memcpy(response, reply.data, reply.len);
     response[reply.len] = '\0';
     if (s_sms_send(sender, response, s_f39_platform.context) != 0) { dbg_printf("[SMS] reply handoff failed for %s\r\n", sender); return false; }
+    if (s_f39_uses_defaults) { strncpy(s_retry_sender,sender,sizeof s_retry_sender-1); s_retry_sender[sizeof s_retry_sender-1]='\0'; memcpy(s_retry_reply,response,reply.len+1U); s_retry_count=0U; s_retry_pending=true; }
     if (result == F39_RESULT_OK && reply.reset_pending) {
         if (s_f39_uses_defaults) {
             s_reset_waiting_handoff = true;

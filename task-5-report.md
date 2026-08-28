@@ -28,3 +28,10 @@ Verification (`REQUIRE_GCC=1`): end-to-end, SMS ingress/whitelist/boundary, pars
 - CMGS TX now uses a serialized, READY-gated state machine with bounded TXDE/TXC waits and watchdog reloads.
 - Reset cancels in-flight SMS state and reports failed handoff; prompt and result parsing are scoped to CMGS context (`>` at line start, `+CMGS:`/`+CMS ERROR:` only).
 - Non-RESET handoff failures emit bounded diagnostics; production default remains non-blocking.
+
+## Re-review fix round 2
+
+- CMGS result handling accepts exact `ERROR`, `+CMS ERROR:` and `+CMGS:` lines.
+- Power-off, reset and init cancel pending SMS state, release AT ownership and signal failure.
+- Periodic CSQ uses the shared AT owner instead of raw UART writes.
+- Default replies retain bounded sender/text state and retry asynchronous failures twice with fixed backoff; terminal failure is diagnosed, and RESET schedules only after confirmed send completion.

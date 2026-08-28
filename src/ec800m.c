@@ -203,6 +203,7 @@ void ec800m_power_on(void)
 
 void ec800m_power_off(void)
 {
+    if (s_sms_tx_state != SMS_TX_IDLE) { s_sms_tx_state=SMS_TX_IDLE; s_at_owner=AT_OWNER_NONE; sms_send_complete(false); }
     at_send_wait("AT+QPOWD=0", "POWERED DOWN", 5000);
     GPIO_SetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);  /* PA8=HIGH = idle */
     s_state = EC800M_STATE_OFF;
@@ -343,7 +344,7 @@ static void process_urc(const char *line)
     /* +QIOPEN: ch,err */
     int qiopen_ch, qiopen_err;
     sms_process_urc(line);
-    if (s_at_owner == AT_OWNER_SMS && s_sms_tx_state == SMS_TX_WAIT_RESULT && (strncmp(line, "+CMGS:", 6) == 0 || strncmp(line, "+CMS ERROR:", 11) == 0)) {
+    if (s_at_owner == AT_OWNER_SMS && s_sms_tx_state == SMS_TX_WAIT_RESULT && (strncmp(line, "+CMGS:", 6) == 0 || strncmp(line, "+CMS ERROR:", 11) == 0 || strcmp(line, "ERROR") == 0)) {
         s_sms_tx_state = SMS_TX_IDLE; s_at_owner = AT_OWNER_NONE;
         sms_send_complete(strncmp(line, "+CMGS:", 6) == 0);
     } else if (s_sms_tx_state != SMS_TX_IDLE && strncmp(line, "+CMS ERROR:", 11) == 0) {
@@ -439,6 +440,8 @@ static void drain_rx(void)
 /* ── Public API ───────────────────────────────────────────────────────────── */
 void ec800m_init(void)
 {
+    if (s_sms_tx_state != SMS_TX_IDLE) sms_send_complete(false);
+    s_sms_tx_state=SMS_TX_IDLE; s_at_owner=AT_OWNER_NONE; s_sms_prompt=false;
     rx_irq_init();
     memset(s_tcp, 0, sizeof(s_tcp));
     s_state = EC800M_STATE_BOOTING;
@@ -475,7 +478,7 @@ void ec800m_process(void)
         /* CSQ: request every 30s, response comes as URC "+CSQ:" parsed in process_urc */
         if (TICK_MS() - s_state_enter_ms > 30000 &&
             (TICK_MS() % 30000) > 29900) {
-            usart_send_str("AT+CSQ\r\n");  /* non-blocking: just send, don't wait */
+            if (s_at_owner == AT_OWNER_NONE) (void)at_send_wait("AT+CSQ", "+CSQ:", 1000);
         }
         break;
     case EC800M_STATE_ERROR:
