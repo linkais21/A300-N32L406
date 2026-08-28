@@ -2,6 +2,7 @@
 #define AT_CONFIG_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 void at_config_init(void);
 /* Feed one byte from debug/RS232 UART into the command parser */

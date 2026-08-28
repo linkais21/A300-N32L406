@@ -27,14 +27,15 @@ def run() -> None:
           for (i = 0; i < sizeof(ok)/sizeof(ok[0]); ++i) assert(sms_command_allowed(ok[i]));
           for (i = 0; i < sizeof(bad)/sizeof(bad[0]); ++i) assert(!sms_command_allowed(bad[i]));
           sms_queue_reset();
-          assert(sms_queue_push((const uint8_t *)"IP=1", 4));
-          assert(sms_queue_push((const uint8_t *)"RELAY=ON", 8));
-          assert(!sms_queue_push((const uint8_t *)"APN=1", 5));
-          assert(sms_queue_pop(cmd, sizeof(cmd), &len) && len == 4 && !memcmp(cmd, "IP=1", 4));
-          assert(sms_queue_pop(cmd, sizeof(cmd), &len) && len == 8 && !memcmp(cmd, "RELAY=ON", 8));
-          assert(!sms_queue_pop(cmd, sizeof(cmd), &len));
+          char phone[SMS_PHONE_MAX_LEN];
+          assert(sms_queue_push("1", (const uint8_t *)"IP=1", 4));
+          assert(sms_queue_push("2", (const uint8_t *)"RELAY=ON", 8));
+          assert(!sms_queue_push("3", (const uint8_t *)"APN=1", 5));
+          assert(sms_queue_pop(phone, sizeof(phone), cmd, sizeof(cmd), &len) && !strcmp(phone,"1") && len == 4 && !memcmp(cmd, "IP=1", 4));
+          assert(sms_queue_pop(phone, sizeof(phone), cmd, sizeof(cmd), &len) && !strcmp(phone,"2") && len == 8 && !memcmp(cmd, "RELAY=ON", 8));
+          assert(!sms_queue_pop(phone, sizeof(phone), cmd, sizeof(cmd), &len));
           memset(cmd, 'A', sizeof(cmd));
-          assert(!sms_queue_push(cmd, SMS_COMMAND_MAX_LEN));
+          assert(!sms_queue_push("1", cmd, SMS_COMMAND_MAX_LEN));
           return 0;
         }
     '''

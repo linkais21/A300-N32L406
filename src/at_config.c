@@ -6,6 +6,7 @@
 #include "debug_uart.h"
 #include "config.h"
 #include "flash_config.h"
+#include "sms_command.h"
 #include <string.h>
 #include <stdlib.h>
 

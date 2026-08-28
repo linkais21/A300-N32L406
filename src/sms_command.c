@@ -1,6 +1,6 @@
 #include "sms_command.h"
 #include <string.h>
-typedef struct { uint16_t len; uint8_t data[SMS_COMMAND_MAX_LEN]; } sms_queue_entry_t;
+typedef struct { char from[SMS_PHONE_MAX_LEN]; uint16_t len; uint8_t data[SMS_COMMAND_MAX_LEN]; } sms_queue_entry_t;
 static sms_queue_entry_t s_queue[SMS_QUEUE_DEPTH];
 static uint8_t s_head, s_tail, s_count;
 static char upper(char c) { return (c >= 'a' && c <= 'z') ? (char)(c - 32) : c; }
@@ -37,19 +37,24 @@ bool sms_command_allowed(const char *cmd)
     }
     return root_ok(cmd, root) && valid_suffix(cmd + root);
 }
-bool sms_queue_push(const uint8_t *data, uint16_t len) {
-    sms_queue_entry_t *e; if(!data || !len || len>=SMS_COMMAND_MAX_LEN || s_count>=SMS_QUEUE_DEPTH) return false;
-    e=&s_queue[s_tail]; memcpy(e->data,data,len); e->data[len]=0; if(!sms_command_allowed((const char*)e->data)) return false; e->len=len; s_tail=(uint8_t)((s_tail+1)%SMS_QUEUE_DEPTH); ++s_count; return true;
+bool sms_queue_push(const char *from, const uint8_t *data, uint16_t len) {
+    sms_queue_entry_t *e;
+    uint16_t from_len = 0;
+    if (!from || !data || !len || len >= SMS_COMMAND_MAX_LEN || s_count >= SMS_QUEUE_DEPTH) return false;
+    while (from_len < SMS_PHONE_MAX_LEN && from[from_len]) ++from_len;
+    if (from_len == 0 || from_len == SMS_PHONE_MAX_LEN || !sms_command_allowed((const char *)data)) return false;
+    e = &s_queue[s_tail];
+    memcpy(e->from, from, from_len + 1);
+    memcpy(e->data, data, len); e->data[len] = 0; e->len = len;
+    s_tail = (uint8_t)((s_tail + 1) % SMS_QUEUE_DEPTH); ++s_count; return true;
 }
-bool sms_queue_pop(uint8_t *out, uint16_t size, uint16_t *len) {
-    sms_queue_entry_t *e; if(!out || !len || !s_count) return false; e=&s_queue[s_head]; if(size<e->len) return false; memcpy(out,e->data,e->len); *len=e->len; s_head=(uint8_t)((s_head+1)%SMS_QUEUE_DEPTH); --s_count; return true;
-}
-bool sms_queue_dispatch(void (*executor)(const uint8_t *cmd, uint16_t len))
-{
-    uint8_t cmd[SMS_COMMAND_MAX_LEN];
-    uint16_t len;
-    if (!executor || !sms_queue_pop(cmd, sizeof(cmd), &len)) return false;
-    executor(cmd, len);
-    return true;
+bool sms_queue_pop(char *from, uint16_t from_size, uint8_t *out, uint16_t size, uint16_t *len) {
+    sms_queue_entry_t *e;
+    uint16_t from_len;
+    if (!from || !out || !len || !s_count) return false;
+    e = &s_queue[s_head]; from_len = (uint16_t)strlen(e->from);
+    if (size < e->len || from_size <= from_len) return false;
+    memcpy(from, e->from, from_len + 1); memcpy(out, e->data, e->len); *len = e->len;
+    s_head = (uint8_t)((s_head + 1) % SMS_QUEUE_DEPTH); --s_count; return true;
 }
 void sms_queue_reset(void) { s_head=s_tail=s_count=0; }
