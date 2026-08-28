@@ -169,3 +169,59 @@ cannot satisfy the permitted-call requirement.
 Fix-round independent review result: PASS, with no remaining Critical,
 Important, or Minor findings. The post-review verification marker was
 `TASK2_ROUND1_FINAL2_VERIFICATION_PASS`.
+
+## Fix Round 2
+
+Closed the remaining release-guard false negatives reported by
+`task-2-rereview-1.md` without changing firmware sources:
+
+- C integer initializers now accept valid U/L suffix combinations, including
+  `U`, `L`, `UL`, `LU`, `ULL`, and `LLU`, before decoding decimal, octal, or
+  hexadecimal byte values.
+- Character initializers now decode ordinary characters, simple C escapes,
+  one-to-three digit octal escapes, and hexadecimal escapes.
+- Each small identity consumer has an explicit output data-flow contract. After
+  removing its permitted declaration/service/sink patterns, any remaining use
+  of the identity output variable produces `<identity-service>`. Thus an
+  unreachable or irrelevant `terminal_id_derive()` call cannot hide a fixed
+  output path in the same function.
+
+TDD RED evidence:
+
+```text
+$env:REQUIRE_GCC='1'; python tools/tests/test_terminal_identity.py
+AssertionError: release_guard.fixed_identity_findings(suffixed_hex_array)
+exit 1
+```
+
+The permanent tests exercise direct detection and the complete `scan()` path
+for suffixed hex initializers, escaped character initializers, and a fixed-output
+`device_id()` containing a decoy central-service call.
+
+Independent-review follow-up added coverage for constants wrapped in redundant
+parentheses/common integer casts and for file-scope object-like macro aliases of
+the identity output. Initializer tokens are normalized before decoding, and
+transitive output aliases are included in the residual data-flow check.
+The second review follow-up also covers `L`/`u`/`U` prefixed escaped character
+constants and object-like aliases whose replacement is parenthesized, such as
+`#define OUT (terminal_id)`.
+The final alias follow-up treats any object-like macro replacement that
+references the output (or a transitive output alias) as an alias, covering
+equivalent expressions such as `(terminal_id + 0)` and `(&terminal_id[0])`.
+Function-like macros are handled by the same replacement-list analysis, with a
+regression for `#define OUT() terminal_id`.
+
+Fresh verification:
+
+```text
+test_terminal_identity: C99 -Wall -Wextra -Werror PASS
+test_terminal_identity: PASS
+release-guard: PASS
+test_feature_guards: PASS
+git diff --check: exit 0
+TASK2_ROUND2_VERIFICATION_PASS
+```
+
+Independent round-2 review after all follow-ups: PASS, with no remaining
+Critical, Important, or Minor finding. Final verification marker:
+`TASK2_ROUND2_FINAL4_VERIFICATION_PASS`.

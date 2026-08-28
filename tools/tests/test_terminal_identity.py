@@ -476,6 +476,23 @@ def test_release_guard_behavior() -> None:
     alpha_split = 'memcpy(terminal_id, "ABC" "1234", 7);\n'
     byte_array = "static const char terminal_id[8] = {'1','2','3','4','5','6','7',0};\n"
     hex_array = "static const char terminal_id[8] = {0x31,0x32,0x33,0x34,0x35,0x36,0x37,0};\n"
+    suffixed_hex_array = (
+        "static const char terminal_id[8] = "
+        "{0x31U,0x32UL,0x33LU,0x34L,0x35uL,0x36lU,0x37LLU,0U};\n"
+    )
+    escaped_char_array = (
+        "static const char terminal_id[8] = "
+        "{'\\x31','\\062','\\x33','\\064','\\x35','\\066','\\x37','\\0'};\n"
+    )
+    wrapped_array = (
+        "static const char terminal_id[8] = "
+        "{((uint8_t)(0x31U)),(0x32UL),(unsigned char)0x33LU,(0x34L),"
+        "(0x35uL),(0x36lU),(0x37LLU),(0U)};\n"
+    )
+    prefixed_char_array = (
+        "static const int terminal_id[8] = "
+        "{L'\\x31',u'\\062',U'\\x33',L'\\064',u'\\x35',U'\\066',L'\\x37',L'\\0'};\n"
+    )
     info_query = 'memcpy(tid, "1234567", 7);\n'
     strcpy_form = 'strcpy(terminal_id, "1234567");\n'
     initializer = 'char terminal_id[8] = "1234567";\n'
@@ -487,6 +504,10 @@ def test_release_guard_behavior() -> None:
     assert release_guard.fixed_identity_findings(alpha_split)
     assert release_guard.fixed_identity_findings(byte_array)
     assert release_guard.fixed_identity_findings(hex_array)
+    assert release_guard.fixed_identity_findings(suffixed_hex_array)
+    assert release_guard.fixed_identity_findings(escaped_char_array)
+    assert release_guard.fixed_identity_findings(wrapped_array)
+    assert release_guard.fixed_identity_findings(prefixed_char_array)
     assert release_guard.fixed_identity_findings(info_query)
     assert release_guard.fixed_identity_findings(strcpy_form)
     assert release_guard.fixed_identity_findings(initializer)
@@ -540,6 +561,34 @@ def test_release_guard_behavior() -> None:
         destination.write_text(original, encoding="utf-8")
 
         destination.write_text(
+            original + ("\nstatic const char fixed_wrapped[8] = "
+                        "{((uint8_t)(0x31U)),(0x32UL),(unsigned char)0x33LU,(0x34L),"
+                        "(0x35uL),(0x36lU),(0x37LLU),(0U)};\n"),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<fixed-terminal-id>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+
+        destination.write_text(
+            original + ("\nstatic const char fixed_suffixed[8] = "
+                        "{0x31U,0x32UL,0x33LU,0x34L,0x35uL,0x36lU,0x37LLU,0U};\n"),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<fixed-terminal-id>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+
+        destination.write_text(
+            original + ("\nstatic const char fixed_escaped[8] = "
+                        "{'\\x31','\\062','\\x33','\\064','\\x35','\\066','\\x37','\\0'};\n"),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<fixed-terminal-id>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+
+        destination.write_text(
             original + "\nstatic const char fixed_hex[8] = {0x31,0x32,0x33,0x34,0x35,0x36,0x37,0};\n",
             encoding="utf-8",
         )
@@ -549,6 +598,69 @@ def test_release_guard_behavior() -> None:
 
         destination.write_text(
             original.replace("terminal_id_derive", "legacy_identity_derive"), encoding="utf-8"
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+
+        macro_decoy = (
+            "memset(OUT, '1', 7U); OUT[7] = '\\0'; return true; "
+            "if (p->imei_len == 0U) return terminal_id_derive(c->pid, imei, terminal_id);"
+        )
+        destination.write_text(
+            "#define OUT terminal_id\n" + original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", macro_decoy
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+
+        for alias_expression in ("(terminal_id + 0)", "(&terminal_id[0])"):
+            destination.write_text(
+                f"#define OUT {alias_expression}\n" + original.replace(
+                    "return terminal_id_derive(c->pid, imei, terminal_id);", macro_decoy
+                ),
+                encoding="utf-8",
+            )
+            findings = release_guard.scan(root)
+            assert any(item[2] == "<identity-service>" for item in findings)
+            destination.write_text(original, encoding="utf-8")
+
+        function_macro_decoy = (
+            "memset(OUT(), '1', 7U); OUT()[7] = '\\0'; return true; "
+            "if (p->imei_len == 0U) return terminal_id_derive(c->pid, imei, terminal_id);"
+        )
+        destination.write_text(
+            "#define OUT() terminal_id\n" + original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", function_macro_decoy
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+
+        destination.write_text(
+            "#define OUT (terminal_id)\n" + original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", macro_decoy
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+
+        decoy = (
+            "memset(terminal_id, '1', 7U); terminal_id[7] = '\\0'; return true; "
+            "if (p->imei_len == 0U) return terminal_id_derive(c->pid, imei, terminal_id);"
+        )
+        destination.write_text(
+            original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", decoy
+            ),
+            encoding="utf-8",
         )
         findings = release_guard.scan(root)
         assert any(item[2] == "<identity-service>" for item in findings)
