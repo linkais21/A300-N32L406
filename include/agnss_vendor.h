@@ -21,7 +21,10 @@ bool gnss_vendor_network_rx(uint8_t ch, const uint8_t *data, uint16_t len);
 /* Host/transport helpers for Zhongkewei protocol. */
 int zhongkewei_build_request(char *out, uint32_t cap, const char *user,
                              const char *pwd, const gps_context_t *ctx);
-zhongkewei_resp_t zhongkewei_parse_response(const uint8_t *buf, uint32_t len,
-                              const uint8_t **payload, uint16_t *payload_len);
+/* Validate exactly one documented Zhongkewei CASBIN/CSIP frame.  On
+ * success the returned pointer is the complete BA CE frame and the length
+ * is its complete wire size, ready for transparent UART forwarding. */
+zhongkewei_resp_t zhongkewei_parse_csip_frame(const uint8_t *buf, uint32_t len,
+                              const uint8_t **frame, uint16_t *frame_len);
 
 #endif

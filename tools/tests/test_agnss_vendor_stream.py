@@ -36,7 +36,7 @@ typedef struct { const uint8_t *data; uint32_t len; } agnss_source_t;
 typedef enum { ZK_RESP_MALFORMED=-1, ZK_RESP_INCOMPLETE=0, ZK_RESP_OK=1 } zhongkewei_resp_t;
 int agnss_huada_inject(const agnss_source_t *, const gps_context_t *);
 int agnss_zhongkewei_request(const agnss_source_t *, const gps_context_t *);
-zhongkewei_resp_t zhongkewei_parse_response(const uint8_t *, uint32_t, const uint8_t **, uint16_t *);
+zhongkewei_resp_t zhongkewei_parse_csip_frame(const uint8_t *, uint32_t, const uint8_t **, uint16_t *);
 #endif
 """,
         "debug_uart.h": "#ifndef DEBUG_UART_H\n#define DEBUG_UART_H\n#endif\n",
@@ -97,13 +97,30 @@ static void make_huada_zero(uint8_t frame[8]) {
     frame[4] = 0; frame[5] = 0; frame[6] = 0x1b; frame[7] = 0x5c;
 }
 
-static void make_zhongkewei(uint8_t frame[14]) {
-    static const uint8_t payload[6] = {'a', 'b', 'c', 'd', 'e', 'f'};
-    uint8_t c1 = 0, c2 = 0;
-    frame[0] = 'A'; frame[1] = 'G'; frame[2] = 6; frame[3] = 0; frame[4] = 0;
-    memcpy(frame + 5, payload, sizeof payload);
-    for (unsigned i = 2; i < 11; ++i) { c1 = (uint8_t)(c1 + frame[i]); c2 = (uint8_t)(c2 + c1); }
-    frame[11] = c1; frame[12] = c2; frame[13] = 0;
+static uint32_t harness_le32(const uint8_t *p) {
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static uint32_t csip_checksum(uint8_t cls, uint8_t id, const uint8_t *payload, uint16_t len) {
+    uint32_t sum = ((uint32_t)id << 24) + ((uint32_t)cls << 16) + len;
+    for (uint16_t i = 0; i < len; i += 4) sum += harness_le32(payload + i);
+    return sum;
+}
+
+static uint16_t make_csip(uint8_t *frame, uint8_t cls, uint8_t id,
+                          const uint8_t *payload, uint16_t len) {
+    uint32_t sum;
+    frame[0] = 0xba; frame[1] = 0xce;
+    frame[2] = (uint8_t)len; frame[3] = (uint8_t)(len >> 8);
+    frame[4] = cls; frame[5] = id;
+    if (len) memcpy(frame + 6, payload, len);
+    sum = csip_checksum(cls, id, payload, len);
+    frame[6 + len] = (uint8_t)sum;
+    frame[7 + len] = (uint8_t)(sum >> 8);
+    frame[8 + len] = (uint8_t)(sum >> 16);
+    frame[9 + len] = (uint8_t)(sum >> 24);
+    return (uint16_t)(len + 10);
 }
 
 int main(void) {
@@ -123,49 +140,65 @@ int main(void) {
     assert(agnss_huada_inject(&(agnss_source_t){valid + 3, 5}, &(gps_context_t){0}) == 0);
     assert(gps_calls == 4);
 
-    { const uint8_t *p; uint16_t n;
-      assert(zhongkewei_parse_response((const uint8_t *)"A", 1, &p, &n) == ZK_RESP_INCOMPLETE);
-      assert(zhongkewei_parse_response((const uint8_t *)"XX", 2, &p, &n) == ZK_RESP_MALFORMED);
-    }
     {
-      /* Exercise the production streaming entry point, not only the parser:
-       * incomplete data must wait without injecting GPS, and malformed
-       * AG-prefixed frames must be rejected and clear the buffered state. */
-      uint8_t response[14], bad_checksum[14], bad_length[5];
-      make_zhongkewei(response);
-      memcpy(bad_checksum, response, sizeof response);
-      bad_checksum[11] ^= 0x01;
-      bad_length[0] = 'A'; bad_length[1] = 'G';
-      bad_length[2] = 2; bad_length[3] = 0; bad_length[4] = 0;
+      static const uint8_t payload_a[20] = {
+          0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
+      };
+      static const uint8_t payload_b[16] = {
+          0x10, 0, 0, 0, 0x20, 0, 0, 0, 0x30, 0, 0, 0, 0x40, 0, 0, 0
+      };
+      uint8_t response_a[64], response_b[64], concat[128], bad[64];
+      uint16_t n_a = make_csip(response_a, 0x08, 0x00, payload_a, sizeof payload_a);
+      uint16_t n_b = make_csip(response_b, 0x08, 0x01, payload_b, sizeof payload_b);
+      const uint8_t *parsed; uint16_t parsed_len;
 
+      /* Exact CASBIN checksum and frame shape are independently constructed. */
+      assert(zhongkewei_parse_csip_frame(response_a, n_a, &parsed, &parsed_len) == ZK_RESP_OK);
+      assert(parsed == response_a && parsed_len == n_a);
+      assert(zhongkewei_parse_csip_frame(response_a, n_a - 1, &parsed, &parsed_len) == ZK_RESP_INCOMPLETE);
+      assert(zhongkewei_parse_csip_frame((const uint8_t *)"XX", 2, &parsed, &parsed_len) == ZK_RESP_MALFORMED);
+      { uint8_t invalid_len[4] = {0xba, 0xce, 0x01, 0x00};
+        assert(zhongkewei_parse_csip_frame(invalid_len, sizeof invalid_len, &parsed, &parsed_len) == ZK_RESP_MALFORMED);
+      }
+
+      /* Offline injection must not require configured credentials. */
+      c.agnss_user[0] = 0; c.agnss_pwd[0] = 0;
       assert(agnss_zhongkewei_request(
-          &(agnss_source_t){response, 4}, &(gps_context_t){0}) == 0);
+          &(agnss_source_t){response_a, 5}, &(gps_context_t){0}) == 0);
       assert(gps_calls == 4);
-
       assert(agnss_zhongkewei_request(
-          &(agnss_source_t){bad_checksum, sizeof bad_checksum}, &(gps_context_t){0}) < 0);
-      assert(gps_calls == 4);
-
-      assert(agnss_zhongkewei_request(
-          &(agnss_source_t){bad_length, sizeof bad_length}, &(gps_context_t){0}) < 0);
-      assert(gps_calls == 4);
-
-      /* A valid response must still be accepted after the rejected garbage. */
-      assert(agnss_zhongkewei_request(
-          &(agnss_source_t){response, sizeof response}, &(gps_context_t){0}) == 0);
+          &(agnss_source_t){response_a + 5, n_a - 5}, &(gps_context_t){0}) == 0);
       assert(gps_calls == 5);
+      assert(gps_bytes == 4 * 8 + n_a);
+
+      /* Leading garbage resynchronizes; concatenated complete frames forward once each. */
+      concat[0] = 0x11; concat[1] = 0xba; concat[2] = 0x55;
+      memcpy(concat + 3, response_a, n_a); memcpy(concat + 3 + n_a, response_b, n_b);
+      assert(agnss_zhongkewei_request(&(agnss_source_t){concat, (uint32_t)(3 + n_a + n_b)}, &(gps_context_t){0}) == 0);
+      assert(gps_calls == 7);
+
+      /* Checksum, non-MSG, and wrong ID/length must fail closed and reset. */
+      memcpy(bad, response_a, n_a); bad[n_a - 1] ^= 1;
+      assert(agnss_zhongkewei_request(&(agnss_source_t){bad, n_a}, &(gps_context_t){0}) < 0);
+      assert(agnss_zhongkewei_request(&(agnss_source_t){response_a, n_a}, &(gps_context_t){0}) == 0);
+      assert(gps_calls == 8);
+      make_csip(bad, 0x06, 0x00, payload_a, sizeof payload_a);
+      assert(agnss_zhongkewei_request(&(agnss_source_t){bad, n_a}, &(gps_context_t){0}) < 0);
+      make_csip(bad, 0x08, 0x02, payload_b, sizeof payload_b);
+      assert(agnss_zhongkewei_request(&(agnss_source_t){bad, n_b}, &(gps_context_t){0}) < 0);
+      make_csip(bad, 0x08, 0x00, payload_b, sizeof payload_b);
+      assert(agnss_zhongkewei_request(&(agnss_source_t){bad, n_b}, &(gps_context_t){0}) < 0);
     }
-    { uint8_t response[14]; make_zhongkewei(response);
+    { static const uint8_t payload[20] = {0}; uint8_t response[64]; uint16_t n = make_csip(response, 0x08, 0x00, payload, sizeof payload);
       fail_uart = 0;
       assert(agnss_zhongkewei_request(&(agnss_source_t){response, 4}, &(gps_context_t){0}) == 0);
-      assert(gps_calls == 5);
+      assert(gps_calls == 8);
       fail_uart = 1;
-      assert(agnss_zhongkewei_request(&(agnss_source_t){response + 4, 10}, &(gps_context_t){0}) < 0);
-      assert(gps_calls == 6);
+      assert(agnss_zhongkewei_request(&(agnss_source_t){response + 4, n - 4}, &(gps_context_t){0}) < 0);
+      assert(gps_calls == 9);
       fail_uart = 0;
-      assert(agnss_zhongkewei_request(&(agnss_source_t){response, sizeof response}, &(gps_context_t){0}) == 0);
-      assert(gps_calls == 7);
-      assert(gps_bytes == 4 * 8 + 3 * 3);
+      assert(agnss_zhongkewei_request(&(agnss_source_t){response, n}, &(gps_context_t){0}) == 0);
+      assert(gps_calls == 10);
     }
     return 0;
 }
@@ -173,7 +206,10 @@ int main(void) {
 
 
 def test_c_harness():
-    compiler = shutil.which("gcc") or shutil.which("cc")
+    # In Windows shells PATHEXT may be absent in Python's child environment;
+    # accept an explicit compiler path so the real C contract cannot silently
+    # downgrade to a skip.
+    compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc")
     if not compiler:
         if os.environ.get("REQUIRE_GCC") == "1":
             raise AssertionError("REQUIRE_GCC=1 but no gcc/cc found")

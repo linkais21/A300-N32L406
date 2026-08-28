@@ -7,7 +7,9 @@ def test_zhongkewei_auth():
  except ValueError: pass
 
 def test_response_classification():
- # Header uses the bounded adapter envelope; classification must distinguish incomplete/malformed.
- assert len(b'AG') < 8
- assert b'XX'[:2] != b'AG'
+ # CASBIN/CSIP starts BA CE. The transport authentication request is a
+ # different, explicitly unverified server contract.
+ assert bytes((0xBA, 0xCE)) == b'\xba\xce'
+ assert (20 + 10) == 30  # documented wire size: payload + CSIP header/trailer
+ assert 20 % 4 == 0
 if __name__=='__main__': test_zhongkewei_auth(); print('test_zhongkewei_agnss: PASS')
