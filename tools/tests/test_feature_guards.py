@@ -1,5 +1,6 @@
 """Release guards for the deliberately trimmed A300_406 production image."""
 import re
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -29,12 +30,59 @@ APPROVED_ROOTS = (
 TARGET_VERSION = "T360-A300_406_20260823000000,V3.000"
 
 
-def text_files():
+def project_text_files():
     for base in RELEASE_INPUTS:
         if base.is_file():
             yield base
         else:
             yield from (path for path in base.rglob("*") if path.suffix.lower() in RELEASE_SUFFIXES)
+
+
+def make_value(makefile, name):
+    logical = re.sub(r"\\\r?\n\s*", " ", makefile)
+    match = re.search(rf"(?m)^\s*{re.escape(name)}\s*(?::|\?)?=\s*(.*?)\s*$", logical)
+    assert match, f"Makefile variable {name} is missing"
+    return match.group(1)
+
+
+def sdk_release_inputs(root, makefile):
+    sdk_text = make_value(makefile, "SDK")
+    assert "$(" not in sdk_text and "${" not in sdk_text, "SDK root must resolve directly"
+    sdk_root = (root / sdk_text).resolve()
+
+    def expand(value):
+        return value.replace("$(SDK)", sdk_text).replace("${SDK}", sdk_text)
+
+    sources = []
+    for token in make_value(makefile, "C_SRCS").split():
+        expanded = expand(token)
+        path = (root / expanded).resolve()
+        if path == sdk_root or sdk_root in path.parents:
+            assert path.is_file(), f"Makefile SDK source is missing: {expanded}"
+            sources.append(path)
+
+    headers = []
+    for token in make_value(makefile, "INCLUDES").split():
+        if not token.startswith("-I"):
+            continue
+        expanded = expand(token[2:])
+        path = (root / expanded).resolve()
+        if path == sdk_root or sdk_root in path.parents:
+            assert path.is_dir(), f"Makefile SDK include directory is missing: {expanded}"
+            headers.extend(candidate for candidate in path.rglob("*.h") if candidate.is_file())
+
+    assert sources, "Makefile has no compiled SDK source inputs"
+    assert headers, "Makefile has no SDK header inputs"
+    return tuple(dict.fromkeys(sources + headers))
+
+
+def platform_findings(paths):
+    findings = []
+    for path in paths:
+        text = path.read_text(encoding="utf-8-sig", errors="ignore")
+        if FORBIDDEN_PLATFORM.search(str(path)) or FORBIDDEN_PLATFORM.search(text):
+            findings.append(path)
+    return findings
 
 
 def quoted_roots(source, marker):
@@ -44,20 +92,48 @@ def quoted_roots(source, marker):
     return tuple(re.findall(r'"([A-Z0-9]+)"', source[opening:closing]))
 
 
+def regression_forbidden_sdk_input_is_rejected():
+    """A forbidden token in a compiled SDK input must fail the platform scan."""
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        sdk_source = root / "sdk" / "firmware" / "CMSIS" / "device" / "system_n32l40x.c"
+        sdk_header = root / "sdk" / "firmware" / "CMSIS" / "core" / "core_cm4.h"
+        sdk_source.parent.mkdir(parents=True)
+        sdk_header.parent.mkdir(parents=True)
+        makefile = (
+            "SDK := sdk/firmware\n"
+            "C_SRCS := $(SDK)/CMSIS/device/system_n32l40x.c\n"
+            "INCLUDES := -I$(SDK)/CMSIS/core\n"
+        )
+        sdk_source.write_text("/* Cortex-M4 */\n", encoding="ascii")
+        sdk_header.write_text("/* Cortex-M4 */\n", encoding="ascii")
+        inputs = sdk_release_inputs(root, makefile)
+        assert sdk_source in inputs, "compiled SDK source was not derived from Makefile"
+        assert sdk_header in inputs, "SDK include header was not derived from Makefile"
+        for token, polluted_input in (
+            ("N32G452", sdk_source),
+            ("N32G45x", sdk_header),
+            ("N32G4xx", sdk_source),
+        ):
+            sdk_source.write_text("/* Cortex-M4 */\n", encoding="ascii")
+            sdk_header.write_text("/* Cortex-M4 */\n", encoding="ascii")
+            polluted_input.write_text(f"/* copied {token} platform */\n", encoding="ascii")
+            assert platform_findings(inputs) == [polluted_input], f"{token} pollution was not rejected"
+
+
 def run():
-    haystack = {path: path.read_text(encoding="utf-8-sig", errors="ignore") for path in text_files()}
+    regression_forbidden_sdk_input_is_rejected()
+    project_files = tuple(project_text_files())
+    haystack = {path: path.read_text(encoding="utf-8-sig", errors="ignore") for path in project_files}
     for symbol in REMOVED:
         found = [str(path.relative_to(ROOT)) for path, text in haystack.items() if symbol in text]
         assert not found, f"removed symbol {symbol} remains in {found}"
 
-    polluted = [
-        str(path.relative_to(ROOT))
-        for path, text in haystack.items()
-        if FORBIDDEN_PLATFORM.search(str(path.relative_to(ROOT))) or FORBIDDEN_PLATFORM.search(text)
-    ]
+    makefile = haystack[ROOT / "Makefile"]
+    sdk_files = sdk_release_inputs(ROOT, makefile)
+    polluted = [str(path.relative_to(ROOT)) for path in platform_findings(project_files + sdk_files)]
     assert not polluted, f"forbidden N32G452 platform input remains in {polluted}"
 
-    makefile = haystack[ROOT / "Makefile"]
     assert "Nations.N32L40x_Library" in makefile
     assert "startup_n32l40x.s" in makefile and "ldscript/n32l406.ld" in makefile
     assert "src/fota.c" in makefile, "OTA source dropped from release build"

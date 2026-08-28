@@ -2,6 +2,7 @@
 
 Date: 2026-08-28
 Verified base: `7a525ab6ba8fd1f55ab2b2e407a3eb0503734f3b`
+Task 6 guard review base: `77d78b6face005ec43bc02d67ae18930e72c50fd`
 
 ## Verdict
 
@@ -101,11 +102,18 @@ authorized to edit this test.
 - Removed feature scan: PASS in release production inputs. Tests and docs are
   deliberately outside the scan so negative assertions may name removed
   features.
-- N32G452 platform contamination scan: PASS in release production inputs.
-  `src`, `include`, application/bootloader startup and linker inputs, and both
-  Makefiles contain no `N32G452`/`N32G45x`/`N32G4xx` source or reference. The
-  vendor N32L40x SDK contains unrelated examples with historical N32G45 text;
-  those examples are not release build inputs.
+- N32G452 platform contamination scan: PASS for the exact release production
+  inputs selected by the application Makefile. The guard parses `SDK`,
+  `C_SRCS`, and `INCLUDES`; it scans the 15 selected SDK `.c` files
+  (`system_n32l40x.c` plus the 14 listed peripheral-driver translation units)
+  and all 38 headers under the three selected SDK include roots, in addition
+  to project/bootloader source, headers, startup, linker and Makefile inputs.
+  None contains `N32G452`, `N32G45x`, or `N32G4xx`. A temporary-tree negative
+  regression injects each forbidden form into a derived compiled SDK source
+  or SDK include header and proves it is reported. Unrelated vendor example
+  projects are deliberately excluded because the Makefile neither compiles
+  them nor adds their directories to the include path; historical N32G45 text
+  in those examples is not classified as release-input pollution.
 
 ## User-owned dirty files
 
