@@ -19,6 +19,7 @@
 #define MSG_LOCATION_QUERY_RESP     0x0201
 #define MSG_LOCATION_QUERY          0x8201
 #define MSG_TEMP_LOCATION_TRACK     0x8202
+#define JT808_REPORT_INTERVAL_MIN_S 5U
 #define MSG_TEXT_MESSAGE            0x8300
 #define MSG_SET_POLYGON_AREA        0x8604
 #define MSG_PLATFORM_GENERAL_RESP   0x8001
@@ -75,6 +76,8 @@ int jt808_send_raw(uint16_t msg_id, uint16_t resp_sn,
                    const uint8_t *body, uint16_t blen);
 int jt808_send_raw_tracked(uint16_t msg_id, const uint8_t *body,
                            uint16_t blen, uint16_t *serial_out);
+uint8_t jt808_online_channel(void);
+uint32_t jt808_online_generation(void);
 
 /* Server address management */
 void jt808_set_server(const char *ip, uint16_t port, bool is_backup);

@@ -230,7 +230,11 @@ static void handle_cmd(char *line)
     if (strcmp(cmd, "TIMER") == 0 && argc >= 2) {
         uint16_t a = (uint16_t)atoi(args[0]);
         uint16_t b = (uint16_t)atoi(args[1]);
+        if (a != 0U && a < JT808_REPORT_INTERVAL_MIN_S) a = JT808_REPORT_INTERVAL_MIN_S;
+        if (b != 0U && b < JT808_REPORT_INTERVAL_MIN_S) b = JT808_REPORT_INTERVAL_MIN_S;
         jt808_set_report_interval(a, b);
+        cfg_get()->report_moving_s = a;
+        cfg_get()->report_stopped_s = b;
         dbg_printf("OK\r\n");
         return;
     }

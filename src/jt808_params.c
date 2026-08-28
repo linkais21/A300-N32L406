@@ -54,9 +54,15 @@ static void apply_param(uint32_t id, uint8_t type, const uint8_t *val, uint8_t v
         break;
     case PARAM_REPORT_INTERVAL_DEFAULT:
         c->report_moving_s = (uint16_t)(u32 < 18000 ? u32 : 18000);
+        if (c->report_moving_s != 0U &&
+            c->report_moving_s < JT808_REPORT_INTERVAL_MIN_S)
+            c->report_moving_s = JT808_REPORT_INTERVAL_MIN_S;
         break;
     case PARAM_REPORT_INTERVAL_NOACC:
         c->report_stopped_s = (uint16_t)(u32 < 18000 ? u32 : 18000);
+        if (c->report_stopped_s != 0U &&
+            c->report_stopped_s < JT808_REPORT_INTERVAL_MIN_S)
+            c->report_stopped_s = JT808_REPORT_INTERVAL_MIN_S;
         jt808_set_report_interval(c->report_moving_s, c->report_stopped_s);
         break;
     case PARAM_MAIN_SERVER: {

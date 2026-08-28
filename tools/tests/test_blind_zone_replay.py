@@ -40,6 +40,7 @@ HARNESS = r'''
 
 volatile uint32_t g_tick_ms;
 static bool s_tcp_online = true;
+static uint32_t s_session_generation = 1U;
 static int s_send_result;
 static uint8_t s_sent[1024];
 static uint16_t s_sent_length;
@@ -49,6 +50,7 @@ static uint8_t s_queue_count;
 static uint32_t s_queue_sequence = 1U;
 static unsigned s_append_count;
 static unsigned s_consume_count;
+static bool s_consume_pending_once;
 static uint8_t s_last_consumed;
 static uint32_t s_last_consumed_sequence;
 static gps_data_t s_gps;
@@ -80,6 +82,8 @@ bool tcp_manager_is_online(void) { return s_tcp_online; }
 bool tcp_manager_ch_online(uint8_t ch)
 { return s_tcp_online && ch == EC800M_CH_MAIN; }
 uint8_t tcp_manager_active_ch(void) { return EC800M_CH_MAIN; }
+uint32_t tcp_manager_session_generation(uint8_t ch)
+{ return ch == EC800M_CH_MAIN ? s_session_generation : 0U; }
 tcp_state_t ec800m_tcp_state(uint8_t ch)
 { (void)ch; return s_tcp_online ? TCP_STATE_OPEN : TCP_STATE_CLOSED; }
 const gps_data_t *gps_get_data(void) { return &s_gps; }
@@ -125,6 +129,10 @@ blind_zone_result_t blind_zone_consume(uint32_t sequence, uint8_t count)
     ++s_consume_count;
     s_last_consumed = count;
     s_last_consumed_sequence = sequence;
+    if (s_consume_pending_once) {
+        s_consume_pending_once = false;
+        return BLIND_ZONE_PENDING;
+    }
     return BLIND_ZONE_OK;
 }
 
@@ -149,8 +157,9 @@ static uint16_t sent_serial(void)
     return (uint16_t)(((uint16_t)frame[10] << 8) | frame[11]);
 }
 
-static void inject_ack(uint16_t request_serial, uint16_t request_message,
-                       uint8_t result, uint16_t body_length)
+static void inject_ack_ch(uint8_t channel, uint16_t request_serial,
+                          uint16_t request_message, uint8_t result,
+                          uint16_t body_length)
 {
     uint8_t frame[20] = {
         0x7eU, 0x80U, 0x01U, 0U, 5U,
@@ -161,10 +170,26 @@ static void inject_ack(uint16_t request_serial, uint16_t request_message,
     };
     uint8_t checksum = 0U;
     uint16_t i;
+    frame[18] = 0U;
     frame[3] = (uint8_t)(body_length >> 8);
     frame[4] = (uint8_t)body_length;
     for (i = 1U; i < 18U; ++i) checksum ^= frame[i];
     frame[18] = checksum;
+    jt808_on_recv(channel, frame, sizeof(frame));
+}
+
+#define inject_ack(s,m,r,l) inject_ack_ch(EC800M_CH_MAIN,(s),(m),(r),(l))
+
+static void inject_location_query(void)
+{
+    uint8_t frame[15] = {
+        0x7eU, 0x82U, 0x01U, 0U, 0U,
+        0U, 0U, 0U, 0U, 0U, 0U, 0x12U, 0x34U, 0U, 0x7eU
+    };
+    uint8_t checksum = 0U;
+    uint16_t i;
+    for (i = 1U; i < 13U; ++i) checksum ^= frame[i];
+    frame[13] = checksum;
     jt808_on_recv(EC800M_CH_MAIN, frame, sizeof(frame));
 }
 
@@ -175,6 +200,12 @@ static void authenticate(void)
     s_send_result = 0;
     jt808_process();
     auth_serial = sent_serial();
+    inject_ack(auth_serial, MSG_TERMINAL_AUTH, 1U, 5U);
+    assert(!jt808_is_online());
+    inject_ack(auth_serial, MSG_LOCATION_REPORT, 0U, 5U);
+    assert(!jt808_is_online());
+    inject_ack_ch(EC800M_CH_BACKUP, auth_serial, MSG_TERMINAL_AUTH, 0U, 5U);
+    assert(!jt808_is_online());
     inject_ack(auth_serial, MSG_TERMINAL_AUTH, 0U, 5U);
     assert(jt808_is_online());
 }
@@ -224,9 +255,18 @@ int main(void)
     s_gps.valid = true;
     jt808_init(&terminal);
 
+    /* Interval zero disables periodic live send and offline persistence. */
+    jt808_set_report_interval(0U, 0U);
+    s_tcp_online = false;
+    g_tick_ms = 100000U;
+    jt808_process();
+    assert(s_append_count == 0U && s_send_count == 0U);
+    jt808_set_report_interval(1U, 4U);
+    jt808_set_report_interval(30U, 60U);
+
     /* A live report that cannot reach an authenticated session is stored once. */
     s_tcp_online = false;
-    assert(jt808_send_location() < 0);
+    assert(jt808_send_location() == 0); /* accepted by durable offline storage */
     assert(s_append_count == 1U && s_queue_count == 1U);
     g_tick_ms = 60001U;
     jt808_process();
@@ -236,6 +276,13 @@ int main(void)
     for (uint8_t i = 1U; i < 20U; ++i) push_record((uint8_t)(0x20U + i));
 
     authenticate();
+    s_send_result = -1;
+    {
+        unsigned appends = s_append_count;
+        inject_location_query();
+        assert(s_append_count == appends); /* query response is send-only */
+    }
+    s_send_result = 0;
     reset_capture();
     blind_zone_replay_process();
     assert(s_send_count == 1U && s_consume_count == 0U);
@@ -258,6 +305,7 @@ int main(void)
     assert(s_consume_count == 0U && s_queue_count == 21U);
 
     inject_ack(replay_serial, 0x0704U, 0U, 5U);
+    s_consume_pending_once = true;
     blind_zone_replay_process();
     assert(s_consume_count == 1U && s_last_consumed == first_batch &&
            s_last_consumed_sequence == 1U && s_queue_count == 21U - first_batch);
@@ -265,6 +313,17 @@ int main(void)
     reset_capture();
     blind_zone_replay_process();
     assert(s_send_count == 1U);
+    replay_serial2 = sent_serial();
+
+    /* A reconnect generation invalidates the old authenticated replay session. */
+    ++s_session_generation;
+    assert(!jt808_is_online());
+    inject_ack(replay_serial2, 0x0704U, 0U, 5U);
+    blind_zone_replay_process();
+    assert(s_consume_count == 1U);
+    authenticate();
+    reset_capture();
+    blind_zone_replay_process();
     replay_serial2 = sent_serial();
     assert(replay_serial2 != replay_serial);
 

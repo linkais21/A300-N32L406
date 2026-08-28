@@ -131,6 +131,7 @@ bool ext_flash_read(ext_flash_owner_t,uint32_t,void*,uint32_t);
 bool ext_flash_write_verified(ext_flash_owner_t,uint32_t,const void*,uint32_t);
 bool ext_flash_erase(ext_flash_owner_t,uint32_t,uint32_t);
 bool ext_flash_try_lock(ext_flash_owner_t);
+bool ext_flash_try_lock_now(ext_flash_owner_t);
 void ext_flash_unlock(ext_flash_owner_t);
 """, encoding="utf-8")
         (t / "harness.c").write_text("""#include <assert.h>
@@ -143,7 +144,7 @@ static int fail_write;
 bool spi_flash_read(uint32_t a,uint8_t*b,uint32_t n){ memset(b,0x5a,n); return a+n<=FLASH_TOTAL_SIZE; }
 bool spi_flash_write(uint32_t a,const uint8_t*b,uint32_t n){ (void)b; return !fail_write && a+n<=FLASH_TOTAL_SIZE; }
 bool spi_flash_erase_sector(uint32_t a){ return a<FLASH_TOTAL_SIZE && !(a%FLASH_SECTOR_SIZE); }
-int main(void){ uint8_t b[4],d[4]={1,2,3,4}; assert(ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG)); tick_reads=0; assert(!ext_flash_try_lock(EXT_FLASH_OWNER_OTA)); assert(tick_reads==0); assert(!ext_flash_read(EXT_FLASH_OWNER_OTA,0,b,1)); assert(ext_flash_read(EXT_FLASH_OWNER_CONFIG,0,b,1)); assert(!ext_flash_erase(EXT_FLASH_OWNER_CONFIG,1,FLASH_SECTOR_SIZE)); assert(ext_flash_erase(EXT_FLASH_OWNER_CONFIG,0,FLASH_SECTOR_SIZE)); fail_write=1; assert(!ext_flash_write_verified(EXT_FLASH_OWNER_CONFIG,0,d,sizeof d)); ext_flash_unlock(EXT_FLASH_OWNER_CONFIG); assert(ext_flash_try_lock(EXT_FLASH_OWNER_OTA)); ext_flash_unlock(EXT_FLASH_OWNER_OTA); return 0;}
+int main(void){ uint8_t b[4],d[4]={1,2,3,4}; assert(ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG)); tick_reads=0; assert(!ext_flash_try_lock(EXT_FLASH_OWNER_OTA)); assert(tick_reads>0); tick_reads=0; assert(!ext_flash_try_lock_now(EXT_FLASH_OWNER_BLIND_ZONE)); assert(tick_reads==0); assert(!ext_flash_read(EXT_FLASH_OWNER_OTA,0,b,1)); assert(ext_flash_read(EXT_FLASH_OWNER_CONFIG,0,b,1)); assert(!ext_flash_erase(EXT_FLASH_OWNER_CONFIG,1,FLASH_SECTOR_SIZE)); assert(ext_flash_erase(EXT_FLASH_OWNER_CONFIG,0,FLASH_SECTOR_SIZE)); fail_write=1; assert(!ext_flash_write_verified(EXT_FLASH_OWNER_CONFIG,0,d,sizeof d)); ext_flash_unlock(EXT_FLASH_OWNER_CONFIG); assert(ext_flash_try_lock(EXT_FLASH_OWNER_OTA)); ext_flash_unlock(EXT_FLASH_OWNER_OTA); return 0;}
 """, encoding="utf-8")
         exe = t / "host_test.exe"
         cmd = [cc, "-std=c99", "-I", str(t), str(ROOT / "src" / "ext_flash_store.c"), str(t / "harness.c"), "-o", str(exe)]

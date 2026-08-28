@@ -26,6 +26,7 @@ uint8_t tcp_manager_active_ch(void);
 
 /* Returns true when the specified channel is connected and open */
 bool tcp_manager_ch_online(uint8_t ch);
+uint32_t tcp_manager_session_generation(uint8_t ch);
 bool tcp_manager_ota_active(void);
 
 #endif

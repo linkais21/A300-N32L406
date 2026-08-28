@@ -45,7 +45,6 @@ static jt808_config_t s_cfg = {
 
 static jt808_terminal_t s_term;
 static uint16_t s_msg_sn = 0;
-static uint8_t  s_tcp_ch = TCP_CH_MAIN;   /* active channel */
 
 /* Registration state */
 typedef enum {
@@ -63,6 +62,10 @@ static uint16_t s_active_registration_sn;
 static bool s_registration_response_active;
 static uint32_t s_identity_log_ms;
 static bool s_identity_logged;
+static uint16_t s_auth_serial;
+static uint8_t s_auth_channel;
+static uint32_t s_auth_generation;
+static bool s_auth_active;
 
 static uint32_t s_last_heartbeat_ms = 0;
 static uint32_t s_last_location_ms  = 0;
@@ -70,9 +73,13 @@ static uint32_t s_alarm_flags       = 0;
 
 /* RX reassembly */
 #define JT808_RX_MAX  512
-static uint8_t  s_rx_raw[JT808_RX_MAX];
-static uint16_t s_rx_pos  = 0;
-static bool     s_rx_in   = false;   /* inside frame */
+typedef struct {
+    uint8_t raw[JT808_RX_MAX];
+    uint16_t pos;
+    uint32_t generation;
+    bool in_frame;
+} rx_assembly_t;
+static rx_assembly_t s_rx[EC800M_CH_MAX];
 
 /* ── BCD helpers ──────────────────────────────────────────────────────────── */
 static void bcd_encode(const char *s, uint8_t *out, uint8_t len)
@@ -131,7 +138,28 @@ static int send_frame(frame_t *body)
     else out[o++] = cs;
     out[o++] = FRAME_FLAG;
 
-    return ec800m_tcp_send(s_tcp_ch, out, o);
+    return ec800m_tcp_send(tcp_manager_active_ch(), out, o);
+}
+
+static int send_frame_channel(frame_t *body, uint8_t channel)
+{
+    uint8_t out[1024];
+    uint16_t o = 0U;
+    uint8_t cs = checksum(body->buf, body->pos);
+    uint16_t i;
+    if (!tcp_manager_ch_online(channel)) return -1;
+    out[o++] = FRAME_FLAG;
+    for (i = 0U; i < body->pos; ++i) {
+        uint8_t b = body->buf[i];
+        if (b == FRAME_FLAG) { out[o++] = ESC_FLAG; out[o++] = 0x02U; }
+        else if (b == ESC_FLAG) { out[o++] = ESC_FLAG; out[o++] = 0x01U; }
+        else out[o++] = b;
+    }
+    if (cs == FRAME_FLAG) { out[o++] = ESC_FLAG; out[o++] = 0x02U; }
+    else if (cs == ESC_FLAG) { out[o++] = ESC_FLAG; out[o++] = 0x01U; }
+    else out[o++] = cs;
+    out[o++] = FRAME_FLAG;
+    return ec800m_tcp_send(channel, out, o);
 }
 
 /* Build standard JT808 header */
@@ -241,8 +269,12 @@ int jt808_send_auth(const char *code)
     uint8_t len = (uint8_t)strlen(code);
     frame_t f; frame_init(&f);
     build_header(&f, MSG_TERMINAL_AUTH, len);
+    s_auth_serial = s_msg_sn;
+    s_auth_channel = tcp_manager_active_ch();
+    s_auth_generation = tcp_manager_session_generation(s_auth_channel);
+    s_auth_active = true;
     frame_bytes(&f, (const uint8_t *)code, len);
-    return send_frame(&f);
+    return send_frame_channel(&f, s_auth_channel);
 }
 
 int jt808_send_heartbeat(void)
@@ -335,23 +367,40 @@ int jt808_send_location(void)
         }
     }
 
-    if (blind_zone_append(&record) == BLIND_ZONE_OK)
-        s_alarm_flags = 0;
+    {
+        blind_zone_result_t stored = blind_zone_append(&record);
+        if (stored == BLIND_ZONE_OK || stored == BLIND_ZONE_PENDING) {
+            s_alarm_flags = 0;
+            return 0;
+        }
+        if (stored == BLIND_ZONE_BUSY) return -2;
+    }
     return result;
+}
+
+static int send_location_only(uint16_t message_id)
+{
+    uint8_t body[BLIND_ZONE_LOCATION_MAX];
+    frame_t frame;
+    uint16_t length = encode_location_body(body);
+    if (!jt808_is_online()) return -1;
+    frame_init(&frame);
+    build_header(&frame, message_id, length);
+    frame_bytes(&frame, body, length);
+    return send_frame(&frame);
 }
 
 static void process_location_timer(uint32_t now)
 {
     const gps_data_t *g = gps_get_data();
     uint16_t interval_s = s_cfg.report_stopped_s;
-    if (g->valid) {
-        interval_s = (g->speed_kmh < 2.0f)
-                     ? s_cfg.report_stopped_s
-                     : s_cfg.report_moving_s;
-    }
+    if (g->valid)
+        interval_s = (g->speed_kmh < 2.0f) ? s_cfg.report_stopped_s
+                                           : s_cfg.report_moving_s;
+    if (interval_s == 0U) return;
     if (now - s_last_location_ms > (uint32_t)interval_s * 1000U) {
-        (void)jt808_send_location();
-        s_last_location_ms = now;
+        int result = jt808_send_location();
+        if (result != -2) s_last_location_ms = now;
     }
 }
 
@@ -388,11 +437,13 @@ int jt808_send_raw_tracked(uint16_t msg_id, const uint8_t *body,
     build_header(&f, msg_id, blen);
     *serial_out = s_msg_sn;
     if (blen != 0U) frame_bytes(&f, body, blen);
-    return send_frame(&f);
+    if (!jt808_is_online()) return -1;
+    return send_frame_channel(&f, s_auth_channel);
 }
 
 /* ── RX frame parser ──────────────────────────────────────────────────────── */
-static void process_frame(const uint8_t *raw, uint16_t raw_len)
+static void process_frame(uint8_t channel, uint32_t generation,
+                          const uint8_t *raw, uint16_t raw_len)
 {
     /* Unescape */
     uint8_t frame[JT808_RX_MAX];
@@ -427,7 +478,16 @@ static void process_frame(const uint8_t *raw, uint16_t raw_len)
         if (body_len == 5U) {
             uint16_t reply_serial = ((uint16_t)body[0] << 8) | body[1];
             uint16_t reply_msg_id = ((uint16_t)body[2] << 8) | body[3];
-            blind_zone_replay_on_general_ack(reply_serial, reply_msg_id, body[4]);
+            if (channel == s_auth_channel && generation == s_auth_generation)
+                blind_zone_replay_on_general_ack(reply_serial, reply_msg_id, body[4]);
+            if (s_reg == REG_STATE_AUTHENTICATING && s_auth_active &&
+                channel == s_auth_channel && generation == s_auth_generation &&
+                reply_serial == s_auth_serial &&
+                reply_msg_id == MSG_TERMINAL_AUTH && body[4] == 0U) {
+                s_auth_active = false;
+                s_reg = REG_STATE_ONLINE;
+                dbg_printf("[808] online\r\n");
+            }
         }
         break;
 
@@ -478,7 +538,7 @@ static void process_frame(const uint8_t *raw, uint16_t raw_len)
         break;
 
     case MSG_LOCATION_QUERY:
-        jt808_send_location();
+        (void)send_location_only(MSG_LOCATION_QUERY_RESP);
         break;
 
     case MSG_TERMINAL_CTRL:
@@ -497,32 +557,39 @@ static void process_frame(const uint8_t *raw, uint16_t raw_len)
         break;
     }
 
-    /* If we were authenticating, receiving any valid message means auth OK */
-    if (s_reg == REG_STATE_AUTHENTICATING && msg_id == MSG_PLATFORM_GENERAL_RESP) {
-        s_reg = REG_STATE_ONLINE;
-        dbg_printf("[808] online\r\n");
-    }
 }
 
 bool jt808_is_online(void)
 {
-    return s_reg == REG_STATE_ONLINE && tcp_manager_is_online();
+    return s_reg == REG_STATE_ONLINE && tcp_manager_ch_online(s_auth_channel) &&
+           tcp_manager_session_generation(s_auth_channel) == s_auth_generation;
 }
+uint8_t jt808_online_channel(void) { return s_auth_channel; }
+uint32_t jt808_online_generation(void) { return s_auth_generation; }
 
 /* ── Called from EC800M receive callback ─────────────────────────────────── */
 void jt808_on_recv(uint8_t ch, const uint8_t *data, uint16_t len)
 {
-    (void)ch;
+    rx_assembly_t *rx;
+    uint32_t generation;
+    if (ch >= EC800M_CH_MAX) return;
+    rx = &s_rx[ch];
+    generation = tcp_manager_session_generation(ch);
+    if (rx->generation != generation) {
+        rx->generation = generation;
+        rx->pos = 0U;
+        rx->in_frame = false;
+    }
     for (uint16_t i = 0; i < len; i++) {
         uint8_t b = data[i];
         if (b == FRAME_FLAG) {
-            if (s_rx_in && s_rx_pos > 0) {
-                process_frame(s_rx_raw, s_rx_pos);
+            if (rx->in_frame && rx->pos > 0U) {
+                process_frame(ch, generation, rx->raw, rx->pos);
             }
-            s_rx_in  = true;
-            s_rx_pos = 0;
-        } else if (s_rx_in) {
-            if (s_rx_pos < JT808_RX_MAX) s_rx_raw[s_rx_pos++] = b;
+            rx->in_frame = true;
+            rx->pos = 0U;
+        } else if (rx->in_frame) {
+            if (rx->pos < JT808_RX_MAX) rx->raw[rx->pos++] = b;
         }
     }
 }
@@ -541,6 +608,11 @@ void jt808_init(const jt808_terminal_t *info)
     s_registration_response_active = false;
     s_identity_log_ms = 0U;
     s_identity_logged = false;
+    s_auth_active = false;
+    s_auth_serial = 0U;
+    s_auth_channel = TCP_CH_MAIN;
+    s_auth_generation = 0U;
+    memset(s_rx, 0, sizeof(s_rx));
     blind_zone_replay_reset();
     /* restore auth code from flash so reconnects skip re-registration */
     if (info->auth_code[0])
@@ -554,14 +626,19 @@ void jt808_process(void)
     process_location_timer(now);
     if (!ec800m_is_ready()) return;
 
-    /* TCP connection is managed by tcp_manager; wait for active channel. */
-    s_tcp_ch = tcp_manager_active_ch();
-    if (ec800m_tcp_state(s_tcp_ch) != TCP_STATE_OPEN) {
+    /* TCP connection is managed by tcp_manager; wait for at least one channel. */
+    if (!tcp_manager_is_online()) {
         if (s_reg != REG_STATE_IDLE) {
             invalidate_registration_response();
             s_reg = REG_STATE_IDLE;
         }
         return;
+    }
+    if (s_reg == REG_STATE_ONLINE && !jt808_is_online()) {
+        s_reg = REG_STATE_IDLE;
+        s_auth_active = false;
+        memset(s_rx, 0, sizeof(s_rx));
+        blind_zone_replay_reset();
     }
 
     /* Registration / authentication flow.
@@ -654,6 +731,10 @@ void jt808_set_heartbeat_s(uint16_t s)       { s_cfg.heartbeat_s = s; }
 uint16_t jt808_get_heartbeat_s(void)         { return s_cfg.heartbeat_s; }
 void jt808_set_report_interval(uint16_t moving_s, uint16_t stopped_s)
 {
-    s_cfg.report_moving_s  = moving_s;
-    s_cfg.report_stopped_s = stopped_s;
+    s_cfg.report_moving_s =
+        (moving_s != 0U && moving_s < JT808_REPORT_INTERVAL_MIN_S)
+            ? JT808_REPORT_INTERVAL_MIN_S : moving_s;
+    s_cfg.report_stopped_s =
+        (stopped_s != 0U && stopped_s < JT808_REPORT_INTERVAL_MIN_S)
+            ? JT808_REPORT_INTERVAL_MIN_S : stopped_s;
 }

@@ -1,11 +1,24 @@
 #include "ext_flash_store.h"
 #include "spi_flash.h"
+#include "config.h"
 
 static volatile ext_flash_owner_t g_owner = EXT_FLASH_OWNER_NONE;
 static bool range_ok(uint32_t addr, uint32_t len) { return addr <= FLASH_TOTAL_SIZE && len <= FLASH_TOTAL_SIZE - addr; }
 static bool owner_ok(ext_flash_owner_t owner) { return owner != EXT_FLASH_OWNER_NONE && g_owner == owner; }
 
 bool ext_flash_try_lock(ext_flash_owner_t owner)
+{
+    uint32_t start;
+    uint32_t guard;
+    if (owner == EXT_FLASH_OWNER_NONE) return false;
+    start = TICK_MS();
+    guard = SPI_FLASH_TIMEOUT_MS * 1024U + 1U;
+    do {
+        if (g_owner == EXT_FLASH_OWNER_NONE) { g_owner = owner; return true; }
+    } while ((uint32_t)(TICK_MS() - start) < SPI_FLASH_TIMEOUT_MS && guard-- != 0U);
+    return false;
+}
+bool ext_flash_try_lock_now(ext_flash_owner_t owner)
 {
     if (owner == EXT_FLASH_OWNER_NONE || g_owner != EXT_FLASH_OWNER_NONE) return false;
     g_owner = owner;

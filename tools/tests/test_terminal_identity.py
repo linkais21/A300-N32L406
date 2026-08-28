@@ -228,6 +228,7 @@ int ec800m_get_csq(void) { return 0; }
 bool tcp_manager_is_online(void) { return s_online; }
 bool tcp_manager_ch_online(uint8_t channel) { return s_online && channel == EC800M_CH_MAIN; }
 uint8_t tcp_manager_active_ch(void) { return EC800M_CH_MAIN; }
+uint32_t tcp_manager_session_generation(uint8_t channel) { (void)channel; return 1U; }
 tcp_state_t ec800m_tcp_state(uint8_t channel)
 { (void)channel; return s_online ? TCP_STATE_OPEN : TCP_STATE_CLOSED; }
 const gps_data_t *gps_get_data(void) { static gps_data_t data; return &data; }

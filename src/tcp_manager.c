@@ -31,6 +31,7 @@ typedef struct {
     uint32_t   backoff_ms;
     uint8_t    fails;
     uint8_t    ch;
+    uint32_t   generation;
 } ch_ctx_t;
 
 static ch_ctx_t s_ch[2];   /* [0]=main  [1]=backup */
@@ -42,6 +43,7 @@ static void ch_init(ch_ctx_t *c, uint8_t ch)
     c->state_ms   = TICK_MS();
     c->backoff_ms = BACKOFF_INIT_MS;
     c->fails      = 0;
+    c->generation = 0U;
 }
 
 static void ch_start_connect(ch_ctx_t *c)
@@ -88,6 +90,7 @@ static void ch_process(ch_ctx_t *c)
     case CS_CONNECTING: {
         tcp_state_t st = ec800m_tcp_state(c->ch);
         if (st == TCP_STATE_OPEN) {
+            ++c->generation;
             dbg_printf("[TCP] ch%u online\r\n", c->ch);
             c->state      = CS_ONLINE;
             c->state_ms   = TICK_MS();
@@ -157,6 +160,13 @@ bool tcp_manager_ch_online(uint8_t ch)
     if (ch == TCP_CH_MAIN)   return s_ch[0].state == CS_ONLINE;
     if (ch == TCP_CH_BACKUP) return s_ch[1].state == CS_ONLINE;
     return false;
+}
+
+uint32_t tcp_manager_session_generation(uint8_t ch)
+{
+    if (ch == TCP_CH_MAIN) return s_ch[0].generation;
+    if (ch == TCP_CH_BACKUP) return s_ch[1].generation;
+    return 0U;
 }
 
 uint8_t tcp_manager_active_ch(void)

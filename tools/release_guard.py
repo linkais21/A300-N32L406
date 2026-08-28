@@ -123,7 +123,7 @@ CANONICAL_IDENTITY_FILE_SHA256 = {
     "include/config.h": "72653c500dbdb46a823ccb691a07948d32de933bd83561a8e1ac8d2dbf94271f",
     "include/build_version.h": "cb8e276f477eb946903af3eb1260d58f3f266e9631f55ee2fb77e08ceec2c484",
     "include/f39_reply.h": "5809ee23562052f428c5fecc385df768fa549bf7c2793632c8b98245d45ec98c",
-    "include/jt808.h": "4664cf4d84d6b299d966a81eb70872f8250c634016cdcdee5dc385bf0fd1ca24",
+    "include/jt808.h": "257a498062cb52d27abc71cf501d3f1bd7a642198964cb8438abd6ce28a62941",
 }
 
 
