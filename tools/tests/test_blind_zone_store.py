@@ -61,6 +61,7 @@ static unsigned erase_count;
 static uint32_t fail_read_address = 0xffffffffUL;
 static bool fail_read_once;
 static bool fail_commit_verify_after_program;
+static bool fail_marker_program_noop;
 
 bool ext_flash_try_lock(ext_flash_owner_t requested)
 {
@@ -98,6 +99,11 @@ bool ext_flash_write_verified(ext_flash_owner_t requested, uint32_t address,
     uint32_t i;
     if (owner != requested || data == NULL || address > FLASH_BYTES || length > FLASH_BYTES - address)
         return false;
+    if (fail_marker_program_noop && address >= BLIND_DATA_ADDR &&
+        ((address - BLIND_DATA_ADDR) % RECORD_BYTES) == 60U) {
+        fail_marker_program_noop = false;
+        return false;
+    }
     for (i = 0U; i < length; ++i) {
         if (fail_after == 0) return false;
         if ((flash_mem[address + i] & source[i]) != source[i]) return false;
@@ -204,6 +210,11 @@ static void maintenance_ready(void)
 
 static void consume_accepted(uint32_t sequence, uint8_t count)
 {
+    blind_zone_record_t snapshot[12];
+    uint32_t first = 0U;
+    assert(count <= 12U);
+    assert(blind_zone_peek(snapshot, count, &first) == count);
+    assert(first == sequence);
     blind_zone_result_t result = blind_zone_consume(sequence, count);
     assert(result == BLIND_ZONE_OK || result == BLIND_ZONE_PENDING);
     maintenance_ready();
@@ -492,6 +503,7 @@ static void test_consume_tombstones_precede_metadata_and_survive_each_cut(void)
         for (i = 1U; i <= 4U; ++i) {
             record = make_record(720U + i); append_accepted(&record);
         }
+        assert(blind_zone_peek(out, 3U, &sequence) == 3U && sequence == 1U);
         assert(blind_zone_consume(1U, 3U) == BLIND_ZONE_PENDING);
         fail_after = (int)(cut * sizeof(uint32_t));
         blind_zone_recovery_process();
@@ -511,12 +523,67 @@ static void test_commit_marker_verify_uncertainty_is_pending(void)
     owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
     record = make_record(731U);
     fail_commit_verify_after_program = true;
-    fail_read_address = BLIND_DATA_ADDR;
+    fail_read_address = BLIND_DATA_ADDR + 60U;
     fail_read_once = true;
     assert(blind_zone_append(&record) == BLIND_ZONE_PENDING);
     assert(blind_zone_append(&record) == BLIND_ZONE_BUSY);
     maintenance_ready();
     expect_front(731U, 1U);
+}
+
+static void test_commit_marker_noop_is_definite_io_error(void)
+{
+    blind_zone_record_t record;
+    blind_zone_diagnostics_t before, after;
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    record = make_record(732U);
+    blind_zone_get_diagnostics(&before);
+    fail_marker_program_noop = true;
+    assert(blind_zone_append(&record) == BLIND_ZONE_IO_ERROR);
+    blind_zone_get_diagnostics(&after);
+    assert(after.io_precommit_drop == before.io_precommit_drop + 1U);
+    assert(after.append_io == before.append_io + 1U);
+    append_accepted(&record);
+    expect_front(732U, 1U);
+}
+
+static void test_sequence_corrupt_middle_progresses_by_physical_batch(void)
+{
+    blind_zone_record_t record, out;
+    uint32_t sequence = 0U, corrupt = 0x90000000UL;
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    record = make_record(741U); append_accepted(&record);
+    record = make_record(742U); append_accepted(&record);
+    record = make_record(743U); append_accepted(&record);
+    memcpy(flash_mem + BLIND_DATA_ADDR + RECORD_BYTES + RECORD_SEQUENCE_OFFSET,
+           &corrupt, sizeof(corrupt));
+    assert(blind_zone_peek(&out, 1U, &sequence) == 1U && sequence == 1U);
+    consume_accepted(1U, 1U);
+    assert(blind_zone_peek(&out, 1U, &sequence) == 0U);
+    maintenance_ready();
+    assert(blind_zone_peek(&out, 1U, &sequence) == 1U && sequence == 3U);
+    assert(record_value(&out) == 743U);
+}
+
+static void test_full_ring_append_after_peek_makes_ack_stale(void)
+{
+    blind_zone_record_t record, out;
+    uint32_t sequence = 0U, i;
+    blind_zone_diagnostics_t before, after;
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    for (i = 1U; i <= BLIND_ZONE_LOGICAL_CAPACITY; ++i) {
+        record = make_record(i); append_accepted(&record);
+    }
+    assert(blind_zone_peek(&out, 1U, &sequence) == 1U && sequence == 1U);
+    record = make_record(10001U); append_accepted(&record);
+    blind_zone_get_diagnostics(&before);
+    assert(blind_zone_consume(sequence, 1U) == BLIND_ZONE_STALE);
+    blind_zone_get_diagnostics(&after);
+    assert(after.stale_ack_overwrite == before.stale_ack_overwrite + 1U);
+    expect_front(2U, 2U);
 }
 
 static void test_v1_media_fails_closed_and_counts_diagnostic(void)
@@ -547,6 +614,39 @@ static void test_diagnostic_counters_saturate(void)
     blind_zone_get_diagnostics(&after);
     assert(after.busy == 0xffffffffUL);
     owner = EXT_FLASH_OWNER_NONE;
+}
+
+static void test_full_metadata_journal_rollover_power_cuts(void)
+{
+    unsigned phase;
+    for (phase = 0U; phase < 3U; ++phase) {
+        blind_zone_record_t record, out[4];
+        uint32_t sequence = 0U;
+        unsigned i;
+        memset(flash_mem, 0xff, sizeof(flash_mem));
+        owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+        for (i = 1U; i <= 101U; ++i) {
+            record = make_record(800U + i); append_accepted(&record);
+        }
+        assert(blind_zone_peek(out, 2U, &sequence) == 2U && sequence == 1U);
+        assert(blind_zone_consume(1U, 2U) == BLIND_ZONE_PENDING);
+        maintenance_ready();
+        /* Entry 102 is now the last journal slot. The next consume forces the
+         * genuine rollover path after its tombstone is durable. */
+        assert(blind_zone_peek(out, 1U, &sequence) == 1U && sequence == 3U);
+        assert(blind_zone_consume(3U, 1U) == BLIND_ZONE_PENDING);
+        blind_zone_recovery_process(); /* consume tombstone */
+        blind_zone_recovery_process(); /* schedule rollover */
+        if (phase == 0U) fail_read_address = BLIND_DATA_ADDR + 10U * RECORD_BYTES;
+        else fail_after = phase == 1U ? 1 : (int)(SECTOR_BYTES + 8U);
+        fail_read_once = phase == 0U;
+        blind_zone_recovery_process();
+        fail_after = -1; fail_read_once = false;
+        owner = EXT_FLASH_OWNER_NONE;
+        recover();
+        assert(blind_zone_peek(out, 1U, &sequence) == 1U);
+        assert(sequence >= 4U);
+    }
 }
 
 static void test_consumed_tombstone_prevents_raw_resurrection(void)
@@ -614,8 +714,12 @@ int main(void)
     test_transient_head_read_failure_never_quarantines_valid_head();
     test_consume_tombstones_precede_metadata_and_survive_each_cut();
     test_commit_marker_verify_uncertainty_is_pending();
+    test_commit_marker_noop_is_definite_io_error();
+    test_sequence_corrupt_middle_progresses_by_physical_batch();
+    test_full_ring_append_after_peek_makes_ack_stale();
     test_v1_media_fails_closed_and_counts_diagnostic();
     test_diagnostic_counters_saturate();
+    test_full_metadata_journal_rollover_power_cuts();
     test_consumed_tombstone_prevents_raw_resurrection();
     test_reconcile_adopts_three_unjournaled_records();
     test_full_queue_postcommit_head_read_fault_is_pending();

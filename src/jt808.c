@@ -59,6 +59,8 @@ static uint32_t s_register_sent_ms;
 static uint32_t s_registration_generation;
 static uint32_t s_active_registration_generation;
 static uint16_t s_active_registration_sn;
+static uint8_t s_active_registration_channel;
+static uint32_t s_active_registration_session_generation;
 static bool s_registration_response_active;
 static uint32_t s_identity_log_ms;
 static bool s_identity_logged;
@@ -250,6 +252,9 @@ static int send_register_current_identity(void)
         if (result == 0) {
             s_active_registration_sn = s_msg_sn;
             s_active_registration_generation = s_registration_generation;
+            s_active_registration_channel = tcp_manager_active_ch();
+            s_active_registration_session_generation =
+                tcp_manager_session_generation(s_active_registration_channel);
             s_registration_response_active = true;
         }
         return result;
@@ -483,6 +488,9 @@ static void process_frame(uint8_t channel, uint32_t generation,
     if (s_reg == REG_STATE_ONLINE &&
         (channel != s_auth_channel || generation != s_auth_generation))
         return;
+    if (s_reg != REG_STATE_ONLINE && msg_id != MSG_TERMINAL_REGISTER_RESP &&
+        msg_id != MSG_PLATFORM_GENERAL_RESP)
+        return;
 
     switch (msg_id) {
     case MSG_PLATFORM_GENERAL_RESP:
@@ -506,6 +514,8 @@ static void process_frame(uint8_t channel, uint32_t generation,
         if (body_len >= 3 && s_reg == REG_STATE_REGISTERING &&
             s_registration_response_active &&
             s_active_registration_generation == s_registration_generation &&
+            channel == s_active_registration_channel &&
+            generation == s_active_registration_session_generation &&
             (((uint16_t)body[0] << 8) | body[1]) == s_active_registration_sn) {
             uint8_t result = body[2];
             s_registration_response_active = false;

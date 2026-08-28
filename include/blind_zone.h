@@ -12,6 +12,7 @@ typedef enum {
     BLIND_ZONE_OK = 0,
     BLIND_ZONE_PENDING,
     BLIND_ZONE_BUSY,
+    BLIND_ZONE_STALE,
     BLIND_ZONE_INVALID,
     BLIND_ZONE_IO_ERROR,
 } blind_zone_result_t;
@@ -26,6 +27,7 @@ typedef struct {
     uint32_t consume_io;
     uint32_t recovery_retry;
     uint32_t format_rejected;
+    uint32_t stale_ack_overwrite;
 } blind_zone_diagnostics_t;
 
 typedef struct {

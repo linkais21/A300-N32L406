@@ -58,6 +58,11 @@ void blind_zone_replay_process(void)
     if (s_inflight.active && s_inflight.acknowledged) {
         blind_zone_result_t consumed =
             blind_zone_consume(s_inflight.first_sequence, s_inflight.count);
+        if (consumed == BLIND_ZONE_STALE) {
+            s_inflight.active = false;
+            s_inflight.acknowledged = false;
+            return;
+        }
         if (consumed != BLIND_ZONE_OK) return;
         s_inflight.active = false;
         s_inflight.acknowledged = false;
