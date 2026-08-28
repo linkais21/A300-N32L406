@@ -17,7 +17,8 @@ static bool root_ok(const char *s, uint16_t n)
 static bool valid_suffix(const char *suffix)
 {
     if (*suffix == '\0' || *suffix == '=' || *suffix == ':') return true;
-    return *suffix == '?' && suffix[1] == '\0';
+    if (*suffix == '?' && suffix[1] == '\0') return true;
+    return *suffix == ',';
 }
 
 bool sms_command_allowed(const char *cmd)
@@ -26,11 +27,11 @@ bool sms_command_allowed(const char *cmd)
     if (!cmd) return false;
     while (n < SMS_COMMAND_MAX_LEN && cmd[n]) ++n;
     if (!n || n == SMS_COMMAND_MAX_LEN) return false;
-    while (root < n && cmd[root] != '=' && cmd[root] != ':' && cmd[root] != '?') ++root;
+    while (root < n && cmd[root] != '=' && cmd[root] != ':' && cmd[root] != '?' && cmd[root] != ',') ++root;
     if (!root) return false;
     if (eq(cmd, root, "DUALSET")) {
         const char *p;
-        if (cmd[root] != '=') return false;
+        if (cmd[root] != '=' && cmd[root] != ',') return false;
         p = cmd + root + 1;
         while (nested < n - root - 1 && p[nested] != '=' && p[nested] != '?' && p[nested] != ':' && p[nested] != ',') ++nested;
         return nested && root_ok(p, nested) && valid_suffix(p + nested);

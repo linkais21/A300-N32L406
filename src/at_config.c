@@ -7,6 +7,12 @@
 #include "config.h"
 #include "flash_config.h"
 #include "sms_command.h"
+#include "f39_command.h"
+#include "f39_reply.h"
+#include "tcp_manager.h"
+#include "agnss_vendor.h"
+#include "agnss_manager.h"
+#include "peripherals.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -16,6 +22,49 @@
 static char    s_cmd_buf[CMD_BUF_SIZE];
 static uint8_t s_cmd_pos   = 0;
 static bool    s_cmd_ready = false;
+
+static f39_platform_t s_f39_platform;
+static at_config_sms_send_fn s_sms_send;
+static at_config_reset_fn s_schedule_reset;
+static bool s_f39_bound;
+static bool s_f39_uses_defaults;
+static volatile bool s_reset_pending;
+static uint32_t s_reset_due_ms;
+
+static bool f39_persist(const device_config_t *candidate, void *context) { (void)context; return cfg_store_candidate(candidate); }
+static void f39_timer_refresh(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_heartbeat_s(c->heartbeat_s); jt808_set_report_interval(c->report_moving_s, c->report_stopped_s); }
+static void f39_network_reconnect(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_server(c->server_ip, c->server_port, false); jt808_set_server(c->backup_ip[0] ? c->backup_ip : c->server_ip, c->backup_port ? c->backup_port : c->server_port, true); tcp_manager_reconnect(); }
+static void f39_gnss_mode(gnss_type_t type, uint8_t mode, void *context)
+{
+    static const char *const commands[] = { NULL, "$PCAS04,1*18\r\n", "$PCAS04,2*1B\r\n", "$PCAS04,7*1E\r\n" };
+    (void)context; gnss_vendor_set_type(type);
+    if (mode >= 1U && mode <= 3U) gps_send_cmd(commands[mode]);
+}
+static void f39_jt808_reregister(void *context) { (void)context; (void)jt808_send_register(); }
+static void f39_remaining_refresh(void *context) { (void)context; agnss_init(cfg_get()->gnss_type); }
+static bool f39_relay(bool cut, void *context) { (void)context; relay_set(cut); return true; }
+static bool f39_gps_valid(void *context) { (void)context; return gps_is_valid(); }
+static float f39_gps_speed(void *context) { (void)context; return gps_get_data()->speed_kmh; }
+static bool f39_relay_get(void *context) { (void)context; return relay_get(); }
+static void f39_default_reset(uint32_t delay_ms, void *context) { (void)context; s_reset_pending = true; s_reset_due_ms = TICK_MS() + delay_ms; }
+static int f39_default_sms_send(const char *to, const char *text, void *context) { (void)context; return sms_send(to, text); }
+
+static void f39_bind_defaults(void)
+{
+    static char imei[16];
+    const gps_data_t *g;
+    if (s_f39_bound) return;
+    memset(&s_f39_platform, 0, sizeof s_f39_platform);
+    s_f39_platform.config = cfg_get(); s_f39_platform.persist = f39_persist;
+    s_f39_platform.timer_refresh = f39_timer_refresh; s_f39_platform.network_reconnect = f39_network_reconnect;
+    s_f39_platform.gnss_set_mode = f39_gnss_mode; s_f39_platform.jt808_reregister = f39_jt808_reregister;
+    s_f39_platform.remaining_refresh = f39_remaining_refresh; s_f39_platform.relay_set = f39_relay;
+    s_f39_platform.gps_valid = f39_gps_valid; s_f39_platform.gps_speed_kmh = f39_gps_speed; s_f39_platform.relay_get = f39_relay_get;
+    s_f39_platform.version = FW_VERSION_STR; s_f39_platform.version_len = (uint16_t)strlen(FW_VERSION_STR);
+    ec800m_get_imei(imei, sizeof imei); s_f39_platform.imei = imei; s_f39_platform.imei_len = (uint16_t)strlen(imei);
+    s_f39_platform.csq = ec800m_get_csq(); g = gps_get_data(); s_f39_platform.gps_fix_quality = g->fix_quality; s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
+    s_sms_send = f39_default_sms_send; s_schedule_reset = f39_default_reset; s_f39_bound = true; s_f39_uses_defaults = true;
+}
 
 /* ── Feed bytes from serial ───────────────────────────────────────────────── */
 void at_config_feed(uint8_t byte)
@@ -225,10 +274,14 @@ static void handle_cmd(char *line)
     dbg_printf("ERR:UNKNOWN CMD\r\n");
 }
 
-void at_config_init(void) {}
+void at_config_init(void) { f39_bind_defaults(); }
 
 void at_config_process(void)
 {
+    if (s_reset_pending && (int32_t)(TICK_MS() - s_reset_due_ms) >= 0) {
+        s_reset_pending = false;
+        NVIC_SystemReset();
+    }
     if (!s_cmd_ready) return;
     s_cmd_ready = false;
     /* Work on a local copy so feed() can safely refill s_cmd_buf */
@@ -237,11 +290,49 @@ void at_config_process(void)
     handle_cmd(local);
 }
 
-bool at_config_execute_sms(const uint8_t *text, uint16_t len)
+void at_config_bind_f39(f39_platform_t *platform, at_config_sms_send_fn send,
+                        at_config_reset_fn schedule_reset, void *context)
 {
-    char local[SMS_COMMAND_MAX_LEN];
-    if (!text || len == 0 || len >= sizeof(local)) return false;
-    if (!sms_command_copy_allowed(text, len, local, sizeof(local))) return false;
-    handle_cmd(local);
+    if (platform == NULL || send == NULL || schedule_reset == NULL) {
+        s_f39_bound = false;
+        return;
+    }
+    s_f39_platform = *platform;
+    s_f39_platform.context = context;
+    s_sms_send = send;
+    s_schedule_reset = schedule_reset;
+    s_f39_bound = true;
+    s_f39_uses_defaults = false;
+}
+
+bool at_config_execute_sms(const char *sender, const uint8_t *text, uint16_t len)
+{
+    f39_request_t request;
+    f39_reply_t reply;
+    char response[F39_REPLY_MAX_LENGTH];
+    f39_result_t result;
+    if (!s_f39_bound) f39_bind_defaults();
+    if (!sender || !text || !s_f39_bound ||
+        f39_parse(text, len, &request) != F39_RESULT_OK) return false;
+    if (s_f39_uses_defaults) {
+        static char imei[16];
+        const gps_data_t *g = gps_get_data();
+        ec800m_get_imei(imei, sizeof imei);
+        s_f39_platform.imei = imei; s_f39_platform.imei_len = (uint16_t)strlen(imei);
+        s_f39_platform.csq = ec800m_get_csq(); s_f39_platform.gps_fix_quality = g->fix_quality;
+        s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
+    }
+    result = f39_execute(&request, &s_f39_platform, &reply);
+    if (reply.len == 0U || reply.len >= sizeof response) return false;
+    memcpy(response, reply.data, reply.len);
+    response[reply.len] = '\0';
+    if (s_sms_send(sender, response, s_f39_platform.context) != 0) return false;
+    if (result == F39_RESULT_OK && reply.reset_pending)
+        s_schedule_reset(reply.reset_delay_ms, s_f39_platform.context);
     return true;
+}
+
+void at_config_receive_sms(const char *from, const uint8_t *text, uint16_t len)
+{
+    (void)at_config_execute_sms(from, text, len);
 }

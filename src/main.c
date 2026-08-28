@@ -23,16 +23,15 @@
 
 /* ── Terminal info loaded from flash at runtime ───────────────────────────── */
 static jt808_terminal_t s_terminal;
-static void agnss_network_rx(uint8_t ch, const uint8_t *data, uint16_t len)
-{
-    (void)gnss_vendor_network_rx(ch, data, len);
-}
 static void sms_command_execute(const char *from, const char *text)
 {
     uint16_t len = 0;
-    (void)from;
     while (len < SMS_COMMAND_MAX_LEN && text[len] != '\0') ++len;
-    (void)at_config_execute_sms((const uint8_t *)text, len);
+    (void)at_config_execute_sms(from, (const uint8_t *)text, len);
+}
+static void agnss_network_rx(uint8_t ch, const uint8_t *data, uint16_t len)
+{
+    (void)gnss_vendor_network_rx(ch, data, len);
 }
 
 static void early_debug_uart_init(void)
