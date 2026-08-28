@@ -4,6 +4,7 @@
 #include "debug_uart.h"
 #include "n32l40x.h"
 #include "sms_ingress.h"
+#include "ec800m.h"
 #include <string.h>
 
 static uint8_t s_rs485_rx_buf[256];
@@ -32,6 +33,7 @@ uint16_t rs485_recv(uint8_t *buf, uint16_t max_len)
 }
 
 static sms_recv_cb_t s_sms_cb;
+static sms_send_result_cb_t s_sms_result_cb;
 static void sms_dispatch(const char *from, const uint8_t *cmd, uint16_t len)
 {
     char text[SMS_COMMAND_MAX_LEN];
@@ -45,10 +47,11 @@ void sms_set_recv_cb(sms_recv_cb_t cb) { s_sms_cb = cb; sms_ingress_set_callback
 
 int sms_send(const char *phone, const char *text)
 {
-    (void)phone;
-    (void)text;
-    return 0;
+    return ec800m_sms_send(phone, text);
 }
+
+void sms_set_send_result_cb(sms_send_result_cb_t cb) { s_sms_result_cb = cb; }
+void sms_send_complete(bool success) { if (s_sms_result_cb) s_sms_result_cb(success); }
 
 void sms_process_urc(const char *line)
 {

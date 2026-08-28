@@ -30,6 +30,8 @@ static bool s_f39_bound;
 static bool s_f39_uses_defaults;
 static volatile bool s_reset_pending;
 static uint32_t s_reset_due_ms;
+static bool s_reset_waiting_handoff;
+static uint32_t s_reset_handoff_delay_ms;
 
 static bool f39_persist(const device_config_t *candidate, void *context) { (void)context; return cfg_store_candidate(candidate); }
 static void f39_timer_refresh(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_heartbeat_s(c->heartbeat_s); jt808_set_report_interval(c->report_moving_s, c->report_stopped_s); }
@@ -48,6 +50,12 @@ static float f39_gps_speed(void *context) { (void)context; return gps_get_data()
 static bool f39_relay_get(void *context) { (void)context; return relay_get(); }
 static void f39_default_reset(uint32_t delay_ms, void *context) { (void)context; s_reset_pending = true; s_reset_due_ms = TICK_MS() + delay_ms; }
 static int f39_default_sms_send(const char *to, const char *text, void *context) { (void)context; return sms_send(to, text); }
+static void f39_sms_result(bool success)
+{
+    if (!s_reset_waiting_handoff) return;
+    s_reset_waiting_handoff = false;
+    if (success) f39_default_reset(s_reset_handoff_delay_ms, NULL);
+}
 
 static void f39_bind_defaults(void)
 {
@@ -62,8 +70,8 @@ static void f39_bind_defaults(void)
     s_f39_platform.gps_valid = f39_gps_valid; s_f39_platform.gps_speed_kmh = f39_gps_speed; s_f39_platform.relay_get = f39_relay_get;
     s_f39_platform.version = FW_VERSION_STR; s_f39_platform.version_len = (uint16_t)strlen(FW_VERSION_STR);
     ec800m_get_imei(imei, sizeof imei); s_f39_platform.imei = imei; s_f39_platform.imei_len = (uint16_t)strlen(imei);
-    s_f39_platform.csq = ec800m_get_csq(); g = gps_get_data(); s_f39_platform.gps_fix_quality = g->fix_quality; s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
-    s_sms_send = f39_default_sms_send; s_schedule_reset = f39_default_reset; s_f39_bound = true; s_f39_uses_defaults = true;
+    s_f39_platform.csq = ec800m_get_csq(); g = gps_get_data(); s_f39_platform.acc_on = (GPIO_ReadInputDataBit(ACC_DET_PORT, ACC_DET_PIN) != Bit_RESET); s_f39_platform.gps_fix_quality = g->fix_quality; s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
+    s_sms_send = f39_default_sms_send; s_schedule_reset = f39_default_reset; sms_set_send_result_cb(f39_sms_result); s_f39_bound = true; s_f39_uses_defaults = true;
 }
 
 /* ── Feed bytes from serial ───────────────────────────────────────────────── */
@@ -320,15 +328,21 @@ bool at_config_execute_sms(const char *sender, const uint8_t *text, uint16_t len
         ec800m_get_imei(imei, sizeof imei);
         s_f39_platform.imei = imei; s_f39_platform.imei_len = (uint16_t)strlen(imei);
         s_f39_platform.csq = ec800m_get_csq(); s_f39_platform.gps_fix_quality = g->fix_quality;
-        s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
+        s_f39_platform.acc_on = (GPIO_ReadInputDataBit(ACC_DET_PORT, ACC_DET_PIN) != Bit_RESET); s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
     }
     result = f39_execute(&request, &s_f39_platform, &reply);
     if (reply.len == 0U || reply.len >= sizeof response) return false;
     memcpy(response, reply.data, reply.len);
     response[reply.len] = '\0';
     if (s_sms_send(sender, response, s_f39_platform.context) != 0) return false;
-    if (result == F39_RESULT_OK && reply.reset_pending)
-        s_schedule_reset(reply.reset_delay_ms, s_f39_platform.context);
+    if (result == F39_RESULT_OK && reply.reset_pending) {
+        if (s_f39_uses_defaults) {
+            s_reset_waiting_handoff = true;
+            s_reset_handoff_delay_ms = reply.reset_delay_ms;
+        } else {
+            s_schedule_reset(reply.reset_delay_ms, s_f39_platform.context);
+        }
+    }
     return true;
 }
 

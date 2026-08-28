@@ -54,6 +54,7 @@ void ec800m_reset(void);
 /* TCP */
 int  ec800m_tcp_open(uint8_t ch, const char *ip, uint16_t port);
 int  ec800m_tcp_send(uint8_t ch, const uint8_t *data, uint16_t len);
+int  ec800m_sms_send(const char *phone, const char *text);
 void ec800m_tcp_close(uint8_t ch);
 tcp_state_t ec800m_tcp_state(uint8_t ch);
 

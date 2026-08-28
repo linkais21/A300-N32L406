@@ -35,6 +35,7 @@ HARNESS = r'''
 #include "gps.h"
 #include "sms_command.h"
 #include "sms_ingress.h"
+#include "peripherals.h"
 
 static device_config_t config;
 static unsigned saves, resets, callbacks;
@@ -42,6 +43,8 @@ static char order[16]; static unsigned order_len;
 static char sent_to[4][SMS_PHONE_MAX_LEN];
 static char sent_text[4][F39_REPLY_MAX_LENGTH]; static unsigned sent_count;
 static int send_result;
+static sms_send_result_cb_t production_result_cb;
+static unsigned production_sends, system_resets;
 static void effect(char c);
 volatile uint32_t g_tick_ms;
 device_config_t *cfg_get(void) { return &config; }
@@ -60,10 +63,12 @@ bool relay_get(void) { return false; }
 bool gps_is_valid(void) { return true; }
 const gps_data_t *gps_get_data(void) { static gps_data_t g; g.valid=true; return &g; }
 void gps_send_cmd(const char *c) { (void)c; }
+int GPIO_ReadInputDataBit(void *p, unsigned x) { (void)p; (void)x; return 1; }
 void ec800m_get_imei(char *b, uint8_t n) { if (n > 0) { strncpy(b, "123456789012345", n-1); b[n-1]=0; } }
 int ec800m_get_csq(void) { return 20; }
-void NVIC_SystemReset(void) { }
-int sms_send(const char *p, const char *t) { (void)p; (void)t; return 0; }
+void NVIC_SystemReset(void) { system_resets++; }
+int sms_send(const char *p, const char *t) { (void)p; (void)t; production_sends++; return 0; }
+void sms_set_send_result_cb(sms_send_result_cb_t cb) { production_result_cb=cb; }
 
 static void effect(char c) { order[order_len++] = c; order[order_len] = 0; callbacks++; }
 static bool persist(const device_config_t *candidate, void *ctx) { (void)candidate; (void)ctx; saves++; return true; }
@@ -120,6 +125,14 @@ int main(void) {
     assert(resets == 0);
     send_result=0; feed("13800000005", "RESET#"); sms_ingress_process();
     assert(resets == 1 && sent_count == 1 && strstr(sent_text[0], "RESET=Success!"));
+
+    at_config_bind_f39(0, 0, 0, 0); at_config_init();
+    assert(at_config_execute_sms("13800000006",(const uint8_t*)"PARAM",5));
+    assert(production_sends==1 && production_result_cb);
+    assert(at_config_execute_sms("13800000006",(const uint8_t*)"RESET",5));
+    assert(system_resets==0); production_result_cb(false); assert(system_resets==0);
+    assert(at_config_execute_sms("13800000006",(const uint8_t*)"RESET",5));
+    production_result_cb(true); g_tick_ms=F39_RESET_DELAY_MS; at_config_process(); assert(system_resets==1);
     puts("PASS"); return 0;
 }
 '''
@@ -135,7 +148,7 @@ def test_f39_end_to_end():
         harness = tmp / "f39_e2e.c"
         exe = tmp / "f39_e2e.exe"
         harness.write_text(HARNESS, encoding="ascii")
-        (tmp / "n32l40x.h").write_text("#ifndef N32L40X_H\n#define N32L40X_H\n#include <stdint.h>\ntypedef int BitAction;\n#define ENABLE 1\n#define DISABLE 0\nvoid NVIC_SystemReset(void);\n#endif\n", encoding="ascii")
+        (tmp / "n32l40x.h").write_text("#ifndef N32L40X_H\n#define N32L40X_H\n#include <stdint.h>\ntypedef int BitAction;\n#define ENABLE 1\n#define DISABLE 0\n#define Bit_RESET 0\n#define GPIOA ((void*)0)\n#define GPIO_PIN_3 3\nint GPIO_ReadInputDataBit(void*,unsigned);\nvoid NVIC_SystemReset(void);\n#endif\n", encoding="ascii")
         cmd = [
             cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-ffunction-sections",
             "-fdata-sections", "-I", str(tmp), "-I", str(ROOT / "include"), str(harness),

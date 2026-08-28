@@ -43,6 +43,13 @@ static tcp_channel_t s_tcp[EC800M_CH_MAX];
 static ec800m_recv_cb_t s_recv_cb = NULL;
 static ec800m_recv_cb_t s_ota_recv_cb = NULL;
 static ec800m_recv_cb_t s_agnss_recv_cb = NULL;
+typedef enum { SMS_TX_IDLE, SMS_TX_QUEUED, SMS_TX_WAIT_PROMPT, SMS_TX_WAIT_RESULT } sms_tx_state_t;
+static sms_tx_state_t s_sms_tx_state;
+static char s_sms_phone[20];
+static char s_sms_text[192];
+static bool s_sms_prompt;
+static uint32_t s_sms_deadline_ms;
+static void sms_tx_process(void);
 
 /* ── RX init: DMA is configured in hw_init.c; only reset the read pointer here ─────────── */
 static void rx_irq_init(void)
@@ -193,7 +200,7 @@ static const char *s_init_cmds[] = {
     "ATE0",
     "AT+QURCCFG=\"urcport\",\"uart1\"",
     "AT+CMGF=1",
-    "AT+CNMI=2,1,0,0,0",
+    "AT+CNMI=2,2,0,0,0",
     "AT+CTZU=3",
     NULL
 };
@@ -312,6 +319,13 @@ static void process_urc(const char *line)
     /* +QIOPEN: ch,err */
     int qiopen_ch, qiopen_err;
     sms_process_urc(line);
+    if (s_sms_tx_state == SMS_TX_WAIT_RESULT && strstr(line, "+CMGS:")) {
+        s_sms_tx_state = SMS_TX_IDLE;
+        sms_send_complete(true);
+    } else if (s_sms_tx_state != SMS_TX_IDLE && strstr(line, "ERROR")) {
+        s_sms_tx_state = SMS_TX_IDLE;
+        sms_send_complete(false);
+    }
     if (sscanf(line, "+QIOPEN: %d,%d", &qiopen_ch, &qiopen_err) == 2
         && qiopen_ch >= 0 && qiopen_ch < EC800M_CH_MAX) {
         if (qiopen_err == 0) {
@@ -384,6 +398,7 @@ static void drain_rx(void)
 #if EC800M_RX_ECHO
         dbg_putchar(c);
 #endif
+        if (c == '>' && s_sms_tx_state == SMS_TX_WAIT_PROMPT) s_sms_prompt = true;
         if (c == '\r') continue;
         if (c == '\n') {
             s_line_buf[s_line_len] = '\0';
@@ -410,6 +425,7 @@ void ec800m_init(void)
 void ec800m_process(void)
 {
     drain_rx();
+    sms_tx_process();
 
     switch (s_state) {
     case EC800M_STATE_BOOTING:
@@ -446,6 +462,36 @@ void ec800m_process(void)
 
 ec800m_state_t ec800m_get_state(void) { return s_state; }
 bool ec800m_is_ready(void)            { return s_state == EC800M_STATE_READY; }
+
+static void sms_tx_process(void)
+{
+    char command[48];
+    if (s_sms_tx_state == SMS_TX_QUEUED) {
+        (void)snprintf(command, sizeof command, "AT+CMGS=\"%s\"", s_sms_phone);
+        usart_send_str(command); usart_send_str("\r\n");
+        s_sms_prompt = false; s_sms_tx_state = SMS_TX_WAIT_PROMPT; s_sms_deadline_ms = TICK_MS() + 5000U;
+    } else if (s_sms_tx_state == SMS_TX_WAIT_PROMPT && s_sms_prompt) {
+        usart_send_buf((const uint8_t *)s_sms_text, (uint16_t)strlen(s_sms_text));
+        usart_send_buf((const uint8_t *)"\x1A", 1U);
+        s_sms_tx_state = SMS_TX_WAIT_RESULT; s_sms_deadline_ms = TICK_MS() + 30000U;
+    } else if (s_sms_tx_state != SMS_TX_IDLE && s_sms_tx_state != SMS_TX_QUEUED &&
+               (int32_t)(TICK_MS() - s_sms_deadline_ms) >= 0) {
+        s_sms_tx_state = SMS_TX_IDLE;
+        sms_send_complete(false);
+    }
+}
+
+int ec800m_sms_send(const char *phone, const char *text)
+{
+    size_t n;
+    if (!phone || !text || !ec800m_is_ready()) return -1;
+    if (s_sms_tx_state != SMS_TX_IDLE) return -2;
+    n = strlen(text);
+    if (strlen(phone) == 0U || strlen(phone) >= 20U || n == 0U || n >= 192U) return -3;
+    (void)strcpy(s_sms_phone, phone); (void)strcpy(s_sms_text, text);
+    s_sms_tx_state = SMS_TX_QUEUED;
+    return 0;
+}
 
 int ec800m_tcp_open(uint8_t ch, const char *ip, uint16_t port)
 {

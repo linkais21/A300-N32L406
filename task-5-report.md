@@ -15,3 +15,10 @@ Integrated the production SMS path with F39 parsing/execution and bounded replie
 - Added `tools/tests/test_f39_end_to_end.py` covering two senders, config save/action replies, busy/failure, reset handoff, removed commands and effect order.
 
 Verification (`REQUIRE_GCC=1`): end-to-end, SMS ingress/whitelist/boundary, parser, config, DUALSET and actions all PASS; `git diff --check` PASS.
+
+## Fix round 1
+
+- Replaced the unconditional `sms_send` stub with an EC800M bounded non-blocking `CMGS` state machine (busy, prompt timeout, result timeout, `+CMGS` success and `ERROR` failure).
+- Changed modem `CNMI` to `2,2` so direct `+CMT` URCs feed the existing ingress FIFO.
+- RESET handoff now waits for actual modem send completion before scheduling reset.
+- Default `PARAM` binding refreshes ACC from the PA3 input; e2e covers default transport, busy/failure and reset handoff.
