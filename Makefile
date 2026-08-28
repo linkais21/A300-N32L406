@@ -39,6 +39,7 @@ C_SRCS := \
     src/mileage.c        \
     src/peripherals.c    \
     src/sms_command.c    \
+    src/f39_command.c    \
     src/sms_ingress.c    \
     src/power_mgr.c      \
     src/tcp_manager.c    \
