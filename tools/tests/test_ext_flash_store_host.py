@@ -22,6 +22,10 @@ def test_fota_failed_lock_does_not_unlock_owner():
             """#include <stdint.h>\n#include <stdbool.h>\n#define FOTA_FLASH_ADDR 0x10000U\n#define FOTA_MAX_SIZE 0x1000U\n#define FOTA_PENDING_ADDR 0x20000U\n#define FOTA_PENDING_MAGIC 0xF07AF07AU\ntypedef enum { FOTA_STATE_IDLE=0, FOTA_STATE_CONNECTING, FOTA_STATE_DOWNLOADING, FOTA_STATE_VERIFYING, FOTA_STATE_READY, FOTA_STATE_ERROR } fota_state_t;\nvoid fota_init(void); int fota_start(const char *);\n""",
             encoding="utf-8",
         )
+        (t / "fota.h").write_text(
+            """#include <stdint.h>\n#include <stdbool.h>\n#define FOTA_FLASH_ADDR 0x10000U\n#define FOTA_MAX_SIZE 0x1000U\n#define FOTA_RESUME_MAGIC 0x46525331UL\ntypedef enum { FOTA_STATE_IDLE=0, FOTA_STATE_CONNECTING, FOTA_STATE_DOWNLOADING, FOTA_STATE_VERIFYING, FOTA_STATE_READY, FOTA_STATE_ERROR } fota_state_t;\ntypedef struct { const char *url; uint32_t expected_length, version; const char *etag; } fota_request_t;\ntypedef struct { fota_state_t state; uint32_t offset, expected_length, crc32; bool resumable; char url[128], etag[40]; } fota_status_t;\nvoid fota_init(void); int fota_start(const char *);\nvoid fota_on_http_header(const char *);\nvoid fota_on_chunk(const uint8_t *, uint16_t, uint32_t);\n""",
+            encoding="utf-8",
+        )
         (t / "ext_flash_layout.h").write_text(
             """#include <stdint.h>\n#define FLASH_TOTAL_SIZE (2U*1024U*1024U)\n#define FLASH_SECTOR_SIZE 4096U\n""",
             encoding="utf-8",
@@ -38,6 +42,30 @@ def test_fota_failed_lock_does_not_unlock_owner():
             """#include <stdint.h>\nextern volatile uint32_t g_tick_ms;\n#define TICK_MS() g_tick_ms\n#define SPI_FLASH_TIMEOUT_MS 2U\n#define CFG_IP_LEN 64\ntypedef struct { uint32_t fota_size; } config_t;\nconst config_t *cfg_get(void);\n""",
             encoding="utf-8",
         )
+        (t / "flash_config.h").write_text(
+            """#ifndef FLASH_CONFIG_H\n#define FLASH_CONFIG_H\n#include \"config.h\"\n#include \"ext_flash_layout.h\"\n#endif\n""",
+            encoding="utf-8",
+        )
+        (t / "spi_flash.h").write_text(
+            """#include <stdint.h>\n#include <stdbool.h>\n#define FLASH_TOTAL_SIZE (2U*1024U*1024U)\n#define FLASH_SECTOR_SIZE 4096U\nbool spi_flash_read(uint32_t, uint8_t *, uint32_t);\nbool spi_flash_write(uint32_t, const uint8_t *, uint32_t);\nbool spi_flash_erase_sector(uint32_t);\n""",
+            encoding="utf-8",
+        )
+        (t / "ext_flash_layout.h").write_text(
+            """#include <stdint.h>\n#include \"spi_flash.h\"\n#define EXT_FLASH_RESUME_ADDR 0x100000UL\n""",
+            encoding="utf-8",
+        )
+        (t / "config.h").write_text(
+            """#ifndef CONFIG_H\n#define CONFIG_H\n#include <stdint.h>\nextern volatile uint32_t g_tick_ms;\n#define TICK_MS() g_tick_ms\n#define SPI_FLASH_TIMEOUT_MS 2U\n#define CFG_IP_LEN 64\ntypedef struct { uint32_t fota_size; } config_t;\nconst config_t *cfg_get(void);\n#endif\n""",
+            encoding="utf-8",
+        )
+        (t / "fota.h").write_text(
+            """#include <stdint.h>\n#include <stdbool.h>\n#define FOTA_FLASH_ADDR 0x10000U\n#define FOTA_MAX_SIZE 0x1000U\n#define FOTA_RESUME_MAGIC 0x46525331UL\ntypedef enum { FOTA_STATE_IDLE=0, FOTA_STATE_CONNECTING, FOTA_STATE_DOWNLOADING, FOTA_STATE_VERIFYING, FOTA_STATE_READY, FOTA_STATE_ERROR } fota_state_t;\ntypedef struct { const char *url; uint32_t expected_length, version; const char *etag; } fota_request_t;\ntypedef struct { fota_state_t state; uint32_t offset, expected_length, crc32; bool resumable; char url[128], etag[40]; } fota_status_t;\nvoid fota_init(void); int fota_start(const char *);\n""",
+            encoding="utf-8",
+        )
+        (t / "fota.h").write_text(
+            (t / "fota.h").read_text(encoding="utf-8") + "void fota_on_http_header(const char *);\nvoid fota_on_chunk(const uint8_t *, uint16_t, uint32_t);\n",
+            encoding="utf-8",
+        )
         for name, body in {
             "ec800m.h": "#include <stdint.h>\n#define EC800M_CH_OTA 1\nint ec800m_tcp_open(int, const char *, uint16_t);\nvoid ec800m_tcp_send(int, const uint8_t *, uint16_t);\n",
             "debug_uart.h": "void dbg_printf(const char *, ...);\n",
@@ -49,6 +77,8 @@ def test_fota_failed_lock_does_not_unlock_owner():
             """#include <assert.h>\n#include <stdint.h>\n#include <string.h>\n#include \"fota.h\"\n#include \"ext_flash_store.h\"\nvolatile uint32_t g_tick_ms;\nstatic const config_t cfg = { 0 };\nconst config_t *cfg_get(void) { return &cfg; }\nbool spi_flash_read(uint32_t a, uint8_t *b, uint32_t n) { memset(b, 0xff, n); return a+n <= FLASH_TOTAL_SIZE; }\nbool spi_flash_write(uint32_t a, const uint8_t *b, uint32_t n) { (void)b; return a+n <= FLASH_TOTAL_SIZE; }\nbool spi_flash_erase_sector(uint32_t a) { return a < FLASH_TOTAL_SIZE && !(a % FLASH_SECTOR_SIZE); }\nint ec800m_tcp_open(int ch, const char *host, uint16_t port) { (void)ch; (void)host; (void)port; return -1; }\nvoid ec800m_tcp_send(int ch, const uint8_t *p, uint16_t n) { (void)ch; (void)p; (void)n; }\nvoid dbg_printf(const char *fmt, ...) { (void)fmt; }\nvoid delay_ms(unsigned ms) { (void)ms; }\nvoid NVIC_SystemReset(void) {}\nint main(void) {\n    assert(ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG));\n    assert(fota_start(\"http://example.invalid/fw.bin\") < 0);\n    /* A failed OTA acquisition must not release CONFIG's lock. */\n    assert(!ext_flash_try_lock(EXT_FLASH_OWNER_OTA));\n    ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);\n    assert(ext_flash_try_lock(EXT_FLASH_OWNER_OTA));\n    ext_flash_unlock(EXT_FLASH_OWNER_OTA);\n    return 0;\n}\n""",
             encoding="utf-8",
         )
+        harness = (t / "harness.c").read_text(encoding="utf-8")
+        (t / "harness.c").write_text('#include "config.h"\n#include "ext_flash_layout.h"\ntypedef struct bcr_record bcr_record_t;\nbool bcr_valid(const bcr_record_t *r) { (void)r; return false; }\n' + harness, encoding="utf-8")
         exe = t / "fota_lock_test.exe"
         cmd = [
             cc,
