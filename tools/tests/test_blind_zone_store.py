@@ -47,11 +47,14 @@ HARNESS = r'''
 #define SECTOR_BYTES 4096U
 #define BLIND_META_ADDR 0x110000UL
 #define BLIND_DATA_ADDR 0x111000UL
+#define BLIND_SCRATCH_ADDR 0x1b0000UL
 #define RECORD_BYTES 64U
+#define DATA_SLOTS_PER_SECTOR (SECTOR_BYTES / RECORD_BYTES)
 #define META_BYTES 40U
 #define META_COMMIT_OFFSET 36U
-#define RECORD_SEQUENCE_OFFSET 8U
-#define RECORD_LOCATION_OFFSET 12U
+#define RECORD_EVENT_ID_OFFSET 8U
+#define RECORD_SEQUENCE_OFFSET 12U
+#define RECORD_LOCATION_OFFSET 16U
 #define RECORD_CRC_OFFSET 56U
 
 static uint8_t flash_mem[FLASH_BYTES];
@@ -167,6 +170,7 @@ static blind_zone_record_t make_record(uint32_t value)
     blind_zone_record_t record;
     unsigned i;
     memset(&record, 0, sizeof(record));
+    record.event_id = value;
     record.length = BLIND_ZONE_LOCATION_MAX;
     for (i = 0U; i < record.length; ++i)
         record.location[i] = (uint8_t)(value + i * 17U);
@@ -207,7 +211,7 @@ static void forge_record_from_slot0(uint32_t slot, uint32_t sequence, uint32_t v
     record[RECORD_LOCATION_OFFSET + 1U] = (uint8_t)(value >> 16);
     record[RECORD_LOCATION_OFFSET + 2U] = (uint8_t)(value >> 8);
     record[RECORD_LOCATION_OFFSET + 3U] = (uint8_t)value;
-    crc = test_crc32(record, 52U);
+    crc = test_crc32(record, 56U);
     memcpy(record + RECORD_CRC_OFFSET, &crc, sizeof(crc));
 }
 
@@ -255,9 +259,45 @@ static void expect_front(uint32_t value, uint32_t expected_sequence)
     blind_zone_record_t record;
     uint32_t sequence = 0U;
     assert(blind_zone_peek(&record, 1U, &sequence) == 1U);
+    if (sequence != expected_sequence)
+        fprintf(stderr, "expect_front value=%lu expected_seq=%lu got_seq=%lu got_value=%lu\n",
+                (unsigned long)value, (unsigned long)expected_sequence,
+                (unsigned long)sequence, (unsigned long)record_value(&record));
     assert(sequence == expected_sequence);
     assert(record.length == BLIND_ZONE_LOCATION_MAX);
     assert(record_value(&record) == value);
+}
+
+static void test_exact_capacity_and_event_identity_contract(void)
+{
+    blind_zone_record_t first = make_record(41U);
+    blind_zone_record_t same_payload = first;
+    blind_zone_record_t conflicting = first;
+    blind_zone_record_t invalid = first;
+    blind_zone_record_t out[2];
+    uint32_t sequence = 0U;
+
+    assert(BLIND_ZONE_LOGICAL_CAPACITY == 9900UL);
+    assert(BLIND_ZONE_PHYSICAL_SLOTS == 10176UL);
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE;
+    fail_after = -1;
+    recover();
+
+    invalid.event_id = 0U;
+    assert(blind_zone_append(&invalid) == BLIND_ZONE_INVALID);
+
+    append_accepted(&first);
+    conflicting.location[0] ^= 0x5aU;
+    assert(blind_zone_append(&conflicting) == BLIND_ZONE_INVALID);
+
+    same_payload.event_id = 42U;
+    append_accepted(&same_payload);
+    assert(blind_zone_peek(out, 2U, &sequence) == 2U);
+    assert(sequence == 1U);
+    assert(out[0].event_id == 41U && out[1].event_id == 42U);
+    assert(memcmp(out[0].location, out[1].location,
+                  BLIND_ZONE_LOCATION_MAX) == 0);
 }
 
 static void test_fifo_reboot_capacity_and_sector_reclaim(void)
@@ -279,20 +319,21 @@ static void test_fifo_reboot_capacity_and_sector_reclaim(void)
     consume_accepted(sequence, 2U);
     expect_front(3U, 3U);
 
-    /* Refill from one live item to the exact 10,000-record logical cap. */
-    for (i = 4U; i <= 10002U; ++i) {
+    /* Refill from one live item to the exact logical capacity. */
+    for (i = 4U; i <= BLIND_ZONE_LOGICAL_CAPACITY + 2U; ++i) {
         blind_zone_record_t record = make_record(i);
         append_accepted(&record);
     }
     expect_front(3U, 3U);
     {
-        blind_zone_record_t record = make_record(10003U);
+        blind_zone_record_t record = make_record(BLIND_ZONE_LOGICAL_CAPACITY + 3U);
         append_accepted(&record);
     }
     expect_front(4U, 4U); /* full append overwrites exactly one oldest record */
 
-    /* Cross the 10,240-slot physical wrap and force sector-safe reclamation. */
-    for (i = 10004U; i <= 10260U; ++i) {
+    /* Cross the physical wrap and force sector-safe reclamation. */
+    for (i = BLIND_ZONE_LOGICAL_CAPACITY + 4U;
+         i <= BLIND_ZONE_LOGICAL_CAPACITY + 260U; ++i) {
         blind_zone_record_t record = make_record(i);
         append_accepted(&record);
     }
@@ -300,7 +341,7 @@ static void test_fifo_reboot_capacity_and_sector_reclaim(void)
     expect_front(261U, 261U);
     assert(erase_count > 1U); /* metadata rotations plus reclaimed data sectors */
 
-    /* A lost journal rebuilds the newest 10,000 out of 10,240 valid slots. */
+    /* A lost journal rebuilds the retained logical FIFO. */
     memset(flash_mem + BLIND_META_ADDR, 0xff, SECTOR_BYTES);
     recover();
     expect_front(261U, 261U);
@@ -328,10 +369,144 @@ static void test_crc_metadata_selection_and_torn_metadata_scan(void)
     consume_accepted(seq, 1U);
     expect_front(12U, 2U);
 
-    /* CRC-corrupt oldest record is rejected, not exposed as a location. */
-    flash_mem[BLIND_DATA_ADDR + RECORD_BYTES + 20U] &= 0x7fU;
+    /* CRC-corrupt only remaining record is never exposed as a location. */
+    flash_mem[BLIND_DATA_ADDR + RECORD_BYTES] &= 0x2fU;
     recover();
     assert(blind_zone_peek(&r, 1U, &seq) == 0U);
+}
+
+static void test_journalled_boot_repairs_damaged_sector_before_ready(void)
+{
+    blind_zone_record_t record;
+    uint32_t sequence = 0U;
+
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    record = make_record(91U); append_accepted(&record);
+    record = make_record(92U); append_accepted(&record);
+
+    /* The journal remains valid: boot must still inspect and repair the
+     * damaged sector before exposing the surviving suffix. */
+    flash_mem[BLIND_DATA_ADDR] &= 0x2fU;
+    owner = EXT_FLASH_OWNER_NONE;
+    recover();
+    assert(blind_zone_peek(&record, 1U, &sequence) == 1U);
+    assert(sequence == 2U && record_value(&record) == 92U);
+}
+
+static void assert_scratch_erased(void)
+{
+    unsigned i;
+    for (i = 0U; i < SECTOR_BYTES; ++i)
+        assert(flash_mem[BLIND_SCRATCH_ADDR + i] == 0xffU);
+}
+
+static void test_prepared_record_is_finalized_after_reset(void)
+{
+    blind_zone_record_t record = make_record(93U), out;
+    uint32_t sequence = 0U;
+
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    fail_marker_program_noop = true;
+    assert(blind_zone_append(&record) == BLIND_ZONE_IO_ERROR);
+    owner = EXT_FLASH_OWNER_NONE;
+    recover();
+    assert(blind_zone_peek(&out, 1U, &sequence) == 1U);
+    assert(sequence == 1U && out.event_id == record.event_id &&
+           record_value(&out) == 93U);
+}
+
+static void test_scratch_phase_cut_restores_exact_slots(void)
+{
+    static const blind_zone_test_recovery_state_t phases[] = {
+        BLIND_ZONE_TEST_RECOVERY_SCRATCH_BACKUP,
+        BLIND_ZONE_TEST_RECOVERY_SCRATCH_HEADER,
+        BLIND_ZONE_TEST_RECOVERY_VICTIM_ERASE,
+        BLIND_ZONE_TEST_RECOVERY_VICTIM_RESTORE,
+        BLIND_ZONE_TEST_RECOVERY_SCRATCH_ERASE,
+    };
+    unsigned phase;
+
+    for (phase = 0U; phase < sizeof(phases) / sizeof(phases[0]); ++phase) {
+        blind_zone_record_t record;
+        uint8_t first[RECORD_BYTES], third[RECORD_BYTES];
+        unsigned calls = 0U;
+
+        memset(flash_mem, 0xff, sizeof(flash_mem));
+        owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+        record = make_record(101U); append_accepted(&record);
+        record = make_record(102U); append_accepted(&record);
+        record = make_record(103U); append_accepted(&record);
+        memcpy(first, flash_mem + BLIND_DATA_ADDR, sizeof(first));
+        memcpy(third, flash_mem + BLIND_DATA_ADDR + 2U * RECORD_BYTES,
+               sizeof(third));
+        flash_mem[BLIND_DATA_ADDR + RECORD_BYTES] &= 0x2fU;
+
+        assert(blind_zone_init());
+        while (blind_zone_test_recovery_state() != phases[phase] &&
+               calls++ < 3000U)
+            blind_zone_recovery_process();
+        assert(calls < 3000U);
+        fail_after = 0;
+        blind_zone_recovery_process();
+        fail_after = -1;
+        owner = EXT_FLASH_OWNER_NONE;
+        recover();
+        assert(memcmp(flash_mem + BLIND_DATA_ADDR, first, sizeof(first)) == 0);
+        assert(memcmp(flash_mem + BLIND_DATA_ADDR + 2U * RECORD_BYTES,
+                      third, sizeof(third)) == 0);
+        assert_scratch_erased();
+    }
+}
+
+static void test_repeated_sector_repairs_make_forward_progress(void)
+{
+    blind_zone_record_t record;
+    uint32_t sequence = 0U;
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    record = make_record(111U); append_accepted(&record);
+    record = make_record(112U); append_accepted(&record);
+    record = make_record(113U); append_accepted(&record);
+    flash_mem[BLIND_DATA_ADDR + RECORD_BYTES] &= 0x2fU;
+    owner = EXT_FLASH_OWNER_NONE; recover();
+    flash_mem[BLIND_DATA_ADDR + 2U * RECORD_BYTES] &= 0x2fU;
+    owner = EXT_FLASH_OWNER_NONE; recover();
+    record = make_record(114U); append_accepted(&record);
+    assert(blind_zone_peek(&record, 1U, &sequence) <= 1U);
+    assert_scratch_erased();
+}
+
+static void test_full_capacity_prepared_and_distributed_repairs_progress(void)
+{
+    blind_zone_record_t record;
+    uint32_t i;
+
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    for (i = 1U; i <= BLIND_ZONE_LOGICAL_CAPACITY; ++i) {
+        record = make_record(1000U + i);
+        append_accepted(&record);
+    }
+    /* Damage four of the 276 physical spare slots in distinct sectors.  The
+     * full FIFO must still admit a PREPARED event and repair around them. */
+    for (i = 0U; i < 4U; ++i) {
+        flash_mem[BLIND_DATA_ADDR +
+                  (BLIND_ZONE_LOGICAL_CAPACITY + i * DATA_SLOTS_PER_SECTOR) *
+                  RECORD_BYTES] &=
+            0x2fU;
+    }
+    record = make_record(12000U);
+    delay_marker_program = true;
+    assert(blind_zone_append(&record) == BLIND_ZONE_PENDING);
+    owner = EXT_FLASH_OWNER_NONE;
+    recover();
+    assert(blind_zone_append(&record) == BLIND_ZONE_OK);
+    record = make_record(12001U);
+    append_accepted(&record);
+    assert(blind_zone_ready());
+    assert_scratch_erased();
 }
 
 static void test_contention_and_power_cut_prefixes(void)
@@ -465,7 +640,7 @@ static void test_corrupt_head_and_middle_are_quarantined(void)
     owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
     for (i = 1U; i <= 3U; ++i) { records[0] = make_record(300U + i); append_accepted(&records[0]); }
     blind_zone_get_diagnostics(&before);
-    flash_mem[BLIND_DATA_ADDR + 20U] &= 0x7fU;
+    flash_mem[BLIND_DATA_ADDR] &= 0x2fU;
     assert(blind_zone_peek(records, 3U, &sequence) == 0U);
     maintenance_ready();
     assert(blind_zone_peek(records, 3U, &sequence) == 2U && sequence == 2U);
@@ -476,7 +651,7 @@ static void test_corrupt_head_and_middle_are_quarantined(void)
     memset(flash_mem, 0xff, sizeof(flash_mem));
     owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
     for (i = 1U; i <= 3U; ++i) { records[0] = make_record(400U + i); append_accepted(&records[0]); }
-    flash_mem[BLIND_DATA_ADDR + RECORD_BYTES + 20U] &= 0xf7U;
+    flash_mem[BLIND_DATA_ADDR + RECORD_BYTES] &= 0x2fU;
     assert(blind_zone_peek(records, 3U, &sequence) == 1U && sequence == 1U);
     assert(record_value(&records[0]) == 401U);
     consume_accepted(1U, 1U);
@@ -597,10 +772,6 @@ static void test_production_batch_sequence_corrupt_middle_survives_reboot(void)
     maintenance_ready();
     owner = EXT_FLASH_OWNER_NONE;
     recover();
-    assert(blind_zone_peek(out, 11U, &sequence) == 0U);
-    maintenance_ready();
-    owner = EXT_FLASH_OWNER_NONE;
-    recover();
     assert(blind_zone_peek(out, 11U, &sequence) == 1U && sequence == 3U);
     assert(record_value(&out[0]) == 743U);
 }
@@ -665,10 +836,11 @@ static void test_v1_media_fails_closed_and_counts_diagnostic(void)
 static void test_diagnostic_counters_saturate(void)
 {
     blind_zone_diagnostics_t value, after;
+    blind_zone_record_t record = make_record(999U);
     memset(&value, 0xff, sizeof(value));
     blind_zone_test_set_diagnostics(&value);
     owner = EXT_FLASH_OWNER_CONFIG;
-    assert(blind_zone_append(&(blind_zone_record_t){0}) == BLIND_ZONE_BUSY);
+    assert(blind_zone_append(&record) == BLIND_ZONE_BUSY);
     blind_zone_get_diagnostics(&after);
     assert(after.busy == 0xffffffffUL);
     owner = EXT_FLASH_OWNER_NONE;
@@ -813,8 +985,14 @@ static void test_full_queue_postcommit_head_read_fault_is_pending(void)
 
 int main(void)
 {
+    test_exact_capacity_and_event_identity_contract();
     test_fifo_reboot_capacity_and_sector_reclaim();
     test_crc_metadata_selection_and_torn_metadata_scan();
+    test_journalled_boot_repairs_damaged_sector_before_ready();
+    test_prepared_record_is_finalized_after_reset();
+    test_scratch_phase_cut_restores_exact_slots();
+    test_repeated_sector_repairs_make_forward_progress();
+    test_full_capacity_prepared_and_distributed_repairs_progress();
     test_contention_and_power_cut_prefixes();
     test_two_cut_hole_then_committed_record_recovery();
     test_diagnostics_contract();

@@ -70,10 +70,21 @@ def test_agnss_alignment_and_exact_slots():
 def test_blind_zone_fixed_record_layout():
     assert val("EXT_FLASH_BLIND_SIZE") == 644 * 1024
     metadata_size = 4096
-    data_size = val("EXT_FLASH_BLIND_SIZE") - metadata_size
-    assert data_size == 640 * 1024
-    assert data_size // 64 == 10240
-    assert 10000 < data_size // 64
+    scratch_size = 4096
+    data_size = val("EXT_FLASH_BLIND_SIZE") - metadata_size - scratch_size
+    scratch_addr = val("EXT_FLASH_BLIND_ADDR") + metadata_size + data_size
+    assert metadata_size == 4 * 1024
+    assert data_size == 636 * 1024
+    assert scratch_size == 4 * 1024
+    assert scratch_addr == 0x1B0000
+    assert data_size // 64 == 10176
+
+    blind_zone_h = (ROOT / "include" / "blind_zone.h").read_text(encoding="utf-8")
+    logical = re.search(r"#define\s+BLIND_ZONE_LOGICAL_CAPACITY\s+(\d+)", blind_zone_h)
+    physical = re.search(r"#define\s+BLIND_ZONE_PHYSICAL_SLOTS\s+(\d+)", blind_zone_h)
+    assert logical and int(logical.group(1)) == 9900
+    assert physical and int(physical.group(1)) == 10176
+    assert int(logical.group(1)) < int(physical.group(1))
 
 def test_layout_header_preprocesses_and_compiles():
     gcc = shutil.which("gcc")
