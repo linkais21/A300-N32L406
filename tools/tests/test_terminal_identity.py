@@ -459,6 +459,126 @@ int main(void)
 }
 '''
 
+DIGRAPH_MACRO_HARNESS = r'''
+#include <stdbool.h>
+#include <string.h>
+
+static bool terminal_id_derive(const char *pid, const char *imei, char out[8])
+{
+    (void)pid;
+    (void)imei;
+    (void)out;
+    return false;
+}
+
+%:define OUT terminal_id
+
+static bool device_id(unsigned imei_len, char terminal_id[8])
+{
+    if (imei_len == 99U) return terminal_id_derive("", "", terminal_id);
+    memset(OUT, 49, 7U);
+    memset(OUT + 7, 0, 1U);
+    return true;
+}
+
+int main(void)
+{
+    char terminal_id[8];
+    return device_id(0U, terminal_id) && terminal_id[0] == '1' && terminal_id[7] == '\0'
+        ? 0 : 1;
+}
+'''
+
+EXTENDED_IDENTIFIER_HARNESS = r'''
+#include <stdbool.h>
+#include <string.h>
+
+static bool terminal_id_derive(const char *pid, const char *imei, char out[8])
+{
+    (void)pid;
+    (void)imei;
+    (void)out;
+    return false;
+}
+
+#define Ω terminal_id
+
+static bool device_id(unsigned imei_len, char terminal_id[8])
+{
+    if (imei_len == 99U) return terminal_id_derive("", "", terminal_id);
+    memset(Ω, 49, 7U);
+    memset(Ω + 7, 0, 1U);
+    return true;
+}
+
+int main(void)
+{
+    char terminal_id[8];
+    return device_id(0U, terminal_id) && terminal_id[0] == '1' && terminal_id[7] == '\0'
+        ? 0 : 1;
+}
+'''
+
+TRIGRAPH_SPLICE_HARNESS = r'''
+#include <stdbool.h>
+#include <string.h>
+
+static bool terminal_id_derive(const char *pid, const char *imei, char out[8])
+{
+    (void)pid;
+    (void)imei;
+    (void)out;
+    return false;
+}
+
+static bool device_id(unsigned imei_len, char terminal_id[8])
+{
+    if (imei_len == 99U) return terminal_id_derive("", "", terminal_id);
+??=??/
+include "fixed_identity.inc"
+}
+
+int main(void)
+{
+    char terminal_id[8];
+    return device_id(0U, terminal_id) && terminal_id[0] == '1' && terminal_id[7] == '\0'
+        ? 0 : 1;
+}
+'''
+
+QUOTED_COMMENT_HARNESS = r'''
+#include <stdbool.h>
+#include <string.h>
+
+static bool terminal_id_derive(const char *pid, const char *imei, char out[8])
+{
+    (void)pid;
+    (void)imei;
+    (void)out;
+    return false;
+}
+
+static const char *guard_open = "/*";
+#define OUT terminal_id
+static const char *guard_close = "*/";
+
+static bool device_id(unsigned imei_len, char terminal_id[8])
+{
+    if (imei_len == 99U) return terminal_id_derive("", "", terminal_id);
+    memset(OUT, 49, 7U);
+    memset(OUT + 7, 0, 1U);
+    return true;
+}
+
+int main(void)
+{
+    char terminal_id[8];
+    return guard_open[0] == '/' && guard_close[0] == '*' &&
+        device_id(0U, terminal_id) && terminal_id[0] == '1' && terminal_id[7] == '\0'
+        ? 0 : 1;
+}
+'''
+
 
 def compiler() -> str | None:
     found = shutil.which("gcc") or shutil.which("cc")
@@ -528,7 +648,8 @@ def test_release_guard_behavior() -> None:
         for relative in (
             "src/main.c", "src/jt808.c", "src/jt808_params.c", "src/terminal_identity.c",
             "src/f39_reply.c",
-            "include/config.h", "include/build_version.h", "gen_version.ps1",
+            "include/config.h", "include/build_version.h", "include/f39_reply.h",
+            "include/jt808.h", "gen_version.ps1",
         ):
             destination = root / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -602,6 +723,221 @@ def test_release_guard_behavior() -> None:
         findings = release_guard.scan(root)
         assert any(item[2] == "<identity-service>" for item in findings)
         destination.write_text(original, encoding="utf-8")
+
+        argument_macro_decoy = (
+            "if (p->imei_len == 99U) return terminal_id_derive(c->pid, imei, terminal_id); "
+            "memset(OUT, 49, 7U); memset(OUT + 7, 0, 1U); return true;"
+        )
+        destination.write_text(
+            "#define OUT terminal_id\n" + original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", argument_macro_decoy
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+
+        canonical = release_guard.c_function_body(original, "device_id")
+        assert canonical is not None
+        assert release_guard.canonical_identity_consumer(
+            original, "src/f39_reply.c", "device_id", canonical
+        ) is None
+
+        destination.write_text(
+            original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);",
+                "(void)0; return terminal_id_derive(c->pid, imei, terminal_id);",
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+
+        token_paste_decoy = (
+            "if (p->imei_len == 99U) return terminal_id_derive(c->pid, imei, terminal_id); "
+            "memset(CAT(terminal,_id), 49, 7U); CAT(terminal,_id)[7] = 0; return true;"
+        )
+        destination.write_text(
+            "#define CAT_(a,b) a##b\n#define CAT(a,b) CAT_(a,b)\n" + original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", token_paste_decoy
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+
+        config_path = root / "include/config.h"
+        config_original = config_path.read_text(encoding="utf-8")
+        config_path.write_text(config_original + "\n/* manual review */\n", encoding="utf-8")
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        config_path.write_text(config_original, encoding="utf-8")
+
+        config_path.write_text(
+            config_original + "\n#define CAT_(a,b) a##b\n#define CAT(a,b) CAT_(a,b)\n",
+            encoding="utf-8",
+        )
+        destination.write_text(
+            original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", token_paste_decoy
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+        config_path.write_text(config_original, encoding="utf-8")
+
+        config_path.write_text(
+            config_original + ('\nstatic const char *guard_open = "/*";\n'
+                               '#define OUT terminal_id\n'
+                               'static const char *guard_close = "*/";\n'),
+            encoding="utf-8",
+        )
+        destination.write_text(
+            original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", argument_macro_decoy
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+        config_path.write_text(config_original, encoding="utf-8")
+
+        config_path.write_text(
+            config_original + ("\n#undef FW_MODEL_STR\n"
+                               "#define FW_MODEL_STR "
+                               "(memset(tid,49,7U),tid[7]=0,\"A300_406\")\n"),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        config_path.write_text(config_original, encoding="utf-8")
+
+        include_fragment = root / "include/fixed_identity.inc"
+        include_fragment.write_text(
+            "memset(terminal_id, 49, 7U); terminal_id[7] = 0; return true;\n",
+            encoding="utf-8",
+        )
+        include_decoy = (
+            "if (p->imei_len == 99U) return terminal_id_derive(c->pid, imei, terminal_id); "
+            "#include \"fixed_identity.inc\""
+        )
+        destination.write_text(
+            original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", include_decoy
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+        include_fragment.unlink()
+
+        include_fragment.write_text(
+            "memset(terminal_id, 49, 7U); terminal_id[7] = 0; return true;\n",
+            encoding="utf-8",
+        )
+        spliced_include_decoy = (
+            "if (p->imei_len == 99U) return terminal_id_derive(c->pid, imei, terminal_id); "
+            "#\\\ninclude \"fixed_identity.inc\""
+        )
+        destination.write_text(
+            original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", spliced_include_decoy
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+        include_fragment.unlink()
+
+        include_fragment.write_text(
+            "memset(terminal_id, 49, 7U); terminal_id[7] = 0; return true;\n",
+            encoding="utf-8",
+        )
+        digraph_include_decoy = (
+            "if (p->imei_len == 99U) return terminal_id_derive(c->pid, imei, terminal_id); "
+            "%:include \"fixed_identity.inc\""
+        )
+        destination.write_text(
+            original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", digraph_include_decoy
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+        include_fragment.unlink()
+
+        include_fragment.write_text(
+            "memset(terminal_id, 49, 7U); terminal_id[7] = 0; return true;\n",
+            encoding="utf-8",
+        )
+        trigraph_splice_decoy = (
+            "if (p->imei_len == 99U) return terminal_id_derive(c->pid, imei, terminal_id); "
+            "??=??/\ninclude \"fixed_identity.inc\""
+        )
+        destination.write_text(
+            original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);",
+                trigraph_splice_decoy,
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+        include_fragment.unlink()
+
+        config_path.write_text(
+            config_original + "\n#define OUT terminal_id\n", encoding="utf-8"
+        )
+        destination.write_text(
+            original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", argument_macro_decoy
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+        config_path.write_text(config_original, encoding="utf-8")
+
+        config_path.write_text(
+            config_original + "\n%:define OUT terminal_id\n", encoding="utf-8"
+        )
+        destination.write_text(
+            original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", argument_macro_decoy
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+        config_path.write_text(config_original, encoding="utf-8")
+
+        config_path.write_text(
+            config_original + "\n#define Ω terminal_id\n", encoding="utf-8"
+        )
+        destination.write_text(
+            original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);",
+                argument_macro_decoy.replace("OUT", "Ω"),
+            ),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+        config_path.write_text(config_original, encoding="utf-8")
 
         macro_decoy = (
             "memset(OUT, '1', 7U); OUT[7] = '\\0'; return true; "
@@ -743,6 +1079,94 @@ def main() -> int:
             print(executed.stdout, end="")
             print(executed.stderr, end="")
             print("test_terminal_identity: FAIL (JT808 harness assertion)")
+            return 1
+
+        digraph_harness = temp / "digraph_macro_harness.c"
+        digraph_binary = temp / "digraph_macro_harness.exe"
+        digraph_harness.write_text(DIGRAPH_MACRO_HARNESS, encoding="ascii")
+        compiled = subprocess.run(
+            [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", str(digraph_harness),
+             "-o", str(digraph_binary)],
+            text=True,
+            capture_output=True,
+        )
+        if compiled.returncode != 0:
+            print(compiled.stdout, end="")
+            print(compiled.stderr, end="")
+            print("test_terminal_identity: FAIL (%:define mutation did not compile as C99)")
+            return 1
+        executed = subprocess.run([str(digraph_binary)], text=True, capture_output=True)
+        if executed.returncode != 0:
+            print(executed.stdout, end="")
+            print(executed.stderr, end="")
+            print("test_terminal_identity: FAIL (%:define mutation did not execute)")
+            return 1
+
+        extended_harness = temp / "extended_identifier_harness.c"
+        extended_binary = temp / "extended_identifier_harness.exe"
+        extended_harness.write_text(EXTENDED_IDENTIFIER_HARNESS, encoding="utf-8")
+        compiled = subprocess.run(
+            [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-finput-charset=UTF-8",
+             str(extended_harness), "-o", str(extended_binary)],
+            text=True,
+            capture_output=True,
+        )
+        if compiled.returncode != 0:
+            print(compiled.stdout, end="")
+            print(compiled.stderr, end="")
+            print("test_terminal_identity: FAIL (extended macro mutation did not compile as C99)")
+            return 1
+        executed = subprocess.run([str(extended_binary)], text=True, capture_output=True)
+        if executed.returncode != 0:
+            print(executed.stdout, end="")
+            print(executed.stderr, end="")
+            print("test_terminal_identity: FAIL (extended macro mutation did not execute)")
+            return 1
+
+        trigraph_harness = temp / "trigraph_splice_harness.c"
+        trigraph_binary = temp / "trigraph_splice_harness.exe"
+        trigraph_harness.write_text(TRIGRAPH_SPLICE_HARNESS, encoding="ascii")
+        (temp / "fixed_identity.inc").write_text(
+            "memset(terminal_id, 49, 7U); terminal_id[7] = 0; return true;\n",
+            encoding="ascii",
+        )
+        compiled = subprocess.run(
+            [cc, "-std=c99", "-trigraphs", "-Wno-trigraphs", "-Wall", "-Wextra",
+             "-Werror", str(trigraph_harness), "-o", str(trigraph_binary)],
+            text=True,
+            capture_output=True,
+        )
+        if compiled.returncode != 0:
+            print(compiled.stdout, end="")
+            print(compiled.stderr, end="")
+            print("test_terminal_identity: FAIL (trigraph-splice mutation did not compile)")
+            return 1
+        executed = subprocess.run([str(trigraph_binary)], text=True, capture_output=True)
+        if executed.returncode != 0:
+            print(executed.stdout, end="")
+            print(executed.stderr, end="")
+            print("test_terminal_identity: FAIL (trigraph-splice mutation did not execute)")
+            return 1
+
+        quoted_comment_harness = temp / "quoted_comment_harness.c"
+        quoted_comment_binary = temp / "quoted_comment_harness.exe"
+        quoted_comment_harness.write_text(QUOTED_COMMENT_HARNESS, encoding="ascii")
+        compiled = subprocess.run(
+            [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", str(quoted_comment_harness),
+             "-o", str(quoted_comment_binary)],
+            text=True,
+            capture_output=True,
+        )
+        if compiled.returncode != 0:
+            print(compiled.stdout, end="")
+            print(compiled.stderr, end="")
+            print("test_terminal_identity: FAIL (quoted-comment mutation did not compile)")
+            return 1
+        executed = subprocess.run([str(quoted_comment_binary)], text=True, capture_output=True)
+        if executed.returncode != 0:
+            print(executed.stdout, end="")
+            print(executed.stderr, end="")
+            print("test_terminal_identity: FAIL (quoted-comment mutation did not execute)")
             return 1
 
     print("test_terminal_identity: C99 -Wall -Wextra -Werror PASS")

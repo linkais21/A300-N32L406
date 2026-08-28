@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import sys
 from pathlib import Path
@@ -66,10 +67,106 @@ IDENTITY_SERVICE_REQUIREMENTS = {
         re.compile(r"return\s+terminal_id_derive\s*\(\s*c->pid\s*,\s*imei\s*,\s*terminal_id\s*\)\s*;"),
     )),
 }
+CANONICAL_CONSUMER_PATTERNS = {
+    "src/main.c": (
+        re.compile(r"s_terminal\.terminal_id\s*\[\s*0\s*\]\s*=\s*'\\0'\s*;"),
+    ),
+    "src/jt808.c": (
+        re.compile(r"char\s+terminal_id\s*\[\s*8\s*\]\s*;"),
+        re.compile(r"if\s*\(\s*!terminal_identity_load\s*\(\s*terminal_id\s*\)\s*\)\s*return\s+false\s*;"),
+        re.compile(r"memcpy\s*\(\s*s_term\.terminal_id\s*,\s*terminal_id\s*,\s*"
+                   r"sizeof\s*\(\s*s_term\.terminal_id\s*\)\s*\)\s*;"),
+        re.compile(r"return\s+true\s*;"),
+    ),
+    "src/jt808_params.c": (
+        re.compile(r"char\s+tid\s*\[\s*8\s*\]\s*;"),
+        re.compile(r"if\s*\(\s*!terminal_identity_load\s*\(\s*tid\s*\)\s*\)\s*\{"),
+        re.compile(r"memcpy\s*\(\s*body\s*\+\s*pos\s*,\s*tid\s*,\s*7\s*\)\s*;"),
+    ),
+    "src/terminal_identity.c": (
+        re.compile(r"if\s*\(\s*out\s*==\s*NULL\s*\)\s*return\s+false\s*;"),
+        re.compile(r"out\s*\[\s*0\s*\]\s*=\s*'\\0'\s*;"),
+        re.compile(r"return\s+terminal_id_derive\s*\(\s*config->pid\s*,\s*imei\s*,\s*out\s*\)\s*;"),
+    ),
+    "src/f39_reply.c": (
+        re.compile(r"char\s+imei\s*\[\s*F39_IMEI_MAX_LENGTH\s*\+\s*1U\s*\]\s*;"),
+        re.compile(r"return\s+terminal_id_derive\s*\(\s*c->pid\s*,\s*imei\s*,\s*terminal_id\s*\)\s*;"),
+    ),
+}
+CANONICAL_CONSUMER_MACROS = {
+    "src/main.c": {"FW_BUILD_DATE", "FW_FULL_VERSION", "FW_MODEL_STR"},
+    "src/jt808_params.c": {"FW_MODEL_STR", "FW_VERSION_STR", "MSG_QUERY_TERMINAL_INFO"},
+    "src/f39_reply.c": {"F39_IMEI_MAX_LENGTH"},
+}
+CANONICAL_MACRO_DEFINITIONS = {
+    "FW_BUILD_DATE": re.compile(r'"[^"\r\n]*"'),
+    "FW_FULL_VERSION": re.compile(rf'"{re.escape(TARGET_VERSION)}"'),
+    "FW_MODEL_STR": re.compile(r'"A300_406"'),
+    "FW_VERSION_STR": re.compile(rf'"{re.escape(TARGET_VERSION)}"'),
+    "MSG_QUERY_TERMINAL_INFO": re.compile(r"0[xX]8107(?:[uUlL]*)"),
+    "F39_IMEI_MAX_LENGTH": re.compile(r"15(?:[uU])?"),
+}
+C_IDENTIFIER = r"(?:[^\W\d]|\\(?:u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}))(?:\w|\\(?:u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}))*"
+PP_DIRECTIVE = r"(?:#|%:|\?\?=)"
+TRIGRAPHS = {
+    "??=": "#", "??/": "\\", "??'": "^", "??(": "[", "??)": "]",
+    "??!": "|", "??<": "{", "??>": "}", "??-": "~",
+}
+CANONICAL_CONSUMER_SHA256 = {
+    "src/main.c": "28246074f01aea52591c88d7cc97b534d2a7e36b63e28e74e61275d1d427d861",
+    "src/jt808.c": "9d465de0bd09fd7b89d8022cfeed284a83095ef7ed79449af13f23b2525330a4",
+    "src/jt808_params.c": "2000242a482e339fef40541a46c3e2190b0bdfc9d4b79f7807322f2ab584fd0e",
+    "src/terminal_identity.c": "516c0c00012ff5c27046891fc05fb206d4028705d8ebc0bb84d6f392309cf178",
+    "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
+}
+CANONICAL_IDENTITY_FILE_SHA256 = {
+    "include/config.h": "72653c500dbdb46a823ccb691a07948d32de933bd83561a8e1ac8d2dbf94271f",
+    "include/build_version.h": "7780ada5e1977ebe83228b87d90bc8b44363c110131dcf36df370b90ad921199",
+    "include/f39_reply.h": "5809ee23562052f428c5fecc385df768fa549bf7c2793632c8b98245d45ec98c",
+    "include/jt808.h": "cf4e1a15bd56b434cdfff3a39167d3e81bde3e05d8b010c87471fabb6517ee20",
+}
 
 
 def strip_c_comments(text: str) -> str:
-    return re.sub(r"/\*.*?\*/|//[^\r\n]*", "", text, flags=re.DOTALL)
+    translated = text
+    for trigraph, replacement in TRIGRAPHS.items():
+        translated = translated.replace(trigraph, replacement)
+    spliced = re.sub(r"\\\r?\n", "", translated)
+    result = []
+    index = 0
+    quote = None
+    escaped = False
+    while index < len(spliced):
+        char = spliced[index]
+        following = spliced[index + 1] if index + 1 < len(spliced) else ""
+        if quote is not None:
+            result.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            index += 1
+        elif char in ("'", '"'):
+            quote = char
+            result.append(char)
+            index += 1
+        elif char == "/" and following == "/":
+            index += 2
+            while index < len(spliced) and spliced[index] not in "\r\n":
+                index += 1
+        elif char == "/" and following == "*":
+            index += 2
+            while index + 1 < len(spliced) and spliced[index:index + 2] != "*/":
+                if spliced[index] in "\r\n":
+                    result.append(spliced[index])
+                index += 1
+            index = min(index + 2, len(spliced))
+        else:
+            result.append(char)
+            index += 1
+    return "".join(result)
 
 
 def fixed_identity_findings(text: str):
@@ -218,27 +315,55 @@ def c_function_body(text: str, name: str) -> str | None:
     return None
 
 
-def c_object_aliases(text: str, symbol: str) -> set[str]:
-    """Return object-like macro names that expand directly to symbol/aliases."""
+def canonical_body_digest(body: str) -> str:
+    """Hash a comment-free body after stable newline/trailing-space normalization."""
+    normalized = body.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = "\n".join(line.rstrip() for line in normalized.split("\n")).strip()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def canonical_file_digest(text: str, relative: str) -> str:
+    """Hash reviewed dependency text, ignoring generated build timestamps only."""
+    normalized = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    if relative == "include/build_version.h":
+        normalized = re.sub(
+            r'(?m)^(\s*#define\s+FW_BUILD_(?:NUMBER|DATE)\s+)"[^"\r\n]*"\s*$',
+            r'\1"<generated>"',
+            normalized,
+        )
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def canonical_identity_consumer(text: str, relative: str, function_name: str,
+                                body: str, macro_names: set[str] | None = None,
+                                macro_definitions: dict[str, list[str]] | None = None) -> str | None:
+    """Return a reason when one small consumer departs from its strict contract."""
     clean = strip_c_comments(text)
-    aliases = {symbol}
-    raw_definitions = re.findall(
-        r"(?m)^\s*#\s*define\s+([A-Za-z_]\w*)(?:\([^\r\n)]*\))?[ \t]+([^\r\n]+?)\s*$",
-        clean,
-    )
-    definitions = []
-    for name, replacement in raw_definitions:
-        identifiers = set(re.findall(r"\b[A-Za-z_]\w*\b", replacement))
-        definitions.append((name, identifiers))
-    changed = True
-    while changed:
-        changed = False
-        for name, targets in definitions:
-            if targets & aliases and name not in aliases:
-                aliases.add(name)
-                changed = True
-    aliases.remove(symbol)
-    return aliases
+    if canonical_body_digest(body) != CANONICAL_CONSUMER_SHA256.get(relative):
+        return f"noncanonical body for {function_name}() consumer; manual review required"
+    if re.search(rf"(?m){PP_DIRECTIVE}\s*{C_IDENTIFIER}", body):
+        return f"preprocessor directive forbidden for {function_name}() consumer"
+    if re.search(r"[^\x00-\x7f]|\\(?:u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})", body):
+        return f"non-ASCII identifier forbidden for {function_name}() consumer"
+    local_macro_names = set(re.findall(
+        rf"(?m)^\s*{PP_DIRECTIVE}\s*define\s+({C_IDENTIFIER})(?:\([^\r\n)]*\))?", clean
+    ))
+    if macro_names is not None:
+        local_macro_names.update(macro_names)
+    allowed_macros = CANONICAL_CONSUMER_MACROS.get(relative, set())
+    if macro_definitions is not None:
+        for name in allowed_macros:
+            definitions = macro_definitions.get(name, [])
+            expected = CANONICAL_MACRO_DEFINITIONS[name]
+            if len(definitions) != 1 or expected.fullmatch(definitions[0].strip()) is None:
+                return f"noncanonical definition for allowed macro {name}"
+    forbidden_macros = local_macro_names - allowed_macros
+    if any(re.search(rf"(?<!\w){re.escape(name)}(?!\w)", body) for name in forbidden_macros):
+        return f"macro invocation forbidden in {function_name}() identity flow"
+    patterns = CANONICAL_CONSUMER_PATTERNS.get(relative, ())
+    if any(pattern.search(body) is None for pattern in patterns):
+        return f"canonical identity flow missing from {function_name}()"
+    return None
 
 
 def generated_version_is_target(text: str) -> bool:
@@ -269,7 +394,31 @@ def scan(root: Path, paths: tuple[str, ...] = DEFAULT_PATHS):
     """Return (file, line, token, text) tuples for forbidden matches."""
     findings = []
     patterns = [(token, re.compile(re.escape(token), re.IGNORECASE)) for token in FORBIDDEN]
-    for path in iter_release_files(root, paths):
+    release_files = list(iter_release_files(root, paths))
+    release_texts: dict[Path, str] = {}
+    release_macro_names = set()
+    release_macro_definitions: dict[str, list[str]] = {}
+    for release_path in release_files:
+        try:
+            release_text = release_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        release_texts[release_path] = release_text
+        release_macro_names.update(re.findall(
+            rf"(?m)^\s*{PP_DIRECTIVE}\s*define\s+({C_IDENTIFIER})",
+            strip_c_comments(release_text),
+        ))
+        if release_path.suffix.casefold() not in (".c", ".h", ".inc"):
+            continue
+        for name, replacement in re.findall(
+                rf"(?m)^\s*{PP_DIRECTIVE}\s*define\s+({C_IDENTIFIER})(?:\([^\r\n)]*\))?[ \t]+([^\r\n]+?)\s*$",
+                strip_c_comments(release_text)):
+            release_macro_definitions.setdefault(name, []).append(replacement)
+        for name in re.findall(rf"(?m)^\s*{PP_DIRECTIVE}\s*undef\s+({C_IDENTIFIER})",
+                               strip_c_comments(release_text)):
+            if name in CANONICAL_MACRO_DEFINITIONS:
+                release_macro_definitions.setdefault(name, []).append("<undef>")
+    for path in release_files:
         try:
             lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError as exc:
@@ -280,6 +429,11 @@ def scan(root: Path, paths: tuple[str, ...] = DEFAULT_PATHS):
                 if pattern.search(line):
                     findings.append((path, number, token, line.strip()))
         relative = path.relative_to(root).as_posix()
+        expected_file_digest = CANONICAL_IDENTITY_FILE_SHA256.get(relative)
+        if (expected_file_digest is not None and canonical_file_digest(
+                release_texts.get(path, ""), relative) != expected_file_digest):
+            findings.append((path, 0, "<identity-service>",
+                             "noncanonical identity dependency; manual review required"))
         if relative in IDENTITY_CONSUMERS:
             for terminal_id in fixed_identity_findings("\n".join(lines)):
                 if terminal_id not in IDENTITY_LITERAL_ALLOWLIST:
@@ -291,18 +445,20 @@ def scan(root: Path, paths: tuple[str, ...] = DEFAULT_PATHS):
                 if body is None or service_pattern.search(body) is None:
                     findings.append((path, 0, "<identity-service>",
                                      f"required call missing from {function_name}()"))
-                elif output_symbol is not None:
-                    residual = body
-                    for allowed_use in allowed_uses:
-                        residual = allowed_use.sub("", residual)
-                    if re.search(rf"\b{re.escape(output_symbol)}\b", residual):
-                        findings.append((path, 0, "<identity-service>",
-                                         f"unapproved {output_symbol} data flow in {function_name}()"))
-                    else:
-                        aliases = c_object_aliases("\n".join(lines), output_symbol)
-                        if any(re.search(rf"\b{re.escape(alias)}\b", residual) for alias in aliases):
+                else:
+                    reason = canonical_identity_consumer("\n".join(lines), relative,
+                                                         function_name, body,
+                                                         release_macro_names,
+                                                         release_macro_definitions)
+                    if reason is not None:
+                        findings.append((path, 0, "<identity-service>", reason))
+                    elif output_symbol is not None:
+                        residual = body
+                        for allowed_use in allowed_uses:
+                            residual = allowed_use.sub("", residual)
+                        if re.search(rf"\b{re.escape(output_symbol)}\b", residual):
                             findings.append((path, 0, "<identity-service>",
-                                             f"unapproved alias data flow in {function_name}()"))
+                                             f"unapproved {output_symbol} data flow in {function_name}()"))
         if path.name.casefold() == "gen_version.ps1" and not generated_version_is_target("\n".join(lines)):
             findings.append((path, 0, "<target-version>", f"expected {TARGET_VERSION}"))
         if relative == "include/config.h" and not c_define_is_target("\n".join(lines), "FW_VERSION_STR"):
