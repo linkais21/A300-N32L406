@@ -362,6 +362,100 @@ static bool prepare_pid(const f39_request_t *request,
     return true;
 }
 
+/* Apply one already parsed configuration operation to a candidate copy. */
+static bool prepare_operation(const f39_request_t *request,
+                              device_config_t *candidate, uint32_t *effects)
+{
+    switch (request->operation) {
+    case F39_OPERATION_IP:
+        return prepare_ip(request, candidate, effects);
+    case F39_OPERATION_FIP:
+        return prepare_fip(request, candidate, effects);
+    case F39_OPERATION_FREQ:
+        return prepare_freq(request, candidate, effects);
+    case F39_OPERATION_HBT:
+        return prepare_hbt(request, candidate);
+    case F39_OPERATION_MODEL:
+        return prepare_model(request, candidate, effects);
+    case F39_OPERATION_SPEED:
+        return prepare_speed(request, candidate);
+    case F39_OPERATION_APN:
+        return prepare_apn(request, candidate, effects);
+    case F39_OPERATION_GPSDUP:
+        return prepare_gpsdup(request, candidate);
+    case F39_OPERATION_MLG:
+        return prepare_mileage(request, candidate);
+    case F39_OPERATION_CAR:
+        return prepare_car(request, candidate);
+    case F39_OPERATION_GPSBDS:
+        return prepare_gpsbds(request, candidate, effects);
+    case F39_OPERATION_GMTSET:
+        return prepare_gmt(request, candidate);
+    default:
+        return false;
+    }
+}
+
+static bool is_dualset_operation(f39_operation_t operation)
+{
+    switch (operation) {
+    case F39_OPERATION_IP:
+    case F39_OPERATION_FIP:
+    case F39_OPERATION_FREQ:
+    case F39_OPERATION_HBT:
+    case F39_OPERATION_MODEL:
+    case F39_OPERATION_SPEED:
+    case F39_OPERATION_APN:
+    case F39_OPERATION_GPSDUP:
+    case F39_OPERATION_MLG:
+    case F39_OPERATION_CAR:
+    case F39_OPERATION_GPSBDS:
+    case F39_OPERATION_GMTSET:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool prepare_dualset(const f39_request_t *request,
+                            device_config_t *candidate, uint32_t *effects)
+{
+    bool seen[F39_OPERATION_GMTSET + 1U] = { false };
+    f39_operation_t operations[F39_MAX_DUALSET_ITEMS];
+    uint8_t i;
+
+    if (request->dualset_count == 0U ||
+        request->dualset_count > F39_MAX_DUALSET_ITEMS) {
+        return false;
+    }
+
+    /* Parse and authorize the complete set before changing the candidate. */
+    for (i = 0U; i < request->dualset_count; ++i) {
+        f39_request_t item;
+        const f39_argument_t *span = &request->dualset_items[i];
+        if ((uint32_t)span->offset + span->len > request->raw_len ||
+            f39_parse(&request->raw[span->offset], span->len, &item) !=
+                F39_RESULT_OK ||
+            !is_dualset_operation(item.operation) ||
+            seen[item.operation]) {
+            return false;
+        }
+        operations[i] = item.operation;
+        seen[item.operation] = true;
+    }
+    for (i = 0U; i < request->dualset_count; ++i) {
+        f39_request_t item;
+        const f39_argument_t *span = &request->dualset_items[i];
+        if (f39_parse(&request->raw[span->offset], span->len, &item) !=
+                F39_RESULT_OK ||
+            item.operation != operations[i] ||
+            !prepare_operation(&item, candidate, effects)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void f39_transaction_init(f39_transaction_t *transaction,
                           device_config_t *live,
                           f39_persist_config_fn persist,
@@ -390,37 +484,18 @@ bool f39_prepare_config(const f39_request_t *request,
         return false;
     }
     transaction->candidate = *current;
-    switch (request->operation) {
-    case F39_OPERATION_IP:
-        valid = prepare_ip(request, &transaction->candidate, &transaction->effects); break;
-    case F39_OPERATION_FIP:
-        valid = prepare_fip(request, &transaction->candidate, &transaction->effects); break;
-    case F39_OPERATION_FREQ:
-        valid = prepare_freq(request, &transaction->candidate, &transaction->effects); break;
-    case F39_OPERATION_HBT:
-        valid = prepare_hbt(request, &transaction->candidate); break;
-    case F39_OPERATION_MODEL:
-        valid = prepare_model(request, &transaction->candidate, &transaction->effects); break;
-    case F39_OPERATION_SPEED:
-        valid = prepare_speed(request, &transaction->candidate); break;
-    case F39_OPERATION_APN:
-        valid = prepare_apn(request, &transaction->candidate, &transaction->effects); break;
-    case F39_OPERATION_GPSDUP:
-        valid = prepare_gpsdup(request, &transaction->candidate); break;
-    case F39_OPERATION_MLG:
-        valid = prepare_mileage(request, &transaction->candidate); break;
-    case F39_OPERATION_CAR:
-        valid = prepare_car(request, &transaction->candidate); break;
-    case F39_OPERATION_GPSBDS:
-        valid = prepare_gpsbds(request, &transaction->candidate, &transaction->effects); break;
-    case F39_OPERATION_GMTSET:
-        valid = prepare_gmt(request, &transaction->candidate); break;
-    case F39_OPERATION_PID:
-        valid = prepare_pid(request, &transaction->candidate, &transaction->effects); break;
-    default:
-        valid = false; break;
+    if (request->operation == F39_OPERATION_DUALSET) {
+        valid = prepare_dualset(request, &transaction->candidate,
+                                &transaction->effects);
+    } else if (request->operation == F39_OPERATION_PID) {
+        valid = prepare_pid(request, &transaction->candidate,
+                            &transaction->effects);
+    } else {
+        valid = prepare_operation(request, &transaction->candidate,
+                                  &transaction->effects);
     }
     if (!valid) {
+        transaction->candidate = *current;
         transaction->effects = F39_EFFECT_NONE;
         return false;
     }
@@ -437,6 +512,7 @@ f39_result_t f39_commit_config(f39_transaction_t *transaction)
     transaction->prepared = false;
     if (!transaction->persist(&transaction->candidate,
                               transaction->persist_context)) {
+        transaction->effects = F39_EFFECT_NONE;
         return F39_RESULT_INVALID;
     }
     *transaction->live = transaction->candidate;
