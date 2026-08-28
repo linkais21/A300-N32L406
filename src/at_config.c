@@ -334,7 +334,7 @@ bool at_config_execute_sms(const char *sender, const uint8_t *text, uint16_t len
     if (reply.len == 0U || reply.len >= sizeof response) return false;
     memcpy(response, reply.data, reply.len);
     response[reply.len] = '\0';
-    if (s_sms_send(sender, response, s_f39_platform.context) != 0) return false;
+    if (s_sms_send(sender, response, s_f39_platform.context) != 0) { dbg_printf("[SMS] reply handoff failed for %s\r\n", sender); return false; }
     if (result == F39_RESULT_OK && reply.reset_pending) {
         if (s_f39_uses_defaults) {
             s_reset_waiting_handoff = true;

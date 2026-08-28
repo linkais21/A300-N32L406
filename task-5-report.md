@@ -22,3 +22,9 @@ Verification (`REQUIRE_GCC=1`): end-to-end, SMS ingress/whitelist/boundary, pars
 - Changed modem `CNMI` to `2,2` so direct `+CMT` URCs feed the existing ingress FIFO.
 - RESET handoff now waits for actual modem send completion before scheduling reset.
 - Default `PARAM` binding refreshes ACC from the PA3 input; e2e covers default transport, busy/failure and reset handoff.
+
+## Re-review fix round 1
+
+- CMGS TX now uses a serialized, READY-gated state machine with bounded TXDE/TXC waits and watchdog reloads.
+- Reset cancels in-flight SMS state and reports failed handoff; prompt and result parsing are scoped to CMGS context (`>` at line start, `+CMGS:`/`+CMS ERROR:` only).
+- Non-RESET handoff failures emit bounded diagnostics; production default remains non-blocking.

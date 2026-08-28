@@ -48,8 +48,28 @@ static sms_tx_state_t s_sms_tx_state;
 static char s_sms_phone[20];
 static char s_sms_text[192];
 static bool s_sms_prompt;
+static bool s_sms_prompt_line_start;
 static uint32_t s_sms_deadline_ms;
+typedef enum { AT_OWNER_NONE, AT_OWNER_BLOCKING, AT_OWNER_SMS } at_owner_t;
+static at_owner_t s_at_owner;
 static void sms_tx_process(void);
+static bool sms_tx_send(const uint8_t *data, uint16_t len)
+{
+    uint32_t deadline = TICK_MS() + 100U;
+    uint16_t i;
+    for (i = 0U; i < len; ++i) {
+        while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXDE) == RESET) {
+            IWDG_ReloadKey();
+            if ((int32_t)(TICK_MS() - deadline) >= 0) return false;
+        }
+        USART_SendData(EC800M_UART, data[i]);
+    }
+    while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXC) == RESET) {
+        IWDG_ReloadKey();
+        if ((int32_t)(TICK_MS() - deadline) >= 0) return false;
+    }
+    return true;
+}
 
 /* ── RX init: DMA is configured in hw_init.c; only reset the read pointer here ─────────── */
 static void rx_irq_init(void)
@@ -94,6 +114,8 @@ static uint16_t s_at_resp_len = 0;  /* actual byte count (including \0) */
 static bool at_send_wait(const char *cmd, const char *expect,
                           uint32_t timeout_ms)
 {
+    if (s_at_owner != AT_OWNER_NONE) return false;
+    s_at_owner = AT_OWNER_BLOCKING;
     memset(s_at_resp, 0, sizeof(s_at_resp));
     s_at_resp_len = 0;
 
@@ -124,9 +146,10 @@ static bool at_send_wait(const char *cmd, const char *expect,
         }
         s_at_resp_len = resp_pos;
         s_at_resp[resp_pos] = '\0';
-        if (expect[0] && strstr(s_at_resp, expect)) return true;
-        if (strstr(s_at_resp, "ERROR")) return false;
+        if (expect[0] && strstr(s_at_resp, expect)) { s_at_owner = AT_OWNER_NONE; return true; }
+        if (strstr(s_at_resp, "ERROR")) { s_at_owner = AT_OWNER_NONE; return false; }
     }
+    s_at_owner = AT_OWNER_NONE;
     return false;
 }
 
@@ -187,6 +210,7 @@ void ec800m_power_off(void)
 
 void ec800m_reset(void)
 {
+    if (s_sms_tx_state != SMS_TX_IDLE) { s_sms_tx_state = SMS_TX_IDLE; s_sms_prompt = false; s_at_owner = AT_OWNER_NONE; sms_send_complete(false); }
     ec800m_power_off();
     delay_ms(1000);
     ec800m_power_on();
@@ -319,11 +343,11 @@ static void process_urc(const char *line)
     /* +QIOPEN: ch,err */
     int qiopen_ch, qiopen_err;
     sms_process_urc(line);
-    if (s_sms_tx_state == SMS_TX_WAIT_RESULT && strstr(line, "+CMGS:")) {
-        s_sms_tx_state = SMS_TX_IDLE;
-        sms_send_complete(true);
-    } else if (s_sms_tx_state != SMS_TX_IDLE && strstr(line, "ERROR")) {
-        s_sms_tx_state = SMS_TX_IDLE;
+    if (s_at_owner == AT_OWNER_SMS && s_sms_tx_state == SMS_TX_WAIT_RESULT && (strncmp(line, "+CMGS:", 6) == 0 || strncmp(line, "+CMS ERROR:", 11) == 0)) {
+        s_sms_tx_state = SMS_TX_IDLE; s_at_owner = AT_OWNER_NONE;
+        sms_send_complete(strncmp(line, "+CMGS:", 6) == 0);
+    } else if (s_sms_tx_state != SMS_TX_IDLE && strncmp(line, "+CMS ERROR:", 11) == 0) {
+        s_sms_tx_state = SMS_TX_IDLE; s_at_owner = AT_OWNER_NONE;
         sms_send_complete(false);
     }
     if (sscanf(line, "+QIOPEN: %d,%d", &qiopen_ch, &qiopen_err) == 2
@@ -398,13 +422,14 @@ static void drain_rx(void)
 #if EC800M_RX_ECHO
         dbg_putchar(c);
 #endif
-        if (c == '>' && s_sms_tx_state == SMS_TX_WAIT_PROMPT) s_sms_prompt = true;
+        if (c == '>' && s_sms_tx_state == SMS_TX_WAIT_PROMPT && s_line_len == 0U && s_sms_prompt_line_start) s_sms_prompt = true;
         if (c == '\r') continue;
         if (c == '\n') {
             s_line_buf[s_line_len] = '\0';
             if (s_line_len > 0) process_urc(s_line_buf);
-            s_line_len = 0;
+            s_line_len = 0; s_sms_prompt_line_start = true;
         } else {
+            if (c != ' ' && c != '>') s_sms_prompt_line_start = false;
             if (s_line_len < AT_LINE_MAX - 1)
                 s_line_buf[s_line_len++] = c;
         }
@@ -466,17 +491,19 @@ bool ec800m_is_ready(void)            { return s_state == EC800M_STATE_READY; }
 static void sms_tx_process(void)
 {
     char command[48];
+    if (!ec800m_is_ready()) return;
     if (s_sms_tx_state == SMS_TX_QUEUED) {
+        if (s_at_owner != AT_OWNER_NONE) return;
+        s_at_owner = AT_OWNER_SMS;
         (void)snprintf(command, sizeof command, "AT+CMGS=\"%s\"", s_sms_phone);
-        usart_send_str(command); usart_send_str("\r\n");
-        s_sms_prompt = false; s_sms_tx_state = SMS_TX_WAIT_PROMPT; s_sms_deadline_ms = TICK_MS() + 5000U;
+        if (!sms_tx_send((const uint8_t *)command, (uint16_t)strlen(command)) || !sms_tx_send((const uint8_t *)"\r\n",2U)) { s_sms_tx_state=SMS_TX_IDLE; s_at_owner=AT_OWNER_NONE; sms_send_complete(false); return; }
+        s_sms_prompt = false; s_sms_prompt_line_start = true; s_sms_tx_state = SMS_TX_WAIT_PROMPT; s_sms_deadline_ms = TICK_MS() + 5000U;
     } else if (s_sms_tx_state == SMS_TX_WAIT_PROMPT && s_sms_prompt) {
-        usart_send_buf((const uint8_t *)s_sms_text, (uint16_t)strlen(s_sms_text));
-        usart_send_buf((const uint8_t *)"\x1A", 1U);
+        if (!sms_tx_send((const uint8_t *)s_sms_text, (uint16_t)strlen(s_sms_text)) || !sms_tx_send((const uint8_t *)"\x1A", 1U)) { s_sms_tx_state=SMS_TX_IDLE; s_at_owner=AT_OWNER_NONE; sms_send_complete(false); return; }
         s_sms_tx_state = SMS_TX_WAIT_RESULT; s_sms_deadline_ms = TICK_MS() + 30000U;
     } else if (s_sms_tx_state != SMS_TX_IDLE && s_sms_tx_state != SMS_TX_QUEUED &&
                (int32_t)(TICK_MS() - s_sms_deadline_ms) >= 0) {
-        s_sms_tx_state = SMS_TX_IDLE;
+        s_sms_tx_state = SMS_TX_IDLE; s_at_owner = AT_OWNER_NONE;
         sms_send_complete(false);
     }
 }
