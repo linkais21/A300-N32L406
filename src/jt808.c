@@ -11,6 +11,8 @@
 #include "flash_config.h"
 #include "tcp_manager.h"
 #include "terminal_identity.h"
+#include "blind_zone.h"
+#include "blind_zone_replay.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -250,7 +252,7 @@ int jt808_send_heartbeat(void)
     return send_frame(&f);
 }
 
-int jt808_send_location(void)
+static uint16_t encode_location_body(uint8_t body[BLIND_ZONE_LOCATION_MAX])
 {
     const gps_data_t *g = gps_get_data();
     uint32_t alm = s_alarm_flags;
@@ -264,8 +266,6 @@ int jt808_send_location(void)
     if (g->lat < 0) status |= LOC_FLAG_SOUTH_LAT;
     if (g->fix_quality > 0) status |= LOC_FLAG_GPS_FIXED;
 
-    frame_t f; frame_init(&f);
-
     uint32_t lat_deg = (uint32_t)(fabs(g->lat) * 1e6);
     uint32_t lon_deg = (uint32_t)(fabs(g->lon) * 1e6);
     uint16_t speed   = (uint16_t)(g->speed_kmh * 10);
@@ -273,7 +273,6 @@ int jt808_send_location(void)
     uint16_t alt     = (uint16_t)g->altitude_m;
 
     /* 强制字段(28字节) + 附加项0x31卫星颗数(3字节) + 附加项0x30信号强度(3字节) */
-    uint8_t body[34];
     uint16_t p = 0;
     body[p++]=(alm>>24); body[p++]=(alm>>16); body[p++]=(alm>>8); body[p++]=alm;
     body[p++]=(status>>24); body[p++]=(status>>16); body[p++]=(status>>8); body[p++]=status;
@@ -315,11 +314,45 @@ int jt808_send_location(void)
     body[p++] = 0x01;
     body[p++] = (uint8_t)ec800m_get_csq();
 
-    build_header(&f, MSG_LOCATION_REPORT, p);
-    frame_bytes(&f, body, p);
+    return p;
+}
 
-    s_alarm_flags = 0;
-    return send_frame(&f);
+int jt808_send_location(void)
+{
+    blind_zone_record_t record;
+    frame_t f;
+    int result = -1;
+
+    record.length = (uint8_t)encode_location_body(record.location);
+    if (jt808_is_online()) {
+        frame_init(&f);
+        build_header(&f, MSG_LOCATION_REPORT, record.length);
+        frame_bytes(&f, record.location, record.length);
+        result = send_frame(&f);
+        if (result == 0) {
+            s_alarm_flags = 0;
+            return 0;
+        }
+    }
+
+    if (blind_zone_append(&record) == BLIND_ZONE_OK)
+        s_alarm_flags = 0;
+    return result;
+}
+
+static void process_location_timer(uint32_t now)
+{
+    const gps_data_t *g = gps_get_data();
+    uint16_t interval_s = s_cfg.report_stopped_s;
+    if (g->valid) {
+        interval_s = (g->speed_kmh < 2.0f)
+                     ? s_cfg.report_stopped_s
+                     : s_cfg.report_moving_s;
+    }
+    if (now - s_last_location_ms > (uint32_t)interval_s * 1000U) {
+        (void)jt808_send_location();
+        s_last_location_ms = now;
+    }
 }
 
 int jt808_send_general_resp(uint16_t resp_sn, uint16_t resp_id, uint8_t result)
@@ -341,6 +374,20 @@ int jt808_send_raw(uint16_t msg_id, uint16_t resp_sn,
     frame_t f; frame_init(&f);
     build_header(&f, msg_id, blen);
     if (blen) frame_bytes(&f, body, blen);
+    return send_frame(&f);
+}
+
+int jt808_send_raw_tracked(uint16_t msg_id, const uint8_t *body,
+                           uint16_t blen, uint16_t *serial_out)
+{
+    frame_t f;
+    if (serial_out == NULL || blen > sizeof(f.buf) - 12U ||
+        (blen != 0U && body == NULL))
+        return -1;
+    frame_init(&f);
+    build_header(&f, msg_id, blen);
+    *serial_out = s_msg_sn;
+    if (blen != 0U) frame_bytes(&f, body, blen);
     return send_frame(&f);
 }
 
@@ -373,9 +420,15 @@ static void process_frame(const uint8_t *raw, uint16_t raw_len)
     uint16_t body_len   = body_prop & 0x03FF;
     uint16_t serial_no  = ((uint16_t)frame[10] << 8) | frame[11];
     const uint8_t *body = &frame[12];
+    if ((body_prop & 0x2000U) != 0U || body_len != flen - 13U) return;
 
     switch (msg_id) {
     case MSG_PLATFORM_GENERAL_RESP:
+        if (body_len == 5U) {
+            uint16_t reply_serial = ((uint16_t)body[0] << 8) | body[1];
+            uint16_t reply_msg_id = ((uint16_t)body[2] << 8) | body[3];
+            blind_zone_replay_on_general_ack(reply_serial, reply_msg_id, body[4]);
+        }
         break;
 
     case MSG_TERMINAL_REGISTER_RESP:
@@ -451,6 +504,11 @@ static void process_frame(const uint8_t *raw, uint16_t raw_len)
     }
 }
 
+bool jt808_is_online(void)
+{
+    return s_reg == REG_STATE_ONLINE && tcp_manager_is_online();
+}
+
 /* ── Called from EC800M receive callback ─────────────────────────────────── */
 void jt808_on_recv(uint8_t ch, const uint8_t *data, uint16_t len)
 {
@@ -483,6 +541,7 @@ void jt808_init(const jt808_terminal_t *info)
     s_registration_response_active = false;
     s_identity_log_ms = 0U;
     s_identity_logged = false;
+    blind_zone_replay_reset();
     /* restore auth code from flash so reconnects skip re-registration */
     if (info->auth_code[0])
         strncpy(s_cfg.auth_code, info->auth_code, sizeof(s_cfg.auth_code) - 1);
@@ -491,9 +550,9 @@ void jt808_init(const jt808_terminal_t *info)
 
 void jt808_process(void)
 {
-    if (!ec800m_is_ready()) return;
-
     uint32_t now = TICK_MS();
+    process_location_timer(now);
+    if (!ec800m_is_ready()) return;
 
     /* TCP connection is managed by tcp_manager; wait for active channel. */
     s_tcp_ch = tcp_manager_active_ch();
@@ -565,18 +624,6 @@ void jt808_process(void)
         s_last_heartbeat_ms = now;
     }
 
-    /* Location report — GPS有效时按行驶/停车间隔上报，无效时按停车间隔上报 */
-    const gps_data_t *g = gps_get_data();
-    uint16_t interval_s = s_cfg.report_stopped_s;
-    if (g->valid) {
-        interval_s = (g->speed_kmh < 2.0f)
-                     ? s_cfg.report_stopped_s
-                     : s_cfg.report_moving_s;
-    }
-    if (now - s_last_location_ms > (uint32_t)interval_s * 1000) {
-        jt808_send_location();
-        s_last_location_ms = now;
-    }
 }
 
 /* ── Config accessors ─────────────────────────────────────────────────────── */

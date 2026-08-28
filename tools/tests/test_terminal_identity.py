@@ -19,6 +19,7 @@ HARNESS = r'''
 #include "terminal_identity.h"
 #include "flash_config.h"
 #include "jt808.h"
+#include "blind_zone.h"
 #include "jt808_params.h"
 #include <assert.h>
 #include <stdbool.h>
@@ -175,6 +176,7 @@ int main(void)
 
 JT808_HARNESS = r'''
 #include "jt808.h"
+#include "blind_zone.h"
 #include "flash_config.h"
 #include "gps.h"
 #include "tcp_manager.h"
@@ -194,6 +196,12 @@ static unsigned s_imei_reads;
 static unsigned s_identity_logs;
 static int s_send_result;
 static bool s_online = true;
+
+void blind_zone_replay_reset(void) {}
+void blind_zone_replay_on_general_ack(uint16_t serial, uint16_t message, uint8_t result)
+{ (void)serial; (void)message; (void)result; }
+blind_zone_result_t blind_zone_append(const blind_zone_record_t *record)
+{ (void)record; return BLIND_ZONE_BUSY; }
 
 device_config_t *cfg_get(void) { return &s_config; }
 void cfg_save(void) {}

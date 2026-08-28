@@ -119,7 +119,7 @@ bool spi_flash_write(uint32_t,const uint8_t*,uint32_t);
 bool spi_flash_erase_sector(uint32_t);
 #endif
 """, encoding="utf-8")
-        (t / "config.h").write_text("#include <stdint.h>\nextern volatile uint32_t g_tick_ms;\n#define TICK_MS() g_tick_ms\n#define SPI_FLASH_TIMEOUT_MS 2U\n", encoding="utf-8")
+        (t / "config.h").write_text("#include <stdint.h>\nextern volatile uint32_t g_tick_ms;\nuint32_t test_tick_read(void);\n#define TICK_MS() test_tick_read()\n#define SPI_FLASH_TIMEOUT_MS 2U\n", encoding="utf-8")
         (t / "ext_flash_layout.h").write_text("""#include <stdint.h>
 #include "spi_flash.h"
 typedef enum { EXT_FLASH_OWNER_NONE=0, EXT_FLASH_OWNER_OTA, EXT_FLASH_OWNER_AGNSS, EXT_FLASH_OWNER_BLIND_ZONE, EXT_FLASH_OWNER_CONFIG } ext_flash_owner_t;
@@ -137,12 +137,13 @@ void ext_flash_unlock(ext_flash_owner_t);
 #include <stdint.h>
 #include <string.h>
 #include "ext_flash_store.h"
-volatile uint32_t g_tick_ms;
+volatile uint32_t g_tick_ms; static unsigned tick_reads;
+uint32_t test_tick_read(void){++tick_reads;return g_tick_ms;}
 static int fail_write;
 bool spi_flash_read(uint32_t a,uint8_t*b,uint32_t n){ memset(b,0x5a,n); return a+n<=FLASH_TOTAL_SIZE; }
 bool spi_flash_write(uint32_t a,const uint8_t*b,uint32_t n){ (void)b; return !fail_write && a+n<=FLASH_TOTAL_SIZE; }
 bool spi_flash_erase_sector(uint32_t a){ return a<FLASH_TOTAL_SIZE && !(a%FLASH_SECTOR_SIZE); }
-int main(void){ uint8_t b[4],d[4]={1,2,3,4}; assert(ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG)); assert(!ext_flash_try_lock(EXT_FLASH_OWNER_OTA)); assert(!ext_flash_read(EXT_FLASH_OWNER_OTA,0,b,1)); assert(ext_flash_read(EXT_FLASH_OWNER_CONFIG,0,b,1)); assert(!ext_flash_erase(EXT_FLASH_OWNER_CONFIG,1,FLASH_SECTOR_SIZE)); assert(ext_flash_erase(EXT_FLASH_OWNER_CONFIG,0,FLASH_SECTOR_SIZE)); fail_write=1; assert(!ext_flash_write_verified(EXT_FLASH_OWNER_CONFIG,0,d,sizeof d)); ext_flash_unlock(EXT_FLASH_OWNER_CONFIG); assert(ext_flash_try_lock(EXT_FLASH_OWNER_OTA)); ext_flash_unlock(EXT_FLASH_OWNER_OTA); return 0;}
+int main(void){ uint8_t b[4],d[4]={1,2,3,4}; assert(ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG)); tick_reads=0; assert(!ext_flash_try_lock(EXT_FLASH_OWNER_OTA)); assert(tick_reads==0); assert(!ext_flash_read(EXT_FLASH_OWNER_OTA,0,b,1)); assert(ext_flash_read(EXT_FLASH_OWNER_CONFIG,0,b,1)); assert(!ext_flash_erase(EXT_FLASH_OWNER_CONFIG,1,FLASH_SECTOR_SIZE)); assert(ext_flash_erase(EXT_FLASH_OWNER_CONFIG,0,FLASH_SECTOR_SIZE)); fail_write=1; assert(!ext_flash_write_verified(EXT_FLASH_OWNER_CONFIG,0,d,sizeof d)); ext_flash_unlock(EXT_FLASH_OWNER_CONFIG); assert(ext_flash_try_lock(EXT_FLASH_OWNER_OTA)); ext_flash_unlock(EXT_FLASH_OWNER_OTA); return 0;}
 """, encoding="utf-8")
         exe = t / "host_test.exe"
         cmd = [cc, "-std=c99", "-I", str(t), str(ROOT / "src" / "ext_flash_store.c"), str(t / "harness.c"), "-o", str(exe)]

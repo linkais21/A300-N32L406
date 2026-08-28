@@ -15,6 +15,7 @@
 #define MSG_QUERY_TERMINAL_INFO     0x8107
 #define MSG_TERMINAL_CTRL           0x8105
 #define MSG_LOCATION_REPORT         0x0200
+#define MSG_BLIND_ZONE_BATCH        0x0704
 #define MSG_LOCATION_QUERY_RESP     0x0201
 #define MSG_LOCATION_QUERY          0x8201
 #define MSG_TEMP_LOCATION_TRACK     0x8202
@@ -67,10 +68,13 @@ int jt808_send_auth(const char *code);
 int jt808_send_heartbeat(void);
 int jt808_send_location(void);
 int jt808_send_general_resp(uint16_t resp_sn, uint16_t resp_id, uint8_t result);
+bool jt808_is_online(void);
 
 /* Send an arbitrary message body (used by jt808_params.c for 0x0104/0x0107) */
 int jt808_send_raw(uint16_t msg_id, uint16_t resp_sn,
                    const uint8_t *body, uint16_t blen);
+int jt808_send_raw_tracked(uint16_t msg_id, const uint8_t *body,
+                           uint16_t blen, uint16_t *serial_out);
 
 /* Server address management */
 void jt808_set_server(const char *ip, uint16_t port, bool is_backup);

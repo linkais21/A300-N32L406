@@ -67,6 +67,14 @@ def test_agnss_alignment_and_exact_slots():
     assert tail_addr + tail_size == val("EXT_FLASH_AGNSS_ADDR") + val("EXT_FLASH_AGNSS_SIZE")
     assert tail_addr + tail_size <= 2 * 1024 * 1024
 
+def test_blind_zone_fixed_record_layout():
+    assert val("EXT_FLASH_BLIND_SIZE") == 644 * 1024
+    metadata_size = 4096
+    data_size = val("EXT_FLASH_BLIND_SIZE") - metadata_size
+    assert data_size == 640 * 1024
+    assert data_size // 64 == 10240
+    assert 10000 < data_size // 64
+
 def test_layout_header_preprocesses_and_compiles():
     gcc = shutil.which("gcc")
     if not gcc:
@@ -97,5 +105,6 @@ if __name__ == "__main__":
     test_timeout_and_owner_contracts_present()
     test_config_layout_and_owner_enforcement()
     test_agnss_alignment_and_exact_slots()
+    test_blind_zone_fixed_record_layout()
     test_layout_header_preprocesses_and_compiles()
     print("test_ext_flash_layout: PASS")

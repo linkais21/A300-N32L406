@@ -28,6 +28,8 @@ C_SRCS := \
     src/adc_monitor.c    \
     src/spi_flash.c      \
     src/ext_flash_store.c \
+    src/blind_zone.c     \
+    src/blind_zone_replay.c \
     src/i2c_accel.c      \
     src/relay.c          \
     src/flash_config.c   \

@@ -113,7 +113,7 @@ TRIGRAPHS = {
     "??!": "|", "??<": "{", "??>": "}", "??-": "~",
 }
 CANONICAL_CONSUMER_SHA256 = {
-    "src/main.c": "28246074f01aea52591c88d7cc97b534d2a7e36b63e28e74e61275d1d427d861",
+    "src/main.c": "b14e80cd3234f15283f08ad476e8e651d63bfb21f81328ea95abc52a323c0b7b",
     "src/jt808.c": "9d465de0bd09fd7b89d8022cfeed284a83095ef7ed79449af13f23b2525330a4",
     "src/jt808_params.c": "2000242a482e339fef40541a46c3e2190b0bdfc9d4b79f7807322f2ab584fd0e",
     "src/terminal_identity.c": "516c0c00012ff5c27046891fc05fb206d4028705d8ebc0bb84d6f392309cf178",
@@ -123,7 +123,7 @@ CANONICAL_IDENTITY_FILE_SHA256 = {
     "include/config.h": "72653c500dbdb46a823ccb691a07948d32de933bd83561a8e1ac8d2dbf94271f",
     "include/build_version.h": "cb8e276f477eb946903af3eb1260d58f3f266e9631f55ee2fb77e08ceec2c484",
     "include/f39_reply.h": "5809ee23562052f428c5fecc385df768fa549bf7c2793632c8b98245d45ec98c",
-    "include/jt808.h": "cf4e1a15bd56b434cdfff3a39167d3e81bde3e05d8b010c87471fabb6517ee20",
+    "include/jt808.h": "4664cf4d84d6b299d966a81eb70872f8250c634016cdcdee5dc385bf0fd1ca24",
 }
 
 

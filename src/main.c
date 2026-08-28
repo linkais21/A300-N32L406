@@ -16,6 +16,8 @@
 #include "geofence.h"
 #include "fota.h"
 #include "agnss_manager.h"
+#include "blind_zone.h"
+#include "blind_zone_replay.h"
 #include "agnss_vendor.h"
 #include "peripherals.h"
 #include "n32l40x.h"
@@ -211,6 +213,7 @@ int main(void)
     /* ── 3. Flash config ─────────────────────────────────────────────────── */
     spi_flash_init();
     cfg_init();
+    blind_zone_init();
     device_config_t *c = cfg_get();
     dbg_printf("[CFG] server=%s:%u hb=%us plate=%s\r\n",
                c->server_ip, c->server_port, c->heartbeat_s, c->plate_no);
@@ -270,6 +273,8 @@ int main(void)
         adc_monitor_process();
         geofence_process();
         fota_process();
+        blind_zone_recovery_process();
+        blind_zone_replay_process();
         agnss_process();
         pwr_process();
         at_config_process();
