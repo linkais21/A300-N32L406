@@ -102,11 +102,19 @@ static int csip_feed(const uint8_t *data, uint32_t len)
 
 int agnss_zhongkewei_request(const agnss_source_t *src, const gps_context_t *ctx)
 {
-    device_config_t *cfg=cfg_get(); char req[256];
     if (src && src->data && src->len) {
         /* Offline CSIP injection is receiver data and needs no server credential. */
         return csip_feed(src->data, src->len);
     }
+    /* agnss_manager uses an empty source as the bounded-storage flush. A
+     * partial frame is not a successful injection and must not start I/O. */
+    if (s_rx_len) { s_rx_len = 0; return -1; }
+    return 0;
+}
+
+int zhongkewei_request_assistance(const gps_context_t *ctx)
+{
+    device_config_t *cfg=cfg_get(); char req[256];
     /* The receiver specification defines CSIP only. This server request is
      * retained for transport compatibility but remains protocol-unverified. */
     if (!cfg || zhongkewei_build_request(req,sizeof req,cfg->agnss_user,cfg->agnss_pwd,ctx)<0) return -1;

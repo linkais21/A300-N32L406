@@ -36,6 +36,7 @@ typedef struct { const uint8_t *data; uint32_t len; } agnss_source_t;
 typedef enum { ZK_RESP_MALFORMED=-1, ZK_RESP_INCOMPLETE=0, ZK_RESP_OK=1 } zhongkewei_resp_t;
 int agnss_huada_inject(const agnss_source_t *, const gps_context_t *);
 int agnss_zhongkewei_request(const agnss_source_t *, const gps_context_t *);
+int zhongkewei_request_assistance(const gps_context_t *);
 zhongkewei_resp_t zhongkewei_parse_csip_frame(const uint8_t *, uint32_t, const uint8_t **, uint16_t *);
 #endif
 """,
@@ -79,9 +80,15 @@ def _write_harness(directory):
 static int fail_uart;
 static unsigned gps_calls;
 static uint32_t gps_bytes;
+static uint8_t gps_last[128];
+static uint32_t gps_last_len;
 static gps_data_t g = {0};
 static device_config_t c = {"u", "p"};
-int gps_send_raw(const uint8_t *p, uint32_t n) { (void)p; ++gps_calls; gps_bytes += n; return fail_uart ? -1 : 0; }
+int gps_send_raw(const uint8_t *p, uint32_t n) {
+    assert(n <= sizeof gps_last);
+    memcpy(gps_last, p, n); gps_last_len = n;
+    ++gps_calls; gps_bytes += n; return fail_uart ? -1 : 0;
+}
 const gps_data_t *gps_get_data(void) { return &g; }
 fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
 bool ec800m_is_ready(void) { return true; }
@@ -170,6 +177,7 @@ int main(void) {
           &(agnss_source_t){response_a + 5, n_a - 5}, &(gps_context_t){0}) == 0);
       assert(gps_calls == 5);
       assert(gps_bytes == 4 * 8 + n_a);
+      assert(gps_last_len == n_a && memcmp(gps_last, response_a, n_a) == 0);
 
       /* Leading garbage resynchronizes; concatenated complete frames forward once each. */
       concat[0] = 0x11; concat[1] = 0xba; concat[2] = 0x55;
@@ -182,6 +190,7 @@ int main(void) {
       assert(agnss_zhongkewei_request(&(agnss_source_t){bad, n_a}, &(gps_context_t){0}) < 0);
       assert(agnss_zhongkewei_request(&(agnss_source_t){response_a, n_a}, &(gps_context_t){0}) == 0);
       assert(gps_calls == 8);
+      assert(gps_last_len == n_a && memcmp(gps_last, response_a, n_a) == 0);
       make_csip(bad, 0x06, 0x00, payload_a, sizeof payload_a);
       assert(agnss_zhongkewei_request(&(agnss_source_t){bad, n_a}, &(gps_context_t){0}) < 0);
       make_csip(bad, 0x08, 0x02, payload_b, sizeof payload_b);
@@ -199,6 +208,16 @@ int main(void) {
       fail_uart = 0;
       assert(agnss_zhongkewei_request(&(agnss_source_t){response, n}, &(gps_context_t){0}) == 0);
       assert(gps_calls == 10);
+    }
+    {
+      static const uint8_t payload[20] = {0}; uint8_t response[64]; uint16_t n = make_csip(response, 0x08, 0x00, payload, sizeof payload);
+      /* Storage flush distinguishes completed streams from truncated frames,
+       * and must never use the unverified network-request path. */
+      assert(agnss_zhongkewei_request(&(agnss_source_t){response, 7}, &(gps_context_t){0}) == 0);
+      assert(agnss_zhongkewei_request(NULL, &(gps_context_t){0}) < 0);
+      assert(agnss_zhongkewei_request(NULL, &(gps_context_t){0}) == 0);
+      assert(agnss_zhongkewei_request(&(agnss_source_t){response, n}, &(gps_context_t){0}) == 0);
+      assert(gps_last_len == n && memcmp(gps_last, response, n) == 0);
     }
     return 0;
 }
