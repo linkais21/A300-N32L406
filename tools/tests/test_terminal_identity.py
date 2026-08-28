@@ -193,6 +193,7 @@ static unsigned s_send_count;
 static unsigned s_imei_reads;
 static unsigned s_identity_logs;
 static int s_send_result;
+static bool s_online = true;
 
 device_config_t *cfg_get(void) { return &s_config; }
 void cfg_save(void) {}
@@ -216,8 +217,11 @@ int ec800m_tcp_send(uint8_t channel, const uint8_t *data, uint16_t length)
     return s_send_result;
 }
 int ec800m_get_csq(void) { return 0; }
-bool tcp_manager_is_online(void) { return true; }
-bool tcp_manager_ch_online(uint8_t channel) { return channel == EC800M_CH_MAIN; }
+bool tcp_manager_is_online(void) { return s_online; }
+bool tcp_manager_ch_online(uint8_t channel) { return s_online && channel == EC800M_CH_MAIN; }
+uint8_t tcp_manager_active_ch(void) { return EC800M_CH_MAIN; }
+tcp_state_t ec800m_tcp_state(uint8_t channel)
+{ (void)channel; return s_online ? TCP_STATE_OPEN : TCP_STATE_CLOSED; }
 const gps_data_t *gps_get_data(void) { static gps_data_t data; return &data; }
 bool i2c_accel_is_moving(void) { return false; }
 int GPIO_ReadInputDataBit(void *port, unsigned pin) { (void)port; (void)pin; return 0; }
@@ -256,6 +260,36 @@ static void reset_capture(void)
     s_send_count = 0U;
     s_imei_reads = 0U;
     s_send_result = 0;
+    s_online = true;
+}
+
+static uint16_t sent_serial(void)
+{
+    uint8_t frame[1024];
+    uint16_t length = unescape(frame);
+    assert(length >= 13U);
+    return (uint16_t)(((uint16_t)frame[10] << 8) | frame[11]);
+}
+
+static void inject_register_response_result(uint16_t request_serial, uint8_t result)
+{
+    uint8_t frame[18] = {
+        0x7eU, 0x81U, 0x00U, 0x00U, 0x03U,
+        0U, 0U, 0U, 0U, 0U, 0U,
+        0x12U, 0x34U,
+        (uint8_t)(request_serial >> 8), (uint8_t)request_serial, result,
+        0U, 0x7eU
+    };
+    uint8_t checksum_value = 0U;
+    uint16_t i;
+    for (i = 1U; i < 16U; ++i) checksum_value ^= frame[i];
+    frame[16] = checksum_value;
+    jt808_on_recv(EC800M_CH_MAIN, frame, sizeof(frame));
+}
+
+static void inject_register_response(uint16_t request_serial)
+{
+    inject_register_response_result(request_serial, 0U);
 }
 
 int main(void)
@@ -300,6 +334,62 @@ int main(void)
     assert(s_send_count == 1U && frame[0] == 0x01U && frame[1] == 0x00U);
     assert(memcmp(frame + 41U, "3210987", 7U) == 0);
 
+    /* A registration response from before a TCP disconnect is stale. */
+    {
+        uint16_t disconnected_serial = sent_serial();
+        s_online = false;
+        jt808_process();
+        s_online = true;
+        reset_capture();
+        inject_register_response(disconnected_serial);
+        assert(s_send_count == 0U);
+        jt808_process();
+        assert(s_send_count == 1U);
+        length = unescape(frame);
+        assert(frame[0] == 0x01U && frame[1] == 0x00U);
+        assert(memcmp(frame + 41U, "3210987", 7U) == 0);
+    }
+
+    /* Registration rejection must not lose forced re-registration on reconnect. */
+    {
+        uint16_t rejected_serial = sent_serial();
+        reset_capture();
+        inject_register_response_result(rejected_serial, 1U);
+        assert(s_send_count == 0U);
+        s_online = false;
+        jt808_process();
+        s_online = true;
+        reset_capture();
+        jt808_process();
+        assert(s_send_count == 1U);
+        length = unescape(frame);
+        assert(frame[0] == 0x01U && frame[1] == 0x00U);
+        assert(memcmp(frame + 41U, "3210987", 7U) == 0);
+    }
+
+    /* A response for the old PID must not defeat a newly requested registration. */
+    {
+        uint16_t old_serial = sent_serial();
+        strcpy(s_config.pid, "11111222222");
+        jt808_request_reregister();
+        reset_capture();
+        jt808_process();
+        assert(s_send_count == 1U);
+        length = unescape(frame);
+        assert(frame[0] == 0x01U && frame[1] == 0x00U);
+        assert(memcmp(frame + 41U, "1222222", 7U) == 0);
+        {
+            uint16_t new_serial = sent_serial();
+            reset_capture();
+            inject_register_response(old_serial);
+            assert(s_send_count == 0U);
+            inject_register_response(new_serial);
+            assert(s_send_count == 1U);
+            length = unescape(frame);
+            assert(frame[0] == 0x01U && frame[1] == 0x02U);
+        }
+    }
+
     jt808_request_reregister();
     reset_capture();
     s_send_result = -1;
@@ -337,6 +427,26 @@ int main(void)
     length = unescape(frame);
     assert(frame[0] == 0x01U && frame[1] == 0x00U);
 
+    /* Identity invalidation during a registration retry uses the same limiter. */
+    reset_capture();
+    s_identity_logs = 0U;
+    strcpy(s_config.pid, "12345678901");
+    g_tick_ms = 40000U;
+    jt808_request_reregister();
+    jt808_process();
+    assert(s_send_count == 1U);
+    {
+        uint16_t invalidated_serial = sent_serial();
+    strcpy(s_config.pid, "12345x78901");
+    g_tick_ms = 45000U; jt808_process();
+        reset_capture();
+        inject_register_response(invalidated_serial);
+        assert(s_send_count == 0U);
+    }
+    g_tick_ms = 45001U; jt808_process();
+    g_tick_ms = 50000U; jt808_process();
+    assert(s_send_count == 0U && s_identity_logs == 2U);
+
     strcpy(s_config.pid, "12345x78901");
     jt808_init(&terminal);
     reset_capture();
@@ -351,12 +461,21 @@ int main(void)
 
 
 def compiler() -> str | None:
-    return shutil.which("gcc") or shutil.which("cc")
+    found = shutil.which("gcc") or shutil.which("cc")
+    if found:
+        return found
+    base = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Packages"
+    matches = list(base.glob("BrechtSanders.WinLibs*/mingw64/bin/gcc.exe"))
+    return str(matches[0]) if matches else None
 
 
 def test_release_guard_behavior() -> None:
     fixed = 'strncpy(s_terminal.terminal_id, "T663B01", 7);\n'
     numeric = 'memcpy(terminal_id, "1234567", 7);\n'
+    split = 'memcpy(terminal_id, "123" "4567", 7);\n'
+    alpha_split = 'memcpy(terminal_id, "ABC" "1234", 7);\n'
+    byte_array = "static const char terminal_id[8] = {'1','2','3','4','5','6','7',0};\n"
+    hex_array = "static const char terminal_id[8] = {0x31,0x32,0x33,0x34,0x35,0x36,0x37,0};\n"
     info_query = 'memcpy(tid, "1234567", 7);\n'
     strcpy_form = 'strcpy(terminal_id, "1234567");\n'
     initializer = 'char terminal_id[8] = "1234567";\n'
@@ -364,6 +483,10 @@ def test_release_guard_behavior() -> None:
     centralized = 'if (terminal_identity_load(terminal_id)) send(terminal_id);\n'
     assert release_guard.fixed_identity_findings(fixed)
     assert release_guard.fixed_identity_findings(numeric)
+    assert release_guard.fixed_identity_findings(split)
+    assert release_guard.fixed_identity_findings(alpha_split)
+    assert release_guard.fixed_identity_findings(byte_array)
+    assert release_guard.fixed_identity_findings(hex_array)
     assert release_guard.fixed_identity_findings(info_query)
     assert release_guard.fixed_identity_findings(strcpy_form)
     assert release_guard.fixed_identity_findings(initializer)
@@ -383,6 +506,7 @@ def test_release_guard_behavior() -> None:
         root = Path(directory)
         for relative in (
             "src/main.c", "src/jt808.c", "src/jt808_params.c", "src/terminal_identity.c",
+            "src/f39_reply.c",
             "include/config.h", "include/build_version.h", "gen_version.ps1",
         ):
             destination = root / relative
@@ -395,6 +519,7 @@ def test_release_guard_behavior() -> None:
             "src/jt808.c": '\nstatic const char fixed_id[] = "7654321";\n',
             "src/jt808_params.c": '\nmemcpy(tid,\n "9012345", 7);\n',
             "src/terminal_identity.c": '\nmemcpy(out, "3456789", 7);\n',
+            "src/f39_reply.c": '\nmemcpy(terminal_id, "123" "4567", 7);\n',
         }
         for relative, mutation in mutations.items():
             destination = root / relative
@@ -403,6 +528,42 @@ def test_release_guard_behavior() -> None:
             findings = release_guard.scan(root)
             assert any(item[2] == "<fixed-terminal-id>" for item in findings), relative
             destination.write_text(original, encoding="utf-8")
+
+        destination = root / "src/f39_reply.c"
+        original = destination.read_text(encoding="utf-8")
+        destination.write_text(
+            original + "\nstatic const char fixed_bytes[8] = {'1','2','3','4','5','6','7',0};\n",
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<fixed-terminal-id>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+
+        destination.write_text(
+            original + "\nstatic const char fixed_hex[8] = {0x31,0x32,0x33,0x34,0x35,0x36,0x37,0};\n",
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<fixed-terminal-id>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+
+        destination.write_text(
+            original.replace("terminal_id_derive", "legacy_identity_derive"), encoding="utf-8"
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
+
+        destination.write_text(
+            original.replace(
+                "return terminal_id_derive(c->pid, imei, terminal_id);", "return false;"
+            ) + ("\nstatic bool dead_identity_call(const device_config_t *c, const char *imei, "
+                 "char terminal_id[8]) { return terminal_id_derive(c->pid, imei, terminal_id); }\n"),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<identity-service>" for item in findings)
+        destination.write_text(original, encoding="utf-8")
 
         (root / "include/config.h").write_text('#define FW_VERSION_STR "WRONG"\n', encoding="ascii")
         assert release_guard.scan(root)

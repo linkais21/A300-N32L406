@@ -1,4 +1,4 @@
-#include "jt808.h"
+﻿#include "jt808.h"
 #include "jt808_params.h"
 #include "geofence.h"
 #include "ec800m.h"
@@ -55,6 +55,12 @@ typedef enum {
 static reg_state_t s_reg = REG_STATE_IDLE;
 static bool s_force_registration;
 static uint32_t s_register_sent_ms;
+static uint32_t s_registration_generation;
+static uint32_t s_active_registration_generation;
+static uint16_t s_active_registration_sn;
+static bool s_registration_response_active;
+static uint32_t s_identity_log_ms;
+static bool s_identity_logged;
 
 static uint32_t s_last_heartbeat_ms = 0;
 static uint32_t s_last_location_ms  = 0;
@@ -155,6 +161,26 @@ static bool refresh_terminal_identity(void)
     return true;
 }
 
+static void log_identity_invalid(uint32_t now)
+{
+    if (!s_identity_logged || now - s_identity_log_ms >= 5000U) {
+        dbg_printf("[808] identity invalid\r\n");
+        s_identity_log_ms = now;
+        s_identity_logged = true;
+    }
+}
+
+static void identity_valid(void)
+{
+    s_identity_logged = false;
+}
+
+static void invalidate_registration_response(void)
+{
+    ++s_registration_generation;
+    s_registration_response_active = false;
+}
+
 /* ── Message builders ─────────────────────────────────────────────────────── */
 static int send_register_current_identity(void)
 {
@@ -181,7 +207,15 @@ static int send_register_current_identity(void)
     frame_t f; frame_init(&f);
     build_header(&f, MSG_TERMINAL_REGISTER, pos);
     frame_bytes(&f, body, pos);
-    return send_frame(&f);
+    {
+        int result = send_frame(&f);
+        if (result == 0) {
+            s_active_registration_sn = s_msg_sn;
+            s_active_registration_generation = s_registration_generation;
+            s_registration_response_active = true;
+        }
+        return result;
+    }
 }
 
 int jt808_send_register(void)
@@ -192,9 +226,11 @@ int jt808_send_register(void)
 
 void jt808_request_reregister(void)
 {
+    invalidate_registration_response();
     s_force_registration = true;
     s_reg = REG_STATE_IDLE;
     s_register_sent_ms = 0U;
+    s_registration_response_active = false;
     s_term.terminal_id[0] = '\0';
 }
 
@@ -343,10 +379,15 @@ static void process_frame(const uint8_t *raw, uint16_t raw_len)
         break;
 
     case MSG_TERMINAL_REGISTER_RESP:
-        if (body_len >= 3) {
+        if (body_len >= 3 && s_reg == REG_STATE_REGISTERING &&
+            s_registration_response_active &&
+            s_active_registration_generation == s_registration_generation &&
+            (((uint16_t)body[0] << 8) | body[1]) == s_active_registration_sn) {
             uint8_t result = body[2];
+            s_registration_response_active = false;
             dbg_printf("[808] reg_resp result=%u t=%us\r\n", result, (unsigned)(TICK_MS()/1000));
             if (result == 0) {
+                s_force_registration = false;
                 uint8_t code_len = body_len - 3;
                 if (code_len > 0 && code_len < sizeof(s_cfg.auth_code)) {
                     memcpy(s_cfg.auth_code, &body[3], code_len);
@@ -358,6 +399,7 @@ static void process_frame(const uint8_t *raw, uint16_t raw_len)
                 jt808_send_auth(s_cfg.auth_code);
                 s_reg = REG_STATE_AUTHENTICATING;
             } else if (result == 3) {
+                s_force_registration = false;
                 jt808_send_auth(s_cfg.auth_code);
                 s_reg = REG_STATE_AUTHENTICATING;
             } else {
@@ -435,6 +477,12 @@ void jt808_init(const jt808_terminal_t *info)
     s_reg = REG_STATE_IDLE;
     s_force_registration = false;
     s_register_sent_ms = 0U;
+    s_registration_generation = 1U;
+    s_active_registration_generation = 0U;
+    s_active_registration_sn = 0U;
+    s_registration_response_active = false;
+    s_identity_log_ms = 0U;
+    s_identity_logged = false;
     /* restore auth code from flash so reconnects skip re-registration */
     if (info->auth_code[0])
         strncpy(s_cfg.auth_code, info->auth_code, sizeof(s_cfg.auth_code) - 1);
@@ -450,8 +498,10 @@ void jt808_process(void)
     /* TCP connection is managed by tcp_manager; wait for active channel. */
     s_tcp_ch = tcp_manager_active_ch();
     if (ec800m_tcp_state(s_tcp_ch) != TCP_STATE_OPEN) {
-        if (s_reg == REG_STATE_ONLINE || s_reg == REG_STATE_AUTHENTICATING)
+        if (s_reg != REG_STATE_IDLE) {
+            invalidate_registration_response();
             s_reg = REG_STATE_IDLE;
+        }
         return;
     }
 
@@ -460,17 +510,11 @@ void jt808_process(void)
      * an auth code from a previous successful registration.  Only send 0x0100
      * register when no auth code is known. */
     if (s_reg == REG_STATE_IDLE) {
-        static uint32_t identity_log_ms;
-        static bool identity_logged;
         if (!refresh_terminal_identity()) {
-            if (!identity_logged || now - identity_log_ms >= 5000U) {
-                dbg_printf("[808] identity invalid\r\n");
-                identity_log_ms = now;
-                identity_logged = true;
-            }
+            log_identity_invalid(now);
             return;
         }
-        identity_logged = false;
+        identity_valid();
         if (s_cfg.auth_code[0] && !s_force_registration) {
             dbg_printf("[808] auth -> %s\r\n", s_cfg.auth_code);
             jt808_send_auth(s_cfg.auth_code);
@@ -479,7 +523,6 @@ void jt808_process(void)
             dbg_printf("[808] register\r\n");
             if (send_register_current_identity() == 0) {
                 s_reg = REG_STATE_REGISTERING;
-                s_force_registration = false;
                 s_register_sent_ms = now;
             }
         }
@@ -490,7 +533,14 @@ void jt808_process(void)
     if (s_reg == REG_STATE_REGISTERING) {
         if (now - s_register_sent_ms >= 5000U) {
             dbg_printf("[808] register retry\r\n");
-            if (jt808_send_register() != 0) {
+            if (!refresh_terminal_identity()) {
+                invalidate_registration_response();
+                log_identity_invalid(now);
+                s_register_sent_ms = now;
+                return;
+            }
+            identity_valid();
+            if (send_register_current_identity() != 0) {
                 s_register_sent_ms = now;
                 return;
             }

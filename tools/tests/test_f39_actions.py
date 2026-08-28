@@ -10,6 +10,8 @@ HARNESS = r'''
 #include "f39_reply.h"
 #include "f39_command.h"
 #include "flash_config.h"
+device_config_t *cfg_get(void){return 0;}
+void ec800m_get_imei(char *buf,uint8_t size){if(buf!=0&&size>0)buf[0]='\0';}
 typedef struct { unsigned saves, reconnects, timers, gnss, relays, resets; bool persist_ok, gps_ok; float speed; bool relay; gnss_type_t receiver; uint8_t mode; char order[8]; unsigned order_len; f39_reply_t *reply; } spy_t;
 static void mark(spy_t*s,char c){s->order[s->order_len++]=c;s->order[s->order_len]='\0';}
 static bool save(const device_config_t *c, void *p){ (void)c; spy_t*s=p; s->saves++; return s->persist_ok; }
@@ -40,7 +42,9 @@ int main(void){static const char*queries[]={"PID","IP","FIP","FREQ","HBT","MODEL
  before=c;s.persist_ok=false;{unsigned saves=s.saves;unsigned gnss_calls=s.gnss;assert(run("GPSBDS,1",&c,&s,&r)!=F39_RESULT_OK);assert(s.saves==saves+1&&s.gnss==gnss_calls&&memcmp(&c,&before,sizeof(c))==0);}s.persist_ok=true;
  {static const char*cmds[]={"FREQ,5,60","IP,x,1","GPSBDS,1","MODEL,X","MODEL,X"};unsigned i;for(i=0;i<5;i++){f39_request_t q;device_config_t x=seed();spy_t z={0};f39_reply_t rr;f39_platform_t p=platform(&x,&z);z.persist_ok=true;if(i==0)p.timer_refresh=0;if(i==1)p.network_reconnect=0;if(i==2)p.gnss_set_mode=0;if(i==3)p.jt808_reregister=0;if(i==4)p.remaining_refresh=0;assert(f39_parse((const uint8_t*)cmds[i],(uint16_t)strlen(cmds[i]),&q)==F39_RESULT_OK);assert(f39_execute(&q,&p,&rr)!=F39_RESULT_OK);assert(z.saves==0);} }
  s.resets=0;assert(run("RESET",&c,&s,&r)==F39_RESULT_OK);assert(s.resets==0);assert(r.reset_pending&&r.reset_delay_ms==F39_RESET_DELAY_MS);assert(strstr((char*)r.data,"Success!")!=0);
- { device_config_t empty=seed(); spy_t z={0}; f39_reply_t rr; empty.pid[0]='\0'; assert(run("PID",&empty,&z,&rr)==F39_RESULT_OK); assert(strstr((char*)rr.data,"PID,56789012345")!=0); }
+ { device_config_t q=seed(); spy_t z={0}; f39_reply_t rr; assert(run("PID",&q,&z,&rr)==F39_RESULT_OK); assert(strcmp((char*)rr.data,"PID,5678901=Success!\r\n")==0); assert(run("PARAM",&q,&z,&rr)==F39_RESULT_OK); assert(strstr((char*)rr.data,"P=5678901,S=")!=0); }
+ { device_config_t q=seed(); spy_t z={0}; f39_reply_t rr; q.pid[0]='\0'; assert(run("PID",&q,&z,&rr)==F39_RESULT_OK); assert(strcmp((char*)rr.data,"PID,9012345=Success!\r\n")==0); assert(run("PARAM",&q,&z,&rr)==F39_RESULT_OK); assert(strstr((char*)rr.data,"P=9012345,S=")!=0); }
+ { device_config_t q=seed(); spy_t z={0}; f39_reply_t rr; strcpy(q.pid,"12345x78901"); assert(run("PID",&q,&z,&rr)!=F39_RESULT_OK); assert(strstr((char*)rr.data,"9012345")==0); assert(run("PARAM",&q,&z,&rr)!=F39_RESULT_OK); assert(strstr((char*)rr.data,"9012345")==0); }
  { device_config_t bad=seed(); spy_t z={0}; f39_reply_t rr; memset(bad.terminal_model,'X',sizeof(bad.terminal_model)); assert(run("MODEL",&bad,&z,&rr)!=F39_RESULT_OK); }
  { device_config_t q=seed(); spy_t z={0}; f39_reply_t rr; assert(run("IP,new,8000",&q,&z,&rr)!=F39_RESULT_OK); }
  {f39_request_t q;f39_platform_t p=platform(&c,&s);static char huge[300];memset(huge,'V',sizeof(huge));assert(f39_parse((const uint8_t*)"PARAM",5,&q)==F39_RESULT_OK);p.version=huge;p.version_len=sizeof(huge);assert(f39_execute(&q,&p,&r)!=F39_RESULT_OK);assert(r.len<F39_REPLY_MAX_LENGTH);}
@@ -58,7 +62,7 @@ def main():
  if not cc: print('test_f39_actions: SKIP'); return 0
  with tempfile.TemporaryDirectory() as d:
   h=pathlib.Path(d)/'h.c'; b=pathlib.Path(d)/'h'; h.write_text(HARNESS)
-  cmd=[cc,'-std=c99','-Wall','-Wextra','-Werror','-I',str(ROOT/'include'),str(h),str(ROOT/'src/f39_command.c'),str(ROOT/'src/f39_config_adapter.c'),str(ROOT/'src/f39_reply.c'),'-o',str(b)]
+  cmd=[cc,'-std=c99','-Wall','-Wextra','-Werror','-ffunction-sections','-I',str(ROOT/'include'),str(h),str(ROOT/'src/f39_command.c'),str(ROOT/'src/f39_config_adapter.c'),str(ROOT/'src/f39_reply.c'),str(ROOT/'src/terminal_identity.c'),'-Wl,--gc-sections','-o',str(b)]
   x=subprocess.run(cmd,cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT); print(x.stdout,end='');
   if x.returncode:return x.returncode
   x=subprocess.run([str(b)],text=True)

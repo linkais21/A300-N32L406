@@ -25,8 +25,29 @@ DEFAULT_PATHS = (
 
 IDENTITY_CONSUMERS = (
     "src/main.c", "src/jt808.c", "src/jt808_params.c", "src/terminal_identity.c",
+    "src/f39_reply.c",
 )
 SEVEN_BYTE_LITERAL = re.compile(r'"([A-Za-z0-9]{7})"')
+STRING_LITERAL = re.compile(r'"([A-Za-z0-9]*)"')
+CHAR_LITERAL = re.compile(r"^'([A-Za-z0-9])'$")
+IDENTITY_LITERAL_ALLOWLIST = {"DUALSET", "invalid"}
+IDENTITY_SERVICE_REQUIREMENTS = {
+    "src/main.c": ("main", re.compile(
+        r"\bs_terminal\.terminal_id\s*\[\s*0\s*\]\s*=\s*'\\0'\s*;"
+    )),
+    "src/jt808.c": ("refresh_terminal_identity", re.compile(
+        r"terminal_identity_load\s*\(\s*terminal_id\s*\)"
+    )),
+    "src/jt808_params.c": ("jt808_params_handle_info_query", re.compile(
+        r"terminal_identity_load\s*\(\s*tid\s*\)"
+    )),
+    "src/terminal_identity.c": ("terminal_identity_load", re.compile(
+        r"return\s+terminal_id_derive\s*\(\s*config->pid\s*,\s*imei\s*,\s*out\s*\)\s*;"
+    )),
+    "src/f39_reply.c": ("device_id", re.compile(
+        r"return\s+terminal_id_derive\s*\(\s*c->pid\s*,\s*imei\s*,\s*terminal_id\s*\)\s*;"
+    )),
+}
 
 
 def strip_c_comments(text: str) -> str:
@@ -35,7 +56,72 @@ def strip_c_comments(text: str) -> str:
 
 def fixed_identity_findings(text: str):
     """Return seven-byte alphanumeric literals from an identity consumer."""
-    return [match.group(1) for match in SEVEN_BYTE_LITERAL.finditer(strip_c_comments(text))]
+    clean = strip_c_comments(text)
+    findings = [match.group(1) for match in SEVEN_BYTE_LITERAL.finditer(clean)]
+
+    literals = list(STRING_LITERAL.finditer(clean))
+    run = ""
+    count = 0
+    previous_end = 0
+    for match in literals:
+        if count > 0 and clean[previous_end:match.start()].strip() == "":
+            run += match.group(1)
+            count += 1
+        else:
+            run = match.group(1)
+            count = 1
+        if count >= 2 and len(run) == 7 and run.isalnum():
+            findings.append(run)
+        previous_end = match.end()
+
+    for initializer in re.finditer(r"\{([^{}]*)\}", clean, flags=re.DOTALL):
+        values = []
+        valid = True
+        for token in initializer.group(1).split(","):
+            token = token.strip()
+            char_match = CHAR_LITERAL.match(token)
+            if char_match:
+                values.append(ord(char_match.group(1)))
+            elif re.fullmatch(r"0[xX][0-9A-Fa-f]+|[0-9]+", token):
+                values.append(int(token, 0))
+            else:
+                valid = False
+                break
+        if valid and len(values) in (7, 8) and all(chr(value).isascii() and chr(value).isalnum()
+                                                     for value in values[:7]):
+            if len(values) == 7 or values[7] == 0:
+                findings.append("".join(chr(value) for value in values[:7]))
+    return findings
+
+
+def c_function_body(text: str, name: str) -> str | None:
+    """Return one named C function body without crossing its closing brace."""
+    clean = strip_c_comments(text)
+    match = re.search(rf"\b{re.escape(name)}\s*\([^;{{}}]*\)\s*\{{", clean)
+    if match is None:
+        return None
+    start = match.end()
+    depth = 1
+    quote = None
+    escaped = False
+    for index in range(start, len(clean)):
+        char = clean[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+        elif char in ("'", '"'):
+            quote = char
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return clean[start:index]
+    return None
 
 
 def generated_version_is_target(text: str) -> bool:
@@ -79,7 +165,15 @@ def scan(root: Path, paths: tuple[str, ...] = DEFAULT_PATHS):
         relative = path.relative_to(root).as_posix()
         if relative in IDENTITY_CONSUMERS:
             for terminal_id in fixed_identity_findings("\n".join(lines)):
-                findings.append((path, 0, "<fixed-terminal-id>", terminal_id))
+                if terminal_id not in IDENTITY_LITERAL_ALLOWLIST:
+                    findings.append((path, 0, "<fixed-terminal-id>", terminal_id))
+            required = IDENTITY_SERVICE_REQUIREMENTS.get(relative)
+            if required is not None:
+                function_name, service_pattern = required
+                body = c_function_body("\n".join(lines), function_name)
+                if body is None or service_pattern.search(body) is None:
+                    findings.append((path, 0, "<identity-service>",
+                                     f"required call missing from {function_name}()"))
         if path.name.casefold() == "gen_version.ps1" and not generated_version_is_target("\n".join(lines)):
             findings.append((path, 0, "<target-version>", f"expected {TARGET_VERSION}"))
         if relative == "include/config.h" and not c_define_is_target("\n".join(lines), "FW_VERSION_STR"):

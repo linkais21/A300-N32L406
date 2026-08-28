@@ -1,4 +1,5 @@
 #include "f39_reply.h"
+#include "terminal_identity.h"
 
 #include <stdarg.h>
 #include <math.h>
@@ -132,22 +133,13 @@ static bool valid_config_text(const device_config_t *c)
 }
 
 static bool device_id(const device_config_t *c, const f39_platform_t *p,
-                      const char **text, uint16_t *length)
+                      char terminal_id[8])
 {
-    uint16_t i;
-    if (c->pid[0] != '\0') {
-        *text = c->pid;
-        *length = (uint16_t)strlen(c->pid);
-        return true;
-    }
-    if (!external_text(p->imei, p->imei_len, F39_IMEI_MAX_LENGTH) ||
-        p->imei_len < 11U) return false;
-    for (i = (uint16_t)(p->imei_len - 11U); i < p->imei_len; ++i) {
-        if (p->imei[i] < '0' || p->imei[i] > '9') return false;
-    }
-    *text = &p->imei[p->imei_len - 11U];
-    *length = 11U;
-    return true;
+    char imei[F39_IMEI_MAX_LENGTH + 1U];
+    if (!external_text(p->imei, p->imei_len, F39_IMEI_MAX_LENGTH)) return false;
+    if (p->imei_len > 0U) (void)memcpy(imei, p->imei, p->imei_len);
+    imei[p->imei_len] = '\0';
+    return terminal_id_derive(c->pid, imei, terminal_id);
 }
 
 static bool effects_ready(uint32_t effects, const f39_platform_t *p)
@@ -165,8 +157,7 @@ static f39_result_t query(const f39_request_t *r, f39_platform_t *p,
 {
     const device_config_t *c = p->config;
     const char *name;
-    const char *pid;
-    uint16_t pid_len;
+    char terminal_id[8];
     if (!operation_name(r->operation, &name) || c == NULL || !valid_config_text(c)) {
         return F39_RESULT_INVALID;
     }
@@ -175,14 +166,14 @@ static f39_result_t query(const f39_request_t *r, f39_platform_t *p,
         reply_clear(out);
         if (!external_text(p->version, p->version_len, F39_VERSION_MAX_LENGTH) ||
             !external_text(p->imei, p->imei_len, F39_IMEI_MAX_LENGTH) ||
-            !device_id(c, p, &pid, &pid_len) ||
+            !device_id(c, p, terminal_id) ||
             !reply_append(out,
                           "PARAM,V=%.*s,M=%.*s,I=%.*s,P=%.*s,S=%.*s:%u,"
                           "B=%.*s:%u,H=%u,F=%u/%u,G=%u,A=%u,Q=%d,N=%.*s",
                           (int)p->version_len, p->version != NULL ? p->version : "",
                           (int)CFG_MODEL_LEN, c->terminal_model,
                           (int)p->imei_len, p->imei != NULL ? p->imei : "",
-                          (int)pid_len, pid, (int)CFG_IP_LEN, c->server_ip,
+                          7, terminal_id, (int)CFG_IP_LEN, c->server_ip,
                           (unsigned)c->server_port, (int)CFG_IP_LEN, c->backup_ip,
                           (unsigned)c->backup_port,
                           (unsigned)c->heartbeat_s, (unsigned)c->report_moving_s,
@@ -199,8 +190,8 @@ static f39_result_t query(const f39_request_t *r, f39_platform_t *p,
     case F39_OPERATION_PID:
         reply_clear(out);
         {
-            if (!device_id(c, p, &pid, &pid_len)) return failure(out,name,"identity");
-            return reply_append(out, "PID,%.*s=Success!\r\n", (int)pid_len, pid) ?
+            if (!device_id(c, p, terminal_id)) return failure(out,name,"identity");
+            return reply_append(out, "PID,%.*s=Success!\r\n", 7, terminal_id) ?
             F39_RESULT_OK : failure(out, name, "reply-too-long");
         }
     case F39_OPERATION_IP:

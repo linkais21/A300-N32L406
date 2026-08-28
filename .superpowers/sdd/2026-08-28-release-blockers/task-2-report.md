@@ -101,3 +101,71 @@ Independent quality review: PASS after correcting variable-length 0x0107 fields,
 Self-review confirmed static bounded buffers only, no allocation, exact PID precedence, no invented fallback, one protocol-valid 0x0107 failure response, retained forced registration across send failures, and no staged user-owned hunks.
 
 Commit message: `fix: derive JT808 identity from PID or IMEI`.
+
+## Fix Round 1
+
+Resolved all four Important findings from `task-2-review.md`:
+
+- F39 `PID` and `PARAM` now adapt the bounded platform IMEI and delegate to
+  `terminal_id_derive()`. Both emit exactly seven digits; a non-empty malformed
+  PID fails without falling through to IMEI. The IMEI rule remains numeric
+  length `>=7` within the 15-byte API bound, using the last seven digits.
+- Each successful 0x0100 send records its registration generation and message
+  serial. A 0x8100 is accepted only while registering and only when its body
+  references that active generation/serial. F39 re-registration and connection
+  loss invalidate the previous response token.
+- Idle and registration-retry identity failures share one five-second bounded
+  `[808] identity invalid` diagnostic helper.
+- The release guard includes `src/f39_reply.c`, requires each identity consumer
+  to call its permitted central service, and rejects numeric fixed IDs expressed
+  as ordinary/split literals or character/hex byte initializers through the full
+  `scan()` path.
+
+TDD RED evidence before production changes:
+
+```text
+$env:REQUIRE_GCC='1'; python tools/tests/test_terminal_identity.py
+AssertionError: release_guard.fixed_identity_findings(split)
+exit 1
+```
+
+After enabling GCC for the integration command, the F39 E2E test also exposed
+the expected new link dependency before its harness was updated:
+
+```text
+undefined reference to `terminal_id_derive'
+subprocess.CalledProcessError
+exit 1
+```
+
+Fresh final verification, with WinLibs GCC added to `PATH` and
+`REQUIRE_GCC=1`:
+
+```text
+test_terminal_identity: C99 -Wall -Wextra -Werror PASS
+test_terminal_identity: PASS
+test_f39_actions: PASS
+test_f39_end_to_end: PASS / PASS
+release-guard: PASS
+test_feature_guards: PASS
+git diff --check: exit 0
+TASK2_ROUND1_VERIFICATION_PASS
+```
+
+New harness coverage includes PID precedence and empty-PID IMEI fallback for
+both F39 replies, malformed non-empty PID rejection, a PID change between an old
+registration send and response, successful processing of the current response,
+disconnect-stale response rejection, and bounded retry-time invalid-identity
+diagnostics. The review-follow-up also injects the last valid response after a
+retry detects invalid identity and verifies that response is rejected.
+
+Independent review follow-ups retained the forced re-registration intent until
+a matching active 0x8100 is accepted. The disconnect harness now proves that a
+reconnect sends a fresh 0x0100 with the new seven-digit identity rather than
+authenticating with the previous PID's stored code. Guard follow-ups use
+brace-balanced named-function extraction, so an adjacent dead service call
+cannot satisfy the permitted-call requirement.
+
+Fix-round independent review result: PASS, with no remaining Critical,
+Important, or Minor findings. The post-review verification marker was
+`TASK2_ROUND1_FINAL2_VERIFICATION_PASS`.

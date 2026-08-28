@@ -164,6 +164,7 @@ def test_f39_end_to_end():
             str(ROOT / "src" / "at_config.c"), str(ROOT / "src" / "sms_command.c"),
             str(ROOT / "src" / "sms_ingress.c"), str(ROOT / "src" / "f39_command.c"),
             str(ROOT / "src" / "f39_config_adapter.c"), str(ROOT / "src" / "f39_reply.c"),
+            str(ROOT / "src" / "terminal_identity.c"),
             "-Wl,--gc-sections", "-lm", "-o", str(exe),
         ]
         subprocess.run(cmd, check=True, cwd=ROOT)
@@ -497,6 +498,7 @@ void IWDG_ReloadKey(void) { ++g_tick_ms; }
             str(ROOT / "src" / "at_config.c"), str(ROOT / "src" / "sms_command.c"),
             str(ROOT / "src" / "sms_ingress.c"), str(ROOT / "src" / "f39_command.c"),
             str(ROOT / "src" / "f39_config_adapter.c"), str(ROOT / "src" / "f39_reply.c"),
+            str(ROOT / "src" / "terminal_identity.c"),
             "-Wl,--gc-sections", "-lm", "-o", str(tmp / "production.exe"),
         ]
         subprocess.run(cmd, check=True, cwd=ROOT)
