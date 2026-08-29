@@ -409,9 +409,11 @@ static void test_prepared_record_is_finalized_after_reset(void)
     memset(flash_mem, 0xff, sizeof(flash_mem));
     owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
     fail_marker_program_noop = true;
-    assert(blind_zone_append(&record) == BLIND_ZONE_IO_ERROR);
+    assert(blind_zone_append(&record) == BLIND_ZONE_PENDING);
+    assert(blind_zone_append(&record) == BLIND_ZONE_PENDING);
     owner = EXT_FLASH_OWNER_NONE;
     recover();
+    assert(blind_zone_append(&record) == BLIND_ZONE_OK);
     assert(blind_zone_peek(&out, 1U, &sequence) == 1U);
     assert(sequence == 1U && out.event_id == record.event_id &&
            record_value(&out) == 93U);
@@ -506,6 +508,39 @@ static void test_full_capacity_prepared_and_distributed_repairs_progress(void)
     record = make_record(12001U);
     append_accepted(&record);
     assert(blind_zone_ready());
+    assert_scratch_erased();
+}
+
+static void test_remote_spare_sector_repair_preserves_full_fifo(void)
+{
+    blind_zone_record_t record, out[BLIND_ZONE_PEEK_MAX];
+    uint32_t sequence = 0U, expected = 1U, i;
+
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    for (i = 1U; i <= BLIND_ZONE_LOGICAL_CAPACITY; ++i) {
+        record = make_record(i);
+        append_accepted(&record);
+    }
+    /* Slot 9,900 is spare and lies far from the FIFO head.  Repairing its
+     * sector must not shrink head/count/span to that sector. */
+    flash_mem[BLIND_DATA_ADDR + BLIND_ZONE_LOGICAL_CAPACITY * RECORD_BYTES] &=
+        0x2fU;
+    owner = EXT_FLASH_OWNER_NONE;
+    recover();
+    while (expected <= BLIND_ZONE_LOGICAL_CAPACITY) {
+        uint8_t want = (uint8_t)((BLIND_ZONE_LOGICAL_CAPACITY - expected + 1U) >
+                                 BLIND_ZONE_PEEK_MAX ? BLIND_ZONE_PEEK_MAX :
+                                 (BLIND_ZONE_LOGICAL_CAPACITY - expected + 1U));
+        uint8_t got = blind_zone_peek(out, want, &sequence);
+        uint8_t j;
+        assert(got == want && sequence == expected);
+        for (j = 0U; j < got; ++j)
+            assert(record_value(&out[j]) == expected + j);
+        consume_accepted(sequence, got);
+        expected += got;
+    }
+    assert(blind_zone_peek(&record, 1U, &sequence) == 0U);
     assert_scratch_erased();
 }
 
@@ -737,20 +772,16 @@ static void test_issued_marker_timeout_later_commit_is_accepted_once(void)
     assert(record_value(&out[0]) == 731U);
 }
 
-static void test_never_issued_marker_is_retryable_without_loss(void)
+static void test_never_issued_marker_remains_pending_without_loss(void)
 {
     blind_zone_record_t record, out[2];
     uint32_t sequence = 0U;
-    blind_zone_diagnostics_t before, after;
     memset(flash_mem, 0xff, sizeof(flash_mem));
     owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
     record = make_record(732U);
-    blind_zone_get_diagnostics(&before);
     fail_marker_program_noop = true;
-    assert(blind_zone_append(&record) == BLIND_ZONE_IO_ERROR);
-    blind_zone_get_diagnostics(&after);
-    assert(after.io_precommit_drop == before.io_precommit_drop + 1U);
-    assert(after.append_io == before.append_io + 1U);
+    assert(blind_zone_append(&record) == BLIND_ZONE_PENDING);
+    maintenance_ready();
     assert(blind_zone_append(&record) == BLIND_ZONE_OK);
     assert(blind_zone_peek(out, 2U, &sequence) == 1U && sequence == 1U);
     assert(record_value(&out[0]) == 732U);
@@ -993,6 +1024,7 @@ int main(void)
     test_scratch_phase_cut_restores_exact_slots();
     test_repeated_sector_repairs_make_forward_progress();
     test_full_capacity_prepared_and_distributed_repairs_progress();
+    test_remote_spare_sector_repair_preserves_full_fifo();
     test_contention_and_power_cut_prefixes();
     test_two_cut_hole_then_committed_record_recovery();
     test_diagnostics_contract();
@@ -1001,7 +1033,7 @@ int main(void)
     test_transient_head_read_failure_never_quarantines_valid_head();
     test_consume_tombstones_precede_metadata_and_survive_each_cut();
     test_issued_marker_timeout_later_commit_is_accepted_once();
-    test_never_issued_marker_is_retryable_without_loss();
+    test_never_issued_marker_remains_pending_without_loss();
     test_production_batch_sequence_corrupt_middle_survives_reboot();
     test_public_peek_capacity_is_clamped_to_production_max();
     test_full_ring_append_after_peek_makes_ack_stale();

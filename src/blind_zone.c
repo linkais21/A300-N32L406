@@ -195,6 +195,7 @@ static bool s_scratch_payload_matches;
 static bool s_scratch_victim_matches;
 static bool s_repair_boot_restore;
 static bz_recovery_state_t s_repair_resume;
+static bool s_quarantine_pending;
 static blind_zone_diagnostics_t s_diagnostics;
 
 static bz_meta_result_t commit_meta_locked(uint32_t head, uint32_t count,
@@ -317,6 +318,10 @@ static bool slot_erased(const bz_flash_record_t *record);
 static bool read_record_locked(uint32_t slot, bz_flash_record_t *record);
 static bool sequence_in_state(uint32_t sequence, uint32_t count,
                               uint32_t next_sequence);
+static uint32_t advance_to_sequence_locked(uint32_t slot, uint32_t span,
+                                           uint32_t target_sequence,
+                                           uint32_t *used_out);
+static bool quarantine_missing_head_locked(bz_recovery_state_t resume);
 
 static bool bytes_erased(const void *data, uint32_t length)
 {
@@ -415,21 +420,67 @@ static bool finish_maintenance_locked(bz_recovery_state_t resume)
         start_repair_locked(sector, resume);
         return false;
     }
+    if (s_quarantine_pending) return quarantine_missing_head_locked(resume);
     s_recovery = resume;
     return true;
 }
 
-static bool repair_preserves_sequence_locked(uint32_t sector, uint32_t sequence)
+/* A repaired damaged slot has no recoverable sequence bytes.  It remains in
+ * the logical span until it reaches the FIFO head; only then can a durable
+ * one-record quarantine advance the contiguous public sequence. */
+static bool quarantine_missing_head_locked(bz_recovery_state_t resume)
 {
-    uint32_t slot;
-    for (slot = 0U; slot < BZ_DATA_PER_SECTOR; ++slot) {
-        bz_flash_record_t record;
-        if (!read_record_locked(sector * BZ_DATA_PER_SECTOR + slot, &record))
-            return true;
-        if (flash_record_valid(&record) && record.sequence == sequence)
-            return true;
+    bz_flash_record_t head_record;
+    uint32_t expected;
+    uint32_t skipped;
+    uint32_t next_head;
+    if (s_count == 0U) {
+        s_recovery = resume;
+        return true;
     }
-    return false;
+    expected = s_next_sequence - s_count;
+    if (!read_record_locked(s_head_slot, &head_record)) {
+        saturating_increment(&s_diagnostics.recovery_retry);
+        return false;
+    }
+    if (flash_record_valid(&head_record) && head_record.sequence == expected) {
+        s_quarantine_pending = false;
+        s_recovery = resume;
+        return true;
+    }
+    if (s_count == 1U) {
+        next_head = s_next_slot;
+        skipped = s_span;
+    } else {
+        next_head = advance_to_sequence_locked(s_head_slot, s_span,
+                                               expected + 1U, &skipped);
+        if (next_head >= BLIND_ZONE_PHYSICAL_SLOTS) {
+            saturating_increment(&s_diagnostics.recovery_retry);
+            return false;
+        }
+    }
+    if (commit_meta_locked(next_head, s_count - 1U, s_span - skipped,
+                           s_next_slot, s_next_sequence) != BZ_META_OK) {
+        saturating_increment(&s_diagnostics.recovery_retry);
+        return false;
+    }
+    saturating_increment(&s_diagnostics.corrupt_quarantine);
+    return quarantine_missing_head_locked(resume);
+}
+
+static void request_head_quarantine_if_missing_locked(void)
+{
+    bz_flash_record_t record;
+    uint32_t expected;
+    if (s_count == 0U || s_head_slot / BZ_DATA_PER_SECTOR != s_repair_sector)
+        return;
+    expected = s_next_sequence - s_count;
+    if (!read_record_locked(s_head_slot, &record)) {
+        saturating_increment(&s_diagnostics.recovery_retry);
+        return;
+    }
+    if (!flash_record_valid(&record) || record.sequence != expected)
+        s_quarantine_pending = true;
 }
 
 static bool meta_erased(const bz_meta_t *meta)
@@ -608,13 +659,6 @@ static bool sequence_in_state(uint32_t sequence, uint32_t count, uint32_t next_s
     return (uint32_t)(sequence - first) < count;
 }
 
-static void schedule_cleanup(uint32_t cursor, uint32_t slots)
-{
-    s_cleanup_cursor = cursor;
-    s_cleanup_remaining = slots;
-    if (slots != 0U) s_recovery = BZ_RECOVERY_CLEANUP;
-}
-
 static void schedule_rollover(uint32_t head, uint32_t count, uint32_t span,
                               uint32_t next, uint32_t next_sequence)
 {
@@ -690,6 +734,7 @@ static void finish_current_run(void)
 static void scan_record(uint32_t slot, const bz_flash_record_t *record)
 {
     bz_slot_status_t status = classify_record(record);
+    bz_flash_record_t finalized;
     if (flash_record_is_old_format(record)) s_old_format_seen = true;
     if (status == BZ_SLOT_DAMAGED) mark_repair_slot(slot);
     if (status == BZ_SLOT_PREPARED) {
@@ -701,6 +746,12 @@ static void scan_record(uint32_t slot, const bz_flash_record_t *record)
             mark_repair_slot(slot);
             return;
         }
+        if (!read_record_locked(slot, &finalized)) {
+            saturating_increment(&s_diagnostics.recovery_retry);
+            mark_repair_slot(slot);
+            return;
+        }
+        record = &finalized;
     }
     if (!flash_record_valid(record)) {
         if (s_current_run.valid) ++s_current_run.gap;
@@ -738,6 +789,11 @@ static void scan_repair_record(uint32_t slot, const bz_flash_record_t *record)
                 &commit, sizeof(commit))) {
             saturating_increment(&s_diagnostics.recovery_retry);
             mark_repair_slot(slot);
+        } else {
+            bz_flash_record_t finalized;
+            if (!read_record_locked(slot, &finalized) ||
+                !flash_record_valid(&finalized))
+                mark_repair_slot(slot);
         }
     }
 }
@@ -844,6 +900,7 @@ bool blind_zone_init(void)
     s_scratch_payload_matches = false;
     s_scratch_victim_matches = false;
     s_repair_boot_restore = false;
+    s_quarantine_pending = false;
     s_repair_resume = BZ_RECOVERY_META;
     apply_state(0U, 0U, 0U, 0U, 1U);
     s_generation = 0U;
@@ -995,25 +1052,9 @@ void blind_zone_recovery_process(void)
                     saturating_increment(&s_diagnostics.format_rejected);
                     s_recovery = BZ_RECOVERY_IDLE;
                 } else if (next_repair_sector(&sector)) {
-                    uint32_t first_sequence = s_next_sequence - s_count;
-                    uint32_t last_sequence = s_next_sequence - 1U;
-                    while (s_count != 0U &&
-                           !repair_preserves_sequence_locked(sector,
-                                                              first_sequence)) {
-                        --s_count;
-                        ++first_sequence;
-                        s_head_slot = (s_head_slot + 1U) %
-                                      BLIND_ZONE_PHYSICAL_SLOTS;
-                    }
-                    while (s_count != 0U &&
-                           !repair_preserves_sequence_locked(sector,
-                                                              last_sequence)) {
-                        --s_count;
-                        --last_sequence;
-                    }
                     start_repair_locked(sector, BZ_RECOVERY_RECONCILE);
                 } else {
-                    (void)finish_maintenance_locked(BZ_RECOVERY_RECONCILE);
+                    begin_reconcile();
                 }
             } else {
                 complete_data_scan();
@@ -1121,7 +1162,9 @@ void blind_zone_recovery_process(void)
             s_next_slot, s_next_sequence);
         if (committed == BZ_META_OK) {
             s_consume_complete = true;
-            (void)finish_maintenance_locked(BZ_RECOVERY_READY);
+            /* Keep a peek-detected middle hole deferred until it reaches the
+             * public head and a later peek explicitly requests maintenance. */
+            s_recovery = BZ_RECOVERY_READY;
         } else if (committed == BZ_META_PENDING) {
             s_resume_reconcile = false;
         } else saturating_increment(&s_diagnostics.recovery_retry);
@@ -1354,9 +1397,13 @@ void blind_zone_recovery_process(void)
         if (ext_flash_erase(EXT_FLASH_OWNER_BLIND_ZONE, BZ_SCRATCH_ADDR,
                             FLASH_SECTOR_SIZE)) {
             clear_repair_sector(s_repair_sector);
+            request_head_quarantine_if_missing_locked();
             if (s_repair_boot_restore) {
                 s_repair_boot_restore = false;
                 restart_raw_data_recovery();
+            } else if (!quarantine_missing_head_locked(s_repair_resume)) {
+                /* Preserve global FIFO state during physical repair; only a
+                 * missing logical head is durably dropped. */
             } else if (!finish_maintenance_locked(s_repair_resume)) {
                 /* Another repair was scheduled, or a retryable read failed. */
             }
@@ -1458,6 +1505,8 @@ blind_zone_result_t blind_zone_append(const blind_zone_record_t *record)
                                   &flash_record,
                                   (uint32_t)offsetof(bz_flash_record_t, commit_marker))) {
         saturating_increment(&s_diagnostics.io_precommit_drop);
+        mark_repair_slot(write_slot);
+        start_repair_locked(write_slot / BZ_DATA_PER_SECTOR, BZ_RECOVERY_READY);
         ext_flash_unlock(EXT_FLASH_OWNER_BLIND_ZONE);
         return BLIND_ZONE_IO_ERROR;
     }
@@ -1468,10 +1517,11 @@ blind_zone_result_t blind_zone_append(const blind_zone_record_t *record)
                 offsetof(bz_flash_record_t, commit_marker),
             &commit, sizeof(commit));
         if (marker_result == EXT_FLASH_PROGRAM_NOT_ISSUED) {
-            saturating_increment(&s_diagnostics.io_precommit_drop);
-            saturating_increment(&s_diagnostics.append_io);
+            begin_append_transaction(record);
+            begin_reconcile();
+            saturating_increment(&s_diagnostics.pending_reconciliation);
             ext_flash_unlock(EXT_FLASH_OWNER_BLIND_ZONE);
-            return BLIND_ZONE_IO_ERROR;
+            return BLIND_ZONE_PENDING;
         }
         if (marker_result == EXT_FLASH_PROGRAM_ISSUED_UNCERTAIN) {
             begin_append_transaction(record);
@@ -1569,29 +1619,14 @@ uint8_t blind_zone_peek(blind_zone_record_t *records, uint8_t capacity,
         s_peek_used_slots = copied_used_slots;
     }
     if (copied == 0U && s_count != 0U && !read_failed) {
-        uint32_t old_head = s_head_slot;
-        uint32_t skipped;
-        uint32_t next_head;
-        if (s_count == 1U) {
-            next_head = s_next_slot;
-            skipped = s_span;
-        } else {
-            next_head = advance_to_sequence_locked(
-                old_head, s_span, expected + 1U, &skipped);
-        }
-        if (next_head < BLIND_ZONE_PHYSICAL_SLOTS) {
-            bz_meta_result_t committed = commit_meta_locked(
-                next_head, s_count - 1U, s_span - skipped,
-                s_next_slot, s_next_sequence);
-            if (committed == BZ_META_OK) {
-                saturating_increment(&s_diagnostics.corrupt_quarantine);
-                schedule_cleanup(old_head, skipped);
-            } else {
-                saturating_increment(&s_diagnostics.recovery_retry);
-                if (committed == BZ_META_PENDING)
-                    saturating_increment(&s_diagnostics.pending_reconciliation);
-            }
-        }
+        mark_repair_slot(s_head_slot);
+        s_quarantine_pending = true;
+        start_repair_locked(s_head_slot / BZ_DATA_PER_SECTOR,
+                            BZ_RECOVERY_READY);
+    } else if (copied != 0U && copied < s_count && !read_failed &&
+               scanned < s_span) {
+        mark_repair_slot((slot + BLIND_ZONE_PHYSICAL_SLOTS - 1U) %
+                         BLIND_ZONE_PHYSICAL_SLOTS);
     }
     ext_flash_unlock(EXT_FLASH_OWNER_BLIND_ZONE);
     return copied;
