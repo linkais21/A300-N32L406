@@ -419,6 +419,26 @@ static void test_prepared_record_is_finalized_after_reset(void)
            record_value(&out) == 93U);
 }
 
+static void test_runtime_prepared_finalizes_in_original_nonboundary_slot(void)
+{
+    blind_zone_record_t seed = make_record(94U), record = make_record(95U), out;
+    uint32_t sequence = 0U;
+    uint8_t *slot;
+
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    append_accepted(&seed);
+    consume_accepted(1U, 1U); /* next slot 1: not a sector boundary */
+    fail_marker_program_noop = true;
+    assert(blind_zone_append(&record) == BLIND_ZONE_PENDING);
+    maintenance_ready();
+    slot = flash_mem + BLIND_DATA_ADDR + RECORD_BYTES;
+    assert(*(uint32_t *)(void *)(slot + 60U) == 0x434d4954UL);
+    assert(blind_zone_append(&record) == BLIND_ZONE_OK);
+    assert(blind_zone_peek(&out, 1U, &sequence) == 1U && sequence == 2U);
+    assert(out.event_id == record.event_id && record_value(&out) == 95U);
+}
+
 static void test_scratch_phase_cut_restores_exact_slots(void)
 {
     static const blind_zone_test_recovery_state_t phases[] = {
@@ -542,6 +562,46 @@ static void test_remote_spare_sector_repair_preserves_full_fifo(void)
     }
     assert(blind_zone_peek(&record, 1U, &sequence) == 0U);
     assert_scratch_erased();
+}
+
+static void test_committed_scratch_reboot_preserves_middle_gap_prefix(void)
+{
+    blind_zone_record_t record, out[BLIND_ZONE_PEEK_MAX];
+    uint32_t sequence = 0U, i;
+    unsigned calls = 0U;
+
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    for (i = 1U; i <= BLIND_ZONE_LOGICAL_CAPACITY; ++i) {
+        record = make_record(i);
+        append_accepted(&record);
+    }
+    flash_mem[BLIND_DATA_ADDR + 5000U * RECORD_BYTES] &= 0x2fU;
+    assert(blind_zone_init());
+    while (blind_zone_test_recovery_state() !=
+           BLIND_ZONE_TEST_RECOVERY_VICTIM_ERASE && calls++ < 4000U)
+        blind_zone_recovery_process();
+    assert(calls < 4000U);
+    owner = EXT_FLASH_OWNER_NONE;
+    recover();
+    assert(blind_zone_peek(out, BLIND_ZONE_PEEK_MAX, &sequence) ==
+           BLIND_ZONE_PEEK_MAX);
+    assert(sequence == 1U && record_value(&out[0]) == 1U &&
+           record_value(&out[BLIND_ZONE_PEEK_MAX - 1U]) ==
+               BLIND_ZONE_PEEK_MAX);
+}
+
+static void test_capacity_limited_peek_does_not_queue_valid_sector_repair(void)
+{
+    blind_zone_record_t record, out[1];
+    uint32_t sequence = 0U;
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    record = make_record(20101U); append_accepted(&record);
+    record = make_record(20102U); append_accepted(&record);
+    assert(blind_zone_peek(out, 1U, &sequence) == 1U && sequence == 1U);
+    assert(blind_zone_test_recovery_state() == BLIND_ZONE_TEST_RECOVERY_OTHER);
+    assert(blind_zone_ready());
 }
 
 static void test_contention_and_power_cut_prefixes(void)
@@ -1021,10 +1081,13 @@ int main(void)
     test_crc_metadata_selection_and_torn_metadata_scan();
     test_journalled_boot_repairs_damaged_sector_before_ready();
     test_prepared_record_is_finalized_after_reset();
+    test_runtime_prepared_finalizes_in_original_nonboundary_slot();
     test_scratch_phase_cut_restores_exact_slots();
     test_repeated_sector_repairs_make_forward_progress();
     test_full_capacity_prepared_and_distributed_repairs_progress();
     test_remote_spare_sector_repair_preserves_full_fifo();
+    test_committed_scratch_reboot_preserves_middle_gap_prefix();
+    test_capacity_limited_peek_does_not_queue_valid_sector_repair();
     test_contention_and_power_cut_prefixes();
     test_two_cut_hole_then_committed_record_recovery();
     test_diagnostics_contract();

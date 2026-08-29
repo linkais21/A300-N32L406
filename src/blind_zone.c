@@ -313,6 +313,7 @@ static uint32_t record_addr(uint32_t slot)
 }
 
 static bool flash_record_valid(const bz_flash_record_t *record);
+static bool flash_record_body_valid(const bz_flash_record_t *record);
 static bz_slot_status_t classify_record(const bz_flash_record_t *record);
 static bool slot_erased(const bz_flash_record_t *record);
 static bool read_record_locked(uint32_t slot, bz_flash_record_t *record);
@@ -393,6 +394,13 @@ static bool record_logically_live(const bz_flash_record_t *record)
            sequence_in_state(record->sequence, s_count, s_next_sequence);
 }
 
+static bool record_repair_preserve(const bz_flash_record_t *record)
+{
+    return record_logically_live(record) ||
+           (flash_record_body_valid(record) &&
+            record->sequence == s_next_sequence);
+}
+
 static void start_repair_locked(uint32_t sector, bz_recovery_state_t resume)
 {
     s_repair_sector = sector;
@@ -414,8 +422,14 @@ static bool finish_maintenance_locked(bz_recovery_state_t resume)
         saturating_increment(&s_diagnostics.recovery_retry);
         return false;
     }
-    if (!slot_erased(&next) && classify_record(&next) == BZ_SLOT_DAMAGED)
+    if (!slot_erased(&next)) {
+        bz_slot_status_t status = classify_record(&next);
+        if (status == BZ_SLOT_ACTIVE || status == BZ_SLOT_PREPARED) {
+            begin_reconcile();
+            return false;
+        }
         mark_repair_slot(s_next_slot);
+    }
     if (next_repair_sector(&sector)) {
         start_repair_locked(sector, resume);
         return false;
@@ -798,19 +812,6 @@ static void scan_repair_record(uint32_t slot, const bz_flash_record_t *record)
     }
 }
 
-static void restart_raw_data_recovery(void)
-{
-    s_have_meta = false;
-    s_data_scan_slot = 0U;
-    memset(&s_current_run, 0, sizeof(s_current_run));
-    memset(&s_first_run, 0, sizeof(s_first_run));
-    memset(&s_last_run, 0, sizeof(s_last_run));
-    memset(&s_best_run, 0, sizeof(s_best_run));
-    s_leading_gap = 0U;
-    s_old_format_seen = false;
-    s_recovery = BZ_RECOVERY_DATA;
-}
-
 static void complete_data_scan(void)
 {
     bz_run_t merged;
@@ -1069,6 +1070,19 @@ void blind_zone_recovery_process(void)
                 saturating_increment(&s_diagnostics.recovery_retry);
                 break;
             }
+            if (classify_record(&record) == BZ_SLOT_PREPARED &&
+                record.sequence == s_next_sequence) {
+                uint32_t commit = BZ_COMMIT_MARKER;
+                if (!ext_flash_write_verified(EXT_FLASH_OWNER_BLIND_ZONE,
+                        record_addr(s_reconcile_cursor) +
+                            offsetof(bz_flash_record_t, commit_marker),
+                        &commit, sizeof(commit)) ||
+                    !read_record_locked(s_reconcile_cursor, &record)) {
+                    saturating_increment(&s_diagnostics.recovery_retry);
+                    mark_repair_slot(s_reconcile_cursor);
+                    break;
+                }
+            }
             adopted_span = s_span + s_reconcile_scanned + 1U;
             if (flash_record_valid(&record) &&
                 sequence_in_state(record.sequence, s_count, s_next_sequence) &&
@@ -1164,7 +1178,7 @@ void blind_zone_recovery_process(void)
             s_consume_complete = true;
             /* Keep a peek-detected middle hole deferred until it reaches the
              * public head and a later peek explicitly requests maintenance. */
-            s_recovery = BZ_RECOVERY_READY;
+            (void)finish_maintenance_locked(BZ_RECOVERY_READY);
         } else if (committed == BZ_META_PENDING) {
             s_resume_reconcile = false;
         } else saturating_increment(&s_diagnostics.recovery_retry);
@@ -1236,7 +1250,7 @@ void blind_zone_recovery_process(void)
                 saturating_increment(&s_diagnostics.recovery_retry);
                 break;
             }
-            if (record_logically_live(&record)) {
+            if (record_repair_preserve(&record)) {
                 uint32_t image_addr = BZ_SCRATCH_ADDR +
                     (s_repair_record_count + 1U) * BZ_RECORD_BYTES;
                 if (s_repair_record_count >= BZ_DATA_PER_SECTOR - 1U ||
@@ -1400,10 +1414,15 @@ void blind_zone_recovery_process(void)
             request_head_quarantine_if_missing_locked();
             if (s_repair_boot_restore) {
                 s_repair_boot_restore = false;
-                restart_raw_data_recovery();
+                /* Scratch already restored the exact victim bytes.  Preserve
+                 * the still-valid journal; raw recovery would discard the
+                 * prefix before a repaired middle gap. */
+                s_recovery = BZ_RECOVERY_META;
             } else if (!quarantine_missing_head_locked(s_repair_resume)) {
                 /* Preserve global FIFO state during physical repair; only a
                  * missing logical head is durably dropped. */
+            } else if (s_repair_resume == BZ_RECOVERY_RECONCILE) {
+                begin_reconcile();
             } else if (!finish_maintenance_locked(s_repair_resume)) {
                 /* Another repair was scheduled, or a retryable read failed. */
             }
@@ -1623,7 +1642,7 @@ uint8_t blind_zone_peek(blind_zone_record_t *records, uint8_t capacity,
         s_quarantine_pending = true;
         start_repair_locked(s_head_slot / BZ_DATA_PER_SECTOR,
                             BZ_RECOVERY_READY);
-    } else if (copied != 0U && copied < s_count && !read_failed &&
+    } else if (copied != 0U && copied < capacity && copied < s_count && !read_failed &&
                scanned < s_span) {
         mark_repair_slot((slot + BLIND_ZONE_PHYSICAL_SLOTS - 1U) %
                          BLIND_ZONE_PHYSICAL_SLOTS);
