@@ -143,7 +143,7 @@ static bool prepare_freq(const f39_request_t *request,
 }
 
 static bool prepare_hbt(const f39_request_t *request,
-                        device_config_t *candidate)
+                        device_config_t *candidate, uint32_t *effects)
 {
     uint32_t value;
     if (request->argc != 1U || !parse_arg_u32(request, 0U, &value) ||
@@ -151,6 +151,8 @@ static bool prepare_hbt(const f39_request_t *request,
         return false;
     }
     candidate->heartbeat_s = (uint16_t)value;
+    /* Keep JT808 and STOP1 deadlines in sync with the persisted candidate. */
+    *effects |= F39_EFFECT_TIMER_REFRESH;
     return true;
 }
 
@@ -374,7 +376,7 @@ static bool prepare_operation(const f39_request_t *request,
     case F39_OPERATION_FREQ:
         return prepare_freq(request, candidate, effects);
     case F39_OPERATION_HBT:
-        return prepare_hbt(request, candidate);
+        return prepare_hbt(request, candidate, effects);
     case F39_OPERATION_MODEL:
         return prepare_model(request, candidate, effects);
     case F39_OPERATION_SPEED:

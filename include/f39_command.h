@@ -32,7 +32,9 @@ typedef enum {
     F39_OPERATION_MLG,
     F39_OPERATION_CAR,
     F39_OPERATION_GPSBDS,
-    F39_OPERATION_GMTSET
+    F39_OPERATION_GMTSET,
+    F39_OPERATION_FOTA,
+    F39_OPERATION_LOG
 } f39_operation_t;
 
 typedef struct {

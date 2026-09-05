@@ -1,5 +1,16 @@
 #include "at_config.h"
 #include "jt808.h"
+#include "work_mode.h"
+#include "hw_init.h"
+
+#if defined(__GNUC__)
+__attribute__((weak)) void work_mode_config_changed(const device_config_t *cfg,
+                                                    uint32_t now_s)
+{
+    (void)cfg;
+    (void)now_s;
+}
+#endif
 #include "ec800m.h"
 #include "gps.h"
 #include "relay.h"
@@ -41,8 +52,8 @@ static bool s_retry_pending;
 static bool s_retry_in_flight;
 
 static bool f39_persist(const device_config_t *candidate, void *context) { (void)context; return cfg_store_candidate(candidate); }
-static void f39_timer_refresh(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_heartbeat_s(c->heartbeat_s); jt808_set_report_interval(c->report_moving_s, c->report_stopped_s); }
-static void f39_network_reconnect(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_server(c->server_ip, c->server_port, false); jt808_set_server(c->backup_ip[0] ? c->backup_ip : c->server_ip, c->backup_port ? c->backup_port : c->server_port, true); tcp_manager_reconnect(); }
+static void f39_timer_refresh(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_heartbeat_s(c->heartbeat_s); jt808_set_report_interval(c->report_moving_s, c->report_stopped_s); work_mode_config_changed(c, TICK_MS() / 1000U); }
+static void f39_network_reconnect(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_server(c->server_ip, c->server_port, false); jt808_set_server(c->backup_ip, c->backup_port, true); tcp_manager_reconnect(); }
 static void f39_gnss_mode(gnss_type_t type, uint8_t mode, void *context)
 {
     static const char *const commands[] = { NULL, "$PCAS04,1*18\r\n", "$PCAS04,2*1B\r\n", "$PCAS04,7*1E\r\n" };
@@ -118,7 +129,7 @@ static void f39_bind_defaults(void)
     s_f39_platform.gps_valid = f39_gps_valid; s_f39_platform.gps_speed_kmh = f39_gps_speed; s_f39_platform.relay_get = f39_relay_get;
     s_f39_platform.version = FW_VERSION_STR; s_f39_platform.version_len = (uint16_t)strlen(FW_VERSION_STR);
     ec800m_get_imei(imei, sizeof imei); s_f39_platform.imei = imei; s_f39_platform.imei_len = (uint16_t)strlen(imei);
-    s_f39_platform.csq = ec800m_get_csq(); g = gps_get_data(); s_f39_platform.acc_on = (GPIO_ReadInputDataBit(ACC_DET_PORT, ACC_DET_PIN) != Bit_RESET); s_f39_platform.gps_fix_quality = g->fix_quality; s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
+    s_f39_platform.csq = ec800m_get_csq(); g = gps_get_data(); s_f39_platform.acc_on = hw_acc_is_on(); s_f39_platform.gps_fix_quality = g->fix_quality; s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
     s_sms_send = f39_default_sms_send; s_schedule_reset = f39_default_reset; sms_set_send_result_cb(f39_sms_result); s_f39_bound = true; s_f39_uses_defaults = true;
 }
 
@@ -220,6 +231,8 @@ static void handle_cmd(char *line)
         uint16_t s = (uint16_t)atoi(args[0]);
         if (s >= 1 && s <= 10) {
             jt808_set_heartbeat_s(s * 60);
+            cfg_get()->heartbeat_s = (uint16_t)(s * 60U);
+            work_mode_config_changed(cfg_get(), TICK_MS() / 1000U);
             dbg_printf("OK\r\n");
         } else {
             dbg_printf("ERR:range 1-10 min\r\n");
@@ -235,6 +248,7 @@ static void handle_cmd(char *line)
         jt808_set_report_interval(a, b);
         cfg_get()->report_moving_s = a;
         cfg_get()->report_stopped_s = b;
+        work_mode_config_changed(cfg_get(), TICK_MS() / 1000U);
         dbg_printf("OK\r\n");
         return;
     }
@@ -389,7 +403,7 @@ bool at_config_execute_sms(const char *sender, const uint8_t *text, uint16_t len
         ec800m_get_imei(imei, sizeof imei);
         s_f39_platform.imei = imei; s_f39_platform.imei_len = (uint16_t)strlen(imei);
         s_f39_platform.csq = ec800m_get_csq(); s_f39_platform.gps_fix_quality = g->fix_quality;
-        s_f39_platform.acc_on = (GPIO_ReadInputDataBit(ACC_DET_PORT, ACC_DET_PIN) != Bit_RESET); s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
+        s_f39_platform.acc_on = hw_acc_is_on(); s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
     }
     result = f39_execute(&request, &s_f39_platform, &reply);
     if (reply.len == 0U || reply.len >= sizeof response) return false;

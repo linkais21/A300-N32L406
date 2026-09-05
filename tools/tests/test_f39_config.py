@@ -135,9 +135,9 @@ static void test_valid_mapping_and_effects(void)
     tx = expect_prepared("IP,edge,1", &live, &spy,
                          F39_EFFECT_NETWORK_RECONNECT);
     assert(tx.candidate.server_port == 1U);
-    tx = expect_prepared("HBT,30", &live, &spy, F39_EFFECT_NONE);
+    tx = expect_prepared("HBT,30", &live, &spy, F39_EFFECT_TIMER_REFRESH);
     assert(tx.candidate.heartbeat_s == 30U);
-    tx = expect_prepared("HBT,3600", &live, &spy, F39_EFFECT_NONE);
+    tx = expect_prepared("HBT,3600", &live, &spy, F39_EFFECT_TIMER_REFRESH);
     assert(tx.candidate.heartbeat_s == 3600U);
 
     tx = expect_prepared("MODEL,T360-A300", &live, &spy,
@@ -278,7 +278,7 @@ static void test_commit_boundary_and_failure(void)
     device_config_t before = live;
     persistence_spy_t spy = {0U, true, {0}};
     f39_transaction_t tx = expect_prepared("HBT,120", &live, &spy,
-                                           F39_EFFECT_NONE);
+                                           F39_EFFECT_TIMER_REFRESH);
 
     assert(f39_commit_config(&tx) == F39_RESULT_OK);
     assert(spy.calls == 1U);

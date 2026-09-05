@@ -10,7 +10,9 @@ HARNESS = r'''
 #include "f39_reply.h"
 #include "f39_command.h"
 #include "flash_config.h"
-device_config_t *cfg_get(void){return 0;}
+static device_config_t s_live_config;
+device_config_t *cfg_get(void){return &s_live_config;}
+bool cfg_store_candidate(const device_config_t *candidate){s_live_config=*candidate;return true;}
 void ec800m_get_imei(char *buf,uint8_t size){if(buf!=0&&size>0)buf[0]='\0';}
 typedef struct { unsigned saves, reconnects, timers, gnss, relays, resets; bool persist_ok, gps_ok; float speed; bool relay; gnss_type_t receiver; uint8_t mode; char order[8]; unsigned order_len; f39_reply_t *reply; } spy_t;
 static void mark(spy_t*s,char c){s->order[s->order_len++]=c;s->order[s->order_len]='\0';}

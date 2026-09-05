@@ -50,6 +50,8 @@ static void effect(char c);
 volatile uint32_t g_tick_ms;
 device_config_t *cfg_get(void) { return &config; }
 bool cfg_store_candidate(const device_config_t *c) { config = *c; saves++; return true; }
+cfg_store_result_t cfg_set_pid_result(const char pid[CFG_PID_LEN])
+{ memcpy(config.pid, pid, CFG_PID_LEN); return CFG_STORE_OK; }
 void jt808_set_heartbeat_s(uint16_t s) { (void)s; }
 void jt808_set_report_interval(uint16_t a, uint16_t b) { (void)a; (void)b; }
 void jt808_set_server(const char *ip, uint16_t p, bool b) { (void)ip; (void)p; (void)b; }
@@ -157,7 +159,7 @@ def test_f39_end_to_end():
         harness = tmp / "f39_e2e.c"
         exe = tmp / "f39_e2e.exe"
         harness.write_text(HARNESS, encoding="ascii")
-        (tmp / "n32l40x.h").write_text("#ifndef N32L40X_H\n#define N32L40X_H\n#include <stdint.h>\ntypedef int BitAction;\n#define ENABLE 1\n#define DISABLE 0\n#define Bit_RESET 0\n#define GPIOA ((void*)0)\n#define GPIO_PIN_3 3\nint GPIO_ReadInputDataBit(void*,unsigned);\nvoid NVIC_SystemReset(void);\n#endif\n", encoding="ascii")
+        (tmp / "n32l40x.h").write_text("#ifndef N32L40X_H\n#define N32L40X_H\n#include <stdint.h>\ntypedef int BitAction;\n#define ENABLE 1\n#define DISABLE 0\n#define Bit_RESET 0\n#define GPIOA ((void*)0)\n#define GPIO_PIN_3 3\n#define GPIO_PIN_12 12\nint GPIO_ReadInputDataBit(void*,unsigned);\nvoid NVIC_SystemReset(void);\n#endif\n", encoding="ascii")
         cmd = [
             cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-ffunction-sections",
             "-fdata-sections", "-I", str(tmp), "-I", str(ROOT / "include"), str(harness),
@@ -190,6 +192,8 @@ static device_config_t config;
 static unsigned saves, reset_scheduled, system_resets;
 static unsigned cfg_saves, timer_calls, network_calls, gnss_calls;
 static unsigned jt808_register_calls, relay_calls, relay_state;
+static char backup_endpoint[CFG_IP_LEN];
+static uint16_t backup_endpoint_port;
 unsigned inject_cmt_during_tcp_wait;
 static unsigned gps_cmd_calls;
 char tx_log[4096];
@@ -209,10 +213,12 @@ void host_feed_rx(const char *s);
 
 device_config_t *cfg_get(void) { return &config; }
 bool cfg_store_candidate(const device_config_t *c) { config = *c; ++saves; ++cfg_saves; return true; }
+cfg_store_result_t cfg_set_pid_result(const char pid[CFG_PID_LEN])
+{ memcpy(config.pid, pid, CFG_PID_LEN); return CFG_STORE_OK; }
 void cfg_save(void) { ++saves; }
 void jt808_set_heartbeat_s(uint16_t s) { (void)s; ++timer_calls; }
 void jt808_set_report_interval(uint16_t a, uint16_t b) { (void)a; (void)b; ++timer_calls; }
-void jt808_set_server(const char *ip, uint16_t p, bool backup) { (void)ip; (void)p; (void)backup; ++network_calls; }
+void jt808_set_server(const char *ip, uint16_t p, bool backup) { if (backup) { strncpy(backup_endpoint, ip, sizeof(backup_endpoint) - 1U); backup_endpoint[sizeof(backup_endpoint) - 1U] = '\0'; backup_endpoint_port = p; } ++network_calls; }
 void tcp_manager_reconnect(void) { ++network_calls; }
 void gnss_vendor_set_type(gnss_type_t t) { (void)t; ++gnss_calls; }
 void agnss_init(gnss_type_t t) { (void)t; ++gnss_calls; }
@@ -272,6 +278,14 @@ int main(void) {
     modem_step(); sms_process(); modem_step(); complete_sms(true);
     assert(!strcmp(config.server_ip, "default.example") && config.server_port == 9001);
     assert(cfg_saves > 0 && network_calls >= 2);
+    feed_cmt("13900000001", "FIP,58.61.154.237,7018#");
+    modem_step(); sms_process(); modem_step(); complete_sms(true);
+    assert(!strcmp(config.backup_ip, "58.61.154.237") && config.backup_port == 7018U);
+    assert(!strcmp(backup_endpoint, "58.61.154.237") && backup_endpoint_port == 7018U);
+    feed_cmt("13900000001", "FIP,0#");
+    modem_step(); sms_process(); modem_step(); complete_sms(true);
+    assert(config.backup_ip[0] == '\0' && config.backup_port == 0U);
+    assert(backup_endpoint[0] == '\0' && backup_endpoint_port == 0U);
     feed_cmt("13900000001", "FREQ,10,20#");
     modem_step(); sms_process(); modem_step(); complete_sms(true);
     assert(config.report_moving_s == 10 && config.report_stopped_s == 20 && timer_calls > 0);
@@ -494,7 +508,8 @@ void IWDG_ReloadKey(void) { ++g_tick_ms; }
         cmd = [
             cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-Wno-dangling-else", "-DEC800M_HOST_TEST",
             "-I", str(tmp), "-I", str(ROOT / "include"), str(tmp / "harness.c"), str(tmp / "stub.c"),
-            str(ROOT / "src" / "ec800m.c"), str(ROOT / "src" / "peripherals.c"),
+            str(ROOT / "src" / "ec800m.c"), str(ROOT / "src" / "ec800m_at_response.c"),
+            str(ROOT / "src" / "peripherals.c"),
             str(ROOT / "src" / "at_config.c"), str(ROOT / "src" / "sms_command.c"),
             str(ROOT / "src" / "sms_ingress.c"), str(ROOT / "src" / "f39_command.c"),
             str(ROOT / "src" / "f39_config_adapter.c"), str(ROOT / "src" / "f39_reply.c"),

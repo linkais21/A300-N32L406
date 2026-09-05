@@ -1,5 +1,6 @@
 #include "f39_command.h"
 
+#include <stdbool.h>
 #include <string.h>
 
 typedef struct {
@@ -24,7 +25,9 @@ static const f39_root_t s_roots[] = {
     {"MLG", F39_OPERATION_MLG},
     {"CAR", F39_OPERATION_CAR},
     {"GPSBDS", F39_OPERATION_GPSBDS},
-    {"GMTSET", F39_OPERATION_GMTSET}
+    {"GMTSET", F39_OPERATION_GMTSET},
+    {"FOTA", F39_OPERATION_FOTA},
+    {"LOG", F39_OPERATION_LOG}
 };
 
 static uint8_t f39_ascii_upper(uint8_t value)
@@ -121,6 +124,7 @@ f39_result_t f39_parse(const uint8_t *data, uint16_t len, f39_request_t *out)
     uint16_t root_len = 0U;
     uint16_t i;
     f39_result_t result;
+    bool query_suffix = false;
 
     if (out == (f39_request_t *)0) {
         return F39_RESULT_INVALID;
@@ -139,6 +143,10 @@ f39_result_t f39_parse(const uint8_t *data, uint16_t len, f39_request_t *out)
         }
         if ((data[i] == (uint8_t)',') && (root_len == 0U)) {
             root_len = i;
+        }
+        if (data[i] == (uint8_t)'?' && i + 1U == len && root_len == 0U) {
+            root_len = i;
+            query_suffix = true;
         }
     }
     if (root_len == 0U) {
@@ -165,6 +173,11 @@ f39_result_t f39_parse(const uint8_t *data, uint16_t len, f39_request_t *out)
             out->operation = F39_OPERATION_INVALID;
             return F39_RESULT_INVALID;
         }
+        return F39_RESULT_OK;
+    }
+    if (query_suffix && (out->operation == F39_OPERATION_PARAM ||
+                         out->operation == F39_OPERATION_FOTA ||
+                         out->operation == F39_OPERATION_LOG)) {
         return F39_RESULT_OK;
     }
     if ((out->operation == F39_OPERATION_PARAM) ||

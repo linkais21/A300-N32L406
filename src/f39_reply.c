@@ -80,9 +80,10 @@ static bool operation_name(f39_operation_t operation, const char **name)
         "", "PARAM", "DUALSET", "RESET", "PID", "IP", "FIP", "FREQ",
         "HBT", "MODEL", "SPEED", "APN", "RELAY", "GPSDUP", "MLG",
         "CAR", "GPSBDS", "GMTSET"
+        , "FOTA", "LOG"
     };
     if (name == NULL || operation <= F39_OPERATION_INVALID ||
-        operation > F39_OPERATION_GMTSET) {
+        operation > F39_OPERATION_LOG) {
         return false;
     }
     *name = names[operation];
@@ -214,6 +215,10 @@ static f39_result_t query(const f39_request_t *r, f39_platform_t *p,
                             (unsigned)c->report_stopped_s) ? F39_RESULT_OK : failure(out,name,"reply-too-long");
     case F39_OPERATION_HBT:
         reply_clear(out); return reply_append(out,"HBT,%u=Success!\r\n",(unsigned)c->heartbeat_s)?F39_RESULT_OK:failure(out,name,"reply-too-long");
+    case F39_OPERATION_FOTA:
+        reply_clear(out); return reply_append(out, "FOTA,STATUS=IDLE\r\n") ? F39_RESULT_OK : failure(out, name, "reply-too-long");
+    case F39_OPERATION_LOG:
+        reply_clear(out); return reply_append(out, "LOG,STATUS=READY\r\n") ? F39_RESULT_OK : failure(out, name, "reply-too-long");
     case F39_OPERATION_MODEL:
         reply_clear(out); return reply_append(out,"MODEL,%.*s=Success!\r\n",(int)CFG_MODEL_LEN,c->terminal_model)?F39_RESULT_OK:failure(out,name,"reply-too-long");
     case F39_OPERATION_SPEED:
