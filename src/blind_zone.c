@@ -1,4 +1,5 @@
 #include "blind_zone.h"
+#include "crc32.h"
 #include "ext_flash_layout.h"
 #include "ext_flash_store.h"
 #include <stddef.h>
@@ -212,6 +213,8 @@ void blind_zone_get_diagnostics(blind_zone_diagnostics_t *out)
     if (out != NULL) *out = s_diagnostics;
 }
 
+static void start_repair_locked(uint32_t sector, bz_recovery_state_t resume);
+
 #ifdef BLIND_ZONE_TEST
 void blind_zone_test_set_diagnostics(const blind_zone_diagnostics_t *value)
 {
@@ -238,6 +241,30 @@ blind_zone_test_recovery_state_t blind_zone_test_recovery_state(void)
         return BLIND_ZONE_TEST_RECOVERY_SCRATCH_ERASE;
     return BLIND_ZONE_TEST_RECOVERY_OTHER;
 }
+
+void blind_zone_test_set_state(uint32_t head, uint32_t count, uint32_t span,
+                               uint32_t next, uint32_t next_sequence)
+{
+    s_head_slot = head;
+    s_count = count;
+    s_span = span;
+    s_next_slot = next;
+    s_next_sequence = next_sequence;
+    s_recovery = BZ_RECOVERY_READY;
+}
+
+void blind_zone_test_begin_reconcile(void)
+{
+    s_reconcile_cursor = s_next_slot;
+    s_reconcile_scanned = 0U;
+    s_recovery = BZ_RECOVERY_RECONCILE;
+}
+
+void blind_zone_test_start_repair(uint32_t slot)
+{
+    start_repair_locked(slot / BZ_DATA_PER_SECTOR, BZ_RECOVERY_READY);
+}
+
 #endif
 
 static bool same_append_record(const blind_zone_record_t *record)
@@ -275,32 +302,6 @@ static void begin_reconcile(void)
     s_recovery = BZ_RECOVERY_RECONCILE;
 }
 
-static uint32_t crc32_bytes(const void *data, uint32_t length)
-{
-    const uint8_t *bytes = (const uint8_t *)data;
-    uint32_t crc = 0xffffffffUL;
-    uint32_t i;
-    uint8_t bit;
-    for (i = 0U; i < length; ++i) {
-        crc ^= bytes[i];
-        for (bit = 0U; bit < 8U; ++bit)
-            crc = (crc >> 1) ^ ((crc & 1U) ? 0xedb88320UL : 0U);
-    }
-    return crc ^ 0xffffffffUL;
-}
-
-static uint32_t crc32_update(uint32_t crc, const void *data, uint32_t length)
-{
-    const uint8_t *bytes = (const uint8_t *)data;
-    uint32_t i;
-    uint8_t bit;
-    for (i = 0U; i < length; ++i) {
-        crc ^= bytes[i];
-        for (bit = 0U; bit < 8U; ++bit)
-            crc = (crc >> 1) ^ ((crc & 1U) ? 0xedb88320UL : 0U);
-    }
-    return crc;
-}
 
 static bool sequence_newer(uint32_t candidate, uint32_t reference)
 {
@@ -352,7 +353,7 @@ static bool scratch_header_valid(const bz_scratch_header_t *header)
            header->record_count <= BZ_DATA_PER_SECTOR - 1U &&
            header->record_count == bitmap_count(header->slot_bitmap) &&
            header->header_crc32 ==
-               crc32_bytes(header, (uint32_t)offsetof(bz_scratch_header_t,
+               crc32_compute(header, (uint32_t)offsetof(bz_scratch_header_t,
                                                        header_crc32)) &&
            header->commit_marker == BZ_COMMIT_MARKER;
 }
@@ -397,7 +398,7 @@ static bool record_logically_live(const bz_flash_record_t *record)
 static bool record_repair_preserve(const bz_flash_record_t *record)
 {
     return record_logically_live(record) ||
-           (flash_record_body_valid(record) &&
+           (classify_record(record) == BZ_SLOT_PREPARED &&
             record->sequence == s_next_sequence);
 }
 
@@ -518,7 +519,7 @@ static bool meta_valid(const bz_meta_t *meta)
     if (meta->count == 0U && meta->head_slot != meta->next_slot) return false;
     if (((meta->head_slot + meta->reserved) % BLIND_ZONE_PHYSICAL_SLOTS) != meta->next_slot)
         return false;
-    return meta->crc32 == crc32_bytes(meta, (uint32_t)offsetof(bz_meta_t, crc32));
+    return meta->crc32 == crc32_compute(meta, (uint32_t)offsetof(bz_meta_t, crc32));
 }
 
 static bool meta_is_old_format(const bz_meta_t *meta)
@@ -532,7 +533,7 @@ static bool flash_record_body_valid(const bz_flash_record_t *record)
     if (record->magic != BZ_RECORD_MAGIC || record->version != BZ_FORMAT_VERSION ||
         record->event_id == 0U || record->length > BLIND_ZONE_LOCATION_MAX)
         return false;
-    return record->crc32 == crc32_bytes(record, (uint32_t)offsetof(bz_flash_record_t, crc32));
+    return record->crc32 == crc32_compute(record, (uint32_t)offsetof(bz_flash_record_t, crc32));
 }
 
 static bool flash_record_is_old_format(const bz_flash_record_t *record)
@@ -699,7 +700,7 @@ static bz_meta_result_t write_meta_locked(uint32_t head, uint32_t count,
     meta.next_slot = next;
     meta.next_sequence = next_sequence;
     meta.reserved = span;
-    meta.crc32 = crc32_bytes(&meta, (uint32_t)offsetof(bz_meta_t, crc32));
+    meta.crc32 = crc32_compute(&meta, (uint32_t)offsetof(bz_meta_t, crc32));
     meta.commit_marker = 0xffffffffUL;
     address = EXT_FLASH_BLIND_ADDR + s_meta_next_slot * BZ_META_BYTES;
     if (!ext_flash_write_verified(EXT_FLASH_OWNER_BLIND_ZONE, address, &meta,
@@ -1110,9 +1111,30 @@ void blind_zone_recovery_process(void)
             ++reads;
         }
         if (s_reconcile_scanned == BLIND_ZONE_PHYSICAL_SLOTS) {
+            bz_flash_record_t stale_next;
+            uint32_t consumed = BZ_RECORD_CONSUMED;
             if (s_append_state == BZ_APPEND_UNCERTAIN)
                 s_append_state = BZ_APPEND_NOT_COMMITTED;
-            (void)finish_maintenance_locked(BZ_RECOVERY_READY);
+            if (s_span == BLIND_ZONE_PHYSICAL_SLOTS &&
+                read_record_locked(s_next_slot, &stale_next) &&
+                (classify_record(&stale_next) == BZ_SLOT_ACTIVE ||
+                 classify_record(&stale_next) == BZ_SLOT_PREPARED) &&
+                !sequence_in_state(stale_next.sequence, s_count,
+                                   s_next_sequence)) {
+                if (ext_flash_write_verified(
+                        EXT_FLASH_OWNER_BLIND_ZONE,
+                        record_addr(s_next_slot) +
+                            offsetof(bz_flash_record_t, commit_marker),
+                        &consumed, sizeof(consumed))) {
+                    mark_repair_slot(s_next_slot);
+                    start_repair_locked(s_next_slot / BZ_DATA_PER_SECTOR,
+                                        BZ_RECOVERY_READY);
+                } else {
+                    saturating_increment(&s_diagnostics.recovery_retry);
+                }
+            } else {
+                (void)finish_maintenance_locked(BZ_RECOVERY_READY);
+            }
         }
     } else if (s_recovery == BZ_RECOVERY_FINALIZE) {
         bz_meta_result_t committed =
@@ -1281,7 +1303,7 @@ void blind_zone_recovery_process(void)
         s_scratch_header.slot_bitmap = s_repair_bitmap;
         s_scratch_header.record_count = s_repair_record_count;
         s_scratch_header.payload_crc32 = s_repair_crc ^ 0xffffffffUL;
-        s_scratch_header.header_crc32 = crc32_bytes(
+        s_scratch_header.header_crc32 = crc32_compute(
             &s_scratch_header,
             (uint32_t)offsetof(bz_scratch_header_t, header_crc32));
         s_scratch_header.commit_marker = 0xffffffffUL;
@@ -1314,7 +1336,9 @@ void blind_zone_recovery_process(void)
                 saturating_increment(&s_diagnostics.recovery_retry);
                 break;
             }
-            if (!flash_record_valid(&image)) {
+            if (!flash_record_valid(&image) &&
+                !(classify_record(&image) == BZ_SLOT_PREPARED &&
+                  image.sequence == s_next_sequence)) {
                 saturating_increment(&s_diagnostics.recovery_retry);
                 s_recovery = BZ_RECOVERY_REPAIR_BEGIN_ERASE;
                 break;
@@ -1383,6 +1407,7 @@ void blind_zone_recovery_process(void)
         while (reads < BZ_RECOVERY_READS &&
                s_repair_image < s_scratch_header.record_count) {
             bz_flash_record_t scratch_image, victim_image;
+            uint32_t commit = BZ_COMMIT_MARKER;
             uint32_t slot;
             while (s_repair_slot < BZ_DATA_PER_SECTOR &&
                    (s_scratch_header.slot_bitmap &
@@ -1400,6 +1425,19 @@ void blind_zone_recovery_process(void)
                 saturating_increment(&s_diagnostics.recovery_retry);
                 s_recovery = BZ_RECOVERY_REPAIR_VICTIM_ERASE;
                 break;
+            }
+            if (classify_record(&victim_image) == BZ_SLOT_PREPARED &&
+                victim_image.sequence == s_next_sequence) {
+                if (!ext_flash_write_verified(
+                        EXT_FLASH_OWNER_BLIND_ZONE,
+                        record_addr(slot) +
+                            offsetof(bz_flash_record_t, commit_marker),
+                        &commit, sizeof(commit)) ||
+                    !read_record_locked(slot, &victim_image) ||
+                    !flash_record_valid(&victim_image)) {
+                    saturating_increment(&s_diagnostics.recovery_retry);
+                    break;
+                }
             }
             ++s_repair_slot;
             ++s_repair_image;
@@ -1517,7 +1555,7 @@ blind_zone_result_t blind_zone_append(const blind_zone_record_t *record)
     flash_record.event_id = record->event_id;
     flash_record.sequence = s_next_sequence;
     memcpy(flash_record.location, record->location, record->length);
-    flash_record.crc32 = crc32_bytes(&flash_record,
+    flash_record.crc32 = crc32_compute(&flash_record,
                                      (uint32_t)offsetof(bz_flash_record_t, crc32));
     flash_record.commit_marker = 0xffffffffUL;
     if (!ext_flash_write_verified(EXT_FLASH_OWNER_BLIND_ZONE, record_addr(write_slot),

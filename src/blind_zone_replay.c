@@ -2,6 +2,7 @@
 #include "blind_zone.h"
 #include "config.h"
 #include "jt808.h"
+#include "log_platform.h"
 #include <stdbool.h>
 
 #define REPLAY_BODY_LIMIT       500U
@@ -21,6 +22,8 @@ typedef struct {
 } replay_inflight_t;
 
 static replay_inflight_t s_inflight;
+
+bool blind_zone_replay_busy(void) { return s_inflight.active; }
 static blind_zone_record_t s_records[REPLAY_RECORDS_PER_BATCH];
 static uint8_t s_body[REPLAY_BODY_LIMIT];
 
@@ -66,6 +69,7 @@ void blind_zone_replay_process(void)
         if (consumed != BLIND_ZONE_OK) return;
         s_inflight.active = false;
         s_inflight.acknowledged = false;
+        log_platform_on_blind_zone_uploaded();
         return;
     }
 

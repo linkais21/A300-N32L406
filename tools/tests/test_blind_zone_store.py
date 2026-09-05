@@ -439,6 +439,35 @@ static void test_runtime_prepared_finalizes_in_original_nonboundary_slot(void)
     assert(out.event_id == record.event_id && record_value(&out) == 95U);
 }
 
+static void test_repair_finalizes_preserved_prepared_image(void)
+{
+    blind_zone_record_t seed = make_record(96U), record = make_record(97U), out;
+    uint32_t sequence = 0U;
+    unsigned calls = 0U;
+
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    append_accepted(&seed);
+    consume_accepted(1U, 1U);
+    fail_marker_program_noop = true;
+    assert(blind_zone_append(&record) == BLIND_ZONE_PENDING);
+    /* Route the still-PREPARED slot directly through the real repair chain;
+     * boot reconcile must not get a chance to finalize it first. */
+    blind_zone_test_start_repair(1U);
+    while (!blind_zone_ready() && calls++ < 3000U)
+        blind_zone_recovery_process();
+    assert(blind_zone_ready() && calls < 3000U);
+    assert(*(uint32_t *)(void *)(flash_mem + BLIND_DATA_ADDR +
+                                RECORD_BYTES + 60U) == 0x434d4954UL);
+    assert(blind_zone_append(&record) == BLIND_ZONE_OK);
+    assert(blind_zone_peek(&out, 1U, &sequence) == 1U && sequence == 2U);
+    assert(out.event_id == record.event_id && record_value(&out) == 97U);
+    owner = EXT_FLASH_OWNER_NONE;
+    recover();
+    assert(blind_zone_peek(&out, 1U, &sequence) == 1U && sequence == 2U);
+    assert(out.event_id == record.event_id && record_value(&out) == 97U);
+}
+
 static void test_scratch_phase_cut_restores_exact_slots(void)
 {
     static const blind_zone_test_recovery_state_t phases[] = {
@@ -1055,6 +1084,29 @@ static void test_reconcile_adopts_three_unjournaled_records(void)
            record_value(&out[2]) == 603U && record_value(&out[3]) == 604U);
 }
 
+static void test_full_ring_stale_next_active_is_reclaimed(void)
+{
+    blind_zone_record_t stale = make_record(611U), next = make_record(612U), out;
+    uint32_t sequence = 0U;
+    unsigned calls = 0U;
+
+    memset(flash_mem, 0xff, sizeof(flash_mem));
+    owner = EXT_FLASH_OWNER_NONE; fail_after = -1; recover();
+    append_accepted(&stale); /* slot 0 contains ACTIVE sequence 1 */
+    blind_zone_test_set_state(0U, 0U, BLIND_ZONE_PHYSICAL_SLOTS, 0U, 1U);
+    blind_zone_test_begin_reconcile();
+    while (!blind_zone_ready() && calls++ < 3000U)
+        blind_zone_recovery_process();
+    assert(blind_zone_ready() && calls < 3000U);
+    append_accepted(&next);
+    assert(blind_zone_peek(&out, 1U, &sequence) == 1U && sequence == 1U);
+    assert(out.event_id == next.event_id && record_value(&out) == 612U);
+    owner = EXT_FLASH_OWNER_NONE;
+    recover();
+    assert(blind_zone_peek(&out, 1U, &sequence) == 1U && sequence == 1U);
+    assert(out.event_id == next.event_id && record_value(&out) == 612U);
+}
+
 static void test_full_queue_postcommit_head_read_fault_is_pending(void)
 {
     uint32_t i;
@@ -1082,6 +1134,7 @@ int main(void)
     test_journalled_boot_repairs_damaged_sector_before_ready();
     test_prepared_record_is_finalized_after_reset();
     test_runtime_prepared_finalizes_in_original_nonboundary_slot();
+    test_repair_finalizes_preserved_prepared_image();
     test_scratch_phase_cut_restores_exact_slots();
     test_repeated_sector_repairs_make_forward_progress();
     test_full_capacity_prepared_and_distributed_repairs_progress();
@@ -1106,6 +1159,7 @@ int main(void)
     test_consume_io_counts_target_read_and_tombstone_failures();
     test_consumed_tombstone_prevents_raw_resurrection();
     test_reconcile_adopts_three_unjournaled_records();
+    test_full_ring_stale_next_active_is_reclaimed();
     test_full_queue_postcommit_head_read_fault_is_pending();
     puts("test_blind_zone_store: PASS");
     return 0;
@@ -1123,7 +1177,8 @@ def main() -> None:
                 compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror",
                 "-DBLIND_ZONE_TEST",
                 "-I", str(ROOT / "include"),
-                str(ROOT / "src" / "blind_zone.c"), str(tmp / "harness.c"),
+                str(ROOT / "src" / "blind_zone.c"), str(ROOT / "src" / "crc32.c"),
+                str(tmp / "harness.c"),
                 "-o", str(executable),
             ],
             check=True,

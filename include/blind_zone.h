@@ -58,6 +58,10 @@ typedef enum {
 } blind_zone_test_recovery_state_t;
 void blind_zone_test_set_diagnostics(const blind_zone_diagnostics_t *value);
 blind_zone_test_recovery_state_t blind_zone_test_recovery_state(void);
+void blind_zone_test_set_state(uint32_t head, uint32_t count, uint32_t span,
+                               uint32_t next, uint32_t next_sequence);
+void blind_zone_test_begin_reconcile(void);
+void blind_zone_test_start_repair(uint32_t slot);
 #endif
 
 #endif

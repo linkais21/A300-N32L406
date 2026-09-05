@@ -70,13 +70,30 @@ static device_config_t s_config;
 
 device_config_t *cfg_get(void) { return &s_config; }
 void cfg_save(void) {}
-bool terminal_identity_load(char out[8]) { memcpy(out, "1234567", 8U); return true; }
+bool cfg_store_candidate(const device_config_t *candidate)
+{ s_config = *candidate; return true; }
+cfg_store_result_t cfg_set_pid_result(const char pid[CFG_PID_LEN])
+{ memcpy(s_config.pid, pid, CFG_PID_LEN); return CFG_STORE_OK; }
+bool cfg_set_auth_code(uint8_t channel, const char *code)
+{
+    char *target = channel == EC800M_CH_MAIN ? s_config.auth_code :
+                   channel == EC800M_CH_BACKUP ? s_config.backup_auth_code : NULL;
+    if (target == NULL || strlen(code) >= CFG_AUTH_LEN) return false;
+    memset(target, 0, CFG_AUTH_LEN); memcpy(target, code, strlen(code)); return true;
+}
 void ec800m_get_imei(char *buf, uint8_t size)
 {
     const char *imei = "123456789012345";
     size_t n = strlen(imei);
     if (n >= size) n = size - 1U;
     memcpy(buf, imei, n); buf[n] = '\0';
+}
+void ec800m_get_iccid(char *buf, uint8_t size)
+{
+    const char *iccid = "89860412102500000001";
+    size_t n = strlen(iccid);
+    if (n >= size) n = size - 1U;
+    memcpy(buf, iccid, n); buf[n] = '\0';
 }
 bool ec800m_is_ready(void) { return true; }
 void ec800m_register_recv(ec800m_recv_cb_t cb) { (void)cb; }
@@ -89,7 +106,15 @@ int ec800m_tcp_send(uint8_t ch, const uint8_t *data, uint16_t length)
     ++s_send_count;
     return s_send_result;
 }
+bool ec800m_tcp_send_was_ambiguous(void) { return false; }
+void ec800m_tcp_send_clear_ambiguous(void) {}
+bool hw_acc_is_on(void) { return false; }
+bool gps_get_last_trusted(gps_data_t *out) { (void)out; return false; }
+void log_platform_on_first_online(void) {}
+void log_platform_on_blind_zone_uploaded(void) {}
 int ec800m_get_csq(void) { return 19; }
+float adc_get_car_voltage(void) { return 12.6f; }
+float adc_get_bat_voltage(void) { return 4.0f; }
 bool tcp_manager_is_online(void) { return s_tcp_online; }
 bool tcp_manager_ch_online(uint8_t ch)
 { return s_tcp_online && ((ch == EC800M_CH_MAIN && s_main_online) ||
@@ -257,12 +282,13 @@ static void authenticate(void)
     s_send_result = 0;
     jt808_process();
     auth_serial = sent_serial();
-    auth_channel = tcp_manager_active_ch();
+    auth_channel = s_last_send_channel;
     other_channel = auth_channel == EC800M_CH_MAIN ?
                     EC800M_CH_BACKUP : EC800M_CH_MAIN;
-    inject_ack(auth_serial, MSG_TERMINAL_AUTH, 1U, 5U);
+    inject_ack_ch(auth_channel, (uint16_t)(auth_serial + 1U),
+                  MSG_TERMINAL_AUTH, 0U, 5U);
     assert(!jt808_is_online());
-    inject_ack(auth_serial, MSG_LOCATION_REPORT, 0U, 5U);
+    inject_ack_ch(auth_channel, auth_serial, MSG_LOCATION_REPORT, 0U, 5U);
     assert(!jt808_is_online());
     inject_ack_ch(other_channel, auth_serial, MSG_TERMINAL_AUTH, 0U, 5U);
     assert(!jt808_is_online());
@@ -338,6 +364,7 @@ int main(void)
     s_append_script[1] = BLIND_ZONE_OK;
     s_append_script_count = 2U; s_append_script_index = 0U;
     s_tcp_online = false;
+    s_gps.last_update_ms = g_tick_ms;
     assert(jt808_send_location() == -2);
     s_gps.lat += 1.0;
     assert(jt808_send_location() == 0);
@@ -349,6 +376,7 @@ int main(void)
     s_append_script[1] = BLIND_ZONE_PENDING;
     s_append_script[2] = BLIND_ZONE_OK;
     s_append_script_count = 3U; s_append_script_index = 0U;
+    s_gps.last_update_ms = g_tick_ms;
     assert(jt808_send_location() == -2);
     s_gps.lon += 1.0;
     assert(jt808_send_location() == -2);
@@ -360,9 +388,12 @@ int main(void)
 
     /* A live report that cannot reach an authenticated session is stored once. */
     s_tcp_online = false;
+    s_gps.last_update_ms = g_tick_ms;
     assert(jt808_send_location() == 0); /* accepted by durable offline storage */
     assert(s_append_count == 1U && s_queue_count == 1U);
-    g_tick_ms = 60001U;
+    assert(s_queue[0].length == 34U);
+    g_tick_ms += 60001U;
+    s_gps.last_update_ms = g_tick_ms;
     jt808_process();
     assert(s_append_count == 2U && s_queue_count == 2U);
     jt808_process();
@@ -372,6 +403,7 @@ int main(void)
     authenticate();
     /* Ordinary traffic stays on the authenticated backup session even when
      * main opens later, and main-channel commands are rejected. */
+    strcpy(s_config.backup_auth_code, "AUTH");
     jt808_init(&terminal);
     s_main_online = false; s_backup_online = true; s_tcp_online = true;
     authenticate();
@@ -487,7 +519,7 @@ def compile_and_run(replay_source: Path) -> subprocess.CompletedProcess[str]:
         (tmp / "harness.c").write_text(HARNESS, encoding="utf-8")
         (tmp / "n32l40x.h").write_text(
             "#ifndef N32L40X_H\n#define N32L40X_H\n"
-            "#define GPIOA ((void *)0)\n#define GPIO_PIN_3 3U\n#define Bit_RESET 0\n"
+            "#define GPIOA ((void *)0)\n#define GPIO_PIN_3 3U\n#define GPIO_PIN_12 12U\n#define Bit_RESET 0\n"
             "int GPIO_ReadInputDataBit(void *, unsigned);\n#endif\n",
             encoding="ascii",
         )
@@ -496,7 +528,9 @@ def compile_and_run(replay_source: Path) -> subprocess.CompletedProcess[str]:
             [
                 compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror",
                 "-I", str(tmp), "-I", str(ROOT / "include"),
-                str(ROOT / "src" / "jt808.c"), str(replay_source),
+                str(ROOT / "src" / "jt808.c"),
+                str(ROOT / "src" / "jt808_session.c"),
+                str(ROOT / "src" / "terminal_identity.c"), str(replay_source),
                 str(tmp / "harness.c"), "-lm", "-o", str(executable),
             ], check=True,
         )
