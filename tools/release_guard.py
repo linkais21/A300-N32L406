@@ -40,10 +40,10 @@ IDENTITY_SERVICE_REQUIREMENTS = {
         r"\bs_terminal\.terminal_id\s*\[\s*0\s*\]\s*=\s*'\\0'\s*;"
     ), None, ()),
     "src/jt808.c": ("refresh_terminal_identity", re.compile(
-        r"terminal_identity_load\s*\(\s*terminal_id\s*\)"
+        r"terminal_identity_sync\s*\(\s*pid\s*,\s*phone\s*,\s*terminal_id\s*\)"
     ), "terminal_id", (
-        re.compile(r"char\s+terminal_id\s*\[\s*8\s*\]\s*;"),
-        re.compile(r"terminal_identity_load\s*\(\s*terminal_id\s*\)"),
+        re.compile(r"char\s+pid\s*\[\s*12\s*\]\s*,\s*phone\s*\[\s*13\s*\]\s*,\s*terminal_id\s*\[\s*8\s*\]\s*;"),
+        re.compile(r"terminal_identity_sync\s*\(\s*pid\s*,\s*phone\s*,\s*terminal_id\s*\)"),
         re.compile(r"memcpy\s*\(\s*s_term\.terminal_id\s*,\s*terminal_id\s*,"
                    r"\s*sizeof\s*\(\s*s_term\.terminal_id\s*\)\s*\)"),
     )),
@@ -55,11 +55,11 @@ IDENTITY_SERVICE_REQUIREMENTS = {
         re.compile(r"memcpy\s*\(\s*body\s*\+\s*pos\s*,\s*tid\s*,\s*7\s*\)"),
     )),
     "src/terminal_identity.c": ("terminal_identity_load", re.compile(
-        r"return\s+terminal_id_derive\s*\(\s*config->pid\s*,\s*imei\s*,\s*out\s*\)\s*;"
+        r"return\s+terminal_identity_sync\s*\(\s*pid\s*,\s*phone\s*,\s*out\s*\)\s*;"
     ), "out", (
-        re.compile(r"out\s*==\s*NULL"),
-        re.compile(r"out\s*\[\s*0\s*\]\s*=\s*'\\0'"),
-        re.compile(r"return\s+terminal_id_derive\s*\(\s*config->pid\s*,\s*imei\s*,\s*out\s*\)\s*;"),
+        re.compile(r"char\s+pid\s*\[\s*12\s*\]\s*;"),
+        re.compile(r"char\s+phone\s*\[\s*13\s*\]\s*;"),
+        re.compile(r"return\s+terminal_identity_sync\s*\(\s*pid\s*,\s*phone\s*,\s*out\s*\)\s*;"),
     )),
     "src/f39_reply.c": ("device_id", re.compile(
         r"return\s+terminal_id_derive\s*\(\s*c->pid\s*,\s*imei\s*,\s*terminal_id\s*\)\s*;"
@@ -72,8 +72,8 @@ CANONICAL_CONSUMER_PATTERNS = {
         re.compile(r"s_terminal\.terminal_id\s*\[\s*0\s*\]\s*=\s*'\\0'\s*;"),
     ),
     "src/jt808.c": (
-        re.compile(r"char\s+terminal_id\s*\[\s*8\s*\]\s*;"),
-        re.compile(r"if\s*\(\s*!terminal_identity_load\s*\(\s*terminal_id\s*\)\s*\)\s*return\s+false\s*;"),
+        re.compile(r"char\s+pid\s*\[\s*12\s*\]\s*,\s*phone\s*\[\s*13\s*\]\s*,\s*terminal_id\s*\[\s*8\s*\]\s*;"),
+        re.compile(r"if\s*\(\s*!terminal_identity_sync\s*\(\s*pid\s*,\s*phone\s*,\s*terminal_id\s*\)\s*\)\s*return\s+false\s*;"),
         re.compile(r"memcpy\s*\(\s*s_term\.terminal_id\s*,\s*terminal_id\s*,\s*"
                    r"sizeof\s*\(\s*s_term\.terminal_id\s*\)\s*\)\s*;"),
         re.compile(r"return\s+true\s*;"),
@@ -84,9 +84,9 @@ CANONICAL_CONSUMER_PATTERNS = {
         re.compile(r"memcpy\s*\(\s*body\s*\+\s*pos\s*,\s*tid\s*,\s*7\s*\)\s*;"),
     ),
     "src/terminal_identity.c": (
-        re.compile(r"if\s*\(\s*out\s*==\s*NULL\s*\)\s*return\s+false\s*;"),
-        re.compile(r"out\s*\[\s*0\s*\]\s*=\s*'\\0'\s*;"),
-        re.compile(r"return\s+terminal_id_derive\s*\(\s*config->pid\s*,\s*imei\s*,\s*out\s*\)\s*;"),
+        re.compile(r"char\s+pid\s*\[\s*12\s*\]\s*;"),
+        re.compile(r"char\s+phone\s*\[\s*13\s*\]\s*;"),
+        re.compile(r"return\s+terminal_identity_sync\s*\(\s*pid\s*,\s*phone\s*,\s*out\s*\)\s*;"),
     ),
     "src/f39_reply.c": (
         re.compile(r"char\s+imei\s*\[\s*F39_IMEI_MAX_LENGTH\s*\+\s*1U\s*\]\s*;"),
@@ -113,17 +113,17 @@ TRIGRAPHS = {
     "??!": "|", "??<": "{", "??>": "}", "??-": "~",
 }
 CANONICAL_CONSUMER_SHA256 = {
-    "src/main.c": "b14e80cd3234f15283f08ad476e8e651d63bfb21f81328ea95abc52a323c0b7b",
-    "src/jt808.c": "9d465de0bd09fd7b89d8022cfeed284a83095ef7ed79449af13f23b2525330a4",
+    "src/main.c": "b5760fe96f713fe50860d8aea2154fbdf1f91b0051b4865b67df478979c5d12d",
+    "src/jt808.c": "d38583fc4d2e47eab4fe184b90a21205dc6e2606266a20e824bff69321871586",
     "src/jt808_params.c": "2000242a482e339fef40541a46c3e2190b0bdfc9d4b79f7807322f2ab584fd0e",
-    "src/terminal_identity.c": "516c0c00012ff5c27046891fc05fb206d4028705d8ebc0bb84d6f392309cf178",
+    "src/terminal_identity.c": "d8f0d206632b5ecb436d0989e3e9daf8a7fbb734763446a84e27285b3e261d5b",
     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
 }
 CANONICAL_IDENTITY_FILE_SHA256 = {
-    "include/config.h": "72653c500dbdb46a823ccb691a07948d32de933bd83561a8e1ac8d2dbf94271f",
+    "include/config.h": "a53b11f8799dc85c6c46d33d54901f6dcfd224f57298348ca73eb7bc0a9f939e",
     "include/build_version.h": "cb8e276f477eb946903af3eb1260d58f3f266e9631f55ee2fb77e08ceec2c484",
     "include/f39_reply.h": "5809ee23562052f428c5fecc385df768fa549bf7c2793632c8b98245d45ec98c",
-    "include/jt808.h": "257a498062cb52d27abc71cf501d3f1bd7a642198964cb8438abd6ce28a62941",
+    "include/jt808.h": "a3f765310627890e543c4a83b44cf9248dbd141e0a5d80f228e9e1ce427271e6",
 }
 
 
