@@ -32,11 +32,14 @@ bool ext_flash_read(ext_flash_owner_t owner, uint32_t addr, void *buf, uint32_t 
 bool ext_flash_write_verified(ext_flash_owner_t owner, uint32_t addr, const void *buf, uint32_t len)
 {
     if (!owner_ok(owner) || !buf || !range_ok(addr, len) || !spi_flash_write(addr, (const uint8_t *)buf, len)) return false;
-    uint8_t verify[256]; const uint8_t *src = (const uint8_t *)buf;
+    uint8_t verify[64]; const uint8_t *src = (const uint8_t *)buf;
     while (len) {
         uint32_t n = len > sizeof verify ? sizeof verify : len;
         if (!owner_ok(owner) || !spi_flash_read(addr, verify, n)) return false;
-        for (uint32_t i = 0; i < n; ++i) if (verify[i] != src[i]) return false;
+        for (uint32_t i = 0; i < n; ++i) if (verify[i] != src[i]) {
+            spi_flash_note_verify_failure();
+            return false;
+        }
         addr += n; src += n; len -= n;
     }
     return true;
@@ -45,7 +48,7 @@ ext_flash_program_result_t ext_flash_write_result(
     ext_flash_owner_t owner, uint32_t addr, const void *buf, uint32_t len)
 {
     spi_flash_program_result_t programmed;
-    uint8_t verify[256];
+    uint8_t verify[64];
     const uint8_t *src = (const uint8_t *)buf;
     uint32_t remaining = len;
     if (!owner_ok(owner) || !buf || !range_ok(addr, len))
@@ -61,8 +64,10 @@ ext_flash_program_result_t ext_flash_write_result(
         if (!owner_ok(owner) || !spi_flash_read(addr, verify, n))
             return EXT_FLASH_PROGRAM_ISSUED_UNCERTAIN;
         for (i = 0U; i < n; ++i)
-            if (verify[i] != src[i])
+            if (verify[i] != src[i]) {
+                spi_flash_note_verify_failure();
                 return EXT_FLASH_PROGRAM_ISSUED_UNCERTAIN;
+            }
         addr += n;
         src += n;
         remaining -= n;

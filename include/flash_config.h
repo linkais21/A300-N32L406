@@ -12,13 +12,15 @@
  *   Slot B: sector 1  @ 0x001000 (4 KB)  — redundant backup
  *   FOTA area:        @ 0x010000 (1 MB)  — firmware download buffer
  *
- * Each slot: [magic(4)] [version(2)] [len(2)] [data(N)] [crc32(4)]
+ * v3 slot: [magic(4)] [version(2)] [len(2)] [generation(4)]
+ *          [data(N)] [crc32(4)] [commit_marker(4)]
  */
 
 #define CFG_FLASH_ADDR_A    EXT_FLASH_CONFIG_SLOT_A_ADDR
 #define CFG_FLASH_ADDR_B    EXT_FLASH_CONFIG_SLOT_B_ADDR
 #define CFG_MAGIC           0xA3001406UL
-#define CFG_VERSION         2
+#define CFG_VERSION         3U
+#define CFG_COMMIT_MARKER   0x43464733UL
 
 /* String field max lengths */
 #define CFG_IP_LEN      64
@@ -103,7 +105,18 @@ typedef struct {
     uint16_t speed_limit_kmh;
     uint8_t  sleep_report_mode;
     uint8_t  gpsbds_mode;
+
+    /* v3 append-only field; the deployed v2 byte prefix ends before this. */
+    char     backup_auth_code[CFG_AUTH_LEN];
 } device_config_t;
+
+typedef enum {
+    CFG_STORE_OK = 0,
+    CFG_STORE_INVALID,
+    CFG_STORE_LOCK_FAILED,
+    CFG_STORE_WRITE_FAILED,
+    CFG_STORE_VERIFY_FAILED,
+} cfg_store_result_t;
 
 /* Default values applied on factory reset */
 extern const device_config_t k_config_defaults;
@@ -111,6 +124,9 @@ extern const device_config_t k_config_defaults;
 void     cfg_init(void);                /* load from flash; apply defaults if invalid */
 void     cfg_save(void);                /* write to both slots */
 bool     cfg_store_candidate(const device_config_t *candidate);
+cfg_store_result_t cfg_store_candidate_result(const device_config_t *candidate);
+cfg_store_result_t cfg_set_pid_result(const char pid[CFG_PID_LEN]);
+bool     cfg_set_auth_code(uint8_t channel, const char *code);
 void     cfg_factory_reset(void);       /* restore defaults and save */
 
 device_config_t *cfg_get(void);         /* pointer to live RAM copy */
