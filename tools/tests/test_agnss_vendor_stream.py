@@ -36,7 +36,6 @@ typedef struct { const uint8_t *data; uint32_t len; } agnss_source_t;
 typedef enum { ZK_RESP_MALFORMED=-1, ZK_RESP_INCOMPLETE=0, ZK_RESP_OK=1 } zhongkewei_resp_t;
 int agnss_huada_inject(const agnss_source_t *, const gps_context_t *);
 int agnss_zhongkewei_request(const agnss_source_t *, const gps_context_t *);
-int zhongkewei_request_assistance(const gps_context_t *);
 zhongkewei_resp_t zhongkewei_parse_csip_frame(const uint8_t *, uint32_t, const uint8_t **, uint16_t *);
 #endif
 """,
@@ -233,6 +232,11 @@ int main(void) {
 
 
 def test_c_harness():
+    source = (ROOT / "src" / "agnss_zhongkewei.c").read_text(encoding="utf-8")
+    assert "#define ZK_STREAM_MAX (2048U + CSIP_MIN_SIZE - 1U)" in source, (
+        "CSIP stream storage must be bounded to the parser's largest possible "
+        "frame instead of reserving an unrelated 4 KiB buffer"
+    )
     # In Windows shells PATHEXT may be absent in Python's child environment;
     # accept an explicit compiler path so the real C contract cannot silently
     # downgrade to a skip.

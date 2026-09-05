@@ -1,22 +1,12 @@
 #include "agnss_vendor.h"
-#include "flash_config.h"
-#include "ec800m.h"
 #include "gps.h"
-#include <stdio.h>
 #include <string.h>
 
-#define ZK_STREAM_MAX 4096U
 #define CSIP_HEADER_SIZE 6U
 #define CSIP_TRAILER_SIZE 4U
 #define CSIP_MIN_SIZE (CSIP_HEADER_SIZE + CSIP_TRAILER_SIZE)
+#define ZK_STREAM_MAX (2048U + CSIP_MIN_SIZE - 1U)
 static uint8_t s_rx[ZK_STREAM_MAX]; static uint32_t s_rx_len;
-
-int zhongkewei_build_request(char *out, uint32_t cap, const char *user, const char *pwd, const gps_context_t *ctx)
-{
-    if (!out || cap == 0 || !user || !pwd || !*user || !*pwd || !ctx) return -1;
-    int n=snprintf(out, cap, "user=%s;pwd=%s;cmd=full;lat=%.7f;lon=%.7f;alt=%.2f;", user,pwd,ctx->lat,ctx->lon,(double)ctx->altitude_m);
-    return (n < 0 || (uint32_t)n >= cap) ? -1 : n;
-}
 
 static uint32_t le32(const uint8_t *p)
 {
@@ -111,6 +101,7 @@ static int csip_feed(const uint8_t *data, uint32_t len)
 
 int agnss_zhongkewei_request(const agnss_source_t *src, const gps_context_t *ctx)
 {
+    (void)ctx;
     if (src && src->data && src->len) {
         /* Offline CSIP injection is receiver data and needs no server credential. */
         return csip_feed(src->data, src->len);
@@ -121,12 +112,3 @@ int agnss_zhongkewei_request(const agnss_source_t *src, const gps_context_t *ctx
     return 0;
 }
 
-int zhongkewei_request_assistance(const gps_context_t *ctx)
-{
-    device_config_t *cfg=cfg_get(); char req[256];
-    /* The receiver specification defines CSIP only. This server request is
-     * retained for transport compatibility but remains protocol-unverified. */
-    if (!cfg || zhongkewei_build_request(req,sizeof req,cfg->agnss_user,cfg->agnss_pwd,ctx)<0) return -1;
-    if (!ec800m_is_ready() || ec800m_tcp_state(EC800M_CH_AGPS) != TCP_STATE_OPEN) return -1;
-    return ec800m_tcp_send(EC800M_CH_AGPS, (const uint8_t *)req, (uint16_t)strlen(req));
-}

@@ -5,6 +5,15 @@
 #include <string.h>
 #include <math.h>
 
+#ifdef A300_HARDWARE_BRINGUP
+int agnss_huada_inject(const agnss_source_t *src, const gps_context_t *ctx)
+{ (void)src; (void)ctx; return -1; }
+void gnss_vendor_set_type(gnss_type_t type) { (void)type; }
+bool gnss_vendor_network_rx(uint8_t ch, const uint8_t *data, uint16_t len)
+{ (void)ch; (void)data; (void)len; return false; }
+bool gnss_vendor_inject(gnss_type_t type, const uint8_t *data, uint16_t len)
+{ (void)type; (void)data; (void)len; return false; }
+#else
 #define HUADA_STREAM_MAX 4096U
 static uint8_t s_stream[HUADA_STREAM_MAX];
 static uint32_t s_stream_len;
@@ -86,3 +95,4 @@ bool gnss_vendor_inject(gnss_type_t type, const uint8_t *data, uint16_t len)
     if (type == GNSS_TYPE_ATGM332D_F7N) return agnss_zhongkewei_request(&src, ctx) == 0;
     return 0;
 }
+#endif
