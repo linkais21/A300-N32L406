@@ -5,6 +5,7 @@
 #include "debug_uart.h"
 #include "config.h"
 #include "terminal_identity.h"
+#include "work_mode.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -110,6 +111,7 @@ void jt808_params_handle_set(const uint8_t *body, uint16_t len, uint16_t sn)
         pos += plen;
     }
     cfg_save();
+    work_mode_config_changed(cfg_get(), TICK_MS() / 1000U);
 done:
     jt808_send_general_resp(sn, MSG_SET_TERMINAL_PARAM, 0);
     dbg_printf("[808] 0x8103 param set (%u params)\r\n", body[0]);

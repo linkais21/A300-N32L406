@@ -5,6 +5,7 @@
 #include "hw_init.h"
 #include "config.h"
 #include "fota.h"
+#include <string.h>
 
 /*
  * Dual-server mode: both main and backup connect independently.
@@ -35,6 +36,71 @@ typedef struct {
 } ch_ctx_t;
 
 static ch_ctx_t s_ch[2];   /* [0]=main  [1]=backup */
+static bool s_boot_summary_logged;
+
+static bool decimal_length_valid(const char *value, size_t first, size_t second)
+{
+    size_t length = 0U;
+    if (value == NULL) return false;
+    while (value[length] >= '0' && value[length] <= '9') ++length;
+    return value[length] == '\0' && (length == first || length == second);
+}
+
+static bool iccid_length_valid(const char *value)
+{
+    size_t length = 0U;
+    if (value == NULL) return false;
+    while ((value[length] >= '0' && value[length] <= '9') ||
+           (value[length] >= 'A' && value[length] <= 'F'))
+        ++length;
+    return value[length] == '\0' && (length == 19U || length == 20U);
+}
+
+static void log_boot_summary(void)
+{
+    char imei[16] = {0};
+    char iccid[22] = {0};
+    char derived_pid[12] = {0};
+    const char *pid;
+    device_config_t *cfg;
+    size_t imei_length, iccid_length;
+    bool imei_valid, iccid_valid;
+    if (s_boot_summary_logged) return;
+    cfg = cfg_get();
+    if (cfg == NULL) return;
+    ec800m_get_imei(imei, sizeof imei);
+    ec800m_get_iccid(iccid, sizeof iccid);
+    imei_length = strlen(imei);
+    iccid_length = strlen(iccid);
+    imei_valid = decimal_length_valid(imei, 15U, 15U);
+    iccid_valid = iccid_length_valid(iccid);
+    pid = cfg->pid;
+    if (!decimal_length_valid(pid, 11U, 11U) && imei_valid) {
+        memcpy(derived_pid, imei + 4U, 11U);
+        derived_pid[11] = '\0';
+        pid = derived_pid;
+    }
+    if (!decimal_length_valid(pid, 11U, 11U)) pid = "INVALID";
+    if (imei_valid && iccid_valid)
+        dbg_printf("[BOOT-ID] IMEI=%s PID=%s ICCID=%s\r\n", imei, pid, iccid);
+    else if (!imei_valid && !iccid_valid)
+        dbg_printf("[BOOT-ID] IMEI=INVALID(len=%u) PID=%s ICCID=INVALID(len=%u)\r\n",
+                   (unsigned)imei_length, pid, (unsigned)iccid_length);
+    else if (!imei_valid)
+        dbg_printf("[BOOT-ID] IMEI=INVALID(len=%u) PID=%s ICCID=%s\r\n",
+                   (unsigned)imei_length, pid, iccid);
+    else
+        dbg_printf("[BOOT-ID] IMEI=%s PID=%s ICCID=INVALID(len=%u)\r\n",
+                   imei, pid, (unsigned)iccid_length);
+    if (cfg->backup_ip[0] == '\0' || cfg->backup_port == 0U)
+        dbg_printf("[BOOT-SERVER] MAIN=%s:%u BACKUP=OFF\r\n",
+                   cfg->server_ip, (unsigned)cfg->server_port);
+    else
+        dbg_printf("[BOOT-SERVER] MAIN=%s:%u BACKUP=%s:%u\r\n",
+                   cfg->server_ip, (unsigned)cfg->server_port,
+                   cfg->backup_ip, (unsigned)cfg->backup_port);
+    s_boot_summary_logged = true;
+}
 
 static void ch_init(ch_ctx_t *c, uint8_t ch)
 {
@@ -52,11 +118,12 @@ static void ch_start_connect(ch_ctx_t *c)
     const char *ip   = (c->ch == TCP_CH_MAIN) ? cfg->server_ip  : cfg->backup_ip;
     uint16_t    port = (c->ch == TCP_CH_MAIN) ? cfg->server_port : cfg->backup_port;
 
-    if (ip[0] == '\0' || ip[0] == '0') {
+    if (ip[0] == '\0' || port == 0U) {
         c->state = CS_DISABLED;
         return;
     }
 
+    log_boot_summary();
     dbg_printf("[TCP] ch%u connecting -> %s:%u\r\n", c->ch, ip, port);
     ec800m_tcp_open(c->ch, ip, port);
     c->state    = CS_CONNECTING;
@@ -132,6 +199,7 @@ static void ch_process(ch_ctx_t *c)
 
 void tcp_manager_init(void)
 {
+    s_boot_summary_logged = false;
     ch_init(&s_ch[0], TCP_CH_MAIN);
     ch_init(&s_ch[1], TCP_CH_BACKUP);
 }

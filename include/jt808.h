@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "gps.h"
 
 /* Message IDs (GB/T 808-2013) */
 #define MSG_TERMINAL_GENERAL_RESP   0x0001
@@ -63,13 +64,23 @@ void jt808_process(void);
 void jt808_on_recv(uint8_t ch, const uint8_t *data, uint16_t len);
 
 /* Build and send messages */
-int jt808_send_register(void);
+int jt808_send_register_to(uint8_t channel);
 void jt808_request_reregister(void);
-int jt808_send_auth(const char *code);
+int jt808_send_auth_to(uint8_t channel, const char *code);
 int jt808_send_heartbeat(void);
+void jt808_set_logical_acc(bool on);
+bool jt808_get_logical_acc(void);
 int jt808_send_location(void);
+int jt808_send_location_to(uint8_t channel, const gps_data_t *snapshot);
+int jt808_send_location_work_mode(uint32_t alarm_bits,
+                                  bool historical_position);
+bool jt808_location_snapshot_valid(const gps_data_t *gps, uint32_t now);
 int jt808_send_general_resp(uint16_t resp_sn, uint16_t resp_id, uint8_t result);
+int jt808_send_general_resp_to(uint8_t channel, uint16_t resp_sn,
+                               uint16_t resp_id, uint8_t result);
 bool jt808_is_online(void);
+bool jt808_channel_online(uint8_t channel);
+uint8_t jt808_online_mask(void);
 
 /* Send an arbitrary message body (used by jt808_params.c for 0x0104/0x0107) */
 int jt808_send_raw(uint16_t msg_id, uint16_t resp_sn,
@@ -77,11 +88,9 @@ int jt808_send_raw(uint16_t msg_id, uint16_t resp_sn,
 int jt808_send_raw_tracked(uint16_t msg_id, const uint8_t *body,
                            uint16_t blen, uint16_t *serial_out);
 uint8_t jt808_online_channel(void);
-uint32_t jt808_online_generation(void);
 
 /* Server address management */
 void jt808_set_server(const char *ip, uint16_t port, bool is_backup);
-void jt808_get_server(char *ip_buf, uint16_t *port, bool is_backup);
 
 /* Alarm trigger */
 void jt808_trigger_alarm(uint32_t alarm_bit);
