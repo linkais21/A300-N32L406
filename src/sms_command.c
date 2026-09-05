@@ -7,7 +7,7 @@ static char upper(char c) { return (c >= 'a' && c <= 'z') ? (char)(c - 32) : c; 
 static bool eq(const char *s, uint16_t n, const char *r) { uint16_t i=0; while (r[i]) { if (i>=n || upper(s[i])!=r[i]) return false; ++i; } return i==n; }
 static bool root_ok(const char *s, uint16_t n)
 {
-    static const char *const roots[]={"PARAM","RESET","PID","IP","FIP","FREQ","HBT","MODEL","SPEED","APN","RELAY","GPSDUP","MLG","CAR","GPSBDS","GMTSET"};
+    static const char *const roots[]={"PARAM","RESET","PID","IP","FIP","FREQ","HBT","MODEL","SPEED","APN","RELAY","GPSDUP","MLG","CAR","GPSBDS","GMTSET","FOTA","LOG"};
     uint16_t i;
     for (i = 0; i < sizeof(roots) / sizeof(roots[0]); ++i)
         if (eq(s, n, roots[i])) return true;

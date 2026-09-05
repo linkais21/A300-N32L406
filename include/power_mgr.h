@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "work_mode_sleep.h"
 
 typedef enum {
     PWR_STATE_ACTIVE = 0,   /* full operation */
@@ -32,5 +33,7 @@ void pwr_acc_isr(void);
 void pwr_sos_isr(void);
 void pwr_charge_isr(void);
 void pwr_light_isr(void);
+
+#define WORK_MODE_SLEEP_LEGACY_POWER_MGR 1
 
 #endif
