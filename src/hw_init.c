@@ -1,5 +1,6 @@
 #include "hw_init.h"
 #include "config.h"
+#include "firmware_layout.h"
 #include "n32l40x.h"
 #include "debug_uart.h"  /* include debug UART header */
 
@@ -22,7 +23,23 @@ void hw_clock_init(void)
      *
      * We only start SysTick here.
      */
+    NVIC_SetVectorTable(NVIC_VectTab_FLASH,
+                        APP_FLASH_BASE - FW_FLASH_BASE);
     SysTick_Config(SYS_CLOCK_HZ / 1000);   /* 1 ms tick at 64 MHz */
+}
+
+bool hw_restore_after_stop2(void)
+{
+    SystemInit();
+    hw_clock_init();
+    hw_nvic_init();
+    hw_gpio_init();
+    hw_usart_init();
+    hw_spi_init();
+    hw_i2c_init();
+    hw_adc_init();
+    hw_tim_init();
+    return SystemCoreClock == SYS_CLOCK_HZ;
 }
 
 /* ── GPIO helper: init struct defaults ───────────────────────────────────── */
@@ -123,10 +140,24 @@ void hw_gpio_init(void)
     GPIO_SetBits(FLASH_CS_PORT, FLASH_CS_PIN);
 
     /* Inputs */
+    /* M_ACC_IN is the Q9 collector.  Q9 is an inverting NPN level shifter:
+     * external ACC ON drives the collector low; the pull-up restores PA12
+     * high when the vehicle is off. */
     gpio_input(ACC_DET_PORT,   ACC_DET_PIN,   GPIO_Pull_Up);
-    gpio_input(SOS_PORT,       SOS_PIN,       GPIO_Pull_Up);
+    gpio_input(SOS_PORT, SOS_PIN, GPIO_Pull_Up);
     gpio_input(DC_UP_PORT,     DC_UP_PIN,     GPIO_No_Pull);
     gpio_input(LIGHT_INT_PORT, LIGHT_INT_PIN, GPIO_No_Pull);
+    gpio_input(DA218E_INT1_PORT, DA218E_INT1_PIN, GPIO_No_Pull);
+}
+
+bool hw_acc_is_on(void)
+{
+    return !hw_acc_pin_high();
+}
+
+bool hw_acc_pin_high(void)
+{
+    return GPIO_ReadInputDataBit(ACC_DET_PORT, ACC_DET_PIN) != Bit_RESET;
 }
 
 /* ── USART AF helper ──────────────────────────────────────────────────────── */
@@ -221,7 +252,7 @@ void hw_usart_init(void)
     USART_Enable(EC800M_UART, ENABLE);
 }
 
-/* ── SPI1 Flash (PA5=SCK AF5, PA6=MISO AF5, PA7=MOSI AF5, PA4=CS) ──────── */
+/* ── SPI1 Flash (PA5=SCK AF0, PA6=MISO AF0, PA7=MOSI AF0, PA4=CS) ──────── */
 void hw_spi_init(void)
 {
     GPIO_InitType g;
@@ -236,16 +267,16 @@ void hw_spi_init(void)
     g.GPIO_Pull      = GPIO_No_Pull;
 
     g.Pin            = FLASH_SCK_PIN;
-    g.GPIO_Alternate = GPIO_AF5_SPI1;
+    g.GPIO_Alternate = GPIO_AF0_SPI1;
     GPIO_InitPeripheral(FLASH_SCK_PORT, &g);
 
     g.Pin            = FLASH_MOSI_PIN;
-    g.GPIO_Alternate = GPIO_AF5_SPI1;
+    g.GPIO_Alternate = GPIO_AF0_SPI1;
     GPIO_InitPeripheral(FLASH_MOSI_PORT, &g);
 
     g.GPIO_Mode      = GPIO_Mode_Input;
     g.Pin            = FLASH_MISO_PIN;
-    g.GPIO_Alternate = GPIO_AF5_SPI1;
+    g.GPIO_Alternate = GPIO_AF0_SPI1;
     GPIO_InitPeripheral(FLASH_MISO_PORT, &g);
 
     /* CS already set high by hw_gpio_init */
@@ -264,7 +295,7 @@ void hw_spi_init(void)
     SPI_Enable(FLASH_SPI, ENABLE);
 }
 
-/* ── I2C1 (PB6=SCL AF4, PB7=SDA AF4) 100 kHz ─────────────────────────────── */
+/* ── I2C2 (PD15=SCL AF6, PD14=SDA AF6) 100 kHz ───────────────────────────── */
 void hw_i2c_init(void)
 {
     GPIO_InitType g;
@@ -273,17 +304,28 @@ void hw_i2c_init(void)
     RCC_EnableAPB1PeriphClk(BSP_I2C_CLK, ENABLE);
     GPIO_InitStruct(&g);
 
+    g.Pin = BSP_I2C_SCL_PIN | BSP_I2C_SDA_PIN;
+    g.GPIO_Mode = GPIO_Mode_Input;
+    g.GPIO_Slew_Rate = GPIO_Slew_Rate_Low;
+    g.GPIO_Current = GPIO_DC_4mA;
+    g.GPIO_Pull = GPIO_Pull_Up;
+    GPIO_InitPeripheral(GPIOD, &g);
+    delay_us(10U);
+    dbg_printf("[ACCEL] bus pre SCL=%u SDA=%u\r\n",
+               GPIO_ReadInputDataBit(BSP_I2C_SCL_PORT, BSP_I2C_SCL_PIN),
+               GPIO_ReadInputDataBit(BSP_I2C_SDA_PORT, BSP_I2C_SDA_PIN));
+
     g.GPIO_Mode      = GPIO_Mode_AF_OD;
     g.GPIO_Slew_Rate = GPIO_Slew_Rate_High;
     g.GPIO_Current   = GPIO_DC_4mA;
     g.GPIO_Pull      = GPIO_Pull_Up;
 
-    g.Pin            = BSP_I2C_SCL_PIN;
-    g.GPIO_Alternate = GPIO_AF4_I2C1;
+    g.Pin = BSP_I2C_SCL_PIN;
+    g.GPIO_Alternate = BSP_I2C_GPIO_AF;
     GPIO_InitPeripheral(BSP_I2C_SCL_PORT, &g);
 
-    g.Pin            = BSP_I2C_SDA_PIN;
-    g.GPIO_Alternate = GPIO_AF4_I2C1;
+    g.Pin = BSP_I2C_SDA_PIN;
+    g.GPIO_Alternate = BSP_I2C_GPIO_AF;
     GPIO_InitPeripheral(BSP_I2C_SDA_PORT, &g);
 
     I2C_DeInit(BSP_I2C);
@@ -298,7 +340,7 @@ void hw_i2c_init(void)
     I2C_Enable(BSP_I2C, ENABLE);
 }
 
-/* ── ADC1: PA0 (ch1=CAR) PA1 (ch2=BAT) ───────────────────────────────────── */
+/* ── ADC: PA3 (ch4=CAR) PA1 (ch2=BAT) ────────────────────────────────────── */
 void hw_adc_init(void)
 {
     GPIO_InitType g;
@@ -309,8 +351,8 @@ void hw_adc_init(void)
     GPIO_InitStruct(&g);
     g.GPIO_Mode  = GPIO_Mode_Analog;
     g.GPIO_Pull  = GPIO_No_Pull;
-    g.Pin        = ADC_CAR_PIN | ADC_BAT_PIN;
-    GPIO_InitPeripheral(GPIOA, &g);
+    g.Pin = ADC_CAR_PIN | ADC_BAT_PIN;
+    GPIO_InitPeripheral(ADC_CAR_PORT, &g);
 
     ADC_DeInit(ADC);
     ADC_InitStruct(&a);

@@ -1,19 +1,26 @@
 /* Newlib syscall stubs — required when libc is pulled in */
 #include <sys/stat.h>
 #include <errno.h>
+#include <stdint.h>
+#include "syscalls.h"
 
 /* heap managed by linker symbols */
 extern char _end;
-extern char _estack;
+extern uint32_t _estack;
+static char *s_heap;
+
+void *sys_heap_break(void)
+{
+    return s_heap != NULL ? s_heap : &_end;
+}
 
 void *_sbrk(int incr)
 {
-    static char *heap = NULL;
     char *prev;
-    if (!heap) heap = &_end;
-    if ((heap + incr) > &_estack) { errno = ENOMEM; return (void *)-1; }
-    prev  = heap;
-    heap += incr;
+    if (s_heap == NULL) s_heap = &_end;
+    if ((s_heap + incr) > (char *)&_estack) { errno = ENOMEM; return (void *)-1; }
+    prev = s_heap;
+    s_heap += incr;
     return prev;
 }
 

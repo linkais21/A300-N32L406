@@ -4,11 +4,6 @@
 #include <stdbool.h>
 #include "sms_command.h"
 
-/* ── RS485 ────────────────────────────────────────────────────────────────── */
-void     rs485_init(uint32_t baud);
-void     rs485_send(const uint8_t *data, uint16_t len);
-uint16_t rs485_recv(uint8_t *buf, uint16_t max_len);  /* returns bytes read */
-
 /* ── SMS ──────────────────────────────────────────────────────────────────── */
 int  sms_send(const char *phone, const char *text);
 typedef void (*sms_send_result_cb_t)(bool success);

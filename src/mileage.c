@@ -74,17 +74,6 @@ void mileage_update(void)
                    (unsigned)dist_m, (unsigned)c->mileage_m);
     }
 
-    /* Angle-change trigger */
-    if (c->anglerep_en && g->speed_kmh >= c->anglerep_speed) {
-        float diff = fabsf(g->heading - s_last_hdg);
-        if (diff > 180.0f) diff = 360.0f - diff;
-        if (diff >= (float)c->anglerep_angle) {
-            dbg_printf("[ANGLE] heading change %.1f deg, force report\r\n", diff);
-            jt808_send_location();
-            s_last_hdg = g->heading;
-        }
-    }
-
     s_last_lat = g->lat;
     s_last_lon = g->lon;
 }
