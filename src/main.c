@@ -181,7 +181,13 @@ static void ntp_resync_process(void)
         dbg_printf("[NTP] synced %04u-%02u-%02u %02u:%02u:%02u UTC\r\n",
                    t.year, t.month, t.day, t.hour, t.minute, t.second);
     } else {
+        /* A silent failure branch made it impossible to tell from a field log
+         * whether the sync ran at all, timed out, or failed to parse.  Report
+         * the attempt and the retry backoff so the next capture is decisive. */
         next_due_ms = TICK_MS() + NTP_RETRY_INTERVAL_MS;
+        dbg_printf("[NTP] sync failed valid=%u retry_in=%us\r\n",
+                   (unsigned)t.valid,
+                   (unsigned)(NTP_RETRY_INTERVAL_MS / 1000UL));
     }
 }
 
