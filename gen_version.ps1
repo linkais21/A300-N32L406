@@ -1,7 +1,9 @@
-# Auto-generate build version before compiling
-$BUILD_DATE = Get-Date -Format "yyyyMMdd"
-$BUILD_TIME = Get-Date -Format "HHmmss"
-$BUILD_DATETIME = Get-Date -Format "MMM dd yyyy - HH:mm:ss"
+# Auto-generate a locale-independent ASCII build version before compiling.
+$NOW = Get-Date
+$INVARIANT_CULTURE = [System.Globalization.CultureInfo]::InvariantCulture
+$BUILD_DATE = $NOW.ToString("yyyyMMdd", $INVARIANT_CULTURE)
+$BUILD_TIME = $NOW.ToString("HHmmss", $INVARIANT_CULTURE)
+$BUILD_DATETIME = $NOW.ToString("MMM dd yyyy - HH:mm:ss", $INVARIANT_CULTURE)
 $FW_VERSION = "T360-A300_406_20260823000000,V3.000"
 
 $versionHeader = @"
@@ -16,5 +18,5 @@ $versionHeader = @"
 #endif /* BUILD_VERSION_H */
 "@
 
-Set-Content -Path "include/build_version.h" -Value $versionHeader -Encoding UTF8
+Set-Content -Path "include/build_version.h" -Value $versionHeader -Encoding ASCII
 Write-Host "Generated version: $FW_VERSION" -ForegroundColor Cyan

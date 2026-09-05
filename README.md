@@ -4,7 +4,7 @@ Firmware for A300-T9 GPS vehicle tracker based on N32L406CDL7 MCU.
 
 ## Hardware
 
-- **MCU**: N32L406CDL7 (ARM Cortex-M4, 384KB Flash, 32KB RAM)
+- **MCU**: N32L406CBL7 (ARM Cortex-M4, 128 KiB Flash, 24 KiB SRAM)
 - **4G Module**: Quectel EC800M-CN (LTE Cat-1, with iFlytek TTS)
 - **GPS Module**: TAU804M-N2B0 (BeiDou dual-frequency RTK)
 - **Flash**: BY25Q16 (16Mbit SPI Flash)
@@ -12,7 +12,7 @@ Firmware for A300-T9 GPS vehicle tracker based on N32L406CDL7 MCU.
 
 ## Features
 
-- JT808/GB-T 808-2013 protocol (Chinese vehicle tracking standard)
+- JT/T 808-2013 registration, authentication, heartbeat and positioning
 - 4G LTE connectivity (EC800M)
 - GPS/BeiDou positioning with RTK support
 - FOTA (Firmware Over-The-Air) updates
@@ -20,6 +20,32 @@ Firmware for A300-T9 GPS vehicle tracker based on N32L406CDL7 MCU.
 - Remote relay control (fuel cutoff)
 - ADC monitoring (vehicle voltage, battery voltage)
 - AT command configuration via debug UART
+
+## JT/T 808-2013 Online Contract
+
+- A valid terminal PID is exactly 11 decimal digits. When PID is empty, the
+  firmware derives it from the last 11 digits of an exact 15-digit IMEI and
+  persists it before sending any JT808 frame.
+- The 2013 message-header phone field is `0 + PID` (12 digits encoded as six
+  BCD bytes); the `0x0100` terminal ID is the final seven PID digits.
+- Primary CH0 and backup CH3 are independent sessions. Each connection has its
+  own registration/authentication transaction, TCP generation, retries,
+  backoff and persisted authentication code.
+- New and factory-reset configurations keep CH3 disabled. Configure it with
+  `FIP,<host>,<port>#` (for example `FIP,58.61.154.237,7018#`) and disable it
+  with `FIP,0#`. Firmware upgrades preserve any non-empty FIP already stored
+  by earlier versions, including legacy domain names.
+- Once per boot, after identity validation and any required PID persistence,
+  the debug UART prints full IMEI, ICCID, device ID, JT808 terminal ID, PID
+  source, main endpoint and either the configured backup endpoint or
+  `BACKUP=OFF`. Identity failures are rate-limited and include the failing
+  stage (`IMEI_FORMAT`, `PID_FORMAT`, `FLASH_LOCK`, `FLASH_WRITE`, or `VERIFY`).
+- After a channel authenticates, it receives `0x0200` immediately when a fresh
+  valid GNSS position and date/time are available. Otherwise it waits for the
+  first valid fix. Zero, stale and frozen coordinates are never reported as a
+  valid real-time fix.
+- I2C2 AF6, EC800M network registration/PDP, both TCP sessions and first-fix
+  positioning require real-device/HIL verification before release.
 
 ## Pin Configuration
 
@@ -30,10 +56,15 @@ Firmware for A300-T9 GPS vehicle tracker based on N32L406CDL7 MCU.
 | 4G PWRKEY | PA8 | Power key control |
 | 4G DTR | PB7 | Sleep control |
 | 4G Power Enable | PA15 | High = enable |
-| GPS TX | PA2 | USART2_TX |
-| GPS RX | PA3 | USART2_RX |
+| GPS TX | PB0 | UART4_TX |
+| GPS RX | PB1 | UART4_RX |
 | GPS Enable | PB6 | LDO enable |
 | GPS LED | PD0 | Blue LED |
+| Vehicle ADC | PA3 | ADC_IN4 |
+| Hardware ACC | PA12 (Q9 collector) | Low = external ACC ON, high = ACC OFF, EXTI12 wake |
+| DA218E SDA | PD14 | I2C2_SDA; requires internal HSI clock |
+| DA218E SCL | PD15 | I2C2_SCL; requires internal HSI clock |
+| DA218E INT1 | PB3 | Digital input |
 | SPI Flash CS | PA4 | Software CS |
 | SPI Flash SCK | PA5 | SPI1_SCK |
 | SPI Flash MISO | PA6 | SPI1_MISO |

@@ -1,5 +1,7 @@
 # Build outputs
 build/
+dist/
+.keys/
 *.o
 *.elf
 *.bin
@@ -41,3 +43,11 @@ build_all.ps1
 # Compiled firmware (keep sources, exclude binaries)
 *.axf
 *.d
+
+# Local portable host toolchain (downloaded outside the source release)
+tools/w64devkit/
+tools/w64devkit-*.7z.exe
+.toolchain/
+
+# HIL/bench build output bundles (regenerated per run, not source)
+output/

@@ -1,10 +1,16 @@
-/* N32L406CDL7 linker script
- * Flash: 128K @ 0x08000000
+/* N32L406CBL7 application linker script
+ * Flash: 104K @ 0x08006000 (after 24K Bootloader)
  * RAM:    24K @ 0x20000000  (SRAM1=16K + SRAM2=8K, per datasheet Table 1-1)
  * Stack: top of RAM = 0x20006000
  */
 
 ENTRY(Reset_Handler)
+
+PHDRS
+{
+  text PT_LOAD FLAGS(5);
+  data PT_LOAD FLAGS(6);
+}
 
 _estack = 0x20006000;
 
@@ -13,7 +19,7 @@ _Min_Stack_Size = 0x800;
 
 MEMORY
 {
-  FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 128K
+  FLASH (rx)  : ORIGIN = 0x08006000, LENGTH = 104K
   RAM   (xrw) : ORIGIN = 0x20000000, LENGTH = 24K
 }
 
@@ -24,7 +30,7 @@ SECTIONS
     . = ALIGN(4);
     KEEP(*(.isr_vector))
     . = ALIGN(4);
-  } >FLASH
+  } >FLASH :text
 
   .text :
   {
@@ -38,7 +44,7 @@ SECTIONS
     KEEP(*(.fini))
     . = ALIGN(4);
     _etext = .;
-  } >FLASH
+  } >FLASH :text
 
   .rodata :
   {
@@ -46,36 +52,36 @@ SECTIONS
     *(.rodata)
     *(.rodata*)
     . = ALIGN(4);
-  } >FLASH
+  } >FLASH :text
 
-  .ARM.extab : { *(.ARM.extab* .gnu.linkonce.armextab.*) } >FLASH
+  .ARM.extab : { *(.ARM.extab* .gnu.linkonce.armextab.*) } >FLASH :text
   .ARM :
   {
     __exidx_start = .;
     *(.ARM.exidx*)
     __exidx_end = .;
-  } >FLASH
+  } >FLASH :text
 
   .preinit_array :
   {
     PROVIDE_HIDDEN(__preinit_array_start = .);
     KEEP(*(.preinit_array*))
     PROVIDE_HIDDEN(__preinit_array_end = .);
-  } >FLASH
+  } >FLASH :text
   .init_array :
   {
     PROVIDE_HIDDEN(__init_array_start = .);
     KEEP(*(SORT(.init_array.*)))
     KEEP(*(.init_array*))
     PROVIDE_HIDDEN(__init_array_end = .);
-  } >FLASH
+  } >FLASH :text
   .fini_array :
   {
     PROVIDE_HIDDEN(__fini_array_start = .);
     KEEP(*(SORT(.fini_array.*)))
     KEEP(*(.fini_array*))
     PROVIDE_HIDDEN(__fini_array_end = .);
-  } >FLASH
+  } >FLASH :text
 
   _sidata = LOADADDR(.data);
 
@@ -87,10 +93,10 @@ SECTIONS
     *(.data*)
     . = ALIGN(4);
     _edata = .;
-  } >RAM AT> FLASH
+  } >RAM AT> FLASH :data
 
   . = ALIGN(4);
-  .bss :
+  .bss (NOLOAD) :
   {
     _sbss = .;
     __bss_start__ = _sbss;
@@ -100,9 +106,9 @@ SECTIONS
     . = ALIGN(4);
     _ebss = .;
     __bss_end__ = _ebss;
-  } >RAM
+  } >RAM :NONE
 
-  ._user_heap_stack :
+  ._user_heap_stack (NOLOAD) :
   {
     . = ALIGN(4);
     PROVIDE(end = .);
@@ -110,7 +116,7 @@ SECTIONS
     . = . + _Min_Heap_Size;
     . = . + _Min_Stack_Size;
     . = ALIGN(4);
-  } >RAM
+  } >RAM :NONE
 
   /DISCARD/ :
   {
@@ -121,3 +127,6 @@ SECTIONS
 
   .ARM.attributes 0 : { *(.ARM.attributes) }
 }
+
+_app_load_end = LOADADDR(.data) + SIZEOF(.data);
+ASSERT(_app_load_end <= 0x08020000, "application exceeds N32L406CBL7 Flash")
