@@ -34,6 +34,17 @@ static int print_uint(unsigned long v, unsigned base)
     return n;
 }
 
+static int print_uint_width(unsigned long v, unsigned base, int width, int zero_pad)
+{
+    char buf[32];
+    int digits = 0, n = 0;
+    if (v == 0) buf[digits++] = '0';
+    while (v) { unsigned d = (unsigned)(v % base); buf[digits++] = d < 10 ? (char)('0' + d) : (char)('a' + d - 10); v /= base; }
+    for (int pad = digits; pad < width; ++pad) { dbg_putchar((char)(zero_pad ? '0' : ' ')); n++; }
+    for (int i = digits - 1; i >= 0; --i) { dbg_putchar(buf[i]); n++; }
+    return n;
+}
+
 /* print a signed long */
 static int print_int(long v, unsigned base)
 {
@@ -91,7 +102,10 @@ int dbg_printf(const char *fmt, ...)
         }
         fmt++;  /* skip '%' */
 
-        /* parse optional precision ".N" (we ignore width/flags) */
+        int width = 0, zero_pad = 0;
+        if (*fmt == '0') { zero_pad = 1; fmt++; }
+        while (*fmt >= '0' && *fmt <= '9') width = width * 10 + (*fmt++ - '0');
+        /* parse optional precision ".N" */
         int prec = -1;
         if (*fmt == '.') {
             fmt++;
@@ -106,9 +120,9 @@ int dbg_printf(const char *fmt, ...)
         switch (spec) {
         case 'd':
         case 'i': count += print_int(va_arg(ap, int), 10); break;
-        case 'u': count += print_uint(va_arg(ap, unsigned), 10); break;
+        case 'u': count += width ? print_uint_width(va_arg(ap, unsigned), 10, width, zero_pad) : print_uint(va_arg(ap, unsigned), 10); break;
         case 'x':
-        case 'X': count += print_uint(va_arg(ap, unsigned), 16); break;
+        case 'X': count += width ? print_uint_width(va_arg(ap, unsigned), 16, width, zero_pad) : print_uint(va_arg(ap, unsigned), 16); break;
         case 'f':
         case 'F': count += print_float(va_arg(ap, double), prec); break;
         case 's': {
