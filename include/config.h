@@ -17,7 +17,7 @@ extern volatile uint32_t g_tick_ms;
 #define TICK_MS()        (g_tick_ms)
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * GPIO PIN ASSIGNMENTS  (N32L406CDL7, LQFP-48)
+ * GPIO PIN ASSIGNMENTS  (N32L406CBL7, LQFP-48)
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── 4G modem EC800M (UART5 on PB4/PB5) ───────────────────────────────────── */
@@ -40,8 +40,8 @@ extern volatile uint32_t g_tick_ms;
 #define EC800M_POWER_EN_PIN   GPIO_PIN_15     /* PA15 GPRS_POWER_EN (引脚38) */
 
 /* DMA for EC800M RX — UART5_RX → DMA2_CH5 */
-#define EC800M_DMA           DMA2
-#define EC800M_DMA_CH_RX     DMA2_CH5          /* UART5 对应 DMA2_CH5 */
+#define EC800M_DMA           DMA
+#define EC800M_DMA_CH_RX     DMA_CH5           /* UART5 RX remapped to DMA channel 5 */
 #define EC800M_RX_BUF_SIZE   1024
 
 /* 全局DMA接收缓冲区（定义在ec800m.c） */
@@ -84,22 +84,31 @@ extern uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];
 #define FLASH_CS_LOW()   GPIO_ResetBits(FLASH_CS_PORT, FLASH_CS_PIN)
 #define FLASH_CS_HIGH()  GPIO_SetBits(FLASH_CS_PORT, FLASH_CS_PIN)
 
-/* ── I2C (I2C1 PB6/PB7) ──────────────────────────────────────────────────── */
-#define BSP_I2C              I2C1
-#define BSP_I2C_CLK          RCC_APB1_PERIPH_I2C1
-#define BSP_I2C_SCL_PORT     GPIOB
-#define BSP_I2C_SCL_PIN      GPIO_PIN_6        /* PB6 I2C1_SCL (shared w/ GPS_EN) */
-#define BSP_I2C_SDA_PORT     GPIOB
-#define BSP_I2C_SDA_PIN      GPIO_PIN_7        /* PB7 I2C1_SDA */
+/* ── DA218E I2C (I2C2 on PD14/PD15; HSI clock required) ─────────────────── */
+#define BSP_I2C              I2C2
+#define BSP_I2C_CLK          RCC_APB1_PERIPH_I2C2
+#define BSP_I2C_SDA_PORT     GPIOD
+#define BSP_I2C_SDA_PIN      GPIO_PIN_14       /* PD14 I2C2_SDA / OSC_IN */
+#define BSP_I2C_SCL_PORT     GPIOD
+#define BSP_I2C_SCL_PIN      GPIO_PIN_15       /* PD15 I2C2_SCL / OSC_OUT */
+#define BSP_I2C_GPIO_AF      GPIO_AF6_I2C2
 
-/* DA218E has no SDO pin — I2C address is fixed at 0x27 */
-#define DA218E_I2C_ADDR      0x27
+#define DA218E_INT1_PORT     GPIOB
+#define DA218E_INT1_PIN      GPIO_PIN_3        /* PB3 SOR_INT1 */
+
+/* DA218E address: board SDO=GND -> 0x26; retain 0x27 for compatible batches. */
+#define DA218E_I2C_ADDR           0x26
+#define DA218E_I2C_FALLBACK_ADDR  0x27
+/* Some DA218E batches document 0x26/0x27 as 8-bit address bytes; support
+ * their equivalent 7-bit forms 0x13/0x14 as a compatibility probe. */
+#define DA218E_I2C_LEGACY_ADDR           0x13
+#define DA218E_I2C_LEGACY_FALLBACK_ADDR  0x14
 
 /* ── ADC ──────────────────────────────────────────────────────────────────── */
-/* PA0 CAR_ADC: R1(180K)+R2(5.6K) divider → V_car = adc_v * 33.2 */
+/* PA3 CAR_ADC: R1(180K)+R2(5.6K) divider → V_car = adc_v * 33.2 */
 #define ADC_CAR_PORT         GPIOA
-#define ADC_CAR_PIN          GPIO_PIN_0        /* PA0 ADC1_IN1  */
-#define ADC_CAR_CH           ADC_CH_1
+#define ADC_CAR_PIN          GPIO_PIN_3        /* PA3 ADC_IN4 */
+#define ADC_CAR_CH           ADC_CH_4
 #define ADC_CAR_RATIO        33.2f
 
 /* PA1 BAT_ADC: R69(910K)+R71(390K) divider → V_bat = adc_v * 3.33 */
@@ -110,15 +119,15 @@ extern uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];
 
 /* ── Digital IO ───────────────────────────────────────────────────────────── */
 #define ACC_DET_PORT         GPIOA
-#define ACC_DET_PIN          GPIO_PIN_3        /* PA3  ACC ignition detect */
+#define ACC_DET_PIN          GPIO_PIN_12       /* PA12 M_ACC_IN via Q9, low = ACC ON */
 #define SOS_PORT             GPIOA
-#define SOS_PIN              GPIO_PIN_4        /* PA4  M_SOS button (与 FLASH_CS 共用PA4) */
+#define SOS_PIN              GPIO_PIN_2        /* PA2 M_SOS button */
 #define DC_UP_PORT           GPIOB
 #define DC_UP_PIN            GPIO_PIN_15       /* PB15 DC_UP_EN (引脚28) 充电使能检测 */
 #define RELAY_PORT           GPIOA
 #define RELAY_PIN            GPIO_PIN_11       /* PA11 OIL_CTR relay out (原理图确认) */
-#define LIGHT_INT_PORT       GPIOB
-#define LIGHT_INT_PIN        GPIO_PIN_0        /* PB0  GUANG_INT light sensor IRQ */
+#define LIGHT_INT_PORT       GPIOA
+#define LIGHT_INT_PIN        GPIO_PIN_0        /* PA0 GUANG_INT light sensor IRQ */
 #define GPS_LED_PORT         GPIOD
 #define GPS_LED_PIN          GPIO_PIN_0        /* PD0 GPS status LED (blue) — 原理图确认 2026-06-05 */
 
@@ -135,7 +144,7 @@ extern uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];
 
 /* ── JT808 defaults ───────────────────────────────────────────────────────── */
 #define JT808_DEFAULT_PORT   8898
-#define HEARTBEAT_DEFAULT_S  60
+#define HEARTBEAT_DEFAULT_S  180
 
 /* ── EC800M TCP channels ──────────────────────────────────────────────────── */
 #define TCP_CH_MAIN          0   /* primary JT808 server   */

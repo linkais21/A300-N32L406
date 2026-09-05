@@ -53,5 +53,6 @@ void fota_on_http_header(const char *header);
 
 bool fota_verify_manifest(const void *manifest, uint32_t length);
 bool fota_bcr_commit_pending(uint32_t version, uint32_t length, uint32_t target);
+void fota_confirm_trial_process(void);
 
 #endif

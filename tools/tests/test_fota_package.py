@@ -23,6 +23,9 @@ def test_package_requires_manifest_hash_signature_and_crc_before_pending():
     assert "ecdsa" in FOTA_C.lower()
     assert "crc32" in FOTA_C.lower()
     assert "BCR_PENDING" in FOTA_C
+    assert "fota_signature_digest(m,signature_digest)" in FOTA_C
+    assert "firmware_signature_verify(signature_digest,m->ecdsa_signature)" in FOTA_C
+    assert "fota_ecdsa_verify" not in FOTA_C
 
 
 def test_oversized_and_cancel_paths_release_ota_owner():
@@ -48,12 +51,32 @@ def test_power_loss_checkpoint_is_not_a_pending_handoff():
 
 
 def test_bcr_layout_is_shared_with_bootloader():
-    bcr = (ROOT / "bootloader" / "include" / "bcr.h").read_text(encoding="utf-8")
-    assert '"../bootloader/include/bcr.h"' in FOTA_C
+    bcr = (ROOT / "include" / "boot_contract.h").read_text(encoding="utf-8")
+    assert '"boot_contract.h"' in FOTA_C
     assert "bcr_record_t" in FOTA_C
     assert "fota_bcr_record_t" not in FOTA_C
     assert "BCR_SLOT_A_ADDR" in bcr and "BCR_SLOT_B_ADDR" in bcr
     assert "offsetof(bcr_record_t,crc32)" in FOTA_C
+    assert "uint32_t rollback_floor;" in bcr
+
+
+def test_manifest_enforces_target_version_and_healthy_floor():
+    assert "m->target_address!=APP_FLASH_BASE" in FOTA_C
+    assert "m->version_counter==0U" in FOTA_C
+    assert "m->version_counter<floor" in FOTA_C
+    assert "__attribute__((weak)) bool fota_bcr_commit_pending" not in FOTA_C
+    assert "fota_sequence_newer" in FOTA_C
+    assert "fota_bcr_valid(&check)&&memcmp(&check,&r,sizeof r)==0" in FOTA_C
+
+
+def test_trial_health_is_committed_before_reset():
+    assert "FOTA_TRIAL_HEALTHY_MS 30000UL" in FOTA_C
+    assert "void fota_confirm_trial_process(void)" in FOTA_C
+    body = FOTA_C[FOTA_C.index("void fota_confirm_trial_process(void)"):]
+    assert body.index("ext_flash_try_lock_now(EXT_FLASH_OWNER_OTA)") < body.index("fota_bcr_load(&record)")
+    assert body.index("record.rollback_floor=record.image_version") < body.index("fota_bcr_write_record(&record)")
+    assert body.index("fota_bcr_write_record(&record)") < body.index("NVIC_SystemReset()")
+    assert "fota_confirm_trial_process();" in (ROOT / "src" / "main.c").read_text(encoding="utf-8")
 
 
 def test_runtime_bcr_handoff_uses_payload_length():
@@ -132,5 +155,7 @@ if __name__ == "__main__":
     test_package_hash_and_signature_failures_are_rejected()
     test_power_loss_checkpoint_is_not_a_pending_handoff()
     test_bcr_layout_is_shared_with_bootloader()
+    test_manifest_enforces_target_version_and_healthy_floor()
+    test_trial_health_is_committed_before_reset()
     test_runtime_bcr_handoff_uses_payload_length()
     print("test_fota_package: PASS")

@@ -24,6 +24,7 @@ HARNESS = r'''
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -37,6 +38,9 @@ static uint16_t s_raw_length;
 static uint16_t s_response_sn;
 static uint16_t s_response_id;
 static uint8_t s_response_result;
+static unsigned s_store_calls;
+static bool s_store_ok = true;
+static cfg_store_result_t s_pid_store_result = CFG_STORE_OK;
 
 device_config_t *cfg_get(void)
 {
@@ -92,6 +96,20 @@ void cfg_set_server(const char *ip, uint16_t port, bool backup)
     (void)backup;
 }
 void cfg_save(void) {}
+bool cfg_store_candidate(const device_config_t *candidate)
+{
+    ++s_store_calls;
+    if (!s_store_ok) return false;
+    s_config = *candidate;
+    return true;
+}
+cfg_store_result_t cfg_set_pid_result(const char pid[CFG_PID_LEN])
+{
+    ++s_store_calls;
+    if (s_pid_store_result != CFG_STORE_OK) return s_pid_store_result;
+    memcpy(s_config.pid, pid, CFG_PID_LEN);
+    return CFG_STORE_OK;
+}
 
 static void expect_derive(const char *pid, const char *imei, const char *expected)
 {
@@ -119,12 +137,16 @@ static void set_identity(const char *pid, const char *imei)
 int main(void)
 {
     char out[8] = {'X','X','X','X','X','X','X','X'};
+    char pid[12];
+    char phone[13];
+    char terminal_id[8];
+    uint8_t bcd[6];
 
     expect_derive("12345678901", "not-used", "5678901");
     expect_derive("", "123456789012345", "9012345");
-    expect_derive("", "1234567", "1234567");
-    expect_derive("", "01234567", "1234567");
-    expect_derive("", "12345678901234", "8901234");
+    expect_invalid("", "1234567");
+    expect_invalid("", "01234567");
+    expect_invalid("", "12345678901234");
     expect_derive("00001234567", "any-imei", "1234567");
 
     expect_invalid("12345x78901", "123456789012345");
@@ -137,6 +159,36 @@ int main(void)
     expect_invalid(NULL, "123456789012345");
     expect_invalid("", NULL);
     assert(!terminal_id_derive("12345678901", "123456789012345", NULL));
+
+    set_identity("", "123456789012345");
+    s_store_calls = 0U; s_store_ok = true; s_pid_store_result = CFG_STORE_OK;
+    assert(terminal_identity_sync_result(pid, phone, terminal_id, NULL) ==
+           TERMINAL_IDENTITY_OK_DERIVED);
+    assert(strcmp(pid, "56789012345") == 0);
+    assert(strcmp(phone, "056789012345") == 0);
+    assert(strcmp(terminal_id, "9012345") == 0);
+    assert(strcmp(s_config.pid, "56789012345") == 0);
+    assert(s_store_calls == 1U);
+    assert(terminal_identity_encode_phone(pid, bcd));
+    assert(memcmp(bcd, (uint8_t[]){0x05,0x67,0x89,0x01,0x23,0x45}, 6U) == 0);
+
+    set_identity("12345678901", "987654321098765");
+    s_store_calls = 0U;
+    assert(terminal_identity_sync(pid, phone, terminal_id));
+    assert(strcmp(pid, "12345678901") == 0 && s_store_calls == 0U);
+
+    set_identity("", "123456789012345");
+    s_store_calls = 0U; s_store_ok = false; s_pid_store_result = CFG_STORE_LOCK_FAILED;
+    assert(terminal_identity_sync_result(pid, phone, terminal_id, NULL) ==
+           TERMINAL_IDENTITY_FLASH_LOCK);
+    assert(s_config.pid[0] == '\0' && s_store_calls == 1U);
+    s_store_ok = true; s_pid_store_result = CFG_STORE_OK;
+    set_identity("12345x78901", "123456789012345");
+    assert(terminal_identity_sync_result(pid, phone, terminal_id, NULL) ==
+           TERMINAL_IDENTITY_PID_FORMAT);
+    set_identity("", "12345678901234x");
+    assert(terminal_identity_sync_result(pid, phone, terminal_id, NULL) ==
+           TERMINAL_IDENTITY_IMEI_FORMAT);
 
     set_identity("12345678901", "987654321098765");
     assert(terminal_identity_load(out));
@@ -183,6 +235,7 @@ JT808_HARNESS = r'''
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -194,8 +247,13 @@ static uint16_t s_sent_length;
 static unsigned s_send_count;
 static unsigned s_imei_reads;
 static unsigned s_identity_logs;
+static unsigned s_device_logs;
+static unsigned s_server_logs;
+static char s_log[4096];
+static size_t s_log_length;
 static int s_send_result;
 static bool s_online = true;
+static cfg_store_result_t s_jt_pid_store_result = CFG_STORE_OK;
 
 void blind_zone_replay_reset(void) {}
 void blind_zone_replay_on_general_ack(uint16_t serial, uint16_t message, uint8_t result)
@@ -205,12 +263,37 @@ blind_zone_result_t blind_zone_append(const blind_zone_record_t *record)
 
 device_config_t *cfg_get(void) { return &s_config; }
 void cfg_save(void) {}
+bool cfg_store_candidate(const device_config_t *candidate)
+{ s_config = *candidate; return true; }
+cfg_store_result_t cfg_set_pid_result(const char pid[CFG_PID_LEN])
+{
+    if (s_jt_pid_store_result != CFG_STORE_OK) return s_jt_pid_store_result;
+    memcpy(s_config.pid, pid, CFG_PID_LEN);
+    return CFG_STORE_OK;
+}
+bool cfg_set_auth_code(uint8_t channel, const char *code)
+{
+    char *target = channel == 0U ? s_config.auth_code :
+                   channel == 3U ? s_config.backup_auth_code : NULL;
+    if (target == NULL || strlen(code) >= CFG_AUTH_LEN) return false;
+    memset(target, 0, CFG_AUTH_LEN);
+    memcpy(target, code, strlen(code));
+    return true;
+}
 void ec800m_get_imei(char *buf, uint8_t size)
 {
     size_t length = strlen(s_imei);
     ++s_imei_reads;
     if (length >= size) length = (size_t)size - 1U;
     memcpy(buf, s_imei, length);
+    buf[length] = '\0';
+}
+void ec800m_get_iccid(char *buf, uint8_t size)
+{
+    const char *iccid = "89860412102500000001";
+    size_t length = strlen(iccid);
+    if (length >= size) length = (size_t)size - 1U;
+    memcpy(buf, iccid, length);
     buf[length] = '\0';
 }
 bool ec800m_is_ready(void) { return true; }
@@ -225,6 +308,8 @@ int ec800m_tcp_send(uint8_t channel, const uint8_t *data, uint16_t length)
     return s_send_result;
 }
 int ec800m_get_csq(void) { return 0; }
+float adc_get_car_voltage(void) { return 0.0f; }
+float adc_get_bat_voltage(void) { return 0.0f; }
 bool tcp_manager_is_online(void) { return s_online; }
 bool tcp_manager_ch_online(uint8_t channel) { return s_online && channel == EC800M_CH_MAIN; }
 uint8_t tcp_manager_active_ch(void) { return EC800M_CH_MAIN; }
@@ -244,8 +329,19 @@ void jt808_params_handle_query(const uint8_t *body, uint16_t length, uint16_t sn
 void jt808_params_handle_info_query(uint16_t sn) { (void)sn; }
 int dbg_printf(const char *format, ...)
 {
-    if (strcmp(format, "[808] identity invalid\r\n") == 0) ++s_identity_logs;
-    return 0;
+    int written;
+    va_list args;
+    va_start(args, format);
+    written = vsnprintf(s_log + s_log_length, sizeof(s_log) - s_log_length,
+                        format, args);
+    va_end(args);
+    if (written > 0 && (size_t)written < sizeof(s_log) - s_log_length)
+        s_log_length += (size_t)written;
+    if (strncmp(format, "[808] identity invalid reason=", 30U) == 0)
+        ++s_identity_logs;
+    if (strncmp(format, "[DEVICE]", 8U) == 0) ++s_device_logs;
+    if (strncmp(format, "[SERVER]", 8U) == 0) ++s_server_logs;
+    return written;
 }
 
 static uint16_t unescape(uint8_t *out)
@@ -270,6 +366,13 @@ static void reset_capture(void)
     s_imei_reads = 0U;
     s_send_result = 0;
     s_online = true;
+}
+
+static void reset_logs(void)
+{
+    s_identity_logs = s_device_logs = s_server_logs = 0U;
+    s_log_length = 0U;
+    s_log[0] = '\0';
 }
 
 static uint16_t sent_serial(void)
@@ -298,7 +401,18 @@ static void inject_register_response_result(uint16_t request_serial, uint8_t res
 
 static void inject_register_response(uint16_t request_serial)
 {
-    inject_register_response_result(request_serial, 0U);
+    uint8_t frame[19] = {
+        0x7eU, 0x81U, 0x00U, 0x00U, 0x04U,
+        0U, 0U, 0U, 0U, 0U, 0U,
+        0x12U, 0x34U,
+        (uint8_t)(request_serial >> 8), (uint8_t)request_serial, 0U, 'A',
+        0U, 0x7eU
+    };
+    uint8_t checksum_value = 0U;
+    uint16_t i;
+    for (i = 1U; i < 17U; ++i) checksum_value ^= frame[i];
+    frame[17] = checksum_value;
+    jt808_on_recv(EC800M_CH_MAIN, frame, sizeof(frame));
 }
 
 int main(void)
@@ -312,28 +426,37 @@ int main(void)
 
     memset(&s_config, 0, sizeof(s_config));
     strcpy(s_config.pid, "12345678901");
+    strcpy(s_config.server_ip, "119.147.205.85");
+    s_config.server_port = 9999U;
     strcpy(s_imei, "987654321098765");
     jt808_init(&terminal);
+    reset_logs();
     reset_capture();
     jt808_process();
-    assert(s_send_count == 1U && s_imei_reads == 2U);
+    assert(s_send_count == 1U && s_imei_reads == 1U);
+    assert(s_device_logs == 1U && s_server_logs == 1U);
+    assert(strstr(s_log, "[DEVICE] IMEI=987654321098765 ICCID=89860412102500000001 DEVICE_ID=12345678901 JT808_TID=5678901 PID_SOURCE=CONFIG\r\n") != NULL);
+    assert(strstr(s_log, "[SERVER] MAIN=119.147.205.85:9999 BACKUP=OFF\r\n") != NULL);
+    jt808_process();
+    assert(s_device_logs == 1U && s_server_logs == 1U);
     length = unescape(frame);
     assert(length > 49U && frame[0] == 0x01U && frame[1] == 0x00U);
     assert(memcmp(frame + 41U, "5678901", 7U) == 0);
 
     strcpy(terminal.auth_code, "AUTH");
     jt808_init(&terminal);
+    reset_logs();
     reset_capture();
     jt808_process();
     length = unescape(frame);
-    assert(s_send_count == 1U && s_imei_reads == 2U);
+    assert(s_send_count == 1U && s_imei_reads == 1U);
     assert(length > 16U && frame[0] == 0x01U && frame[1] == 0x02U);
 
     strcpy(s_config.pid, "00001234567");
     reset_capture();
-    assert(jt808_send_register() == 0);
+    assert(jt808_send_register_to(EC800M_CH_MAIN) == 0);
     length = unescape(frame);
-    assert(s_imei_reads == 2U && memcmp(frame + 41U, "1234567", 7U) == 0);
+    assert(s_imei_reads == 0U && memcmp(frame + 41U, "1234567", 7U) == 0);
 
     strcpy(s_config.pid, "76543210987");
     jt808_request_reregister();
@@ -393,6 +516,8 @@ int main(void)
             inject_register_response(old_serial);
             assert(s_send_count == 0U);
             inject_register_response(new_serial);
+            assert(s_send_count == 0U);
+            jt808_process();
             assert(s_send_count == 1U);
             length = unescape(frame);
             assert(frame[0] == 0x01U && frame[1] == 0x02U);
@@ -406,6 +531,12 @@ int main(void)
     assert(s_send_count == 1U);
     s_send_result = 0;
     g_tick_ms = 6001U; jt808_process();
+    assert(s_send_count == 1U);
+    g_tick_ms = 10999U; jt808_process();
+    assert(s_send_count == 1U);
+    g_tick_ms = 11000U; jt808_process();
+    assert(s_send_count == 2U);
+    g_tick_ms = 11001U; jt808_process();
     assert(s_send_count == 2U);
     length = unescape(frame);
     assert(frame[0] == 0x01U && frame[1] == 0x00U);
@@ -459,11 +590,25 @@ int main(void)
     strcpy(s_config.pid, "12345x78901");
     jt808_init(&terminal);
     reset_capture();
-    s_identity_logs = 0U;
+    reset_logs();
     g_tick_ms = 100U; jt808_process();
     g_tick_ms = 200U; jt808_process();
     g_tick_ms = 5100U; jt808_process();
     assert(s_send_count == 0U && s_identity_logs == 2U);
+    assert(strstr(s_log, "[808] identity invalid reason=PID_FORMAT\r\n") != NULL);
+
+    memset(s_config.pid, 0, sizeof(s_config.pid));
+    strcpy(s_config.backup_ip, "58.61.154.237");
+    s_config.backup_port = 7018U;
+    strcpy(s_imei, "123456789012345");
+    s_jt_pid_store_result = CFG_STORE_OK;
+    jt808_init(&terminal);
+    reset_logs();
+    reset_capture();
+    g_tick_ms = 6000U; jt808_process();
+    assert(s_device_logs == 1U && s_server_logs == 1U);
+    assert(strstr(s_log, "DEVICE_ID=56789012345 JT808_TID=9012345 PID_SOURCE=IMEI") != NULL);
+    assert(strstr(s_log, "BACKUP=58.61.154.237:7018\r\n") != NULL);
     return 0;
 }
 '''
@@ -685,8 +830,10 @@ def test_release_guard_behavior() -> None:
             ("generated", generated_build_version),
         ):
             build_version_path.write_text(build_version, encoding="utf-8")
-            assert not release_guard.scan(root), (
-                f"{form_name} build_version.h release tree must pass"
+            baseline_findings = release_guard.scan(root)
+            assert not baseline_findings, (
+                f"{form_name} build_version.h release tree must pass: "
+                f"{baseline_findings!r}"
             )
             build_version_path.write_text(
                 build_version.replace(target, "T360-A300_406_20260823000001,V3.000"),
@@ -1062,7 +1209,6 @@ def test_release_guard_behavior() -> None:
 
 
 def main() -> int:
-    test_release_guard_behavior()
     cc = compiler()
     if cc is None:
         if os.environ.get("REQUIRE_GCC") == "1":
@@ -1078,7 +1224,8 @@ def main() -> int:
         harness.write_text(HARNESS, encoding="ascii")
         (temp / "n32l40x.h").write_text(
             "#ifndef N32L40X_H\n#define N32L40X_H\n"
-            "#define GPIOA ((void *)0)\n#define GPIO_PIN_3 3U\n#define Bit_RESET 0\n"
+            "#define GPIOA ((void *)0)\n#define GPIO_PIN_3 3U\n#define GPIO_PIN_12 12U\n"
+            "#define Bit_RESET 0\n"
             "int GPIO_ReadInputDataBit(void *, unsigned);\n#endif\n", encoding="ascii"
         )
         command = [
@@ -1107,7 +1254,8 @@ def main() -> int:
             cc, "-std=c99", "-Wall", "-Wextra", "-Werror",
             "-I", str(temp), "-I", str(ROOT / "include"), str(jt808_harness),
             str(ROOT / "src" / "terminal_identity.c"),
-            str(ROOT / "src" / "jt808.c"), "-lm", "-o", str(jt808_binary),
+            str(ROOT / "src" / "jt808.c"), str(ROOT / "src" / "jt808_session.c"),
+            "-lm", "-o", str(jt808_binary),
         ]
         compiled = subprocess.run(command, text=True, capture_output=True)
         if compiled.returncode != 0:
@@ -1211,6 +1359,7 @@ def main() -> int:
             return 1
 
     print("test_terminal_identity: C99 -Wall -Wextra -Werror PASS")
+    test_release_guard_behavior()
     print("test_terminal_identity: PASS")
     return 0
 
