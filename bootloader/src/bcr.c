@@ -3,11 +3,6 @@
 #include <stddef.h>
 #include <string.h>
 
-__attribute__((weak)) bool boot_bcr_read(uint32_t address, void *data, uint32_t length) { return boot_ext_read(address,data,length); }
-__attribute__((weak)) bool boot_bcr_write(uint32_t address, const void *data, uint32_t length) { (void)address;(void)data;(void)length; return false; }
-__attribute__((weak)) bool boot_bcr_erase(uint32_t address) { (void)address; return false; }
-__attribute__((weak)) bool boot_bcr_readback(uint32_t address, const void *data, uint32_t length) { (void)address;(void)data;(void)length; return false; }
-
 bool bcr_valid(const bcr_record_t *r)
 {
     bcr_record_t c;
@@ -16,11 +11,16 @@ bool bcr_valid(const bcr_record_t *r)
     return image_crc32(&c,(uint32_t)offsetof(bcr_record_t,crc32)) == r->crc32;
 }
 
+static bool sequence_newer(uint32_t a, uint32_t b)
+{
+    return (int32_t)(a - b) > 0;
+}
+
 bool bcr_load(bcr_record_t *out)
 {
     bcr_record_t a,b; bool va=boot_bcr_read(BCR_SLOT_A_ADDR,&a,sizeof a)&&bcr_valid(&a); bool vb=boot_bcr_read(BCR_SLOT_B_ADDR,&b,sizeof b)&&bcr_valid(&b);
     if (!out || (!va && !vb)) return false;
-    *out = (!vb || (va && a.sequence >= b.sequence)) ? a : b;
+    *out = (!vb || (va && sequence_newer(a.sequence,b.sequence))) ? a : b;
     return true;
 }
 
@@ -46,7 +46,7 @@ bool bcr_mark_trial_healthy(void)
 {
     bcr_record_t r;
     if (!bcr_load(&r) || r.state != BCR_TRIAL) return false;
-    r.state = BCR_ACTIVE; r.boot_attempts = 0U; ++r.sequence;
+    r.state = BCR_ACTIVE; r.boot_attempts = 0U; r.rollback_floor = r.image_version; ++r.sequence;
     return bcr_commit(&r);
 }
 
