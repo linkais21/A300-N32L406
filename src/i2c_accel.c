@@ -102,12 +102,15 @@ static void da218e_bus_recover(void)
 #define VIBRATION_SENSITIVITY_LEVEL_10 10U
 #define VIBRATION_SENSITIVITY_LEVEL_COUNT 10U
 /* Product-facing VIBSENS scale from the terminal command spec: 1..50, where a
- * smaller number is more sensitive. Level 30 is the shipped default and must
- * keep resolving to VIB_THRESH so the already-commissioned sleep/wake
- * behaviour is unchanged; only an explicit VIBSENS command moves it. */
+ * smaller number is more sensitive.  The scale is anchored at level 30 =
+ * VIB_THRESH, the threshold the sleep/wake logic was commissioned against.
+ * The shipped default is level 10, i.e. 70 LSB: deliberately more sensitive
+ * than that commissioning point, chosen so vibration wake triggers more
+ * readily.  Out-of-range or unconfigured input falls back to the default. */
 #define VIBRATION_SENSITIVITY_MIN 1U
 #define VIBRATION_SENSITIVITY_MAX 50U
-#define VIBRATION_SENSITIVITY_DEFAULT 30U
+#define VIBRATION_SENSITIVITY_ANCHOR 30U
+#define VIBRATION_SENSITIVITY_DEFAULT 10U
 #define VIBRATION_THRESHOLD_STEP 4U
 
 static int32_t s_ema_x = 0, s_ema_y = 0, s_ema_z = 0;  /* EMA × (1<<VIB_EMA_SHIFT) */
@@ -123,10 +126,9 @@ static uint32_t s_vibration_last_hit_ms;
 static uint16_t s_vibration_episode_hits;
 
 /* VIBSENS product scale (1..50, smaller = more sensitive) mapped linearly onto
- * the delta threshold in accelerometer LSB.  The mapping is anchored so the
- * shipped default level resolves to exactly VIB_THRESH, keeping the
- * already-commissioned sleep/wake behaviour byte-identical unless an explicit
- * VIBSENS command moves it.  Out-of-range input falls back to that anchor. */
+ * the delta threshold in accelerometer LSB, anchored at level 30 = VIB_THRESH.
+ * Level 1 gives 34 LSB, level 10 (the shipped default) 70, level 50 230.
+ * Out-of-range or unconfigured input falls back to the shipped default. */
 static uint16_t vibration_threshold_by_level(uint8_t sensitivity_level)
 {
     uint32_t threshold;
@@ -137,7 +139,7 @@ static uint16_t vibration_threshold_by_level(uint8_t sensitivity_level)
     }
     threshold = (uint32_t)VIB_THRESH +
                 ((uint32_t)sensitivity_level * VIBRATION_THRESHOLD_STEP) -
-                ((uint32_t)VIBRATION_SENSITIVITY_DEFAULT *
+                ((uint32_t)VIBRATION_SENSITIVITY_ANCHOR *
                  VIBRATION_THRESHOLD_STEP);
     return (uint16_t)threshold;
 }
