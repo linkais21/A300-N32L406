@@ -13,6 +13,9 @@ void at_config_process(void);
 /* SMS invokes this bounded entry; serial feed remains independently permissive. */
 /* Execute one queued F39 SMS and hand the bounded reply back to sender. */
 bool at_config_execute_sms(const char *sender, const uint8_t *text, uint16_t len);
+/* Execute a command delivered over JT808 0x8300 text delivery. The frame is
+ * acknowledged by a terminal general response, so no reply text is produced. */
+bool at_config_execute_text_command(const uint8_t *text, uint16_t len);
 
 typedef int (*at_config_sms_send_fn)(const char *to, const char *text, void *context);
 typedef void (*at_config_reset_fn)(uint32_t delay_ms, void *context);

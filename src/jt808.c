@@ -18,6 +18,7 @@
 #include "log_platform.h"
 #include "motion_corner.h"
 #include "work_mode_sleep.h"
+#include "at_config.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -984,6 +985,35 @@ int jt808_send_raw_tracked(uint16_t msg_id, const uint8_t *body,
     return finish_frame_channel(&f, jt808_online_channel());
 }
 
+#if defined(__GNUC__)
+/* Host contract harnesses link jt808.c without the command executor. The weak
+ * default keeps them linking; the real at_config.c definition wins in the
+ * firmware build. */
+__attribute__((weak)) bool at_config_execute_text_command(const uint8_t *text,
+                                                          uint16_t len)
+{
+    (void)text;
+    (void)len;
+    return false;
+}
+#endif
+
+/* 0x8300 body: flag byte, then GBK text (spec table 37).  The terminal command
+ * set is plain ASCII framed by a trailing '#', matching the SMS channel, so
+ * the text is handed to the same executor.  Kept out of process_frame() so its
+ * locals do not widen that function's audited stack frame. */
+static bool __attribute__((noinline)) handle_text_message(const uint8_t *body,
+                                                          uint16_t body_len)
+{
+    uint16_t text_len;
+
+    if (body_len < 2U) return false;
+    text_len = (uint16_t)(body_len - 1U);
+    if (body[body_len - 1U] == (uint8_t)'#') --text_len;
+    if (text_len == 0U) return false;
+    return at_config_execute_text_command(&body[1], text_len);
+}
+
 /* ── RX frame parser ──────────────────────────────────────────────────────── */
 static void __attribute__((noinline)) process_frame(
     uint8_t channel, uint32_t generation, uint8_t *frame, uint16_t raw_len)
@@ -1108,6 +1138,11 @@ static void __attribute__((noinline)) process_frame(
     case MSG_QUERY_TERMINAL_INFO:   /* 0x8107 query terminal attributes */
         s_response_channel = channel;
         jt808_params_handle_info_query(serial_no);
+        break;
+
+    case MSG_TEXT_MESSAGE:          /* 0x8300 text delivery */
+        jt808_send_general_resp_to(channel, serial_no, msg_id,
+                                   handle_text_message(body, body_len) ? 0U : 1U);
         break;
 
     case MSG_SET_POLYGON_AREA:      /* 0x8604 set polygon geofence */

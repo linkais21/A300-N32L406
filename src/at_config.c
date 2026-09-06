@@ -389,6 +389,42 @@ void at_config_bind_f39(f39_platform_t *platform, at_config_sms_send_fn send,
     s_f39_uses_defaults = false;
 }
 
+static void f39_refresh_live_snapshot(void)
+{
+    static char imei[16];
+    static char iccid[24];
+    const gps_data_t *g = gps_get_data();
+    ec800m_get_imei(imei, sizeof imei);
+    s_f39_platform.imei = imei; s_f39_platform.imei_len = (uint16_t)strlen(imei);
+    ec800m_get_iccid(iccid, sizeof iccid);
+    s_f39_platform.iccid = iccid; s_f39_platform.iccid_len = (uint16_t)strlen(iccid);
+    s_f39_platform.csq = ec800m_get_csq(); s_f39_platform.gps_fix_quality = g->fix_quality;
+    s_f39_platform.acc_on = hw_acc_is_on(); s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
+}
+
+/* Execute a command delivered over a transport that acknowledges the frame
+ * itself (JT808 0x8300 text delivery, answered with a terminal general
+ * response).  No reply text is produced or queued here: unlike the SMS path
+ * there is no return channel to hand it to, and 0x0900 passthrough uplink is
+ * deliberately not implemented. */
+bool at_config_execute_text_command(const uint8_t *text, uint16_t len)
+{
+    f39_request_t request;
+    f39_reply_t reply;
+
+    if (!s_f39_bound) f39_bind_defaults();
+    if (!text || !s_f39_bound ||
+        f39_parse(text, len, &request) != F39_RESULT_OK) return false;
+    if (s_f39_uses_defaults) f39_refresh_live_snapshot();
+    if (f39_execute(&request, &s_f39_platform, &reply) != F39_RESULT_OK)
+        return false;
+    /* A RESET arriving this way still has to restart the device; the SMS path
+     * defers it until its reply is on the wire, but here nothing is pending. */
+    if (reply.reset_pending && s_schedule_reset != NULL)
+        s_schedule_reset(reply.reset_delay_ms, s_f39_platform.context);
+    return true;
+}
+
 bool at_config_execute_sms(const char *sender, const uint8_t *text, uint16_t len)
 {
     f39_request_t request;
@@ -400,15 +436,7 @@ bool at_config_execute_sms(const char *sender, const uint8_t *text, uint16_t len
         (s_f39_uses_defaults && s_retry_pending) ||
         f39_parse(text, len, &request) != F39_RESULT_OK) return false;
     if (s_f39_uses_defaults) {
-        static char imei[16];
-        static char iccid[24];
-        const gps_data_t *g = gps_get_data();
-        ec800m_get_imei(imei, sizeof imei);
-        s_f39_platform.imei = imei; s_f39_platform.imei_len = (uint16_t)strlen(imei);
-        ec800m_get_iccid(iccid, sizeof iccid);
-        s_f39_platform.iccid = iccid; s_f39_platform.iccid_len = (uint16_t)strlen(iccid);
-        s_f39_platform.csq = ec800m_get_csq(); s_f39_platform.gps_fix_quality = g->fix_quality;
-        s_f39_platform.acc_on = hw_acc_is_on(); s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
+        f39_refresh_live_snapshot();
     }
     result = f39_execute(&request, &s_f39_platform, &reply);
     if (reply.len == 0U || reply.len >= sizeof response) return false;
