@@ -85,6 +85,11 @@ int  ec800m_udp_txn_start(const char *ip, uint16_t port,
                           uint8_t *rx, uint16_t rx_cap, uint32_t timeout_ms);
 void ec800m_udp_txn_process(void);
 int  ec800m_udp_txn_result(void);
+/* Largest SMS reply body the modem layer will accept. Bodies longer than one
+ * GSM-7 short message are segmented into a concatenated message. */
+#define EC800M_SMS_TEXT_MAX   256U
+#define EC800M_SMS_SEGMENT_MAX 153U
+
 int  ec800m_sms_send(const char *phone, const char *text);
 void ec800m_tcp_close(uint8_t ch);
 tcp_state_t ec800m_tcp_state(uint8_t ch);

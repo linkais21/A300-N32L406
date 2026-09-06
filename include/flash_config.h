@@ -97,7 +97,12 @@ typedef struct {
     char     fota_url[128];     /* HTTP URL for firmware */
     uint32_t fota_size;         /* expected size, 0=unknown */
 
-    uint8_t  _reserved[32];
+    /* Product vibration sensitivity 1..50 (doc: smaller = more sensitive).
+     * Carved out of the former _reserved block so the v1/v2 byte prefixes and
+     * sizeof(device_config_t) are unchanged and no slot migration is needed.
+     * 0 means "never configured" and falls back to the shipped default. */
+    uint8_t  vib_sens;
+    uint8_t  _reserved[31];
 
     /* v2 F39 settings; append-only after the complete v1 prefix */
     char     pid[CFG_PID_LEN];

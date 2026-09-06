@@ -34,7 +34,9 @@ CHAR_LITERAL = re.compile(r"^(?:L|u|U)?'((?:\\.|[^\\'])+)'$")
 INTEGER_LITERAL = re.compile(
     r"^(0[xX][0-9A-Fa-f]+|0[0-7]*|[1-9][0-9]*)(?:[uU](?:[lL]{1,2})?|[lL]{1,2}[uU]?)?$"
 )
-IDENTITY_LITERAL_ALLOWLIST = {"DUALSET", "invalid"}
+# "DUALSET"/"VIBSENS" are seven-character SMS command names from the terminal
+# command spec, not hardcoded seven-byte JT808 terminal ids.
+IDENTITY_LITERAL_ALLOWLIST = {"DUALSET", "VIBSENS", "invalid"}
 IDENTITY_SERVICE_REQUIREMENTS = {
     "src/main.c": ("main", re.compile(
         r"\bs_terminal\.terminal_id\s*\[\s*0\s*\]\s*=\s*'\\0'\s*;"
@@ -122,7 +124,7 @@ CANONICAL_CONSUMER_SHA256 = {
 CANONICAL_IDENTITY_FILE_SHA256 = {
     "include/config.h": "a53b11f8799dc85c6c46d33d54901f6dcfd224f57298348ca73eb7bc0a9f939e",
     "include/build_version.h": "cb8e276f477eb946903af3eb1260d58f3f266e9631f55ee2fb77e08ceec2c484",
-    "include/f39_reply.h": "5809ee23562052f428c5fecc385df768fa549bf7c2793632c8b98245d45ec98c",
+    "include/f39_reply.h": "1f85f901f0c506dd60d4e48a8b898cb8fb719d2e4039f037acb37318de6e659f",
     "include/jt808.h": "a3f765310627890e543c4a83b44cf9248dbd141e0a5d80f228e9e1ce427271e6",
 }
 

@@ -119,6 +119,7 @@ static void f39_sms_result(bool success)
 static void f39_bind_defaults(void)
 {
     static char imei[16];
+    static char iccid[24];
     const gps_data_t *g;
     if (s_f39_bound) return;
     memset(&s_f39_platform, 0, sizeof s_f39_platform);
@@ -129,6 +130,7 @@ static void f39_bind_defaults(void)
     s_f39_platform.gps_valid = f39_gps_valid; s_f39_platform.gps_speed_kmh = f39_gps_speed; s_f39_platform.relay_get = f39_relay_get;
     s_f39_platform.version = FW_VERSION_STR; s_f39_platform.version_len = (uint16_t)strlen(FW_VERSION_STR);
     ec800m_get_imei(imei, sizeof imei); s_f39_platform.imei = imei; s_f39_platform.imei_len = (uint16_t)strlen(imei);
+    ec800m_get_iccid(iccid, sizeof iccid); s_f39_platform.iccid = iccid; s_f39_platform.iccid_len = (uint16_t)strlen(iccid);
     s_f39_platform.csq = ec800m_get_csq(); g = gps_get_data(); s_f39_platform.acc_on = hw_acc_is_on(); s_f39_platform.gps_fix_quality = g->fix_quality; s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
     s_sms_send = f39_default_sms_send; s_schedule_reset = f39_default_reset; sms_set_send_result_cb(f39_sms_result); s_f39_bound = true; s_f39_uses_defaults = true;
 }
@@ -399,9 +401,12 @@ bool at_config_execute_sms(const char *sender, const uint8_t *text, uint16_t len
         f39_parse(text, len, &request) != F39_RESULT_OK) return false;
     if (s_f39_uses_defaults) {
         static char imei[16];
+        static char iccid[24];
         const gps_data_t *g = gps_get_data();
         ec800m_get_imei(imei, sizeof imei);
         s_f39_platform.imei = imei; s_f39_platform.imei_len = (uint16_t)strlen(imei);
+        ec800m_get_iccid(iccid, sizeof iccid);
+        s_f39_platform.iccid = iccid; s_f39_platform.iccid_len = (uint16_t)strlen(iccid);
         s_f39_platform.csq = ec800m_get_csq(); s_f39_platform.gps_fix_quality = g->fix_quality;
         s_f39_platform.acc_on = hw_acc_is_on(); s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
     }

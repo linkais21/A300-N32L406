@@ -26,6 +26,7 @@ static const f39_root_t s_roots[] = {
     {"CAR", F39_OPERATION_CAR},
     {"GPSBDS", F39_OPERATION_GPSBDS},
     {"GMTSET", F39_OPERATION_GMTSET},
+    {"VIBSENS", F39_OPERATION_VIBSENS},
     {"FOTA", F39_OPERATION_FOTA},
     {"LOG", F39_OPERATION_LOG}
 };

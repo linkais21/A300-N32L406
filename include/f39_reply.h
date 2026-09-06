@@ -6,10 +6,11 @@
 
 #include "f39_config_adapter.h"
 
-#define F39_REPLY_MAX_LENGTH 192U
+#define F39_REPLY_MAX_LENGTH 256U
 #define F39_RESET_DELAY_MS   100U
 #define F39_VERSION_MAX_LENGTH 63U
 #define F39_IMEI_MAX_LENGTH    15U
+#define F39_ICCID_MAX_LENGTH   20U
 
 typedef struct {
     uint16_t len;
@@ -43,6 +44,8 @@ typedef struct {
     uint16_t version_len;
     const char *imei;
     uint16_t imei_len;
+    const char *iccid;
+    uint16_t iccid_len;
     int csq;
     bool acc_on;
     uint8_t gps_fix_quality;

@@ -152,7 +152,14 @@ static ec800m_recv_cb_t s_agnss_recv_cb = NULL;
 typedef enum { SMS_TX_IDLE, SMS_TX_QUEUED, SMS_TX_WAIT_PROMPT, SMS_TX_WAIT_RESULT } sms_tx_state_t;
 static sms_tx_state_t s_sms_tx_state;
 static char s_sms_phone[20];
-static char s_sms_text[192];
+/* Sized to hold a full F39 reply. Replies longer than one GSM-7 short message
+ * are sent as a concatenated message via AT+QCMGS (AT+CMGS does not segment;
+ * see Quectel_LTE_Standard(A) AT command manual, AT+QCMGS). */
+static char s_sms_text[EC800M_SMS_TEXT_MAX];
+static uint16_t s_sms_len;
+static uint8_t s_sms_seg_total;
+static uint8_t s_sms_seg_index;
+static uint8_t s_sms_uid;
 static bool s_sms_prompt;
 static bool s_sms_prompt_line_start;
 static uint32_t s_sms_deadline_ms;
@@ -818,11 +825,22 @@ static void process_urc(const char *line)
     unsigned qiopen_ch, qiopen_err;
     sms_process_urc(line);
     if (s_at_owner == AT_OWNER_SMS &&
-        ((s_sms_tx_state == SMS_TX_WAIT_RESULT && strncmp(line, "+CMGS:", 6) == 0) ||
+        ((s_sms_tx_state == SMS_TX_WAIT_RESULT &&
+          (strncmp(line, "+CMGS:", 6) == 0 || strncmp(line, "+QCMGS:", 7) == 0)) ||
          (s_sms_tx_state != SMS_TX_IDLE &&
           (strncmp(line, "+CMS ERROR:", 11) == 0 || strcmp(line, "ERROR") == 0)))) {
-        s_sms_tx_state = SMS_TX_IDLE; at_owner_release(AT_OWNER_SMS);
-        sms_send_complete(strncmp(line, "+CMGS:", 6) == 0);
+        bool sent = strncmp(line, "+CMGS:", 6) == 0 ||
+                    strncmp(line, "+QCMGS:", 7) == 0;
+        /* Each concatenated part is acknowledged separately; the reply is only
+         * complete once the last one is accepted. */
+        if (sent && (uint8_t)(s_sms_seg_index + 1U) < s_sms_seg_total) {
+            ++s_sms_seg_index;
+            s_sms_tx_state = SMS_TX_QUEUED;
+            at_owner_release(AT_OWNER_SMS);
+        } else {
+            s_sms_tx_state = SMS_TX_IDLE; at_owner_release(AT_OWNER_SMS);
+            sms_send_complete(sent);
+        }
     } else if (s_sms_tx_state != SMS_TX_IDLE && strncmp(line, "+CMS ERROR:", 11) == 0) {
         s_sms_tx_state = SMS_TX_IDLE; at_owner_release(AT_OWNER_SMS);
         sms_send_complete(false);
@@ -1042,15 +1060,29 @@ void ec800m_test_shift_minutes(uint16_t *year, uint8_t *month, uint8_t *day,
 
 static void sms_tx_process(void)
 {
-    char command[48];
+    char command[64];
     if (!ec800m_is_ready()) return;
     if (s_sms_tx_state == SMS_TX_QUEUED) {
         if (!at_owner_acquire(AT_OWNER_SMS)) return;
-        (void)snprintf(command, sizeof command, "AT+CMGS=\"%s\"", s_sms_phone);
+        if (s_sms_seg_total > 1U) {
+            /* AT+CMGS cannot segment; a concatenated message must go out one
+             * part at a time through AT+QCMGS with a shared <uid>. */
+            (void)snprintf(command, sizeof command,
+                           "AT+QCMGS=\"%s\",%u,%u,%u", s_sms_phone,
+                           (unsigned)s_sms_uid,
+                           (unsigned)(s_sms_seg_index + 1U),
+                           (unsigned)s_sms_seg_total);
+        } else {
+            (void)snprintf(command, sizeof command, "AT+CMGS=\"%s\"", s_sms_phone);
+        }
         if (!usart_send_buf((const uint8_t *)command, (uint16_t)strlen(command)) || !usart_send_buf((const uint8_t *)"\r\n",2U)) { s_sms_tx_state=SMS_TX_IDLE; at_owner_release(AT_OWNER_SMS); sms_send_complete(false); return; }
         s_sms_prompt = false; s_sms_prompt_line_start = true; s_sms_tx_state = SMS_TX_WAIT_PROMPT; s_sms_deadline_ms = TICK_MS() + 5000U;
     } else if (s_sms_tx_state == SMS_TX_WAIT_PROMPT && s_sms_prompt) {
-        if (!usart_send_buf((const uint8_t *)s_sms_text, (uint16_t)strlen(s_sms_text)) || !usart_send_buf((const uint8_t *)"\x1A", 1U)) { s_sms_tx_state=SMS_TX_IDLE; at_owner_release(AT_OWNER_SMS); sms_send_complete(false); return; }
+        uint16_t offset = (uint16_t)(s_sms_seg_index * EC800M_SMS_SEGMENT_MAX);
+        uint16_t remaining = (uint16_t)(s_sms_len - offset);
+        uint16_t count = remaining > EC800M_SMS_SEGMENT_MAX ?
+                         EC800M_SMS_SEGMENT_MAX : remaining;
+        if (!usart_send_buf((const uint8_t *)&s_sms_text[offset], count) || !usart_send_buf((const uint8_t *)"\x1A", 1U)) { s_sms_tx_state=SMS_TX_IDLE; at_owner_release(AT_OWNER_SMS); sms_send_complete(false); return; }
         s_sms_tx_state = SMS_TX_WAIT_RESULT; s_sms_deadline_ms = TICK_MS() + 30000U;
     } else if (s_sms_tx_state != SMS_TX_IDLE && s_sms_tx_state != SMS_TX_QUEUED &&
                (int32_t)(TICK_MS() - s_sms_deadline_ms) >= 0) {
@@ -1065,8 +1097,17 @@ int ec800m_sms_send(const char *phone, const char *text)
     if (!phone || !text || !ec800m_is_ready()) return -1;
     if (s_sms_tx_state != SMS_TX_IDLE || s_at_owner != AT_OWNER_NONE) return -2;
     n = strlen(text);
-    if (strlen(phone) == 0U || strlen(phone) >= 20U || n == 0U || n >= 192U) return -3;
+    if (strlen(phone) == 0U || strlen(phone) >= 20U || n == 0U ||
+        n >= EC800M_SMS_TEXT_MAX) return -3;
     (void)strcpy(s_sms_phone, phone); (void)strcpy(s_sms_text, text);
+    s_sms_len = (uint16_t)n;
+    s_sms_seg_total = (uint8_t)((n + EC800M_SMS_SEGMENT_MAX - 1U) /
+                                EC800M_SMS_SEGMENT_MAX);
+    s_sms_seg_index = 0U;
+    /* A concatenated message needs a reference shared by all of its parts and
+     * distinct from the previous message's; the low byte of a counter is
+     * enough for the one-reply-at-a-time traffic this device sends. */
+    if (s_sms_seg_total > 1U) ++s_sms_uid;
     s_sms_tx_state = SMS_TX_QUEUED;
     return 0;
 }

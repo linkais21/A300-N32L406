@@ -99,13 +99,15 @@ int main(void)
         {"GPSBDS,2", F39_OPERATION_GPSBDS, 1U, "2"},
         {"GMTSET", F39_OPERATION_GMTSET, 0U, 0},
         {"GMTSET,8", F39_OPERATION_GMTSET, 1U, "8"},
+        {"VIBSENS", F39_OPERATION_VIBSENS, 0U, 0},
+        {"VIBSENS,30", F39_OPERATION_VIBSENS, 1U, "30"},
     };
     static const char *rejected[] = {
         "", "PARAM,x", "RESET,x", "IP,", "IP,,9000", "IP,a,9000,",
         "IP=a,9000", "IP,a#", "IP,a\r", "IP,a\n", "IPX,a", "IP,a junk",
         "IP,a*HBT,60",
         "DUALSET", "DUALSET,", "DUALSET,*IP,a,1", "DUALSET,IP,a,1*",
-        "VIBSENS,1", "CANCEL", "DISMODE,1", "POWERMODE,1", "VELOCITY,1",
+        "VIBSENSX,1", "CANCEL", "DISMODE,1", "POWERMODE,1", "VELOCITY,1",
         "BALE,1", "BALESET,1", "RTK,1", "C21,1",
     };
     uint8_t nul_data[] = {'I', 'P', ',', 'a', 0, ',', '1'};

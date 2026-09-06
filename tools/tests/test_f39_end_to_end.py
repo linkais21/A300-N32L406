@@ -68,6 +68,7 @@ const gps_data_t *gps_get_data(void) { static gps_data_t g; g.valid=true; return
 void gps_send_cmd(const char *c) { (void)c; }
 int GPIO_ReadInputDataBit(void *p, unsigned x) { (void)p; (void)x; return 1; }
 void ec800m_get_imei(char *b, uint8_t n) { if (n > 0) { strncpy(b, "123456789012345", n-1); b[n-1]=0; } }
+void ec800m_get_iccid(char *b, uint8_t n) { if (n > 0) { strncpy(b, "89860492192080502719", n-1); b[n-1]=0; } }
 int ec800m_get_csq(void) { return 20; }
 void NVIC_SystemReset(void) { system_resets++; }
 int sms_send(const char *p, const char *t) { (void)p; (void)t; production_sends++; return production_send_result; }
@@ -121,7 +122,7 @@ int main(void) {
     assert(!strcmp(order, "TNGJR")); assert(callbacks == 5 && saves == 2);
 
     callbacks=0; sent_count=0;
-    feed("13800000004", "VIBSENS,1#"); sms_ingress_process();
+    feed("13800000004", "VIBSENSX,1#"); sms_ingress_process();
     assert(callbacks == 0 && sent_count == 0);
 
     send_result=-1; feed("13800000005", "RESET#"); sms_ingress_process();

@@ -305,7 +305,7 @@ void work_mode_process(void)
     }
     input.vibration_sample_valid = i2c_accel_vibration_sample_due();
     input.vibration_hit = input.vibration_sample_valid ?
-                          i2c_accel_vibration_hit(10U) : false;
+                          i2c_accel_vibration_hit(cfg_get()->vib_sens) : false;
     /* The PB3 interrupt is the first evidence of a vibration wake. Count the
      * wake sample itself so the six-second confirmation starts immediately,
      * rather than waiting for a second I2C sample after WFI returns. */

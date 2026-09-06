@@ -79,7 +79,7 @@ static bool operation_name(f39_operation_t operation, const char **name)
     static const char *const names[] = {
         "", "PARAM", "DUALSET", "RESET", "PID", "IP", "FIP", "FREQ",
         "HBT", "MODEL", "SPEED", "APN", "RELAY", "GPSDUP", "MLG",
-        "CAR", "GPSBDS", "GMTSET"
+        "CAR", "GPSBDS", "GMTSET", "VIBSENS"
         , "FOTA", "LOG"
     };
     if (name == NULL || operation <= F39_OPERATION_INVALID ||
@@ -165,34 +165,64 @@ static f39_result_t query(const f39_request_t *r, f39_platform_t *p,
     switch (r->operation) {
     case F39_OPERATION_PARAM:
         reply_clear(out);
+        /* Terminal command spec sheet1 row 3: bracketed field format,
+         * including the SIM ICCID.  FIP[] stays empty when no backup platform
+         * is configured rather than being omitted, so the field set is fixed. */
         if (!external_text(p->version, p->version_len, F39_VERSION_MAX_LENGTH) ||
             !external_text(p->imei, p->imei_len, F39_IMEI_MAX_LENGTH) ||
+            !external_text(p->iccid, p->iccid_len, F39_ICCID_MAX_LENGTH) ||
             !device_id(c, p, terminal_id) ||
             !reply_append(out,
-                          "PARAM,V=%.*s,M=%.*s,I=%.*s,P=%.*s,S=%.*s:%u,"
-                          "B=%.*s:%u,H=%u,F=%u/%u,G=%u,A=%u,Q=%d,N=%.*s",
+                          "PRO[JT808_2013]VER[%.*s]IMEI[%.*s]ICCID[%.*s]"
+                          "PID[%.*s]CSQ[%d]GPS[%u]",
                           (int)p->version_len, p->version != NULL ? p->version : "",
-                          (int)CFG_MODEL_LEN, c->terminal_model,
                           (int)p->imei_len, p->imei != NULL ? p->imei : "",
-                          7, terminal_id, (int)CFG_IP_LEN, c->server_ip,
-                          (unsigned)c->server_port, (int)CFG_IP_LEN, c->backup_ip,
-                          (unsigned)c->backup_port,
-                          (unsigned)c->heartbeat_s, (unsigned)c->report_moving_s,
-                          (unsigned)c->report_stopped_s, (unsigned)c->gpsbds_mode,
-                          p->acc_on ? 1U : 0U, p->csq, (int)CFG_APN_LEN, c->apn) ||
-            !reply_append(out, ",SV=%u,X=%u,D=%u.%u,Success!\r\n",
-                          (unsigned)p->gps_satellites,
-                          (unsigned)p->gps_fix_quality,
-                          (unsigned)(p->gps_hdop_x10 / 10U),
-                          (unsigned)(p->gps_hdop_x10 % 10U))) {
+                          (int)p->iccid_len, p->iccid != NULL ? p->iccid : "",
+                          (int)(CFG_PID_LEN - 1), c->pid,
+                          p->csq, (unsigned)p->gps_satellites)) {
+            return failure(out, name, "reply-too-long");
+        }
+        if (c->backup_ip[0] != '\0') {
+            if (!reply_append(out, "IP[%.*s:%u]FIP[%.*s:%u]",
+                              (int)CFG_IP_LEN, c->server_ip, (unsigned)c->server_port,
+                              (int)CFG_IP_LEN, c->backup_ip, (unsigned)c->backup_port)) {
+                return failure(out, name, "reply-too-long");
+            }
+        } else if (!reply_append(out, "IP[%.*s:%u]FIP[]",
+                                 (int)CFG_IP_LEN, c->server_ip,
+                                 (unsigned)c->server_port)) {
+            return failure(out, name, "reply-too-long");
+        }
+        /* The APN user and password fields are deliberately left empty, as in
+         * the spec's own APN[CMIOT,,] example: this reply goes out over SMS in
+         * cleartext, and echoing stored credentials there would leak them. */
+        if (!reply_append(out, "FORCE[%u:%u]ACC[%u]APN[%.*s,,]\r\n",
+                          (unsigned)c->report_moving_s,
+                          (unsigned)c->report_stopped_s,
+                          p->acc_on ? 1U : 0U,
+                          (int)CFG_APN_LEN, c->apn)) {
             return failure(out, name, "reply-too-long");
         }
         return F39_RESULT_OK;
     case F39_OPERATION_PID:
         reply_clear(out);
         {
+            /* Terminal command spec sheet1: PID# echoes the full 11-digit
+             * device ID, not the 7-byte JT808 terminal id derived from it. */
+            char pid_text[CFG_PID_LEN];
             if (!device_id(c, p, terminal_id)) return failure(out,name,"identity");
-            return reply_append(out, "PID,%.*s=Success!\r\n", 7, terminal_id) ?
+            if (c->pid[0] != '\0') {
+                (void)memcpy(pid_text, c->pid, CFG_PID_LEN - 1U);
+                pid_text[CFG_PID_LEN - 1U] = '\0';
+            } else {
+                char imei[F39_IMEI_MAX_LENGTH + 1U];
+                if (p->imei_len != 15U) return failure(out,name,"identity");
+                (void)memcpy(imei, p->imei, 15U);
+                imei[15] = '\0';
+                (void)memcpy(pid_text, imei + 4U, 11U);
+                pid_text[11] = '\0';
+            }
+            return reply_append(out, "PID,%s=Success!\r\n", pid_text) ?
             F39_RESULT_OK : failure(out, name, "reply-too-long");
         }
     case F39_OPERATION_IP:
@@ -235,6 +265,8 @@ static f39_result_t query(const f39_request_t *r, f39_platform_t *p,
         reply_clear(out); return reply_append(out,"GPSBDS,%u=Success!\r\n",(unsigned)c->gpsbds_mode)?F39_RESULT_OK:failure(out,name,"reply-too-long");
     case F39_OPERATION_GMTSET:
         reply_clear(out); return reply_append(out,"GMTSET,%c%02u%02u=Success!\r\n",c->gmt_sign<0?'W':'E',(unsigned)c->gmt_hour,(unsigned)c->gmt_min)?F39_RESULT_OK:failure(out,name,"reply-too-long");
+    case F39_OPERATION_VIBSENS:
+        reply_clear(out); return reply_append(out,"VIBSENS,%u=Success!\r\n",(unsigned)c->vib_sens)?F39_RESULT_OK:failure(out,name,"reply-too-long");
     default: return F39_RESULT_INVALID;
     }
 }

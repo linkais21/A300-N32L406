@@ -314,6 +314,21 @@ static bool prepare_gpsbds(const f39_request_t *request,
     return true;
 }
 
+static bool prepare_vibsens(const f39_request_t *request,
+                            device_config_t *candidate)
+{
+    uint32_t value;
+    /* Doc range is 1..50 (smaller = more sensitive).  Persisting only; the
+     * accelerometer picks the value up on its next sample, so no effect flag
+     * and no disturbance of the running sleep/wake state machine. */
+    if (request->argc != 1U || !parse_arg_u32(request, 0U, &value) ||
+        value < 1U || value > 50U) {
+        return false;
+    }
+    candidate->vib_sens = (uint8_t)value;
+    return true;
+}
+
 static bool prepare_gmt(const f39_request_t *request,
                         device_config_t *candidate)
 {
@@ -393,6 +408,8 @@ static bool prepare_operation(const f39_request_t *request,
         return prepare_gpsbds(request, candidate, effects);
     case F39_OPERATION_GMTSET:
         return prepare_gmt(request, candidate);
+    case F39_OPERATION_VIBSENS:
+        return prepare_vibsens(request, candidate);
     default:
         return false;
     }
@@ -413,6 +430,7 @@ static bool is_dualset_operation(f39_operation_t operation)
     case F39_OPERATION_CAR:
     case F39_OPERATION_GPSBDS:
     case F39_OPERATION_GMTSET:
+    case F39_OPERATION_VIBSENS:
         return true;
     default:
         return false;
@@ -422,7 +440,9 @@ static bool is_dualset_operation(f39_operation_t operation)
 static bool prepare_dualset(const f39_request_t *request,
                             device_config_t *candidate, uint32_t *effects)
 {
-    bool seen[F39_OPERATION_GMTSET + 1U] = { false };
+    /* Sized by the highest dualset-capable operation; VIBSENS now exceeds
+     * GMTSET in the enum, so indexing it must stay in bounds. */
+    bool seen[F39_OPERATION_VIBSENS + 1U] = { false };
     f39_operation_t operations[F39_MAX_DUALSET_ITEMS];
     uint8_t i;
 

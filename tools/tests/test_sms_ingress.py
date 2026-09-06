@@ -37,7 +37,7 @@ def run():
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("RDY");
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("+CSQ: 20,99");
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("PARAM?x#");
-        sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("VIBSENS=1#");
+        sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("VIBSENSX=1#");
         sms_ingress_feed_line("+CMT: \"13800138000\",\"\",\"\""); sms_ingress_feed_line("IP=1");
         sms_ingress_process(); assert(count==5); return 0;
       }

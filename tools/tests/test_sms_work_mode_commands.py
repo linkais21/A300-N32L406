@@ -82,6 +82,7 @@ int main(void) {
     platform.config = &cfg; platform.persist = persist; platform.timer_refresh = timer;
     platform.version = "V1"; platform.version_len = 2;
     platform.imei = "123456789012345"; platform.imei_len = 15;
+    platform.iccid = "89860492192080502719"; platform.iccid_len = 20;
     assert(f39_parse((const uint8_t *)"FREQ,30,180", 11, &request) == F39_RESULT_OK);
     f39_transaction_init(&tx, &cfg, persist, 0);
     assert(f39_prepare_config(&request, &cfg, &tx));
@@ -96,7 +97,11 @@ int main(void) {
     assert(f39_parse((const uint8_t *)"PARAM?", 6, &request) == F39_RESULT_OK);
     assert(f39_execute(&request, &platform, &reply) == F39_RESULT_OK);
     assert(reply.len < F39_REPLY_MAX_LENGTH);
-    assert(strstr((const char *)reply.data, "PARAM,") != 0);
+    /* Terminal command spec sheet1 row 3: bracketed PARAM format. */
+    assert(strstr((const char *)reply.data, "PRO[JT808_2013]") != 0);
+    assert(strstr((const char *)reply.data, "IMEI[123456789012345]") != 0);
+    assert(strstr((const char *)reply.data, "ICCID[89860492192080502719]") != 0);
+    assert(strstr((const char *)reply.data, "FORCE[30:180]") != 0);
     assert(f39_parse((const uint8_t *)"FOTA?", 5, &request) == F39_RESULT_OK);
     assert(f39_execute(&request, &platform, &reply) == F39_RESULT_OK);
     assert(reply.len < F39_REPLY_MAX_LENGTH && strstr((const char *)reply.data, "FOTA,") != 0);
