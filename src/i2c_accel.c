@@ -103,14 +103,15 @@ static void da218e_bus_recover(void)
 #define VIBRATION_SENSITIVITY_LEVEL_COUNT 10U
 /* Product-facing VIBSENS scale from the terminal command spec: 1..50, where a
  * smaller number is more sensitive.  The scale is anchored at level 30 =
- * VIB_THRESH, the threshold the sleep/wake logic was commissioned against.
- * The shipped default is level 10, i.e. 70 LSB: deliberately more sensitive
- * than that commissioning point, chosen so vibration wake triggers more
- * readily.  Out-of-range or unconfigured input falls back to the default. */
+ * VIB_THRESH, the threshold the sleep/wake logic was commissioned against,
+ * and that is also the shipped default: a field capture at level 10 (70 LSB)
+ * showed bench noise deltas of 71..106 repeatedly clearing the threshold on a
+ * genuinely stationary device, which reset the stationary timer and prevented
+ * STOP1 entry.  Out-of-range or unconfigured input falls back to the default. */
 #define VIBRATION_SENSITIVITY_MIN 1U
 #define VIBRATION_SENSITIVITY_MAX 50U
 #define VIBRATION_SENSITIVITY_ANCHOR 30U
-#define VIBRATION_SENSITIVITY_DEFAULT 10U
+#define VIBRATION_SENSITIVITY_DEFAULT 30U
 #define VIBRATION_THRESHOLD_STEP 4U
 
 static int32_t s_ema_x = 0, s_ema_y = 0, s_ema_z = 0;  /* EMA × (1<<VIB_EMA_SHIFT) */

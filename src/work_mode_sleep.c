@@ -22,6 +22,10 @@
 #include "i2c_accel.h"
 
 #define WORK_MODE_SLEEP_MAX_SLICE_MS 15000U
+/* Slices between repeats of the retained-position line while asleep. At the
+ * 15 s slice above this is one line every ~3 min, matching the stationary
+ * reporting period instead of one per slice. */
+#define STOP1_HISTORICAL_LOG_SLICES 12U
 
 static volatile work_sleep_wake_t s_wake;
 static bool s_ready;
@@ -56,6 +60,7 @@ static void clear_wake_exti_pending(void)
 }
 static uint32_t s_systick_ctrl;
 static bool s_stop1_log_active;
+static uint32_t s_stop1_slice_count;
 static uint32_t s_last_alarm_fail_log_ms;
 static uint32_t s_alarm_retry_after_ms;
 
@@ -307,6 +312,7 @@ void work_mode_sleep_init(void)
     s_last_admission_log_ms = 0U;
     s_systick_ctrl = 0U;
     s_stop1_log_active = false;
+    s_stop1_slice_count = 0U;
     s_last_alarm_fail_log_ms = 0U;
     s_alarm_retry_after_ms = 0U;
     s_accel_level_wake_latched = false;
@@ -406,6 +412,8 @@ void work_mode_sleep_process(uint32_t next_service_ms, work_sleep_wake_t pending
     if (!s_stop1_log_active) {
         dbg_printf("[STOP1] enter slice_ms=%lu\r\n", (unsigned long)slice_ms);
         s_stop1_log_active = true;
+        /* New sleep episode: log the retained position on its first slice. */
+        s_stop1_slice_count = 0U;
     }
     ec800m_sleep_enable();
     stop1_suspend_periodic_irqs();
@@ -458,7 +466,15 @@ void work_mode_sleep_process(uint32_t next_service_ms, work_sleep_wake_t pending
         if (elapsed_seconds != 0U) {
             s_sleep_seconds += elapsed_seconds;
             gps_advance_last_trusted_seconds(elapsed_seconds);
-            {
+            /* One line per 15 s slice buried the interesting events in the
+             * field capture.  The retained snapshot only advances its clock
+             * while asleep, so echoing it every slice adds nothing: report it
+             * on the first slice of a sleep episode and then only once per
+             * reporting period, plus whenever a real event ends the episode
+             * (handled by the non-RTC wake branch below). */
+            ++s_stop1_slice_count;
+            if (s_stop1_slice_count == 1U ||
+                (s_stop1_slice_count % STOP1_HISTORICAL_LOG_SLICES) == 0U) {
                 gps_data_t historical;
                 if (gps_get_last_trusted(&historical)) {
                     dbg_printf("[GPS] STOP1 historical valid=%u fix=%u sats=%u lat_e7=%ld lon_e7=%ld time=%04u-%02u-%02u %02u:%02u:%02u\r\n",

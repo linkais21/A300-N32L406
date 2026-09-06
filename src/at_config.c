@@ -51,6 +51,10 @@ static uint32_t s_retry_due_ms;
 static bool s_retry_pending;
 static bool s_retry_in_flight;
 
+/* Defined below; the serial console falls back to it before rejecting a line
+ * as unknown, so the F39 command set works over the debug UART too. */
+static bool f39_execute_console(const char *line);
+
 static bool f39_persist(const device_config_t *candidate, void *context) { (void)context; return cfg_store_candidate(candidate); }
 static void f39_timer_refresh(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_heartbeat_s(c->heartbeat_s); jt808_set_report_interval(c->report_moving_s, c->report_stopped_s); work_mode_config_changed(c, TICK_MS() / 1000U); }
 static void f39_network_reconnect(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_server(c->server_ip, c->server_port, false); jt808_set_server(c->backup_ip, c->backup_port, true); tcp_manager_reconnect(); }
@@ -371,6 +375,14 @@ void at_config_process(void)
     /* Work on a local copy so feed() can safely refill s_cmd_buf */
     char local[CMD_BUF_SIZE];
     strncpy(local, s_cmd_buf, CMD_BUF_SIZE - 1);
+    local[CMD_BUF_SIZE - 1] = '\0';
+    /* Try the F39 terminal command set first, on the untouched line: the
+     * legacy console tokenizer rewrites '=' and ',' in place, which would
+     * hand the F39 parser a truncated root. Falls through to the legacy
+     * console commands when the line is not an F39 command. */
+    if (f39_execute_console(local)) return;
+    strncpy(local, s_cmd_buf, CMD_BUF_SIZE - 1);
+    local[CMD_BUF_SIZE - 1] = '\0';
     handle_cmd(local);
 }
 
@@ -400,6 +412,41 @@ static void f39_refresh_live_snapshot(void)
     s_f39_platform.iccid = iccid; s_f39_platform.iccid_len = (uint16_t)strlen(iccid);
     s_f39_platform.csq = ec800m_get_csq(); s_f39_platform.gps_fix_quality = g->fix_quality;
     s_f39_platform.acc_on = hw_acc_is_on(); s_f39_platform.gps_satellites = g->satellites; s_f39_platform.gps_hdop_x10 = (uint16_t)(g->hdop * 10.0f);
+}
+
+/* Run one console line through the F39 terminal command set and print the
+ * reply on the debug UART.  Returns false when the line is not an F39 command
+ * so the caller can fall through to the legacy console commands.  The debug
+ * console is the local operator's channel, so unlike SMS the reply is echoed
+ * verbatim, failures included. */
+static bool f39_execute_console(const char *line)
+{
+    f39_request_t request;
+    f39_reply_t reply;
+    uint16_t len = 0U;
+
+    if (line == NULL) return false;
+    while (len < F39_COMMAND_MAX_LENGTH && line[len] != '\0') ++len;
+    if (len == 0U || len >= F39_COMMAND_MAX_LENGTH) return false;
+    /* The command set frames commands with a trailing '#'; accept it with or
+     * without, matching the SMS ingress which strips it before parsing. */
+    if (line[len - 1U] == '#') --len;
+    if (len == 0U) return false;
+    if (!s_f39_bound) f39_bind_defaults();
+    if (!s_f39_bound ||
+        f39_parse((const uint8_t *)line, len, &request) != F39_RESULT_OK)
+        return false;
+    if (s_f39_uses_defaults) f39_refresh_live_snapshot();
+    (void)f39_execute(&request, &s_f39_platform, &reply);
+    if (reply.len == 0U) return false;
+    /* reply.data is NUL-terminated by reply_append()'s vsnprintf and already
+     * carries its own CRLF.  dbg_printf's %s ignores any precision, so print
+     * it as a plain string rather than passing a length it would not consume. */
+    reply.data[reply.len] = '\0';
+    dbg_printf("%s", (const char *)reply.data);
+    if (reply.reset_pending && s_schedule_reset != NULL)
+        s_schedule_reset(reply.reset_delay_ms, s_f39_platform.context);
+    return true;
 }
 
 /* Execute a command delivered over a transport that acknowledges the frame
