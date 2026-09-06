@@ -115,7 +115,7 @@ TRIGRAPHS = {
     "??!": "|", "??<": "{", "??>": "}", "??-": "~",
 }
 CANONICAL_CONSUMER_SHA256 = {
-    "src/main.c": "b5760fe96f713fe50860d8aea2154fbdf1f91b0051b4865b67df478979c5d12d",
+    "src/main.c": "9ec6e847daca0731aa80b7661036395d84c2f9f6cef32a1b71c8e8cb68738c1f",
     "src/jt808.c": "d38583fc4d2e47eab4fe184b90a21205dc6e2606266a20e824bff69321871586",
     "src/jt808_params.c": "2000242a482e339fef40541a46c3e2190b0bdfc9d4b79f7807322f2ab584fd0e",
     "src/terminal_identity.c": "d8f0d206632b5ecb436d0989e3e9daf8a7fbb734763446a84e27285b3e261d5b",

@@ -61,6 +61,11 @@ void work_mode_step(const work_mode_input_t *input);
 bool work_mode_next_action(work_mode_action_t *out);
 work_mode_state_t work_mode_state(void);
 bool work_mode_logical_acc(void);
+/* Vibration confirmation-window progress, for the diagnostic log only: how
+ * many samples have been accumulated and how many the window requires. Lets a
+ * field capture show that a wake fired but the episode never confirmed. */
+uint16_t work_mode_vibration_hits(void);
+uint16_t work_mode_vibration_required(void);
 void work_mode_config_changed(const device_config_t *cfg, uint32_t now_s);
 void work_mode_notify_alarm(uint32_t alarm_bits);
 uint32_t work_mode_take_alarm(void);

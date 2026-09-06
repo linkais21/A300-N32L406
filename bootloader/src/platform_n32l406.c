@@ -112,7 +112,10 @@ bool boot_platform_init(void)
     s_fault_reset = RCC_GetFlagStatus(RCC_CTRLSTS_FLAG_IWDGRSTF) == SET ||
                     RCC_GetFlagStatus(RCC_CTRLSTS_FLAG_WWDGRSTF) == SET ||
                     RCC_GetFlagStatus(RCC_CTRLSTS_FLAG_LPWRRSTF) == SET;
-    RCC_ClrFlag();
+    /* The reset flags are deliberately left set here.  Reading them is
+     * non-destructive, and clearing them at this point made the App report
+     * "Reset: unknown" for every boot -- it runs after us and had nothing left
+     * to inspect.  reset_diag_capture() in the App clears them instead. */
 
     RCC_EnableAPB2PeriphClk(RCC_APB2_PERIPH_GPIOA | RCC_APB2_PERIPH_AFIO |
                             RCC_APB2_PERIPH_SPI1, ENABLE);

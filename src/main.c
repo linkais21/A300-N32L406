@@ -228,12 +228,14 @@ static void periodic_status_log(void)
                (unsigned long)accel_diag->read_fail_count,
                (unsigned)accel_diag->delta, (unsigned)accel_diag->threshold,
                (unsigned long)accel_diag->vibration_hit_count);
-    dbg_printf("[WORK] state=%s pin_high=%u acc_on=%u logical_acc=%u vib=%u stop=%u now=%lu\r\n",
+    dbg_printf("[WORK] state=%s pin_high=%u acc_on=%u logical_acc=%u vib=%u hits=%u/%u stop=%u now=%lu\r\n",
                work_mode_state_name(work_mode_state()),
                (unsigned)hw_acc_pin_high(),
                (unsigned)hw_acc_is_on(),
                (unsigned)work_mode_logical_acc(),
                (unsigned)s_work_vibration_hit,
+               (unsigned)work_mode_vibration_hits(),
+               (unsigned)work_mode_vibration_required(),
                (unsigned)work_mode_sleep_is_in_stop1(),
                (unsigned long)work_mode_sleep_monotonic_s());
 }
@@ -335,6 +337,17 @@ void work_mode_process(void)
          (uint32_t)(TICK_MS() - vibration_wake_last_hit_ms) <= 1000U);
     if (work_mode_state() == WORK_MODE_REALTIME ||
         !vibration_wake_hold) {
+        /* Report an episode that woke the CPU but never reached the confirm
+         * threshold: the wake source alone did not explain why the device
+         * went straight back to sleep. */
+        if (vibration_wake_window && work_mode_state() != WORK_MODE_REALTIME) {
+            const accel_diag_t *vd = i2c_accel_get_diag();
+            dbg_printf("[VIB] unconfirmed hits=%u/%u samples=%u delta=%u threshold=%u\r\n",
+                       (unsigned)work_mode_vibration_hits(),
+                       (unsigned)work_mode_vibration_required(),
+                       (unsigned)vibration_wake_samples,
+                       (unsigned)vd->delta, (unsigned)vd->threshold);
+        }
         vibration_wake_window = false;
         vibration_wake_hold = false;
     }
@@ -448,7 +461,9 @@ int main(void)
     dbg_printf("\r\n========================================\r\n");
     dbg_printf("  A300-T9 / %s\r\n", FW_FULL_VERSION);
     dbg_printf("  Build: %s\r\n", FW_BUILD_DATE);
-    dbg_printf("  Reset: %s\r\n", reset_diag_name(reset_diag_reason()));
+    dbg_printf("  Reset: %s flags=0x%02x\r\n",
+               reset_diag_name(reset_diag_reason()),
+               (unsigned)reset_diag_raw_flags());
     dbg_printf("========================================\r\n");
     log_hardware_contract();
 

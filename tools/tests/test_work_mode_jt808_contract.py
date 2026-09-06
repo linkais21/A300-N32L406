@@ -79,4 +79,22 @@ require("JT808_LOCATION_ONLINE_MAX" in wrapper,
 require("MSG_LOCATION_REPORT" in wrapper,
         "work-mode wrapper does not build a 0x0200 location report")
 
+# A live-fix report must not be dropped when GNSS has not re-acquired yet.
+# GNSS is powered down in STOP1, so on wake the live object is stale for as
+# long as the receiver takes to get a fix; dropping the frame there lost ACC
+# state changes and the whole stationary reporting cadence. Fall back to the
+# retained fix and mark the report historical instead.
+require("gps_get_last_trusted" in wrapper,
+        "work-mode report has no retained-fix fallback")
+require(re.search(
+    r"jt808_location_snapshot_valid[\s\S]*?gps_get_last_trusted"
+    r"[\s\S]{0,300}?historical_position\s*=\s*true", wrapper) is not None,
+    "a stale live fix does not fall back to the retained fix")
+require(wrapper.count("gps_get_last_trusted") >= 2,
+        "retained-fix fallback must cover both the historical and live paths")
+# The fallback must still refuse to invent a position when nothing was ever
+# captured, and must say why rather than failing silently.
+require("no-fix-no-trusted" in wrapper,
+        "the no-fix-and-no-retained-fix case is not reported")
+
 print("test_work_mode_jt808_contract: PASS")

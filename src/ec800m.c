@@ -1134,6 +1134,22 @@ int ec800m_tcp_open(uint8_t ch, const char *ip, uint16_t port)
 
 static bool s_tcp_send_ambiguous = false;
 
+/* Echo the last AT response on the debug UART with CR/LF and any non-printable
+ * byte escaped, so a modem reply can be read back from a field capture without
+ * the embedded newlines breaking up the surrounding log line. */
+static void at_dump_response(void)
+{
+    uint16_t i;
+    for (i = 0U; i < s_at_resp_len && i < AT_RESP_MAX; ++i) {
+        char c = s_at_resp[i];
+        if (c == '\0') break;
+        if (c == '\r') dbg_printf("\\r");
+        else if (c == '\n') dbg_printf("\\n");
+        else if (c >= 0x20 && c < 0x7f) dbg_printf("%c", c);
+        else dbg_printf("\\x%02x", (unsigned)(uint8_t)c);
+    }
+}
+
 bool ec800m_tcp_send_was_ambiguous(void) { return s_tcp_send_ambiguous; }
 void ec800m_tcp_send_clear_ambiguous(void) { s_tcp_send_ambiguous = false; }
 
@@ -1156,7 +1172,13 @@ int ec800m_tcp_send(uint8_t ch, const uint8_t *data, uint16_t len)
         goto done;
     }
     if (!at_send_wait_owned("", "SEND OK", 5000U)) {
-        dbg_printf("[4G-TX] fail stage=result ch=%u\r\n", ch);
+        /* The '>' prompt was granted and the payload went out, so the frame is
+         * probably on the wire; only the confirmation is missing.  Echo what
+         * the modem actually said -- a bare timeout gave no way to tell an
+         * unresponsive module from a rejected send. */
+        dbg_printf("[4G-TX] fail stage=result ch=%u resp=\"", ch);
+        at_dump_response();
+        dbg_printf("\"\r\n");
         s_tcp_send_ambiguous = true;
         goto done;
     }

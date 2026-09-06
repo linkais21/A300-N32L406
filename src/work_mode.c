@@ -565,6 +565,16 @@ bool work_mode_logical_acc(void)
     return g_work_mode.logical_acc;
 }
 
+uint16_t work_mode_vibration_hits(void)
+{
+    return (uint16_t)g_work_mode.vibration_hits;
+}
+
+uint16_t work_mode_vibration_required(void)
+{
+    return (uint16_t)vibration_samples_required();
+}
+
 void work_mode_notify_alarm(uint32_t alarm_bits)
 {
     s_pending_alarm_bits |= alarm_bits;

@@ -755,10 +755,25 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
     if (historical_position) {
         /* GNSS is off in STOP1.  Use only a snapshot captured while a live
          * fix was fresh; never encode the now-invalid live GPS object. */
-        if (!gps_get_last_trusted(&snapshot)) return -1;
+        if (!gps_get_last_trusted(&snapshot)) {
+            dbg_printf("[808] 0200 drop reason=no-trusted-fix hist=1\r\n");
+            return -1;
+        }
     } else {
         snapshot = *gps_get_data();
-        if (!jt808_location_snapshot_valid(&snapshot, TICK_MS())) return -1;
+        if (!jt808_location_snapshot_valid(&snapshot, TICK_MS())) {
+            /* A live fix is not available yet -- GNSS was powered down in
+             * STOP1 and has not re-acquired.  Dropping the frame here used to
+             * lose ACC state changes and the whole stationary reporting
+             * cadence until the receiver came back, so fall back to the
+             * retained fix and mark the report historical instead. */
+            if (!gps_get_last_trusted(&snapshot)) {
+                dbg_printf("[808] 0200 drop reason=no-fix-no-trusted hist=0\r\n");
+                return -1;
+            }
+            historical_position = true;
+            dbg_printf("[808] 0200 fallback=last-trusted\r\n");
+        }
     }
     dbg_printf("[808] 0200 acc=%u alarm=0x%08lx hist=%u\r\n",
                (unsigned)jt808_get_logical_acc(),
