@@ -401,11 +401,20 @@ void work_mode_process(void)
             break;
         case WORK_ACTION_REPORT_ENTRY:
         case WORK_ACTION_REPORT_LOCATION:
-        case WORK_ACTION_REPORT_ALARM:
-            if (jt808_send_location_work_mode(action.alarm_bits,
-                                               action.historical_position) != 0)
+        case WORK_ACTION_REPORT_ALARM: {
+            int sent = jt808_send_location_work_mode(action.alarm_bits,
+                                                     action.historical_position);
+            /* Re-queue a transport failure, but never JT808_SEND_NO_POSITION:
+             * that means GNSS has no fix and nothing was ever captured, which
+             * only time can clear.  Retrying it immediately spun this loop at
+             * full speed -- a field capture showed 1092 attempts and nothing
+             * else in 1131 lines, because the blocking debug UART then starved
+             * the very loop that would have acquired the fix.  The scheduler
+             * re-arms this report on the next reporting deadline. */
+            if (sent != 0 && sent != JT808_SEND_NO_POSITION)
                 work_mode_retry_action(&action);
             break;
+        }
         case WORK_ACTION_REPORT_HEARTBEAT:
             if (jt808_send_heartbeat() != 0)
                 work_mode_retry_action(&action);

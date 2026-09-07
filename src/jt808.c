@@ -743,6 +743,33 @@ int jt808_send_location(void)
     return result;
 }
 
+/* Rate-limit the "cannot build a location yet" notice.  Before boot GNSS has
+ * no fix and nothing has ever been captured, so this condition can hold for
+ * minutes; logging every attempt drowned the rest of the log and, because the
+ * debug UART blocks, slowed the main loop that would eventually clear it. */
+static void log_location_unavailable(const char *reason)
+{
+    static const char *last_reason;
+    static uint32_t last_log_ms;
+    static uint32_t suppressed;
+    uint32_t now = TICK_MS();
+
+    if (reason != last_reason ||
+        (uint32_t)(now - last_log_ms) >= JT808_LOCATION_DROP_LOG_MS) {
+        if (suppressed != 0U) {
+            dbg_printf("[808] 0200 unavailable reason=%s (+%lu suppressed)\r\n",
+                       reason, (unsigned long)suppressed);
+        } else {
+            dbg_printf("[808] 0200 unavailable reason=%s\r\n", reason);
+        }
+        last_reason = reason;
+        last_log_ms = now;
+        suppressed = 0U;
+        return;
+    }
+    ++suppressed;
+}
+
 int jt808_send_location_work_mode(uint32_t alarm_bits,
                                   bool historical_position)
 {
@@ -756,8 +783,8 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
         /* GNSS is off in STOP1.  Use only a snapshot captured while a live
          * fix was fresh; never encode the now-invalid live GPS object. */
         if (!gps_get_last_trusted(&snapshot)) {
-            dbg_printf("[808] 0200 drop reason=no-trusted-fix hist=1\r\n");
-            return -1;
+            log_location_unavailable("no-trusted-fix");
+            return JT808_SEND_NO_POSITION;
         }
     } else {
         snapshot = *gps_get_data();
@@ -768,8 +795,8 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
              * cadence until the receiver came back, so fall back to the
              * retained fix and mark the report historical instead. */
             if (!gps_get_last_trusted(&snapshot)) {
-                dbg_printf("[808] 0200 drop reason=no-fix-no-trusted hist=0\r\n");
-                return -1;
+                log_location_unavailable("no-fix-no-trusted");
+                return JT808_SEND_NO_POSITION;
             }
             historical_position = true;
             dbg_printf("[808] 0200 fallback=last-trusted\r\n");

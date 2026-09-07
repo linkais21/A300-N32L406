@@ -72,6 +72,14 @@ void jt808_set_logical_acc(bool on);
 bool jt808_get_logical_acc(void);
 int jt808_send_location(void);
 int jt808_send_location_to(uint8_t channel, const gps_data_t *snapshot);
+/* Returned when no position can be encoded yet: GNSS has no live fix and no
+ * trusted snapshot has ever been captured.  Distinct from a transport failure
+ * so the caller does not busy-retry a condition only time can clear. */
+#define JT808_SEND_NO_POSITION (-3)
+/* Minimum spacing between repeats of the "no position yet" notice. */
+#define JT808_LOCATION_DROP_LOG_MS 30000U
+/* Returns 0 on success, JT808_SEND_NO_POSITION when no position is available,
+ * or another negative value on a transport failure worth retrying. */
 int jt808_send_location_work_mode(uint32_t alarm_bits,
                                   bool historical_position);
 bool jt808_location_snapshot_valid(const gps_data_t *gps, uint32_t now);
