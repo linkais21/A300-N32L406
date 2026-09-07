@@ -33,6 +33,9 @@ static bool s_in_stop1;
 static volatile uint32_t s_sleep_seconds;
 static uint32_t s_rtc_start_sod;
 static bool s_accel_level_wake_latched;
+/* PA12 level captured when the ACC wake was raised, so the filter does not
+ * have to re-sample a pin that may be mid-bounce. */
+static volatile bool s_acc_on_at_wake;
 
 static uint32_t stop1_account_rtc_elapsed(uint32_t fallback_seconds)
 {
@@ -316,6 +319,7 @@ void work_mode_sleep_init(void)
     s_last_alarm_fail_log_ms = 0U;
     s_alarm_retry_after_ms = 0U;
     s_accel_level_wake_latched = false;
+    s_acc_on_at_wake = false;
     s_ready = true;
 }
 
@@ -324,6 +328,15 @@ bool work_mode_sleep_ready(void) { return s_ready; }
 void work_mode_sleep_isr_wake(work_sleep_wake_t source)
 {
     s_wake |= source;
+    /* Sample PA12 here, while the edge that raised this wake is still the
+     * level on the pin.  The filter below used to re-read the pin instead, and
+     * during contact bounce it could read the opposite level and discard a
+     * genuine ACC-ON wake -- a field capture showed
+     * "ACC-off edge ignored as wake" logged while the same pass reported
+     * pin_high=0 acc_on=1. */
+    if ((source & WORK_SLEEP_WAKE_ACC) != 0U) {
+        s_acc_on_at_wake = hw_acc_is_on();
+    }
 }
 
 work_sleep_wake_t work_mode_sleep_take_wake(void)
@@ -352,7 +365,7 @@ void work_mode_sleep_process(uint32_t next_service_ms, work_sleep_wake_t pending
      * still low it is only the confirmation of the sleep state.  Leaving this
      * bit latched would make every pass take the early-service path and keep
      * the RTC/STOP1 window from ever being entered. */
-    if ((s_wake & WORK_SLEEP_WAKE_ACC) != 0U && !hw_acc_is_on()) {
+    if ((s_wake & WORK_SLEEP_WAKE_ACC) != 0U && !s_acc_on_at_wake) {
         s_wake &= (work_sleep_wake_t)~WORK_SLEEP_WAKE_ACC;
         dbg_printf("[STOP1] ACC-off edge ignored as wake\r\n");
     }

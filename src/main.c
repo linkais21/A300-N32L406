@@ -271,6 +271,84 @@ static void scan_alarms(void)
     bat_prev_low = bat_low;
 }
 
+/* ── ACC state-change report de-bounce ───────────────────────────────────────
+ * PA12 bounces on real vehicles: a field capture logged 191 edges and 21 mode
+ * transitions in one session, several times flipping twice within the same
+ * second.  Each flip queued an ACC entry report, so the platform received
+ * alternating ACC ON/OFF frames and kept whichever arrived last -- one capture
+ * showed ACC ON at 14:41:18 not settling until 14:42:07.
+ *
+ * The de-bounce lives here, in the reporting path, deliberately: the work-mode
+ * state machine and its host tests pin ACC timing at 50 ms and at 5 s, leaving
+ * no dwell window that both passes those contracts and outlasts a
+ * multi-second bounce.  Reporting is where the symptom is, so that is where it
+ * is filtered.
+ *
+ * Timing uses the STOP1-aware monotonic second, not TICK_MS(), because the
+ * tick is suspended while asleep and bounce spans sleep entries.
+ */
+#define ACC_REPORT_SETTLE_S 5U
+
+static bool s_acc_report_valid;      /* an ACC level has been announced */
+static bool s_acc_report_level;      /* the level last announced */
+static uint32_t s_acc_report_s;      /* when it was announced */
+static bool s_acc_report_deferred;   /* a reversal is waiting for the window */
+static bool s_acc_report_pending;    /* the level that reversal carried */
+
+/* True when this ACC entry report must not go out yet.  Called only for
+ * WORK_ACTION_REPORT_ENTRY, whose acc_on carries the announced level. */
+static bool acc_report_suppressed(bool acc_on, uint32_t now_s)
+{
+    if (!s_acc_report_valid) {
+        s_acc_report_valid = true;
+        s_acc_report_level = acc_on;
+        s_acc_report_s = now_s;
+        s_acc_report_deferred = false;
+        return false;
+    }
+    if (acc_on == s_acc_report_level) {
+        /* Same level as announced: the bounce came back to where it started,
+         * so nothing further needs to be said. */
+        s_acc_report_deferred = false;
+        return true;
+    }
+    if ((uint32_t)(now_s - s_acc_report_s) < ACC_REPORT_SETTLE_S) {
+        s_acc_report_deferred = true;
+        s_acc_report_pending = acc_on;
+        dbg_printf("[ACC] report deferred level=%u within %us settle\r\n",
+                   (unsigned)acc_on, (unsigned)ACC_REPORT_SETTLE_S);
+        return true;
+    }
+    /* Outside the window this is a genuine change; announce it. */
+    s_acc_report_level = acc_on;
+    s_acc_report_s = now_s;
+    s_acc_report_deferred = false;
+    return false;
+}
+
+/* Emit a level that was deferred once the settle window has passed and the
+ * pin has actually stayed there, so a suppressed change is never simply lost. */
+static void acc_report_settle(uint32_t now_s)
+{
+    if (!s_acc_report_deferred ||
+        (uint32_t)(now_s - s_acc_report_s) < ACC_REPORT_SETTLE_S) {
+        return;
+    }
+    s_acc_report_deferred = false;
+    if (s_acc_report_pending == s_acc_report_level) return;
+    if (hw_acc_is_on() != s_acc_report_pending) {
+        /* The pin did not stay where the deferred edge left it; the level on
+         * record is still correct. */
+        return;
+    }
+    s_acc_report_level = s_acc_report_pending;
+    s_acc_report_s = now_s;
+    dbg_printf("[ACC] report settled level=%u\r\n",
+               (unsigned)s_acc_report_pending);
+    if (jt808_send_location_work_mode(0U, false) == JT808_SEND_NO_POSITION)
+        (void)jt808_send_location_work_mode(0U, true);
+}
+
 void work_mode_process(void)
 {
     static work_mode_state_t last_state = WORK_MODE_BOOT_MONITOR;
@@ -402,8 +480,21 @@ void work_mode_process(void)
         case WORK_ACTION_REPORT_ENTRY:
         case WORK_ACTION_REPORT_LOCATION:
         case WORK_ACTION_REPORT_ALARM: {
-            int sent = jt808_send_location_work_mode(action.alarm_bits,
-                                                     action.historical_position);
+            int sent;
+            /* An ACC state-change announcement is held back when it would
+             * merely undo one just sent: PA12 contact bounce otherwise puts a
+             * burst of alternating ACC ON/OFF reports on the wire and the
+             * platform settles on whichever edge happened to be last.  The
+             * first edge still reports immediately, so a real ACC change is
+             * announced within a second; only a reversal inside the settle
+             * window is deferred, and acc_report_settle() below emits the
+             * level that actually persisted. */
+            if (action.type == WORK_ACTION_REPORT_ENTRY &&
+                acc_report_suppressed(action.acc_on, now_s)) {
+                break;
+            }
+            sent = jt808_send_location_work_mode(action.alarm_bits,
+                                                 action.historical_position);
             /* Re-queue a transport failure, but never JT808_SEND_NO_POSITION:
              * that means GNSS has no fix and nothing was ever captured, which
              * only time can clear.  Retrying it immediately spun this loop at
@@ -430,6 +521,10 @@ void work_mode_process(void)
             break;
         }
     }
+
+    /* Release a deferred ACC level once the bounce has settled, before the
+     * STOP1 decision below: a suppressed change must never be lost. */
+    acc_report_settle(now_s);
 
     if (work_mode_state() == WORK_MODE_STATIONARY_SLEEP &&
         !vibration_wake_hold &&

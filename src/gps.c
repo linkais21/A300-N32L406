@@ -334,6 +334,28 @@ void gps_process(void)
 
 bool gps_is_valid(void)               { return s_gps.valid; }
 const gps_data_t *gps_get_data(void)  { return &s_gps; }
+/* True when the supplied civil time is strictly newer than the retained
+ * snapshot's clock.  Compared field by field from the most significant, which
+ * is exact for the UTC stamps GNSS supplies. */
+static bool retained_clock_is_newer(uint16_t year, uint8_t month, uint8_t day,
+                                    uint8_t hour, uint8_t minute, uint8_t second)
+{
+    uint32_t candidate_date = ((uint32_t)year << 9) |
+                              ((uint32_t)month << 5) | (uint32_t)day;
+    uint32_t retained_date = ((uint32_t)s_last_trusted.year << 9) |
+                             ((uint32_t)s_last_trusted.month << 5) |
+                             (uint32_t)s_last_trusted.day;
+    uint32_t candidate_time, retained_time;
+
+    if (candidate_date != retained_date) return candidate_date > retained_date;
+    candidate_time = ((uint32_t)hour * 3600U) + ((uint32_t)minute * 60U) +
+                     (uint32_t)second;
+    retained_time = ((uint32_t)s_last_trusted.hour * 3600U) +
+                    ((uint32_t)s_last_trusted.minute * 60U) +
+                    (uint32_t)s_last_trusted.second;
+    return candidate_time > retained_time;
+}
+
 bool gps_capture_last_trusted(void)
 {
     uint32_t now = TICK_MS();
@@ -346,6 +368,17 @@ bool gps_capture_last_trusted(void)
         s_gps.year < 2000U || s_gps.month < 1U || s_gps.month > 12U ||
         s_gps.day < 1U || s_gps.day > 31U || s_gps.hour > 23U ||
         s_gps.minute > 59U || s_gps.second > 59U) {
+        return false;
+    }
+    /* Never let the retained clock run backwards.  While asleep this snapshot's
+     * clock is pushed forward by gps_advance_last_trusted_seconds() on every
+     * STOP1 wake, so a live fix whose own timestamp is older than the advanced
+     * value would rewind reported time.  A field capture showed the retained
+     * stamp going 06:41:17 -> 06:41:06 when ACC bounce drove repeated sleep
+     * entries.  Position is still refreshed; only an older clock is refused. */
+    if (s_last_trusted_valid &&
+        !retained_clock_is_newer(s_gps.year, s_gps.month, s_gps.day,
+                                 s_gps.hour, s_gps.minute, s_gps.second)) {
         return false;
     }
     s_last_trusted.lat_e7 = (int32_t)(s_gps.lat * 10000000.0);
