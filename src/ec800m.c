@@ -95,8 +95,20 @@ static bool           s_sim_identity_ready;
 static ec800m_failure_t s_failure = EC800M_FAILURE_NONE;
 static int s_reg_status = -1;
 static uint32_t s_last_diag_ms;
+static uint16_t s_send_fail_streak;
 #define EC800M_DIAG_INTERVAL_MS 10000U
 #define EC800M_ICCID_MAX_ATTEMPTS 3U
+/* READY is the one state with no timeout of its own.  When the module stops
+ * answering while we still believe it is READY, every send fails at the
+ * AT+QISEND prompt and nothing ever re-arms the link: a field capture showed
+ * 1871 consecutive prompt failures, zero received bytes, and no recovery for
+ * the remaining two hours of the log.
+ *
+ * The trigger is a streak of failed sends rather than an elapsed-time
+ * silence, because TICK_MS() is frozen while STOP1 suspends the tick timer
+ * and this failure happens during sleep -- a time-based watchdog would
+ * accumulate only the brief awake windows and effectively never fire. */
+#define EC800M_SEND_FAIL_RESET_STREAK 8U
 
 static bool iccid_retry_should_advance(bool parsed, uint8_t *attempts)
 {
@@ -667,6 +679,9 @@ void ec800m_reset(void)
     s_sim_identity_ready = false;
     s_reg_status = -1;
     s_failure = EC800M_FAILURE_NONE;
+    /* Re-arm the recovery counter: the module is being power-cycled, so
+     * pre-reset failures must not immediately trigger another reset. */
+    s_send_fail_streak = 0U;
 }
 
 /* ── Init sequence steps ──────────────────────────────────────────────────── */
@@ -960,6 +975,7 @@ void ec800m_init(void)
     s_init_step = 0;
     s_iccid_attempts = 0U;
     s_sim_identity_ready = false;
+    s_send_fail_streak = 0U;
     ec800m_power_on();
 }
 
@@ -993,6 +1009,14 @@ void ec800m_process(void)
         if (TICK_MS() - s_state_enter_ms > 30000 &&
             (TICK_MS() % 30000) > 29900) {
             if (s_at_owner == AT_OWNER_NONE) (void)at_send_wait("AT+CSQ", "+CSQ:", 1000);
+        }
+        /* Recover a module that has stopped answering instead of failing
+         * every send forever.  Checked here, not inside the send path, so the
+         * power cycle happens with no AT owner held. */
+        if (s_send_fail_streak >= EC800M_SEND_FAIL_RESET_STREAK) {
+            dbg_printf("[4G] %u consecutive send failures -> reset\r\n",
+                       (unsigned)s_send_fail_streak);
+            ec800m_reset();
         }
         break;
     case EC800M_STATE_ERROR:
@@ -1164,7 +1188,12 @@ int ec800m_tcp_send(uint8_t ch, const uint8_t *data, uint16_t len)
     snprintf(cmd, sizeof(cmd), "AT+QISEND=%d,%u", ch, len);
     dbg_printf("[4G-TX] ch=%u len=%u\r\n", ch, len);
     if (!at_wait_prompt_owned(cmd, 3000U)) {
-        dbg_printf("[4G-TX] fail stage=prompt ch=%u\r\n", ch);
+        /* No '>' within the timeout means the module did not answer the
+         * command at all -- the signature of an unresponsive module rather
+         * than a rejected payload. */
+        ++s_send_fail_streak;
+        dbg_printf("[4G-TX] fail stage=prompt ch=%u streak=%u\r\n", ch,
+                   (unsigned)s_send_fail_streak);
         goto done;
     }
     if (!usart_send_buf(data, len)) {
@@ -1183,6 +1212,7 @@ int ec800m_tcp_send(uint8_t ch, const uint8_t *data, uint16_t len)
         goto done;
     }
     dbg_printf("[4G-TX] ch=%u SEND OK\r\n", ch);
+    s_send_fail_streak = 0U;
     result = 0;
 done:
     at_owner_release(AT_OWNER_TCP);
