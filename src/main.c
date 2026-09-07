@@ -288,6 +288,10 @@ static void scan_alarms(void)
  * tick is suspended while asleep and bounce spans sleep entries.
  */
 #define ACC_REPORT_SETTLE_S 5U
+/* Upper bound on how long an ACC wake keeps the CPU out of STOP1 while the
+ * PA12 debounce commits.  Four times WORK_MODE_ACC_DEBOUNCE_MS leaves room for
+ * a bouncing pin without letting one that never settles hold sleep off. */
+#define ACC_WAKE_HOLD_MS 200U
 
 static bool s_acc_report_valid;      /* an ACC level has been announced */
 static bool s_acc_report_level;      /* the level last announced */
@@ -360,13 +364,28 @@ void work_mode_process(void)
     static uint32_t vibration_wake_started_ms;
     static uint32_t vibration_wake_last_hit_ms;
     static uint32_t last_gps_integrity_log_ms;
+    static bool acc_wake_window;
+    static uint32_t acc_wake_started_ms;
     bool vibration_wake_hold;
+    bool acc_wake_hold;
     uint8_t processed = 0U;
     uint32_t now_s = work_mode_sleep_monotonic_s();
     if (wake != WORK_SLEEP_WAKE_NONE) {
         /* STOP1 suspends SysTick; make the first post-wake accelerometer
          * sample eligible before work-mode evaluates the wake window. */
         i2c_accel_prepare_wake_sampling();
+    }
+    if ((wake & WORK_SLEEP_WAKE_ACC) != 0U) {
+        /* An ACC wake needs the CPU awake long enough for work_mode's 50 ms
+         * PA12 debounce to commit, exactly as a vibration wake needs its
+         * six-second confirmation.  Without this the loop below saw the state
+         * still STATIONARY_SLEEP and re-entered STOP1 immediately, cutting the
+         * debounce short: a field capture showed the wake and the ACC edge
+         * recorded correctly, then "[STOP1] enter", and the mode transition
+         * only after the next 15 s RTC slice -- reported as ACC ON taking
+         * 22..45 s to reach the platform. */
+        acc_wake_window = true;
+        acc_wake_started_ms = TICK_MS();
     }
     input.now_s = now_s;
     input.now_ms = TICK_MS();
@@ -413,6 +432,16 @@ void work_mode_process(void)
     vibration_wake_hold = vibration_wake_window &&
         ((uint32_t)(TICK_MS() - vibration_wake_started_ms) < 6000U ||
          (uint32_t)(TICK_MS() - vibration_wake_last_hit_ms) <= 1000U);
+    /* Hold off STOP1 until the PA12 debounce has had time to commit.  The
+     * window is generous relative to WORK_MODE_ACC_DEBOUNCE_MS (50 ms) so a
+     * bouncing pin still gets a decision, and bounded so a pin that never
+     * settles cannot keep the device awake. */
+    acc_wake_hold = acc_wake_window &&
+        (uint32_t)(TICK_MS() - acc_wake_started_ms) < ACC_WAKE_HOLD_MS;
+    if (work_mode_state() == WORK_MODE_REALTIME || !acc_wake_hold) {
+        acc_wake_window = false;
+        acc_wake_hold = false;
+    }
     if (work_mode_state() == WORK_MODE_REALTIME ||
         !vibration_wake_hold) {
         /* Report an episode that woke the CPU but never reached the confirm
@@ -528,6 +557,7 @@ void work_mode_process(void)
 
     if (work_mode_state() == WORK_MODE_STATIONARY_SLEEP &&
         !vibration_wake_hold &&
+        !acc_wake_hold &&
         !work_mode_sleep_is_in_stop1()) {
         work_mode_sleep_process(15000U, wake);
     }

@@ -124,10 +124,47 @@ def check_retained_clock_monotonic() -> None:
             "the comparison does not read the retained snapshot")
 
 
+def check_acc_wake_hold() -> None:
+    """An ACC wake must keep the CPU awake until the PA12 debounce commits.
+
+    A field capture (ReceivedTofile-COM4-2026_9_7_15-47-18.TXT) showed the wake
+    and the ACC edge both recorded correctly, then "[STOP1] enter" on the same
+    pass, and the mode transition only after the next 15 s RTC slice -- ACC ON
+    took 22..45 s to reach the platform. Vibration wakes already had such a
+    hold; ACC wakes had none.
+    """
+    require("ACC_WAKE_HOLD_MS" in MAIN,
+            "no hold window for ACC wakes")
+    window = re.search(r"#define\s+ACC_WAKE_HOLD_MS\s+(\d+)U?", MAIN)
+    require(window is not None, "ACC hold window is not a plain constant")
+    hold_ms = int(window.group(1))
+    # Must outlast the 50 ms debounce it protects, and stay bounded so a pin
+    # that never settles cannot hold sleep off indefinitely.
+    require(50 < hold_ms <= 2000,
+            f"ACC hold {hold_ms}ms must exceed the 50ms debounce and stay bounded")
+
+    body = function_body(MAIN, "work_mode_process")
+    require(re.search(r"wake\s*&\s*WORK_SLEEP_WAKE_ACC[\s\S]*?"
+                      r"acc_wake_window\s*=\s*true", body) is not None,
+            "an ACC wake does not arm the hold window")
+    require("ACC_WAKE_HOLD_MS" in body,
+            "the hold decision does not consult the window")
+    # The STOP1 re-entry at the end of the loop is the thing being gated.
+    require(re.search(r"WORK_MODE_STATIONARY_SLEEP[\s\S]{0,300}?"
+                      r"!acc_wake_hold[\s\S]{0,300}?work_mode_sleep_process",
+                      body) is not None,
+            "STOP1 re-entry is not gated on the ACC hold")
+    # Reaching REALTIME means the debounce committed: the hold must release.
+    require(re.search(r"WORK_MODE_REALTIME\s*\|\|\s*!acc_wake_hold[\s\S]{0,160}?"
+                      r"acc_wake_window\s*=\s*false", body) is not None,
+            "the ACC hold is not released once the transition happened")
+
+
 def main() -> None:
     check_report_debounce()
     check_wake_filter_race()
     check_retained_clock_monotonic()
+    check_acc_wake_hold()
     print("test_acc_bounce_hardening: PASS")
 
 
