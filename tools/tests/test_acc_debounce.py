@@ -45,31 +45,31 @@ static void test_low_glitch_does_not_enter_stop1(void)
     assert(work_mode_logical_acc());
 }
 
-static void test_low_requires_50ms_confirmation(void)
+static void test_low_requires_500ms_confirmation(void)
 {
     work_mode_init(&CFG, 1U, true);
     drain();
     step_ms(1U, false);
-    step_ms(50U, false);
+    step_ms(500U, false);
     assert(work_mode_state() == WORK_MODE_REALTIME);
-    step_ms(51U, false);
+    step_ms(501U, false);
     assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
     assert(!work_mode_logical_acc());
 }
 
-static void test_high_requires_50ms_confirmation_after_stop1(void)
+static void test_high_requires_500ms_confirmation_after_stop1(void)
 {
     work_mode_init(&CFG, 1U, true);
     drain();
     step_ms(1U, false);
-    step_ms(51U, false);
+    step_ms(501U, false);
     assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
     drain();
-    step_ms(101U, true);
+    step_ms(1001U, true);
     assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
-    step_ms(150U, true);
+    step_ms(1500U, true);
     assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
-    step_ms(151U, true);
+    step_ms(1501U, true);
     assert(work_mode_state() == WORK_MODE_REALTIME);
     assert(work_mode_logical_acc());
 }
@@ -77,8 +77,8 @@ static void test_high_requires_50ms_confirmation_after_stop1(void)
 int main(void)
 {
     test_low_glitch_does_not_enter_stop1();
-    test_low_requires_50ms_confirmation();
-    test_high_requires_50ms_confirmation_after_stop1();
+    test_low_requires_500ms_confirmation();
+    test_high_requires_500ms_confirmation_after_stop1();
     return 0;
 }
 '''

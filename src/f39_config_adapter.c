@@ -82,6 +82,25 @@ static bool arg_equals(const f39_request_t *request, uint8_t index,
            memcmp(data, text, text_length) == 0;
 }
 
+static bool valid_at_string_arg(const f39_request_t *request, uint8_t index,
+                                bool allow_empty)
+{
+    const uint8_t *data;
+    uint16_t length;
+    uint16_t i;
+
+    if (!argument(request, index, &data, &length) ||
+        (!allow_empty && length == 0U)) {
+        return false;
+    }
+    for (i = 0U; i < length; ++i) {
+        if (data[i] < 0x20U || data[i] > 0x7eU || data[i] == (uint8_t)'"') {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool prepare_endpoint(const f39_request_t *request, char *host,
                              size_t host_capacity, uint16_t *port)
 {
@@ -99,10 +118,18 @@ static bool prepare_endpoint(const f39_request_t *request, char *host,
 static bool prepare_ip(const f39_request_t *request, device_config_t *candidate,
                        uint32_t *effects)
 {
-    if (!prepare_endpoint(request, candidate->server_ip,
-                          sizeof(candidate->server_ip),
-                          &candidate->server_port)) {
+    char host[sizeof(candidate->server_ip)];
+    uint16_t port;
+
+    if (!prepare_endpoint(request, host, sizeof(host), &port)) {
         return false;
+    }
+    if (strcmp(candidate->server_ip, host) != 0 ||
+        candidate->server_port != port) {
+        (void)strcpy(candidate->server_ip, host);
+        candidate->server_port = port;
+        candidate->auth_code[0] = '\0';
+        *effects |= F39_EFFECT_MAIN_AUTH_RESET;
     }
     *effects |= F39_EFFECT_NETWORK_RECONNECT;
     return true;
@@ -111,15 +138,23 @@ static bool prepare_ip(const f39_request_t *request, device_config_t *candidate,
 static bool prepare_fip(const f39_request_t *request,
                         device_config_t *candidate, uint32_t *effects)
 {
+    char host[sizeof(candidate->backup_ip)];
+    uint16_t port;
+
     if ((request->argc == 1U) && arg_equals(request, 0U, "0")) {
-        candidate->backup_ip[0] = '\0';
-        candidate->backup_port = 0U;
+        host[0] = '\0';
+        port = 0U;
     } else if (arg_equals(request, 0U, "0")) {
         return false;
-    } else if (!prepare_endpoint(request, candidate->backup_ip,
-                                 sizeof(candidate->backup_ip),
-                                 &candidate->backup_port)) {
+    } else if (!prepare_endpoint(request, host, sizeof(host), &port)) {
         return false;
+    }
+    if (strcmp(candidate->backup_ip, host) != 0 ||
+        candidate->backup_port != port) {
+        (void)strcpy(candidate->backup_ip, host);
+        candidate->backup_port = port;
+        candidate->backup_auth_code[0] = '\0';
+        *effects |= F39_EFFECT_BACKUP_AUTH_RESET;
     }
     *effects |= F39_EFFECT_NETWORK_RECONNECT;
     return true;
@@ -138,6 +173,7 @@ static bool prepare_freq(const f39_request_t *request,
     }
     candidate->report_moving_s = (uint16_t)moving;
     candidate->report_stopped_s = (uint16_t)stopped;
+    candidate->sleep_report_mode = 0U;
     *effects |= F39_EFFECT_TIMER_REFRESH;
     return true;
 }
@@ -207,35 +243,39 @@ static bool prepare_apn(const f39_request_t *request,
         candidate->apn_pass[0] = '\0';
     } else {
         if (request->argc < 1U || request->argc > 3U ||
-            !copy_arg(request, 0U, candidate->apn, sizeof(candidate->apn), true)) {
+            !valid_at_string_arg(request, 0U, false) ||
+            !copy_arg(request, 0U, candidate->apn, sizeof(candidate->apn), false)) {
             return false;
         }
         candidate->apn_user[0] = '\0';
         candidate->apn_pass[0] = '\0';
         if ((request->argc >= 2U) &&
+            (!valid_at_string_arg(request, 1U, true) ||
             !copy_arg(request, 1U, candidate->apn_user,
-                      sizeof(candidate->apn_user), true)) {
+                      sizeof(candidate->apn_user), true))) {
             return false;
         }
         if ((request->argc >= 3U) &&
+            (!valid_at_string_arg(request, 2U, true) ||
             !copy_arg(request, 2U, candidate->apn_pass,
-                      sizeof(candidate->apn_pass), true)) {
+                      sizeof(candidate->apn_pass), true))) {
             return false;
         }
         candidate->autoapn_en = 0U;
     }
-    *effects |= F39_EFFECT_NETWORK_RECONNECT;
+    *effects |= F39_EFFECT_MODEM_PDP_RESTART;
     return true;
 }
 
 static bool prepare_gpsdup(const f39_request_t *request,
-                           device_config_t *candidate)
+                           device_config_t *candidate, uint32_t *effects)
 {
     uint32_t value;
     if (request->argc != 1U || !parse_arg_u32(request, 0U, &value) || value > 1U) {
         return false;
     }
     candidate->sleep_report_mode = (uint8_t)(value == 0U ? 1U : 0U);
+    *effects |= F39_EFFECT_TIMER_REFRESH;
     return true;
 }
 
@@ -269,7 +309,7 @@ static const char *province(uint8_t code)
 }
 
 static bool prepare_car(const f39_request_t *request,
-                        device_config_t *candidate)
+                        device_config_t *candidate, uint32_t *effects)
 {
     const uint8_t *data;
     uint16_t length;
@@ -295,10 +335,13 @@ static bool prepare_car(const f39_request_t *request,
         (void)memcpy(candidate->plate_no, prefix, prefix_length);
         (void)memcpy(candidate->plate_no + prefix_length, data + 2U, suffix_length);
         candidate->plate_no[prefix_length + suffix_length] = '\0';
+        *effects |= F39_EFFECT_JT808_REREGISTER;
         return true;
     }
-    return copy_arg(request, 0U, candidate->plate_no,
-                    sizeof(candidate->plate_no), false);
+    if (!copy_arg(request, 0U, candidate->plate_no,
+                  sizeof(candidate->plate_no), false)) return false;
+    *effects |= F39_EFFECT_JT808_REREGISTER;
+    return true;
 }
 
 static bool prepare_gpsbds(const f39_request_t *request,
@@ -379,6 +422,30 @@ static bool prepare_pid(const f39_request_t *request,
     return true;
 }
 
+static bool prepare_fkey(const f39_request_t *request,
+                         device_config_t *candidate, uint32_t *effects)
+{
+    const uint8_t *data;
+    uint16_t length;
+    uint16_t i;
+
+    if (request->argc != 1U || !argument(request, 0U, &data, &length) ||
+        length < 16U || length >= CFG_DEVICE_API_KEY_LEN) {
+        return false;
+    }
+    for (i = 0U; i < length; ++i) {
+        if (data[i] < 0x20U || data[i] > 0x7eU) {
+            return false;
+        }
+    }
+    if (!copy_arg(request, 0U, candidate->device_api_key,
+                  sizeof(candidate->device_api_key), false)) {
+        return false;
+    }
+    *effects |= F39_EFFECT_FOTA_RECHECK;
+    return true;
+}
+
 /* Apply one already parsed configuration operation to a candidate copy. */
 static bool prepare_operation(const f39_request_t *request,
                               device_config_t *candidate, uint32_t *effects)
@@ -399,17 +466,19 @@ static bool prepare_operation(const f39_request_t *request,
     case F39_OPERATION_APN:
         return prepare_apn(request, candidate, effects);
     case F39_OPERATION_GPSDUP:
-        return prepare_gpsdup(request, candidate);
+        return prepare_gpsdup(request, candidate, effects);
     case F39_OPERATION_MLG:
         return prepare_mileage(request, candidate);
     case F39_OPERATION_CAR:
-        return prepare_car(request, candidate);
+        return prepare_car(request, candidate, effects);
     case F39_OPERATION_GPSBDS:
         return prepare_gpsbds(request, candidate, effects);
     case F39_OPERATION_GMTSET:
         return prepare_gmt(request, candidate);
     case F39_OPERATION_VIBSENS:
         return prepare_vibsens(request, candidate);
+    case F39_OPERATION_FKEY:
+        return prepare_fkey(request, candidate, effects);
     default:
         return false;
     }

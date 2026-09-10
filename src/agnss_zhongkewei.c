@@ -1,12 +1,20 @@
 #include "agnss_vendor.h"
 #include "gps.h"
+#include "agnss_stream_workspace.h"
 #include <string.h>
 
 #define CSIP_HEADER_SIZE 6U
 #define CSIP_TRAILER_SIZE 4U
 #define CSIP_MIN_SIZE (CSIP_HEADER_SIZE + CSIP_TRAILER_SIZE)
 #define ZK_STREAM_MAX (2048U + CSIP_MIN_SIZE - 1U)
-static uint8_t s_rx[ZK_STREAM_MAX]; static uint32_t s_rx_len;
+static uint8_t *s_rx; static uint32_t s_rx_len;
+
+static void stream_reset(void)
+{
+    s_rx_len = 0U;
+    s_rx = NULL;
+    agnss_stream_workspace_release(AGNSS_STREAM_OWNER_ZHONGKEWEI);
+}
 
 static uint32_t le32(const uint8_t *p)
 {
@@ -69,7 +77,15 @@ static int csip_feed(const uint8_t *data, uint32_t len)
     uint32_t i;
     bool delivered = false;
     bool rejected = false;
-    if (!data || !len || len > ZK_STREAM_MAX - s_rx_len) { s_rx_len = 0; return -1; }
+    if (!data || !len) { stream_reset(); return -1; }
+    if (s_rx == NULL) {
+        if (!agnss_stream_workspace_try_acquire(AGNSS_STREAM_OWNER_ZHONGKEWEI))
+            return -1;
+        s_rx = agnss_stream_workspace_buffer(AGNSS_STREAM_OWNER_ZHONGKEWEI,
+                                             NULL);
+        if (s_rx == NULL) { stream_reset(); return -1; }
+    }
+    if (len > ZK_STREAM_MAX - s_rx_len) { stream_reset(); return -1; }
     memcpy(s_rx + s_rx_len, data, len);
     s_rx_len += len;
     while (s_rx_len) {
@@ -80,6 +96,7 @@ static int csip_feed(const uint8_t *data, uint32_t len)
         if (i + 1U >= s_rx_len) {
             if (s_rx[s_rx_len - 1U] == 0xbaU) { s_rx[0] = 0xbaU; s_rx_len = 1U; }
             else s_rx_len = 0;
+            if (s_rx_len == 0U) stream_reset();
             return rejected && !delivered ? -1 : 0;
         }
         if (i) stream_drop(i);
@@ -92,10 +109,11 @@ static int csip_feed(const uint8_t *data, uint32_t len)
             rejected = true;
             continue;
         }
-        if (gps_send_raw(frame, frame_len) < 0) { s_rx_len = 0; return -1; }
+        if (gps_send_raw(frame, frame_len) < 0) { stream_reset(); return -1; }
         delivered = true;
         stream_drop(frame_len);
     }
+    stream_reset();
     return rejected && !delivered ? -1 : 0;
 }
 
@@ -108,7 +126,8 @@ int agnss_zhongkewei_request(const agnss_source_t *src, const gps_context_t *ctx
     }
     /* agnss_manager uses an empty source as the bounded-storage flush. A
      * partial frame is not a successful injection and must not start I/O. */
-    if (s_rx_len) { s_rx_len = 0; return -1; }
+    if (s_rx_len) { stream_reset(); return -1; }
+    stream_reset();
     return 0;
 }
 

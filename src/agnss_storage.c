@@ -1,6 +1,7 @@
 #include "agnss_storage.h"
 #include "crc32.h"
 #include "ext_flash_store.h"
+#include "service_workspace.h"
 #include "config.h"
 #include <string.h>
 #include <stddef.h>
@@ -13,12 +14,13 @@ static uint8_t s_slot;
 static uint32_t s_pos;
 static bool s_active;
 static uint8_t s_latest_slot;
-static uint8_t s_buf[1024];
 
 uint8_t *agnss_storage_scratch(uint16_t *capacity)
 {
-    if (capacity) *capacity = (uint16_t)sizeof(s_buf);
-    return s_buf;
+    size_t available = 0U;
+    uint8_t *buffer = service_workspace_buffer(&available);
+    if (capacity) *capacity = (uint16_t)available;
+    return buffer;
 }
 
 /* Small SHA-256 implementation, used incrementally only during commit. */
@@ -32,13 +34,54 @@ static void sh_fin(sha_t*s,uint8_t out[32]){uint64_t bits=(uint64_t)s->n*8;uint8
 static uint32_t slot_base(uint8_t slot){return slot ? EXT_FLASH_AGNSS_SLOT_B_ADDR : EXT_FLASH_AGNSS_SLOT_A_ADDR;}
 static uint32_t meta_addr(uint8_t slot){return slot ? META_B : META_A;}
 static bool valid_meta(const agnss_meta_t*m){if(m->magic!=AGNSS_MAGIC||m->commit_marker!=AGNSS_COMMIT_MARKER||m->length>AGNSS_MAX_DATA||m->type==GNSS_TYPE_UNKNOWN)return false;return crc32_compute((const uint8_t*)m,(uint32_t)offsetof(agnss_meta_t,metadata_crc))==m->metadata_crc;}
-static bool verify_payload(uint8_t slot,const agnss_meta_t*m){if(!ext_flash_try_lock(EXT_FLASH_OWNER_AGNSS))return false;sha_t sh;sh_init(&sh);uint32_t crc=0xFFFFFFFFUL,left=m->length,off=0;while(left){uint16_t n=(uint16_t)(left>sizeof s_buf?sizeof s_buf:left);if(!ext_flash_read(EXT_FLASH_OWNER_AGNSS,slot_base(slot)+off,s_buf,n)){ext_flash_unlock(EXT_FLASH_OWNER_AGNSS);return false;}crc=crc32_update(crc,s_buf,n);sh_up(&sh,s_buf,n);off+=n;left-=n;}uint8_t h[32];sh_fin(&sh,h);ext_flash_unlock(EXT_FLASH_OWNER_AGNSS);return (crc^0xFFFFFFFFUL)==m->crc32&&memcmp(h,m->sha256,32)==0;}
+static bool verify_payload(uint8_t slot,const agnss_meta_t*m)
+{
+    size_t capacity;
+    uint8_t *buffer;
+    sha_t sh;
+    uint32_t crc=0xFFFFFFFFUL,left=m->length,off=0;
+    uint8_t h[32];
+    bool ok = false;
+    if(!service_workspace_try_acquire(SERVICE_WORKSPACE_OWNER_AGNSS))return false;
+    buffer=service_workspace_buffer(&capacity);
+    if(buffer==NULL||capacity==0U)goto done;
+    if(!ext_flash_try_lock(EXT_FLASH_OWNER_AGNSS))goto done;
+    sh_init(&sh);
+    while(left){
+        uint16_t n=(uint16_t)(left>capacity?capacity:left);
+        if(!ext_flash_read(EXT_FLASH_OWNER_AGNSS,slot_base(slot)+off,buffer,n)){
+            ext_flash_unlock(EXT_FLASH_OWNER_AGNSS);goto done;
+        }
+        crc=crc32_update(crc,buffer,n);sh_up(&sh,buffer,n);off+=n;left-=n;
+    }
+    sh_fin(&sh,h);ext_flash_unlock(EXT_FLASH_OWNER_AGNSS);
+    ok=(crc^0xFFFFFFFFUL)==m->crc32&&memcmp(h,m->sha256,32)==0;
+done:
+    service_workspace_release(SERVICE_WORKSPACE_OWNER_AGNSS);
+    return ok;
+}
 
 bool agnss_storage_init(void){s_active=false;return true;}
 bool agnss_storage_begin(uint8_t slot){if(slot>1||!ext_flash_try_lock(EXT_FLASH_OWNER_AGNSS))return false;s_slot=slot;s_pos=0;s_active=false;if(!ext_flash_erase(EXT_FLASH_OWNER_AGNSS,slot_base(slot),EXT_FLASH_AGNSS_SLOT_SIZE)){ext_flash_unlock(EXT_FLASH_OWNER_AGNSS);return false;}s_active=true;return true;}
-bool agnss_storage_write(const void*d,uint16_t n){if(!s_active||!d||n>sizeof s_buf||s_pos+n>AGNSS_MAX_DATA){agnss_storage_abort();return false;}if(!ext_flash_write_verified(EXT_FLASH_OWNER_AGNSS,slot_base(s_slot)+s_pos,d,n)){agnss_storage_abort();return false;}s_pos+=n;return true;}
-bool agnss_storage_commit(const agnss_meta_t *in){if(!s_active||!in||in->length!=s_pos){agnss_storage_abort();return false;}agnss_meta_t m=*in;m.magic=AGNSS_MAGIC;m.commit_marker=0xFFFFFFFFUL;memset(m.reserved,0,sizeof m.reserved);sha_t sh;sh_init(&sh);uint32_t left=m.length,off=0,crc=0xFFFFFFFFUL;while(left){uint16_t n=left>sizeof s_buf?sizeof s_buf:(uint16_t)left;if(!ext_flash_read(EXT_FLASH_OWNER_AGNSS,slot_base(s_slot)+off,s_buf,n))goto fail;crc=crc32_update(crc,s_buf,n);sh_up(&sh,s_buf,n);off+=n;left-=n;}m.crc32=crc^0xFFFFFFFFUL;sh_fin(&sh,m.sha256);m.timestamp = m.timestamp ? m.timestamp : TICK_MS();m.metadata_crc=crc32_compute((const uint8_t*)&m,(uint32_t)offsetof(agnss_meta_t,metadata_crc));if(!ext_flash_erase(EXT_FLASH_OWNER_AGNSS,meta_addr(s_slot),FLASH_SECTOR_SIZE))goto fail;if(!ext_flash_write_verified(EXT_FLASH_OWNER_AGNSS,meta_addr(s_slot),&m,(uint32_t)offsetof(agnss_meta_t,commit_marker)))goto fail;if(!ext_flash_write_verified(EXT_FLASH_OWNER_AGNSS,meta_addr(s_slot)+offsetof(agnss_meta_t,commit_marker),&((uint32_t){AGNSS_COMMIT_MARKER}),4))goto fail;ext_flash_unlock(EXT_FLASH_OWNER_AGNSS);s_active=false;s_latest_slot=s_slot;return true;fail:agnss_storage_abort();return false;}
+bool agnss_storage_write(const void*d,uint16_t n){if(!s_active||!d||n>SERVICE_WORKSPACE_CAPACITY||s_pos+n>AGNSS_MAX_DATA){agnss_storage_abort();return false;}if(!ext_flash_write_verified(EXT_FLASH_OWNER_AGNSS,slot_base(s_slot)+s_pos,d,n)){agnss_storage_abort();return false;}s_pos+=n;return true;}
+bool agnss_storage_commit(const agnss_meta_t *in)
+{
+    agnss_meta_t m;
+    sha_t sh;
+    uint32_t left,off=0,crc=0xFFFFFFFFUL;
+    size_t capacity;
+    uint8_t *buffer;
+    if(!s_active||!in||in->length!=s_pos){agnss_storage_abort();return false;}
+    if(!service_workspace_try_acquire(SERVICE_WORKSPACE_OWNER_AGNSS)){agnss_storage_abort();return false;}
+    buffer=service_workspace_buffer(&capacity);
+    if(buffer==NULL||capacity==0U)goto fail;
+    m=*in;m.magic=AGNSS_MAGIC;m.commit_marker=0xFFFFFFFFUL;memset(m.reserved,0,sizeof m.reserved);
+    sh_init(&sh);left=m.length;
+    while(left){uint16_t n=(uint16_t)(left>capacity?capacity:left);if(!ext_flash_read(EXT_FLASH_OWNER_AGNSS,slot_base(s_slot)+off,buffer,n))goto fail;crc=crc32_update(crc,buffer,n);sh_up(&sh,buffer,n);off+=n;left-=n;}
+    m.crc32=crc^0xFFFFFFFFUL;sh_fin(&sh,m.sha256);m.timestamp = m.timestamp ? m.timestamp : TICK_MS();m.metadata_crc=crc32_compute((const uint8_t*)&m,(uint32_t)offsetof(agnss_meta_t,metadata_crc));if(!ext_flash_erase(EXT_FLASH_OWNER_AGNSS,meta_addr(s_slot),FLASH_SECTOR_SIZE))goto fail;if(!ext_flash_write_verified(EXT_FLASH_OWNER_AGNSS,meta_addr(s_slot),&m,(uint32_t)offsetof(agnss_meta_t,commit_marker)))goto fail;if(!ext_flash_write_verified(EXT_FLASH_OWNER_AGNSS,meta_addr(s_slot)+offsetof(agnss_meta_t,commit_marker),&((uint32_t){AGNSS_COMMIT_MARKER}),4))goto fail;ext_flash_unlock(EXT_FLASH_OWNER_AGNSS);service_workspace_release(SERVICE_WORKSPACE_OWNER_AGNSS);s_active=false;s_latest_slot=s_slot;return true;
+fail:service_workspace_release(SERVICE_WORKSPACE_OWNER_AGNSS);agnss_storage_abort();return false;
+}
 bool agnss_storage_get_latest(agnss_meta_t*out){if(!out)return false;agnss_meta_t a,b;bool la=ext_flash_try_lock(EXT_FLASH_OWNER_AGNSS);bool va=la&&ext_flash_read(EXT_FLASH_OWNER_AGNSS,META_A,&a,sizeof a)&&valid_meta(&a);if(la)ext_flash_unlock(EXT_FLASH_OWNER_AGNSS);bool lb=ext_flash_try_lock(EXT_FLASH_OWNER_AGNSS);bool vb=lb&&ext_flash_read(EXT_FLASH_OWNER_AGNSS,META_B,&b,sizeof b)&&valid_meta(&b);if(lb)ext_flash_unlock(EXT_FLASH_OWNER_AGNSS);if(va&&!verify_payload(0,&a))va=false;if(vb&&!verify_payload(1,&b))vb=false;if(!va&&!vb)return false;if(!vb||(va&&a.sequence>=b.sequence)){*out=a;s_latest_slot=0;}else {*out=b;s_latest_slot=1;}return true;}
 uint32_t agnss_storage_data_base(const agnss_meta_t*m){(void)m;return EXT_FLASH_AGNSS_SLOT_A_ADDR + (s_latest_slot ? EXT_FLASH_AGNSS_SLOT_SIZE : 0u);}
-bool agnss_storage_read(uint32_t off,void*buf,uint16_t n){agnss_meta_t m;if(!buf||off>AGNSS_MAX_DATA||n>AGNSS_MAX_DATA-off||!agnss_storage_get_latest(&m)||off>m.length||n>m.length-off||n>sizeof s_buf)return false;if(!ext_flash_try_lock(EXT_FLASH_OWNER_AGNSS))return false;bool ok=ext_flash_read(EXT_FLASH_OWNER_AGNSS,slot_base(s_latest_slot)+off,buf,n);ext_flash_unlock(EXT_FLASH_OWNER_AGNSS);return ok;}
+bool agnss_storage_read(uint32_t off,void*buf,uint16_t n){agnss_meta_t m;bool ok;if(!buf||off>AGNSS_MAX_DATA||n>AGNSS_MAX_DATA-off||!agnss_storage_get_latest(&m)||off>m.length||n>m.length-off||n>SERVICE_WORKSPACE_CAPACITY)return false;if(!service_workspace_try_acquire(SERVICE_WORKSPACE_OWNER_AGNSS))return false;if(!ext_flash_try_lock(EXT_FLASH_OWNER_AGNSS)){service_workspace_release(SERVICE_WORKSPACE_OWNER_AGNSS);return false;}ok=ext_flash_read(EXT_FLASH_OWNER_AGNSS,slot_base(s_latest_slot)+off,buf,n);ext_flash_unlock(EXT_FLASH_OWNER_AGNSS);service_workspace_release(SERVICE_WORKSPACE_OWNER_AGNSS);return ok;}
 void agnss_storage_abort(void){if(s_active){s_active=false;ext_flash_unlock(EXT_FLASH_OWNER_AGNSS);}}

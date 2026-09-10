@@ -30,7 +30,8 @@ typedef struct {
     uint32_t now_ms;
 } work_mode_input_t;
 
-#define WORK_MODE_ACC_DEBOUNCE_MS 50U
+#define WORK_MODE_ACC_DEBOUNCE_MS 500U
+#define WORK_MODE_DEFAULT_STOPPED_REPORT_S 180U
 
 /* Supply the raw PA12 sample and millisecond timestamp before work_mode_step.
  * Host callers that only have second resolution may omit this call. */
@@ -67,6 +68,7 @@ bool work_mode_logical_acc(void);
 uint16_t work_mode_vibration_hits(void);
 uint16_t work_mode_vibration_required(void);
 void work_mode_config_changed(const device_config_t *cfg, uint32_t now_s);
+void work_mode_set_stationary_location_enabled(bool enabled, uint32_t now_s);
 void work_mode_notify_alarm(uint32_t alarm_bits);
 uint32_t work_mode_take_alarm(void);
 void work_mode_process(void);

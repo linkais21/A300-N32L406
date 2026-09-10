@@ -20,16 +20,19 @@ typedef struct __attribute__((packed)) {
     uint32_t generation;
 } slot_v3_hdr_t;
 
-#define SLOT_V3_BODY_LEN (sizeof(slot_v3_hdr_t) + sizeof(device_config_t) + 4U)
-#define SLOT_V3_TOTAL    (SLOT_V3_BODY_LEN + 4U)
+#define SLOT_CURRENT_BODY_LEN \
+    (sizeof(slot_v3_hdr_t) + sizeof(device_config_t) + 4U)
+#define SLOT_CURRENT_TOTAL (SLOT_CURRENT_BODY_LEN + 4U)
 #define CFG_V1_DATA_LEN ((uint16_t)offsetof(device_config_t, pid))
 #define CFG_V2_DATA_LEN ((uint16_t)offsetof(device_config_t, backup_auth_code))
+#define CFG_V3_DATA_LEN ((uint16_t)offsetof(device_config_t, device_api_key))
 
 typedef enum {
     SLOT_INVALID = 0,
     SLOT_V1,
     SLOT_V2,
     SLOT_V3,
+    SLOT_V4,
 } slot_format_t;
 
 typedef struct {
@@ -78,7 +81,7 @@ const device_config_t k_config_defaults = {
     .auth_code          = "",
     .plate_no           = "",
     .mileage_m          = 0,
-    .fota_url           = "",
+    .fota_url           = "http://fota.lhhn.net",
     .fota_size          = 0,
     .power_alm_en       = 1,
     .sos_alm_en         = 1,
@@ -86,11 +89,12 @@ const device_config_t k_config_defaults = {
     .lowexbat_alm_en    = 1,
     .vib_sens           = 30,
     .pid                = "",
-    .terminal_model     = "A300_406",
+    .terminal_model     = "T360-A300",
     .speed_limit_kmh    = 120,
     .sleep_report_mode  = 0,
     .gpsbds_mode        = 2,
     .backup_auth_code   = "",
+    .device_api_key     = "",
 };
 
 /* ── Read and validate one flash slot ────────────────────────────────────── */
@@ -124,20 +128,22 @@ static slot_format_t slot_probe_locked(uint32_t addr, slot_probe_t *out)
     *out = (slot_probe_t){ .format = SLOT_INVALID,
                            .generation = 0U, .data_len = 0U };
 
-    if (legacy.version == CFG_VERSION &&
-        legacy.data_len == sizeof(device_config_t)) {
+    if ((legacy.version == CFG_VERSION &&
+         legacy.data_len == sizeof(device_config_t)) ||
+        (legacy.version == 3U && legacy.data_len == CFG_V3_DATA_LEN)) {
         uint32_t marker;
         slot_v3_hdr_t hdr;
         uint32_t calc_crc = 0xFFFFFFFFUL;
+        uint32_t body_len = sizeof(hdr) + legacy.data_len + 4U;
 
         if (!ext_flash_read(EXT_FLASH_OWNER_CONFIG, addr, &hdr, sizeof(hdr)) ||
             !crc_region_locked(addr + offsetof(slot_v3_hdr_t, version),
-                               8U + sizeof(device_config_t), &calc_crc) ||
+                               8U + legacy.data_len, &calc_crc) ||
             !ext_flash_read(EXT_FLASH_OWNER_CONFIG,
-                            addr + sizeof(hdr) + sizeof(device_config_t),
+                            addr + sizeof(hdr) + legacy.data_len,
                             &stored_crc, sizeof(stored_crc)) ||
             !ext_flash_read(EXT_FLASH_OWNER_CONFIG,
-                            addr + SLOT_V3_BODY_LEN, &marker, sizeof(marker)))
+                            addr + body_len, &marker, sizeof(marker)))
             return SLOT_INVALID;
 
         if (stored_crc != ~calc_crc || marker != CFG_COMMIT_MARKER)
@@ -145,8 +151,8 @@ static slot_format_t slot_probe_locked(uint32_t addr, slot_probe_t *out)
 
         out->generation = hdr.generation;
         out->data_len = hdr.data_len;
-        out->format = SLOT_V3;
-        return SLOT_V3;
+        out->format = legacy.version == CFG_VERSION ? SLOT_V4 : SLOT_V3;
+        return out->format;
     }
 
     if (!((legacy.version == 1U && legacy.data_len == CFG_V1_DATA_LEN) ||
@@ -176,8 +182,8 @@ static bool slot_load_locked(uint32_t addr, const slot_probe_t *probe,
     if (probe == NULL || out == NULL || probe->format == SLOT_INVALID)
         return false;
     *out = k_config_defaults;
-    offset = probe->format == SLOT_V3 ? sizeof(slot_v3_hdr_t) :
-                                        sizeof(legacy_slot_hdr_t);
+    offset = (probe->format == SLOT_V3 || probe->format == SLOT_V4) ?
+             sizeof(slot_v3_hdr_t) : sizeof(legacy_slot_hdr_t);
     return ext_flash_read(EXT_FLASH_OWNER_CONFIG, addr + offset, out,
                           probe->data_len);
 }
@@ -189,7 +195,7 @@ static bool slot_matches_locked(uint32_t addr, const device_config_t *cfg,
     uint8_t chunk[64];
     const uint8_t *expected = (const uint8_t *)cfg;
     uint32_t offset = 0U;
-    if (slot_probe_locked(addr, &probe) != SLOT_V3 ||
+    if (slot_probe_locked(addr, &probe) != SLOT_V4 ||
         probe.generation != generation)
         return false;
     while (offset < sizeof(*cfg)) {
@@ -231,7 +237,7 @@ static cfg_store_result_t slot_write_locked(uint32_t addr,
         return CFG_STORE_WRITE_FAILED;
 
     marker_result = ext_flash_write_result(EXT_FLASH_OWNER_CONFIG,
-                                           addr + SLOT_V3_BODY_LEN,
+                                           addr + SLOT_CURRENT_BODY_LEN,
                                            &((uint32_t){ CFG_COMMIT_MARKER }),
                                            sizeof(uint32_t));
     if (marker_result == EXT_FLASH_PROGRAM_NOT_ISSUED)
@@ -288,9 +294,9 @@ void cfg_init(void)
     format_a = slot_probe_locked(CFG_FLASH_ADDR_A, &slot_a);
     format_b = slot_probe_locked(CFG_FLASH_ADDR_B, &slot_b);
 
-    if (format_a == SLOT_V3 || format_b == SLOT_V3) {
-        const bool use_b = format_b == SLOT_V3 &&
-                           (format_a != SLOT_V3 ||
+    if (format_a == SLOT_V4 || format_b == SLOT_V4) {
+        const bool use_b = format_b == SLOT_V4 &&
+                           (format_a != SLOT_V4 ||
                             generation_newer(slot_b.generation,
                                              slot_a.generation));
         const slot_probe_t *selected = use_b ? &slot_b : &slot_a;
@@ -303,8 +309,36 @@ void cfg_init(void)
         s_generation = selected->generation;
         s_active_addr = use_b ? CFG_FLASH_ADDR_B : CFG_FLASH_ADDR_A;
         s_active_valid = true;
-        dbg_printf("[CFG] loaded v3 slot %c gen=%lu\r\n",
+        dbg_printf("[CFG] loaded v4 slot %c gen=%lu\r\n",
                    use_b ? 'B' : 'A', (unsigned long)s_generation);
+        ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
+        return;
+    }
+
+    if (format_a == SLOT_V3 || format_b == SLOT_V3) {
+        const bool use_b = format_b == SLOT_V3 &&
+                           (format_a != SLOT_V3 ||
+                            generation_newer(slot_b.generation,
+                                             slot_a.generation));
+        const slot_probe_t *selected = use_b ? &slot_b : &slot_a;
+        uint32_t source = use_b ? CFG_FLASH_ADDR_B : CFG_FLASH_ADDR_A;
+        uint32_t target = use_b ? CFG_FLASH_ADDR_A : CFG_FLASH_ADDR_B;
+        uint32_t next_generation = selected->generation + 1U;
+        if (!slot_load_locked(source, selected, &s_cfg)) {
+            s_cfg = k_config_defaults;
+            ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
+            return;
+        }
+        s_active_addr = source;
+        s_generation = selected->generation;
+        s_active_valid = true;
+        dbg_printf("[CFG] migrating v3 slot %c gen=%lu\r\n",
+                   use_b ? 'B' : 'A', (unsigned long)selected->generation);
+        if (write_and_activate_locked(target, &s_cfg, next_generation) ==
+            CFG_STORE_OK) {
+            (void)write_and_activate_locked(source, &s_cfg,
+                                            next_generation + 1U);
+        }
         ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
         return;
     }
@@ -380,6 +414,34 @@ cfg_store_result_t cfg_set_pid_result(const char pid[CFG_PID_LEN])
     memcpy(s_cfg.pid, pid, CFG_PID_LEN);
     result = cfg_store_candidate_result(&s_cfg);
     if (result != CFG_STORE_OK) memcpy(s_cfg.pid, previous, sizeof(previous));
+    return result;
+}
+
+cfg_store_result_t cfg_set_device_api_key_result(
+    const char key[CFG_DEVICE_API_KEY_LEN])
+{
+    char previous[CFG_DEVICE_API_KEY_LEN];
+    char staged[CFG_DEVICE_API_KEY_LEN];
+    cfg_store_result_t result;
+    size_t length = 0U;
+
+    if (key == NULL) return CFG_STORE_INVALID;
+    while (length < CFG_DEVICE_API_KEY_LEN && key[length] != '\0') {
+        unsigned char value = (unsigned char)key[length];
+        if (value < 0x20U || value > 0x7eU) return CFG_STORE_INVALID;
+        staged[length] = key[length];
+        ++length;
+    }
+    if (length < 16U || length >= CFG_DEVICE_API_KEY_LEN)
+        return CFG_STORE_INVALID;
+    staged[length] = '\0';
+
+    memcpy(previous, s_cfg.device_api_key, sizeof(previous));
+    memset(s_cfg.device_api_key, 0, sizeof(s_cfg.device_api_key));
+    memcpy(s_cfg.device_api_key, staged, length);
+    result = cfg_store_candidate_result(&s_cfg);
+    if (result != CFG_STORE_OK)
+        memcpy(s_cfg.device_api_key, previous, sizeof(previous));
     return result;
 }
 

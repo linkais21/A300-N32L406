@@ -99,7 +99,7 @@ def test_dev_key_create_refuse_overwrite_and_regenerate_public_header():
 def test_firmware_canonical_digest_matches_python():
     header = (ROOT / "bootloader" / "include" / "image_verify.h").read_text(encoding="utf-8")
     source = (ROOT / "bootloader" / "src" / "image_verify.c").read_text(encoding="utf-8")
-    assert "void image_signature_digest(const image_manifest_t *manifest," in header
+    assert "void legacy_image_signature_digest(const legacy_image_manifest_t *manifest," in header
     assert "boot_ecdsa_sign" not in header and "boot_ecdsa_sign" not in source
     cc = shutil.which("gcc") or shutil.which("clang") or shutil.which("cc")
     if not cc:
@@ -117,17 +117,20 @@ def test_firmware_canonical_digest_matches_python():
 #include "image_verify.h"
 bool boot_ext_read(uint32_t a,void*b,uint32_t n){(void)a;(void)b;(void)n;return false;}
 bool boot_ext_write(uint32_t a,const void*b,uint32_t n){(void)a;(void)b;(void)n;return false;}
+bool boot_ext_erase(uint32_t a,uint32_t n){(void)a;(void)n;return false;}
 bool boot_ext_is_complete(uint32_t a,uint32_t n){(void)a;(void)n;return false;}
 bool firmware_signature_verify(const uint8_t*h,const uint8_t*s){(void)h;(void)s;return false;}
 bool boot_compute_internal_hash(uint32_t a,uint32_t n,uint8_t*h){(void)a;(void)n;(void)h;return false;}
-uint32_t boot_rollback_counter(void){return 0;}
+bool boot_rollback_counter(uint32_t *out){*out=0;return true;}
+bool boot_app_vectors_valid(uint32_t a){(void)a;return false;}
+void boot_watchdog_feed(void){}
 int main(int argc,char**argv){
   static const uint8_t sha[32]={0xba,0x78,0x16,0xbf,0x8f,0x01,0xcf,0xea,0x41,0x41,0x40,0xde,0x5d,0xae,0x22,0x23,0xb0,0x03,0x61,0xa3,0x96,0x17,0x7a,0x9c,0xb4,0x10,0xff,0x61,0xf2,0x00,0x15,0xad};
-  image_manifest_t m={0}; uint8_t out[32],expected[32]; (void)argc;
+  legacy_image_manifest_t m={0}; uint8_t out[32],expected[32]; (void)argc;
   m.magic=0x4133464d;m.product_id=0x41333030;m.hardware_id=0x00343036;
   m.target_address=0x08006000;m.image_length=3;m.version_counter=17;memcpy(m.sha256,sha,32);
   assert(strlen(argv[1])==64);for(int i=0;i<32;i++){unsigned v;assert(sscanf(argv[1]+2*i,"%2x",&v)==1);expected[i]=(uint8_t)v;}
-  image_signature_digest(&m,out);assert(memcmp(out,expected,32)==0);return 0;
+  legacy_image_signature_digest(&m,out);assert(memcmp(out,expected,32)==0);return 0;
 }
 ''', encoding="ascii")
         exe = work / "digest.exe"

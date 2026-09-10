@@ -23,6 +23,11 @@ Firmware for A300-T9 GPS vehicle tracker based on N32L406CDL7 MCU.
 
 ## JT/T 808-2013 Online Contract
 
+- Release identity is defined by `release_identity.json`. This release is
+  `T360-A300_406_20260823000000,V3.002`; subsequent firmware changes increment
+  only the three-digit revision (`V3.003`, `V3.004`, ...). The OTA model is
+  `A300-406`, while the JT808 terminal model and manufacturer are
+  `T360-A300` and `70110`.
 - A valid terminal PID is exactly 11 decimal digits. When PID is empty, the
   firmware derives it from the last 11 digits of an exact 15-digit IMEI and
   persists it before sending any JT808 frame.
@@ -44,8 +49,40 @@ Firmware for A300-T9 GPS vehicle tracker based on N32L406CDL7 MCU.
   valid GNSS position and date/time are available. Otherwise it waits for the
   first valid fix. Zero, stale and frozen coordinates are never reported as a
   valid real-time fix.
+- A live valid `0x0200` sets both status bit1 and BeiDou status bit19. A
+  retained sleep position clears bit1 but preserves bit19 to identify the
+  trusted position source as BeiDou.
+- After first authentication on each boot, CH0 and configured CH3 independently
+  upload one `0x0107` terminal-attributes packet. Delivery completes from the
+  modem send result and does not wait for a platform acknowledgement. Later
+  `0x8107` queries still receive an immediate `0x0107` response on the
+  requesting channel.
 - I2C2 AF6, EC800M network registration/PDP, both TCP sessions and first-fix
   positioning require real-device/HIL verification before release.
+
+## Versioned Release Artifacts
+
+Generate a release from the repository root with:
+
+```powershell
+python tools/build_dev_release.py
+```
+
+The builder reads the release version from `release_identity.json` and writes
+all outputs to `artifacts/<version>/`. The current release is stored in
+`artifacts/V3.002/` and contains:
+
+- `Combined-N32L406CBL7.bin`: complete Bootloader and App programming image.
+- `App-N32L406CBL7.bin`: App-only programming image.
+- `Bootloader-N32L406CBL7.bin` and `.hex`: Bootloader programming images.
+- `A300-406-OTA-V3002.bin`: firmware package uploaded to the FOTA platform.
+- App and Bootloader `.elf`, `.hex`, and `.map` diagnostic artifacts.
+- `SHA256SUMS-N32L406CBL7.json`: artifact sizes and SHA-256 hashes.
+
+Version directories are immutable. If `artifacts/V3.002/` already exists, the
+builder fails before compiling and does not overwrite or merge any files. An
+alternate root can be selected with `--output D:\some\root`; the current
+release is then written to `D:\some\root\V3.002` with the same collision rule.
 
 ## Pin Configuration
 

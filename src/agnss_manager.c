@@ -16,7 +16,7 @@ void agnss_process(void){}
 #define AGNSS_REFRESH_MS (2UL*60UL*60UL*1000UL)
 #define AGNSS_RETRY_MS 60000UL
 static gnss_type_t s_type,s_meta_type; static bool s_boot_pending,s_injected; static uint32_t s_last_attempt,s_retry_at,s_off,s_meta_seq,s_meta_len; static agnss_inject_cb_t s_cb;
-static bool ota_active(void){fota_state_t s=fota_get_state();return s==FOTA_STATE_CONNECTING||s==FOTA_STATE_DOWNLOADING||s==FOTA_STATE_VERIFYING;}
+static bool ota_active(void){fota_state_t s=fota_get_state();return s==FOTA_STATE_CHECK_CONNECTING||s==FOTA_STATE_CHECKING||s==FOTA_STATE_PREPARING||s==FOTA_STATE_CONNECTING||s==FOTA_STATE_DOWNLOADING||s==FOTA_STATE_VERIFYING||s==FOTA_STATE_READY;}
 void agnss_init(gnss_type_t t){s_type=t;s_boot_pending=true;s_injected=false;s_last_attempt=0;s_retry_at=0;s_off=0;gnss_vendor_set_type(t);(void)agnss_storage_init();}
 void agnss_set_inject_callback(agnss_inject_cb_t cb){s_cb=cb;}
 bool agnss_has_injected(void){return s_injected;}

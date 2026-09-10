@@ -246,8 +246,9 @@ static void test_power_cut_never_loads_mixed_candidate(void)
 
 int main(void)
 {
-    assert(CFG_VERSION == 3U);
+    assert(CFG_VERSION == 4U);
     assert(CFG_COMMIT_MARKER == 0x43464733UL);
+    assert(k_config_defaults.device_api_key[0] == '\0');
     assert(sizeof(device_config_t) + 20U < FLASH_SECTOR_SIZE);
     assert(cfg_store_candidate_result(NULL) == CFG_STORE_INVALID);
     test_default_persistence_failure_is_logged();

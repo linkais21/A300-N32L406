@@ -32,6 +32,8 @@ HARNESS = r'''
 #include "flash_config.h"
 #include "gps.h"
 #include "jt808.h"
+#include "jt808_terminal_info.h"
+#include "work_mode.h"
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -112,6 +114,13 @@ bool hw_acc_is_on(void) { return false; }
 bool gps_get_last_trusted(gps_data_t *out) { (void)out; return false; }
 void log_platform_on_first_online(void) {}
 void log_platform_on_blind_zone_uploaded(void) {}
+jt808_terminal_info_result_t jt808_terminal_info_encode(
+    uint8_t *body, uint16_t capacity, uint16_t *length)
+{
+    (void)body; (void)capacity; (void)length;
+    return JT808_TERMINAL_INFO_INVALID_ICCID;
+}
+work_mode_state_t work_mode_state(void) { return WORK_MODE_REALTIME; }
 int ec800m_get_csq(void) { return 19; }
 float adc_get_car_voltage(void) { return 12.6f; }
 float adc_get_bat_voltage(void) { return 4.0f; }
@@ -395,9 +404,11 @@ int main(void)
     g_tick_ms += 60001U;
     s_gps.last_update_ms = g_tick_ms;
     jt808_process();
+    assert(s_append_count == 1U && s_queue_count == 1U);
+    assert(jt808_send_location() == 0); /* next work-mode report event */
     assert(s_append_count == 2U && s_queue_count == 2U);
     jt808_process();
-    assert(s_append_count == 2U); /* one append per eligible periodic event */
+    assert(s_append_count == 2U); /* one append per eligible work-mode event */
     for (uint8_t i = 1U; i < 20U; ++i) push_record((uint8_t)(0x20U + i));
 
     authenticate();

@@ -4,8 +4,9 @@ import sys
 from pathlib import Path
 
 SRAM_BYTES = 24 * 1024
-STACK_MARGIN_BYTES = 4096
-RAM_LIMIT = SRAM_BYTES - STACK_MARGIN_BYTES
+AUDITED_STACK_BYTES = 2440
+RUNTIME_GAP_BYTES = 4096
+RAM_LIMIT = SRAM_BYTES - AUDITED_STACK_BYTES - RUNTIME_GAP_BYTES
 FLASH_LIMITS = {"app": 104 * 1024, "bootloader": 24 * 1024}
 RAM_SECTION = re.compile(r"^\.(?:data|bss|noinit)\s+0x200[0-9a-fA-F]+\s+0x([0-9a-fA-F]+)")
 FLASH_SECTION = re.compile(r"^\.(?:isr_vector|text|rodata|ARM(?:\.extab)?)\s+0x08[0-9a-fA-F]+\s+0x([0-9a-fA-F]+)")
@@ -24,12 +25,16 @@ def run(mode: str, path: Path) -> int:
     ram = static_sram(map_text)
     flash = flash_used(map_text)
     if ram > RAM_LIMIT:
-        print(f"RAM guard failed: static={ram} limit={RAM_LIMIT} margin={STACK_MARGIN_BYTES}")
+        print(f"RAM guard failed: static={ram} stack={AUDITED_STACK_BYTES} "
+              f"gap={RUNTIME_GAP_BYTES} total={ram + AUDITED_STACK_BYTES + RUNTIME_GAP_BYTES} "
+              f"limit={SRAM_BYTES}")
         return 1
     if flash > FLASH_LIMITS[mode]:
         print(f"Flash guard failed: mode={mode} used={flash} limit={FLASH_LIMITS[mode]}")
         return 1
-    print(f"map guard PASS: mode={mode} flash={flash}/{FLASH_LIMITS[mode]} static_ram={ram}/{RAM_LIMIT}")
+    print(f"map guard PASS: mode={mode} flash={flash}/{FLASH_LIMITS[mode]} "
+          f"static_ram={ram}/{RAM_LIMIT} stack={AUDITED_STACK_BYTES} "
+          f"gap={RUNTIME_GAP_BYTES}")
     return 0
 
 if __name__ == "__main__":

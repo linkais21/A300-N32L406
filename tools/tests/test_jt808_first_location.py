@@ -13,6 +13,7 @@ int main(void) {
     jt808_terminal_t terminal;
     uint8_t decoded[1024];
     uint16_t sn0, sn3, length, ignored;
+    uint32_t status;
     unsigned before0, before3;
 
     memset(&cfg,0,sizeof(cfg));strcpy(cfg.pid,"56789012345");
@@ -37,6 +38,7 @@ int main(void) {
     gps.speed_kmh=35.0f;gps.heading=91.0f;gps.satellites=12U;
     gps.year=2026U;gps.month=8U;gps.day=31U;
     gps.hour=18U;gps.minute=3U;gps.second=4U;
+    work_state=WORK_MODE_STATIONARY_SLEEP;
     fail_send[0]=true;
     jt808_process();
     assert(sends[0]==before0+1U && sends[3]==before3+1U);
@@ -46,6 +48,17 @@ int main(void) {
     fail_send[0]=false;
     jt808_process();
     assert(sends[0]==before0+2U && sends[3]==before3+1U);
+    jt808_process();
+    assert(sends[0]==before0+2U && sends[3]==before3+1U);
+
+    before0=sends[0];before3=sends[3];
+    assert(jt808_send_location_work_mode(0U,true)==0);
+    assert(sends[0]==before0+1U && sends[3]==before3+1U);
+    assert(msg(3U,&ignored,decoded,&length)==0x0200U);
+    status=((uint32_t)decoded[16U]<<24)|((uint32_t)decoded[17U]<<16)|
+           ((uint32_t)decoded[18U]<<8)|(uint32_t)decoded[19U];
+    assert((status&LOC_FLAG_GPS_FIXED)==0U);
+    assert((status&LOC_FLAG_BEIDOU_FIXED)!=0U);
 
     before0=sends[0];before3=sends[3];
     query(3U,0x8201U);
@@ -63,6 +76,10 @@ def main() -> int:
     cc=dual.compiler()
     if not cc: return 1
     source=dual.HARNESS[:dual.HARNESS.index("int main(void) {")] + LOCATION_MAIN
+    source=source.replace(
+        "bool gps_get_last_trusted(gps_data_t *out) { (void)out; return false; }",
+        "bool gps_get_last_trusted(gps_data_t *out) { *out=gps; return true; }",
+    )
     with tempfile.TemporaryDirectory(prefix="jt808_location_") as directory:
         t=Path(directory);h=t/"h.c";b=t/"h.exe";h.write_text(source,encoding="ascii")
         (t/"n32l40x.h").write_text("#ifndef N32L40X_H\n#define N32L40X_H\n#define GPIOA ((void*)0)\n#define GPIO_PIN_12 12U\n#define Bit_RESET 0\nint GPIO_ReadInputDataBit(void*,unsigned);\n#endif\n",encoding="ascii")

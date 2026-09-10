@@ -8,29 +8,58 @@ static bool bytes_equal(const uint8_t *data, const char *value, uint16_t length)
     return memcmp(data, value, length) == 0;
 }
 
-static bool complete_crlf_line(const char *data, uint16_t length,
-                               const char *value, uint16_t value_length)
+bool ec800m_at_response_has_line(const char *data, uint16_t length,
+                                 const char *value)
 {
+    size_t value_length;
     uint16_t pos;
 
-    if (data == NULL || value == NULL || length < value_length + 4U)
+    if (data == NULL || value == NULL) return false;
+    value_length = strlen(value);
+    if (value_length == 0U || value_length + 2U > length)
         return false;
 
-    for (pos = 0U; pos + value_length + 4U <= length; ++pos) {
-        if (data[pos] == '\r' && data[pos + 1U] == '\n' &&
-            memcmp(&data[pos + 2U], value, value_length) == 0 &&
-            data[pos + 2U + value_length] == '\r' &&
-            data[pos + 3U + value_length] == '\n')
+    for (pos = 0U; (size_t)pos + value_length + 2U <= length; ++pos) {
+        bool line_start = pos == 0U ||
+                          (pos >= 2U && data[pos - 2U] == '\r' &&
+                           data[pos - 1U] == '\n');
+        if (line_start && memcmp(&data[pos], value, value_length) == 0 &&
+            data[pos + value_length] == '\r' &&
+            data[pos + value_length + 1U] == '\n')
             return true;
+    }
+    return false;
+}
+
+bool ec800m_at_response_has_line_prefix(const char *data, uint16_t length,
+                                        const char *prefix)
+{
+    size_t prefix_length;
+    uint16_t pos;
+
+    if (data == NULL || prefix == NULL) return false;
+    prefix_length = strlen(prefix);
+    if (prefix_length == 0U || prefix_length + 2U > length) return false;
+    for (pos = 0U; (size_t)pos + prefix_length + 2U <= length; ++pos) {
+        uint16_t end;
+        bool line_start = pos == 0U ||
+                          (pos >= 2U && data[pos - 2U] == '\r' &&
+                           data[pos - 1U] == '\n');
+        if (!line_start || memcmp(&data[pos], prefix, prefix_length) != 0)
+            continue;
+        for (end = (uint16_t)(pos + prefix_length); end + 1U < length;
+             ++end) {
+            if (data[end] == '\r' && data[end + 1U] == '\n') return true;
+        }
     }
     return false;
 }
 
 ec800m_at_end_t ec800m_at_response_end(const char *data, uint16_t length)
 {
-    if (complete_crlf_line(data, length, "ERROR", 5U))
+    if (ec800m_at_response_has_line(data, length, "ERROR"))
         return EC800M_AT_ERROR;
-    if (complete_crlf_line(data, length, "OK", 2U))
+    if (ec800m_at_response_has_line(data, length, "OK"))
         return EC800M_AT_OK;
     return EC800M_AT_PENDING;
 }

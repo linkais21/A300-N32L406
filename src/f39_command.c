@@ -27,6 +27,7 @@ static const f39_root_t s_roots[] = {
     {"GPSBDS", F39_OPERATION_GPSBDS},
     {"GMTSET", F39_OPERATION_GMTSET},
     {"VIBSENS", F39_OPERATION_VIBSENS},
+    {"FKEY", F39_OPERATION_FKEY},
     {"FOTA", F39_OPERATION_FOTA},
     {"LOG", F39_OPERATION_LOG}
 };
@@ -136,7 +137,10 @@ f39_result_t f39_parse(const uint8_t *data, uint16_t len, f39_request_t *out)
         return F39_RESULT_INVALID;
     }
     for (i = 0U; i < len; ++i) {
-        if (f39_byte_allowed(data[i]) == 0U) {
+        bool fkey_value_byte = root_len == 4U && i > root_len &&
+                               f39_root_equals(data, root_len, "FKEY") != 0U &&
+                               data[i] >= 0x20U && data[i] <= 0x7eU;
+        if (f39_byte_allowed(data[i]) == 0U && !fkey_value_byte) {
             return F39_RESULT_INVALID;
         }
         if ((data[i] == (uint8_t)'*') && (root_len == 0U)) {
@@ -157,7 +161,8 @@ f39_result_t f39_parse(const uint8_t *data, uint16_t len, f39_request_t *out)
     if (out->operation == F39_OPERATION_INVALID) {
         return F39_RESULT_INVALID;
     }
-    if (out->operation != F39_OPERATION_DUALSET) {
+    if (out->operation != F39_OPERATION_DUALSET &&
+        out->operation != F39_OPERATION_FKEY) {
         for (i = (uint16_t)(root_len + 1U); i < len; ++i) {
             if (data[i] == (uint8_t)'*') {
                 (void)memset(out, 0, sizeof(*out));
@@ -177,6 +182,7 @@ f39_result_t f39_parse(const uint8_t *data, uint16_t len, f39_request_t *out)
         return F39_RESULT_OK;
     }
     if (query_suffix && (out->operation == F39_OPERATION_PARAM ||
+                         out->operation == F39_OPERATION_FKEY ||
                          out->operation == F39_OPERATION_FOTA ||
                          out->operation == F39_OPERATION_LOG)) {
         return F39_RESULT_OK;

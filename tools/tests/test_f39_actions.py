@@ -13,25 +13,42 @@ HARNESS = r'''
 static device_config_t s_live_config;
 device_config_t *cfg_get(void){return &s_live_config;}
 bool cfg_store_candidate(const device_config_t *candidate){s_live_config=*candidate;return true;}
+cfg_store_result_t cfg_set_pid_result(const char pid[CFG_PID_LEN]) { (void)pid; return CFG_STORE_OK; }
 void ec800m_get_imei(char *buf,uint8_t size){if(buf!=0&&size>0)buf[0]='\0';}
-typedef struct { unsigned saves, reconnects, timers, gnss, relays, resets; bool persist_ok, gps_ok; float speed; bool relay; gnss_type_t receiver; uint8_t mode; char order[8]; unsigned order_len; f39_reply_t *reply; } spy_t;
+typedef struct { unsigned saves, reconnects, auth_resets, pdp_restarts, timers, gnss, relays, resets; uint8_t auth_reset_mask; bool persist_ok, gps_ok; float speed; bool relay; gnss_type_t receiver; uint8_t mode; char order[12]; unsigned order_len; f39_reply_t *reply; } spy_t;
 static void mark(spy_t*s,char c){s->order[s->order_len++]=c;s->order[s->order_len]='\0';}
 static bool save(const device_config_t *c, void *p){ (void)c; spy_t*s=p; s->saves++; return s->persist_ok; }
 static void reconnect(void*p){spy_t*s=p;s->reconnects++;mark(s,'N');}
+static void reset_auth(uint8_t mask,void*p){spy_t*s=p;s->auth_resets++;s->auth_reset_mask|=mask;mark(s,'A');}
+static void restart_pdp(void*p){spy_t*s=p;s->pdp_restarts++;mark(s,'P');}
 static void timers(void*p){spy_t*s=p;s->timers++;mark(s,'T');}
 static void register808(void*p){mark((spy_t*)p,'J');}
 static void remaining(void*p){mark((spy_t*)p,'R');}
+static unsigned ota_rechecks;
+static void recheck_ota(void*p){(void)p;++ota_rechecks;}
 static void gnss(gnss_type_t r,uint8_t m,void*p){spy_t*s=p;assert(r==GNSS_TYPE_TAU804M||r==GNSS_TYPE_ATGM332D_F7N);assert(m>=1&&m<=3);s->gnss++;s->receiver=r;s->mode=m;mark(s,'G');}
 static bool relay(bool on,void*p){spy_t*s=p;s->relays++;s->relay=on;return true;}
 static bool relay_get(void*p){return ((spy_t*)p)->relay;}
 static bool gps(void*p){return ((spy_t*)p)->gps_ok;}
 static float speed(void*p){return ((spy_t*)p)->speed;}
-static f39_platform_t platform(device_config_t*c,spy_t*s){f39_platform_t p;memset(&p,0,sizeof(p));p.config=c;p.persist=save;p.context=s;p.network_reconnect=reconnect;p.timer_refresh=timers;p.gnss_set_mode=gnss;p.jt808_reregister=register808;p.remaining_refresh=remaining;p.relay_set=relay;p.relay_get=relay_get;p.gps_valid=gps;p.gps_speed_kmh=speed;p.version="V3";p.version_len=2;p.imei="123456789012345";p.imei_len=15;p.iccid="89860492192080502719";p.iccid_len=20;p.csq=25;p.acc_on=true;p.gps_fix_quality=1;p.gps_satellites=9;return p;}
-static f39_result_t run(const char*t, device_config_t*c, spy_t*s, f39_reply_t*r){f39_request_t q;f39_platform_t p=platform(c,s);s->reply=r;assert(f39_parse((const uint8_t*)t,(uint16_t)strlen(t),&q)==F39_RESULT_OK);return f39_execute(&q,&p,r);}
-static device_config_t seed(void){device_config_t c;memset(&c,0,sizeof(c));c.gnss_type=GNSS_TYPE_TAU804M;strcpy(c.server_ip,"host");c.server_port=9000;strcpy(c.backup_ip,"backup");c.backup_port=9001;c.heartbeat_s=60;c.report_moving_s=30;c.report_stopped_s=300;c.gpsbds_mode=2;c.speed_limit_kmh=80;c.gmt_sign=1;c.gmt_hour=8;strcpy(c.pid,"12345678901");strcpy(c.terminal_model,"A300");strcpy(c.apn,"cmnet");strcpy(c.apn_user,"USERSECRET");strcpy(c.apn_pass,"PASSSECRET");strcpy(c.auth_code,"AUTHSECRET");strcpy(c.agnss_user,"AGNSSUSER");strcpy(c.agnss_pwd,"AGNSSPASS");return c;}
-int main(void){static const char*queries[]={"PID","IP","FIP","FREQ","HBT","MODEL","SPEED","APN","RELAY","GPSDUP","MLG","CAR","GPSBDS","GMTSET"};device_config_t c=seed(),before;spy_t s={0};f39_reply_t r;size_t i;s.persist_ok=true;
+static f39_platform_t platform(device_config_t*c,spy_t*s){f39_platform_t p;memset(&p,0,sizeof(p));p.config=c;p.persist=save;p.context=s;p.network_reconnect=reconnect;p.jt808_auth_reset=reset_auth;p.modem_pdp_restart=restart_pdp;p.timer_refresh=timers;p.gnss_set_mode=gnss;p.jt808_reregister=register808;p.remaining_refresh=remaining;p.relay_set=relay;p.relay_get=relay_get;p.gps_valid=gps;p.gps_speed_kmh=speed;p.version="V3";p.version_len=2;p.imei="123456789012345";p.imei_len=15;p.iccid="89860492192080502719";p.iccid_len=20;p.csq=25;p.acc_on=true;p.gps_fix_quality=1;p.gps_satellites=9;return p;}
+static f39_result_t run(const char*t, device_config_t*c, spy_t*s, f39_reply_t*r){f39_request_t q;f39_platform_t p=platform(c,s);p.fota_recheck=recheck_ota;s->reply=r;assert(f39_parse((const uint8_t*)t,(uint16_t)strlen(t),&q)==F39_RESULT_OK);return f39_execute(&q,&p,r);}
+static device_config_t seed(void){device_config_t c;memset(&c,0,sizeof(c));c.gnss_type=GNSS_TYPE_TAU804M;strcpy(c.server_ip,"host");c.server_port=9000;strcpy(c.backup_ip,"backup");c.backup_port=9001;c.heartbeat_s=60;c.report_moving_s=30;c.report_stopped_s=300;c.gpsbds_mode=2;c.speed_limit_kmh=80;c.gmt_sign=1;c.gmt_hour=8;strcpy(c.pid,"12345678901");strcpy(c.terminal_model,"A300");strcpy(c.apn,"cmnet");strcpy(c.apn_user,"USERSECRET");strcpy(c.apn_pass,"PASSSECRET");strcpy(c.auth_code,"AUTHSECRET");strcpy(c.agnss_user,"AGNSSUSER");strcpy(c.agnss_pwd,"AGNSSPASS");c.device_api_key[0]='\0';return c;}
+int main(void){static const char*queries[]={"PID","IP","FIP","FREQ","HBT","MODEL","SPEED","APN","RELAY","GPSDUP","MLG","CAR","GPSBDS","GMTSET","FKEY?"};device_config_t c=seed(),before;spy_t s={0};f39_reply_t r;size_t i;s.persist_ok=true;
  assert(run("PARAM",&c,&s,&r)==F39_RESULT_OK);assert(r.len>0&&r.len<F39_REPLY_MAX_LENGTH);assert(strstr((char*)r.data,"PASSSECRET")==0);assert(strstr((char*)r.data,"USERSECRET")==0);assert(strstr((char*)r.data,"AUTHSECRET")==0);assert(strstr((char*)r.data,"AGNSSPASS")==0);assert(strstr((char*)r.data,"PRO[JT808_2013]")!=0);assert(strstr((char*)r.data,"ICCID[89860492192080502719]")!=0);assert(strstr((char*)r.data,"APN[cmnet,,]")!=0);
  for(i=0;i<sizeof(queries)/sizeof(queries[0]);i++){assert(run(queries[i],&c,&s,&r)==F39_RESULT_OK);assert(r.len>0&&r.len<F39_REPLY_MAX_LENGTH);}
+ assert(run("FKEY?",&c,&s,&r)==F39_RESULT_OK);assert(strcmp((char*)r.data,"FKEY,CONFIGURED=0\r\n")==0);
+ assert(run("FKEY,1234567890ABCDEF",&c,&s,&r)==F39_RESULT_OK);assert(strcmp(c.device_api_key,"1234567890ABCDEF")==0);assert(strcmp((char*)r.data,"FKEY,CONFIGURED=1\r\n")==0);assert(strstr((char*)r.data,c.device_api_key)==0);
+ assert(run("FKEY,1234567*89012345",&c,&s,&r)==F39_RESULT_OK);assert(strcmp(c.device_api_key,"1234567*89012345")==0);assert(strcmp((char*)r.data,"FKEY,CONFIGURED=1\r\n")==0);assert(strstr((char*)r.data,c.device_api_key)==0);
+ assert(ota_rechecks==2U);
+ assert(run("PARAM",&c,&s,&r)==F39_RESULT_OK);assert(strstr((char*)r.data,c.device_api_key)==0);
+ before=c;s.persist_ok=false;assert(run("FKEY,ZYXWVUTSRQPONMLK",&c,&s,&r)!=F39_RESULT_OK);assert(memcmp(&c,&before,sizeof(c))==0);assert(strstr((char*)r.data,"ZYXWVUTSRQPONMLK")==0);assert(strstr((char*)r.data,c.device_api_key)==0);s.persist_ok=true;
+ assert(ota_rechecks==2U);
+ {f39_request_t q;f39_platform_t p=platform(&c,&s);unsigned saved=s.saves;static const char command[]="FKEY,missing-callback";assert(f39_parse((const uint8_t*)command,sizeof(command)-1U,&q)==F39_RESULT_OK);assert(f39_execute(&q,&p,&r)!=F39_RESULT_OK);assert(s.saves==saved&&ota_rechecks==2U);}
+ {unsigned reconnects=s.reconnects;assert(run("APN,new.apn,user,password",&c,&s,&r)==F39_RESULT_OK);assert(s.pdp_restarts==1U&&s.reconnects==reconnects);}
+ s.order_len=0; {unsigned reconnects=s.reconnects;strcpy(c.auth_code,"MAIN-AUTH");assert(run("IP,new-main,7001",&c,&s,&r)==F39_RESULT_OK);assert(c.auth_code[0]=='\0');assert(s.auth_resets==1U&&s.auth_reset_mask==F39_AUTH_CHANNEL_MAIN);assert(s.reconnects==reconnects+1U);assert(strcmp(s.order,"AN")==0);}
+ {unsigned resets=s.auth_resets;strcpy(c.auth_code,"MAIN-AUTH");assert(run("IP,new-main,7001",&c,&s,&r)==F39_RESULT_OK);assert(strcmp(c.auth_code,"MAIN-AUTH")==0);assert(s.auth_resets==resets);}
+ {unsigned resets=s.auth_resets;strcpy(c.backup_auth_code,"BACK-AUTH");assert(run("FIP,new-backup,7018",&c,&s,&r)==F39_RESULT_OK);assert(c.backup_auth_code[0]=='\0');assert(s.auth_resets==resets+1U&&s.auth_reset_mask==(F39_AUTH_CHANNEL_MAIN|F39_AUTH_CHANNEL_BACKUP));}
  assert(run("GPSBDS,1",&c,&s,&r)==F39_RESULT_OK);assert(s.gnss==1&&s.receiver==GNSS_TYPE_TAU804M&&s.mode==1);
  c.gnss_type=GNSS_TYPE_ATGM332D_F7N;assert(run("GPSBDS,3",&c,&s,&r)==F39_RESULT_OK);assert(s.receiver==GNSS_TYPE_ATGM332D_F7N&&s.mode==3);
  c.gnss_type=GNSS_TYPE_UNKNOWN;before=c;{unsigned saves=s.saves;assert(run("GPSBDS,2",&c,&s,&r)!=F39_RESULT_OK);assert(s.saves==saves&&memcmp(&c,&before,sizeof(c))==0);}
@@ -40,7 +57,7 @@ int main(void){static const char*queries[]={"PID","IP","FIP","FREQ","HBT","MODEL
  s.speed=19.999f;assert(run("RELAY,1",&c,&s,&r)==F39_RESULT_OK);assert(s.relay&&s.relays==1);assert(run("RELAY",&c,&s,&r)==F39_RESULT_OK);assert(strstr((char*)r.data,"RELAY,1")!=0);
  s.speed=NAN;assert(run("RELAY,1",&c,&s,&r)!=F39_RESULT_OK);assert(s.relays==1);
  s.gps_ok=false;s.speed=100;assert(run("RELAY,0",&c,&s,&r)==F39_RESULT_OK);assert(!s.relay&&s.relays==2);
- s.order_len=0;assert(run("DUALSET,FREQ,5,60*IP,new,8000*GPSBDS,3*MODEL,T360",&c,&s,&r)==F39_RESULT_OK);assert(strcmp(s.order,"TNGJR")==0);
+ s.order_len=0;assert(run("DUALSET,FREQ,5,60*IP,new,8000*GPSBDS,3*MODEL,T360",&c,&s,&r)==F39_RESULT_OK);assert(strcmp(s.order,"TANGJR")==0);
  before=c;s.persist_ok=false;{unsigned saves=s.saves;unsigned gnss_calls=s.gnss;assert(run("GPSBDS,1",&c,&s,&r)!=F39_RESULT_OK);assert(s.saves==saves+1&&s.gnss==gnss_calls&&memcmp(&c,&before,sizeof(c))==0);}s.persist_ok=true;
  {static const char*cmds[]={"FREQ,5,60","IP,x,1","GPSBDS,1","MODEL,X","MODEL,X"};unsigned i;for(i=0;i<5;i++){f39_request_t q;device_config_t x=seed();spy_t z={0};f39_reply_t rr;f39_platform_t p=platform(&x,&z);z.persist_ok=true;if(i==0)p.timer_refresh=0;if(i==1)p.network_reconnect=0;if(i==2)p.gnss_set_mode=0;if(i==3)p.jt808_reregister=0;if(i==4)p.remaining_refresh=0;assert(f39_parse((const uint8_t*)cmds[i],(uint16_t)strlen(cmds[i]),&q)==F39_RESULT_OK);assert(f39_execute(&q,&p,&rr)!=F39_RESULT_OK);assert(z.saves==0);} }
  s.resets=0;assert(run("RESET",&c,&s,&r)==F39_RESULT_OK);assert(s.resets==0);assert(r.reset_pending&&r.reset_delay_ms==F39_RESET_DELAY_MS);assert(strstr((char*)r.data,"Success!")!=0);

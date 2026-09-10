@@ -1,4 +1,5 @@
 """Release guards for the deliberately trimmed A300_406 production image."""
+import json
 import re
 import tempfile
 from pathlib import Path
@@ -25,9 +26,12 @@ FORBIDDEN_PLATFORM = re.compile(r"n32g(?:452|45x|4xx)", re.IGNORECASE)
 APPROVED_ROOTS = (
     "PARAM", "DUALSET", "RESET", "PID", "IP", "FIP", "FREQ", "HBT",
     "MODEL", "SPEED", "APN", "RELAY", "GPSDUP", "MLG", "CAR", "GPSBDS",
-    "GMTSET",
+    "GMTSET", "VIBSENS", "FKEY", "FOTA", "LOG",
 )
-TARGET_VERSION = "T360-A300_406_20260823000000,V3.000"
+RELEASE_IDENTITY = json.loads(
+    (ROOT / "release_identity.json").read_text(encoding="utf-8")
+)
+TARGET_VERSION = RELEASE_IDENTITY["firmware_version"]
 
 
 def project_text_files():
@@ -154,6 +158,9 @@ def run():
     layout_h = haystack[ROOT / "include" / "ext_flash_layout.h"]
     fota_h = haystack[ROOT / "include" / "fota.h"]
     assert TARGET_VERSION in config_h
+    assert RELEASE_IDENTITY["ota_device_model"] in config_h
+    assert RELEASE_IDENTITY["jt808_terminal_model"] in config_h
+    assert RELEASE_IDENTITY["jt808_manufacturer_id"] in config_h
     assert "EXT_FLASH_BLIND_ADDR" in layout_h and "EXT_FLASH_BLIND_SIZE" in layout_h
     assert "EXT_FLASH_OWNER_BLIND_ZONE" in layout_h
     assert "FOTA_FLASH_ADDR   EXT_FLASH_CANDIDATE_ADDR" in fota_h

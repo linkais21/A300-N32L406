@@ -92,6 +92,11 @@ def main() -> None:
     # A transport failure must still be retried, or reports would be lost.
     require("work_mode_retry_action" in caller,
             "transport failures are no longer retried at all")
+    require(re.search(
+        r"sent\s*!=\s*0[\s\S]{0,180}?work_mode_retry_action\s*\(\s*&action\s*\)"
+        r"[\s\S]{0,100}?processed\s*=\s*8U",
+        caller) is not None,
+        "a failed location can be retried repeatedly in one dispatcher pass")
 
     print("test_location_retry_backoff: PASS")
 

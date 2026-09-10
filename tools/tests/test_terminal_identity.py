@@ -21,6 +21,7 @@ HARNESS = r'''
 #include "jt808.h"
 #include "blind_zone.h"
 #include "jt808_params.h"
+#include "jt808_terminal_info.h"
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -30,6 +31,7 @@ HARNESS = r'''
 
 static device_config_t s_config;
 static char s_imei[16];
+static char s_iccid[22] = "89860412102500000001";
 static unsigned s_raw_count;
 static unsigned s_response_count;
 static uint16_t s_raw_message;
@@ -41,6 +43,7 @@ static uint8_t s_response_result;
 static unsigned s_store_calls;
 static bool s_store_ok = true;
 static cfg_store_result_t s_pid_store_result = CFG_STORE_OK;
+volatile uint32_t g_tick_ms;
 
 device_config_t *cfg_get(void)
 {
@@ -88,6 +91,20 @@ void jt808_set_report_interval(uint16_t moving, uint16_t stopped)
 {
     (void)moving;
     (void)stopped;
+}
+
+void ec800m_get_iccid(char *buf, uint8_t size)
+{
+    size_t length = strlen(s_iccid);
+    if (buf == NULL || size == 0U) return;
+    if (length >= size) length = (size_t)size - 1U;
+    memcpy(buf, s_iccid, length);
+    buf[length] = '\0';
+}
+void work_mode_config_changed(const device_config_t *config, uint32_t now_s)
+{
+    (void)config;
+    (void)now_s;
 }
 void cfg_set_server(const char *ip, uint16_t port, bool backup)
 {
@@ -210,10 +227,58 @@ int main(void)
     jt808_params_handle_info_query(0x1234U);
     assert(s_raw_count == 1U && s_response_count == 0U);
     assert(s_raw_message == 0x0107U && s_raw_length == 83U);
+    assert(memcmp(s_raw_body, (uint8_t[]){0x00U, 0x0DU}, 2U) == 0);
+    assert(memcmp(s_raw_body + 2U, "70110", 5U) == 0);
+    assert(memcmp(s_raw_body + 7U, "T360-A300", 9U) == 0);
+    assert(memcmp(s_raw_body + 16U, (uint8_t[11]){0}, 11U) == 0);
     assert(memcmp(s_raw_body + 27U, "5678901", 7U) == 0);
+    assert(memcmp(s_raw_body + 34U,
+                  (uint8_t[]){0x89U,0x86U,0x04U,0x12U,0x10U,
+                              0x25U,0x00U,0x00U,0x00U,0x01U}, 10U) == 0);
     assert(s_raw_body[44U] == 0U);
     assert(s_raw_body[45U] == 35U);
-    assert(memcmp(s_raw_body + 46U, "T360-A300_406_20260823000000,V3.000", 35U) == 0);
+    assert(memcmp(s_raw_body + 46U, "T360-A300_406_20260823000000,V3.002", 35U) == 0);
+    assert(s_raw_body[81U] == 0x02U);
+    assert(s_raw_body[82U] == 0x20U);
+
+    strcpy(s_iccid, "8986041210250000001");
+    jt808_params_handle_info_query(0x1234U);
+    assert(memcmp(s_raw_body + 34U,
+                  (uint8_t[]){0x08U,0x98U,0x60U,0x41U,0x21U,
+                              0x02U,0x50U,0x00U,0x00U,0x01U}, 10U) == 0);
+
+    /* The EC800M contract permits hexadecimal ICCID nibbles.  Preserve a
+       modem-provided value exactly in the ten-byte terminal-attributes field. */
+    strcpy(s_iccid, "898600000000D0000000");
+    jt808_params_handle_info_query(0x1234U);
+    assert(memcmp(s_raw_body + 34U,
+                  (uint8_t[]){0x89U,0x86U,0x00U,0x00U,0x00U,
+                              0x00U,0xD0U,0x00U,0x00U,0x00U}, 10U) == 0);
+    strcpy(s_iccid, "898600000000d0000000");
+    jt808_params_handle_info_query(0x1234U);
+    assert(memcmp(s_raw_body + 34U,
+                  (uint8_t[]){0x89U,0x86U,0x00U,0x00U,0x00U,
+                              0x00U,0xD0U,0x00U,0x00U,0x00U}, 10U) == 0);
+
+    strcpy(s_iccid, "898600000000G0000000");
+    s_raw_count = s_response_count = 0U;
+    jt808_params_handle_info_query(0x2345U);
+    assert(s_raw_count == 0U && s_response_count == 1U);
+    assert(s_response_result == 1U);
+    strcpy(s_iccid, "89860412102500000001");
+
+    {
+        uint8_t encoded[JT808_TERMINAL_INFO_BODY_LENGTH];
+        uint16_t encoded_length = 99U;
+        assert(jt808_terminal_info_encode(NULL, sizeof(encoded), &encoded_length) ==
+               JT808_TERMINAL_INFO_INVALID_ARGUMENT);
+        assert(jt808_terminal_info_encode(encoded, sizeof(encoded), NULL) ==
+               JT808_TERMINAL_INFO_INVALID_ARGUMENT);
+        assert(jt808_terminal_info_encode(encoded, sizeof(encoded) - 1U,
+                                          &encoded_length) ==
+               JT808_TERMINAL_INFO_NO_SPACE);
+        assert(encoded_length == 0U);
+    }
 
     s_raw_count = s_response_count = 0U;
     set_identity("12345x78901", "123456789012345");
@@ -232,6 +297,7 @@ JT808_HARNESS = r'''
 #include "flash_config.h"
 #include "gps.h"
 #include "tcp_manager.h"
+#include "work_mode.h"
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -307,6 +373,8 @@ int ec800m_tcp_send(uint8_t channel, const uint8_t *data, uint16_t length)
     ++s_send_count;
     return s_send_result;
 }
+bool ec800m_tcp_send_was_ambiguous(void) { return false; }
+void ec800m_tcp_send_clear_ambiguous(void) {}
 int ec800m_get_csq(void) { return 0; }
 float adc_get_car_voltage(void) { return 0.0f; }
 float adc_get_bat_voltage(void) { return 0.0f; }
@@ -317,7 +385,11 @@ uint32_t tcp_manager_session_generation(uint8_t channel) { (void)channel; return
 tcp_state_t ec800m_tcp_state(uint8_t channel)
 { (void)channel; return s_online ? TCP_STATE_OPEN : TCP_STATE_CLOSED; }
 const gps_data_t *gps_get_data(void) { static gps_data_t data; return &data; }
+bool gps_get_last_trusted(gps_data_t *out) { (void)out; return false; }
 bool i2c_accel_is_moving(void) { return false; }
+bool hw_acc_is_on(void) { return false; }
+work_mode_state_t work_mode_state(void) { return WORK_MODE_REALTIME; }
+void log_platform_on_first_online(void) {}
 int GPIO_ReadInputDataBit(void *port, unsigned pin) { (void)port; (void)pin; return 0; }
 void relay_set(bool cut) { (void)cut; }
 void geofence_handle_jt808(const uint8_t *body, uint16_t length, uint16_t sn)
@@ -585,7 +657,7 @@ int main(void)
     }
     g_tick_ms = 45001U; jt808_process();
     g_tick_ms = 50000U; jt808_process();
-    assert(s_send_count == 0U && s_identity_logs == 2U);
+    assert(s_send_count == 0U && s_identity_logs == 1U);
 
     strcpy(s_config.pid, "12345x78901");
     jt808_init(&terminal);
@@ -789,8 +861,11 @@ def test_release_guard_behavior() -> None:
     assert not release_guard.fixed_identity_findings(centralized)
     assert not release_guard.fixed_identity_findings('/* "1234567" */\n')
 
-    target = 'T360-A300_406_20260823000000,V3.000'
-    assert release_guard.generated_version_is_target(f'$FW_VERSION = "{target}"\n')
+    target = 'T360-A300_406_20260823000000,V3.002'
+    assert release_guard.generated_version_is_target(
+        '$IDENTITY = Get-Content release_identity.json | ConvertFrom-Json\n'
+        '$FW_VERSION = $IDENTITY.firmware_version\n'
+    )
     assert not release_guard.generated_version_is_target(
         '$FW_VERSION = "T663B_B409_${BUILD_DATE}_${BUILD_TIME}"\n'
     )
@@ -801,27 +876,26 @@ def test_release_guard_behavior() -> None:
         root = Path(directory)
         for relative in (
             "src/main.c", "src/jt808.c", "src/jt808_params.c", "src/terminal_identity.c",
-            "src/f39_reply.c",
+            "src/jt808_terminal_info.c", "src/f39_reply.c",
             "include/config.h", "include/build_version.h", "include/f39_reply.h",
-            "include/jt808.h", "gen_version.ps1",
+            "include/jt808.h", "include/jt808_terminal_info.h", "include/work_mode.h",
+            "gen_version.ps1", "release_identity.json",
         ):
             destination = root / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / relative, destination)
         build_version_path = root / "include/build_version.h"
-        committed_build_version = subprocess.run(
-            ["git", "show", "HEAD:include/build_version.h"],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-        ).stdout.decode("utf-8")
+        committed_build_version = (ROOT / "include/build_version.h").read_text(
+            encoding="utf-8"
+        )
         generated_build_version = (
             "/* Auto-generated build version - DO NOT EDIT */\n"
             "#ifndef BUILD_VERSION_H\n"
             "#define BUILD_VERSION_H\n\n"
             "#define FW_BUILD_NUMBER  \"20991231_235959\"\n"
             "#define FW_BUILD_DATE    \"Dec 31 2099 - 23:59:59\"\n"
-            f"#define FW_FULL_VERSION  \"{target}\"\n\n"
+            f"#define FW_FULL_VERSION  \"{target}\"\n"
+            "#define FW_VERSION_COUNTER  3002UL\n\n"
             "#endif /* BUILD_VERSION_H */\n"
         )
 
@@ -843,6 +917,17 @@ def test_release_guard_behavior() -> None:
             assert any(item[2] == "<target-version>" for item in findings), form_name
 
         build_version_path.write_text(generated_build_version, encoding="utf-8")
+
+        contract_path = root / "release_identity.json"
+        contract_original = contract_path.read_text(encoding="utf-8")
+        contract_path.write_text(
+            contract_original.replace('"firmware_revision": 2',
+                                      '"firmware_revision": 3'),
+            encoding="utf-8",
+        )
+        findings = release_guard.scan(root)
+        assert any(item[2] == "<release-contract>" for item in findings)
+        contract_path.write_text(contract_original, encoding="utf-8")
 
         mutations = {
             "src/main.c": '\nstrcpy(s_terminal.terminal_id, "1234567");\n',
@@ -1232,7 +1317,8 @@ def main() -> int:
             cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-ffunction-sections",
             "-I", str(temp), "-I", str(ROOT / "include"), str(harness),
             str(ROOT / "src" / "terminal_identity.c"), "-o", str(binary),
-            str(ROOT / "src" / "jt808_params.c"), "-Wl,--gc-sections",
+            str(ROOT / "src" / "jt808_params.c"),
+            str(ROOT / "src" / "jt808_terminal_info.c"), "-Wl,--gc-sections",
         ]
         compiled = subprocess.run(command, text=True, capture_output=True)
         if compiled.returncode != 0:
@@ -1255,6 +1341,7 @@ def main() -> int:
             "-I", str(temp), "-I", str(ROOT / "include"), str(jt808_harness),
             str(ROOT / "src" / "terminal_identity.c"),
             str(ROOT / "src" / "jt808.c"), str(ROOT / "src" / "jt808_session.c"),
+            str(ROOT / "src" / "jt808_terminal_info.c"),
             "-lm", "-o", str(jt808_binary),
         ]
         compiled = subprocess.run(command, text=True, capture_output=True)

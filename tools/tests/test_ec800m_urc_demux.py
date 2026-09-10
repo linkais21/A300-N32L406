@@ -107,13 +107,20 @@ HARNESS = r'''
 #include "n32l40x.h"
 #include "config.h"
 #include "ec800m.h"
+#include "ec800m_at_response.h"
+#include "flash_config.h"
 #include "sms_ingress.h"
 
 volatile uint32_t g_tick_ms;
+static device_config_t config;
+device_config_t *cfg_get(void) { return &config; }
 usart_module_t host_uart5;
 static uint16_t wr;
 static unsigned injection;
 static unsigned fragment_body_mode;
+static unsigned binary_result_mode;
+static unsigned ota_echo_mode;
+static char ota_test_key[21];
 static unsigned qird_phase;
 static char tx_log[1024];
 static unsigned tx_len;
@@ -158,9 +165,16 @@ void host_uart_tx(uint8_t byte)
         tx_log[tx_len++] = (char)byte;
         tx_log[tx_len] = '\0';
     }
-    if (fragment_body_mode == 1U && byte == '\n' && strstr(tx_log, "AT+QISEND=0,3\r\n") != NULL) {
+    if (ota_echo_mode == 1U && byte == '\n' && strstr(tx_log, "AT+QISEND=1,3\r\n") != NULL) {
+        host_feed_rx(">\r\n");ota_echo_mode=2U;
+    } else if (ota_echo_mode == 2U && byte == 'c') {
+        host_feed_rx("\r\nX-Device-Key: ");host_feed_rx(ota_test_key);host_feed_rx("\r\nERROR\r\n");ota_echo_mode=3U;
+    } else if (fragment_body_mode == 1U && byte == '\n' && strstr(tx_log, "AT+QISEND=0,3\r\n") != NULL) {
         host_feed_rx(">\r\n");
         fragment_body_mode = 2U;
+    } else if (binary_result_mode == 1U && byte == '\n' && strstr(tx_log, "AT+QISEND=0,3\r\n") != NULL) {
+        host_feed_rx(">\r\n");
+        binary_result_mode = 2U;
     } else if (injection == 0U && byte == '\n' && strstr(tx_log, "AT+QISEND=0,3\r\n") != NULL) {
         host_feed_rx(">\r\n+CMT: \"13900000004\",\"\",\"\"\r\nPARAM#\r\n+QIURC: \"closed\",0\r\n");
         injection = 1U;
@@ -169,6 +183,13 @@ void host_uart_tx(uint8_t byte)
          * subsequent TCP SEND OK expectation while the AT owner is held. */
         host_feed_rx("\r\n+CMT: \"13900000005\",\"\",\"\"\r\nSEND OK");
         fragment_body_mode = 3U;
+    } else if (binary_result_mode == 2U && byte == 'c') {
+        static const uint8_t result[] = {
+            ' ', 0x7eU, 0x00U, 0x02U, '\r', '\n',
+            'S', 'E', 'N', 'D', ' ', 'O', 'K', '\r', '\n'
+        };
+        host_feed_bytes(result, sizeof result);
+        binary_result_mode = 3U;
     } else if (injection == 1U && byte == 'c') {
         host_feed_rx("\r\nSEND OK\r\n");
         injection = 2U;
@@ -249,6 +270,20 @@ static void tcp_cb(uint8_t ch, const uint8_t *data, uint16_t len)
 
 int main(void)
 {
+    {
+        static const char payload_token[] = {
+            (char)0x7e, 0x00, 0x02, 'S', 'E', 'N', 'D', ' ', 'O', 'K',
+            (char)0x7e
+        };
+        static const char modem_result[] = {
+            (char)0x7e, 0x00, '\r', '\n',
+            'S', 'E', 'N', 'D', ' ', 'O', 'K', '\r', '\n'
+        };
+        assert(!ec800m_at_response_has_line(
+            payload_token, sizeof payload_token, "SEND OK"));
+        assert(ec800m_at_response_has_line(
+            modem_result, sizeof modem_result, "SEND OK"));
+    }
     {
         char iccid[22] = "unchanged";
         assert(ec800m_test_parse_iccid("\r\n+QCCID: 8986001234567890123\r\nOK\r\n", iccid));
@@ -341,6 +376,22 @@ int main(void)
     ec800m_test_set_tcp_open(0U);
     fragment_body_mode = 1U;
     assert(ec800m_tcp_send(0U, (const uint8_t *)"abc", 3U) != 0);
+
+    /* A platform response can arrive before the modem's SEND OK. Binary
+     * bytes, including NUL, must not truncate the bounded result matcher. */
+    ec800m_test_set_tcp_open(0U);
+    fragment_body_mode = 0U;
+    binary_result_mode = 1U;
+    assert(ec800m_tcp_send(0U, (const uint8_t *)"abc", 3U) == 0);
+
+    /* Modem failure may echo payload into the AT response: OTA logs must not. */
+    ec800m_test_set_tcp_open(1U);ota_echo_mode=1U;
+    memset(ota_test_key,'Q',20);ota_test_key[20]=0;
+    tx_len=diag_len=0;tx_log[0]=diag_log[0]=0;
+    assert(ec800m_tcp_send(1U,(const uint8_t *)"abc",3U)!=0);
+    assert(ota_echo_mode==3U);
+    assert(strstr(diag_log,"fail stage=result ch=1")!=NULL);
+    assert(strstr(diag_log,ota_test_key)==NULL);
 
     puts("test_ec800m_urc_demux: PASS");
     return 0;

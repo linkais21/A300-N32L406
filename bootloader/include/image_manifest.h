@@ -4,9 +4,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define IMAGE_MANIFEST_MAGIC 0x4133464DUL /* A3FM */
+#include "fota.h"
+#define IMAGE_MANIFEST_MAGIC FOTA_PACKAGE_HEADER_MAGIC
 #define IMAGE_SHA256_SIZE 32U
 #define IMAGE_ECDSA_SIGNATURE_SIZE 64U
+
+typedef fota_package_header_t image_manifest_t;
 
 typedef struct __attribute__((packed)) {
     uint32_t magic;
@@ -18,9 +21,12 @@ typedef struct __attribute__((packed)) {
     uint8_t sha256[IMAGE_SHA256_SIZE];
     uint8_t ecdsa_signature[IMAGE_ECDSA_SIGNATURE_SIZE];
     uint32_t crc32;
-} image_manifest_t;
+} legacy_image_manifest_t;
 
-_Static_assert(sizeof(image_manifest_t) == 124U, "manifest wire size must remain stable");
+_Static_assert(sizeof(image_manifest_t) == FOTA_PACKAGE_HEADER_SIZE,
+               "A300 package header wire size must remain stable");
+_Static_assert(sizeof(legacy_image_manifest_t) == 124U,
+               "legacy recovery manifest wire size changed");
 
 typedef enum {
     IMAGE_VERIFY_OK = 0,

@@ -20,6 +20,7 @@ typedef struct {
 } f39_reply_t;
 
 typedef void (*f39_effect_fn)(void *context);
+typedef void (*f39_auth_reset_fn)(uint8_t channel_mask, void *context);
 typedef void (*f39_gnss_mode_fn)(gnss_type_t receiver, uint8_t mode,
                                  void *context);
 typedef bool (*f39_relay_fn)(bool cut, void *context);
@@ -33,9 +34,12 @@ typedef struct {
     void *context;
     f39_effect_fn timer_refresh;
     f39_effect_fn network_reconnect;
+    f39_auth_reset_fn jt808_auth_reset;
+    f39_effect_fn modem_pdp_restart;
     f39_gnss_mode_fn gnss_set_mode;
     f39_effect_fn jt808_reregister;
     f39_effect_fn remaining_refresh;
+    f39_effect_fn fota_recheck;
     f39_relay_fn relay_set;
     f39_gps_valid_fn gps_valid;
     f39_gps_speed_fn gps_speed_kmh;

@@ -5,10 +5,17 @@
 #include <stdbool.h>
 #include "boot_contract.h"
 
-bool bcr_load(bcr_record_t *out);
+typedef enum {
+    BCR_LOAD_IO_ERROR = -1,
+    BCR_LOAD_ABSENT = 0,
+    BCR_LOAD_FOUND = 1,
+    BCR_LOAD_INVALID = 2
+} bcr_load_result_t;
+
+bcr_load_result_t bcr_load(bcr_record_t *out);
 bool bcr_commit(const bcr_record_t *record);
 bool bcr_valid(const bcr_record_t *record);
-void bcr_note_trial_reset(bool fault_or_watchdog);
+bool bcr_note_trial_reset(bool fault_or_watchdog);
 bool bcr_mark_trial_healthy(void);
 bool boot_bcr_read(uint32_t address, void *data, uint32_t length);
 bool boot_bcr_write(uint32_t address, const void *data, uint32_t length);

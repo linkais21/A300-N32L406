@@ -21,6 +21,7 @@ typedef struct {
     work_mode_state_t state;
     bool logical_acc;
     bool previous_acc_high;
+    bool wake_fix_pending;
     uint32_t boot_monitor_started_s;
     uint32_t stationary_since_s;
     uint32_t moving_deadline_s;
@@ -41,6 +42,7 @@ typedef struct {
 static work_mode_context_t g_work_mode;
 static volatile uint32_t s_pending_alarm_bits;
 static uint32_t s_acc_sample;
+static bool s_stationary_location_enabled;
 
 #define ACC_SAMPLE_VALID_MASK 0x80000000UL
 #define ACC_SAMPLE_HIGH_MASK  0x40000000UL
@@ -69,6 +71,15 @@ static uint32_t interval_or_safe(uint32_t interval_s)
         return WORK_MODE_MAX_SAFE_INTERVAL_S;
     }
     return interval_s;
+}
+
+static uint32_t stopped_report_interval_s(void)
+{
+    uint32_t interval_s = g_work_mode.config.report_stopped_s;
+
+    if (interval_s == 0U)
+        interval_s = WORK_MODE_DEFAULT_STOPPED_REPORT_S;
+    return interval_or_safe(interval_s);
 }
 
 static uint32_t vibration_samples_required(void)
@@ -239,19 +250,23 @@ static bool enqueue_action(work_mode_action_type_t type, bool acc_on,
 static void set_deadlines(uint32_t now_s)
 {
     g_work_mode.moving_deadline_s = now_s + interval_or_safe(g_work_mode.config.report_moving_s);
-    g_work_mode.stopped_deadline_s = now_s + interval_or_safe(g_work_mode.config.report_stopped_s);
+    g_work_mode.stopped_deadline_s = now_s + stopped_report_interval_s();
     g_work_mode.heartbeat_deadline_s = now_s + interval_or_safe(g_work_mode.config.heartbeat_s);
 }
 
 static void enter_realtime(uint32_t now_s)
 {
+    bool waking_from_sleep;
+
     if (g_work_mode.state == WORK_MODE_REALTIME) {
         return;
     }
 
+    waking_from_sleep = g_work_mode.state == WORK_MODE_STATIONARY_SLEEP;
     ++g_work_mode.mode_generation;
     g_work_mode.state = WORK_MODE_REALTIME;
     g_work_mode.logical_acc = true;
+    g_work_mode.wake_fix_pending = waking_from_sleep;
     g_work_mode.vibration_hits = 0U;
     g_work_mode.vibration_miss_count = 0U;
     g_work_mode.vibration_started_ms = 0U;
@@ -274,11 +289,12 @@ static void enter_stationary(uint32_t now_s, bool gps_valid)
     ++g_work_mode.mode_generation;
     g_work_mode.state = WORK_MODE_STATIONARY_SLEEP;
     g_work_mode.logical_acc = false;
+    g_work_mode.wake_fix_pending = false;
     g_work_mode.vibration_hits = 0U;
     g_work_mode.vibration_miss_count = 0U;
     g_work_mode.vibration_started_ms = 0U;
     g_work_mode.vibration_last_hit_ms = 0U;
-    g_work_mode.stopped_deadline_s = now_s + interval_or_safe(g_work_mode.config.report_stopped_s);
+    g_work_mode.stopped_deadline_s = now_s + stopped_report_interval_s();
     g_work_mode.heartbeat_deadline_s = now_s + interval_or_safe(g_work_mode.config.heartbeat_s);
     (void)enqueue_action(WORK_ACTION_SET_LOGICAL_ACC, false, 0U, false);
     /* Capture the trusted fix before powering GNSS down, then report the
@@ -293,12 +309,19 @@ static void process_vibration(uint32_t now_s, uint32_t now_ms, bool vibration_hi
     if (now_ms == 0U)
         now_ms = now_s * WORK_MODE_MS_PER_SECOND;
     if (!vibration_hit) {
-        if (g_work_mode.vibration_hits != 0U &&
-            (uint32_t)(now_ms - g_work_mode.vibration_last_hit_ms) >
-            WORK_MODE_VIBRATION_MAX_GAP_MS) {
+        if (g_work_mode.vibration_hits != 0U) {
+            if (g_work_mode.vibration_miss_count < UINT32_MAX)
+                ++g_work_mode.vibration_miss_count;
+        }
+        if (g_work_mode.vibration_miss_count >
+                WORK_MODE_VIBRATION_MISS_TOLERANCE ||
+            (g_work_mode.vibration_hits != 0U &&
+             (uint32_t)(now_ms - g_work_mode.vibration_last_hit_ms) >
+                 WORK_MODE_VIBRATION_MAX_GAP_MS)) {
             g_work_mode.vibration_hits = 0U;
             g_work_mode.vibration_miss_count = 0U;
             g_work_mode.vibration_started_ms = 0U;
+            g_work_mode.vibration_last_hit_ms = 0U;
         }
         return;
     }
@@ -315,7 +338,7 @@ static void process_vibration(uint32_t now_s, uint32_t now_ms, bool vibration_hi
     if (g_work_mode.vibration_hits < vibration_samples_required()) {
         ++g_work_mode.vibration_hits;
     }
-    if (g_work_mode.vibration_hits != 0U &&
+    if (g_work_mode.vibration_hits >= vibration_samples_required() &&
         (uint32_t)(now_ms - g_work_mode.vibration_started_ms) >=
         vibration_confirm_ms()) {
         enter_realtime(now_s);
@@ -329,6 +352,7 @@ void work_mode_init(const work_mode_config_t *cfg, uint32_t now_s, bool acc_high
     g_work_mode.config.heartbeat_s = 180U;
     g_work_mode.config.stationary_timeout_s = 300U;
     g_work_mode.config.vibration_confirm_s = 6U;
+    s_stationary_location_enabled = true;
     if (cfg != 0) {
         g_work_mode.config = *cfg;
     }
@@ -339,6 +363,7 @@ void work_mode_init(const work_mode_config_t *cfg, uint32_t now_s, bool acc_high
      */
     g_work_mode.logical_acc = true;
     g_work_mode.previous_acc_high = acc_high;
+    g_work_mode.wake_fix_pending = false;
     /* Zero is the millisecond debounce-candidate sentinel.  The previous
      * implementation stored the boot second here, causing the first PA12
      * sample after boot to be compared against a mixed time base and accepted
@@ -480,6 +505,17 @@ void work_mode_step(const work_mode_input_t *input)
         enter_stationary(input->now_s, input->gps_valid);
     }
 
+    /* The wake entry report intentionally uses the retained position and is
+     * marked not fixed.  Emit one live follow-up as soon as GNSS provides a
+     * fresh valid snapshot, then restart the normal moving cadence there. */
+    if (g_work_mode.state == WORK_MODE_REALTIME &&
+        g_work_mode.wake_fix_pending && input->gps_valid &&
+        enqueue_action(WORK_ACTION_REPORT_LOCATION, true, 0U, false)) {
+        g_work_mode.wake_fix_pending = false;
+        g_work_mode.moving_deadline_s = input->now_s +
+                                         interval_or_safe(g_work_mode.config.report_moving_s);
+    }
+
     if (g_work_mode.state == WORK_MODE_REALTIME &&
         deadline_reached(input->now_s, g_work_mode.moving_deadline_s)) {
         if (enqueue_action(WORK_ACTION_REPORT_LOCATION, true, 0U, !input->gps_valid)) {
@@ -507,10 +543,11 @@ void work_mode_step(const work_mode_input_t *input)
          * every STOP1 wake) has a valid clock. input->gps_valid can stay
          * stuck true here because TICK_MS() freezes during STOP1, so it
          * must not gate this choice. */
-        if (deadline_reached(input->now_s, g_work_mode.stopped_deadline_s) &&
+        if (s_stationary_location_enabled &&
+            deadline_reached(input->now_s, g_work_mode.stopped_deadline_s) &&
             enqueue_action(WORK_ACTION_REPORT_LOCATION, false, 0U, true)) {
             g_work_mode.stopped_deadline_s = input->now_s +
-                                              interval_or_safe(g_work_mode.config.report_stopped_s);
+                                              stopped_report_interval_s();
         }
         /* Heartbeats are scheduled by jt808_process(), the single transport
          * owner.  Keeping one scheduler prevents duplicate 0x0002 frames. */
@@ -605,4 +642,13 @@ void work_mode_config_changed(const device_config_t *cfg, uint32_t now_s)
     next.stationary_timeout_s = 300U;
     next.vibration_confirm_s = 6U;
     work_mode_configure(&next, now_s);
+    work_mode_set_stationary_location_enabled(cfg->sleep_report_mode == 0U,
+                                              now_s);
+}
+
+void work_mode_set_stationary_location_enabled(bool enabled, uint32_t now_s)
+{
+    s_stationary_location_enabled = enabled;
+    if (enabled && g_work_mode.state == WORK_MODE_STATIONARY_SLEEP)
+        g_work_mode.stopped_deadline_s = now_s + stopped_report_interval_s();
 }

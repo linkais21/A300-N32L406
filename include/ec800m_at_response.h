@@ -30,6 +30,10 @@ typedef struct {
 } ec800m_qird_diag_t;
 
 ec800m_at_end_t ec800m_at_response_end(const char *data, uint16_t length);
+bool ec800m_at_response_has_line(const char *data, uint16_t length,
+                                 const char *value);
+bool ec800m_at_response_has_line_prefix(const char *data, uint16_t length,
+                                        const char *prefix);
 bool ec800m_parse_reg_status(const char *data, const char *prefix, int *status);
 bool ec800m_parse_qird_response(const uint8_t *data, uint16_t length,
                                 const uint8_t **payload,

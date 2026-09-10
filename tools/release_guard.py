@@ -5,12 +5,19 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 import sys
 from pathlib import Path
 
 FORBIDDEN = ("T663B", "A300_202511", "V1.274")
-TARGET_VERSION = "T360-A300_406_20260823000000,V3.000"
+ROOT = Path(__file__).resolve().parents[1]
+CONTRACT = json.loads((ROOT / "release_identity.json").read_text(encoding="utf-8"))
+TARGET_VERSION = CONTRACT["firmware_version"]
+TARGET_VERSION_COUNTER = CONTRACT["firmware_version_counter"]
+TARGET_OTA_MODEL = CONTRACT["ota_device_model"]
+TARGET_JT808_MODEL = CONTRACT["jt808_terminal_model"]
+TARGET_MANUFACTURER_ID = CONTRACT["jt808_manufacturer_id"]
 DEFAULT_PATHS = (
     "src",
     "include",
@@ -22,11 +29,12 @@ DEFAULT_PATHS = (
     "manifest.yml",
     "packaging",
     "gen_version.ps1",
+    "release_identity.json",
 )
 
 IDENTITY_CONSUMERS = (
     "src/main.c", "src/jt808.c", "src/jt808_params.c", "src/terminal_identity.c",
-    "src/f39_reply.c",
+    "src/jt808_terminal_info.c", "src/f39_reply.c",
 )
 SEVEN_BYTE_LITERAL = re.compile(r'"([A-Za-z0-9]{7})"')
 STRING_LITERAL = re.compile(r'"([A-Za-z0-9]*)"')
@@ -50,11 +58,14 @@ IDENTITY_SERVICE_REQUIREMENTS = {
                    r"\s*sizeof\s*\(\s*s_term\.terminal_id\s*\)\s*\)"),
     )),
     "src/jt808_params.c": ("jt808_params_handle_info_query", re.compile(
-        r"terminal_identity_load\s*\(\s*tid\s*\)"
-    ), "tid", (
-        re.compile(r"char\s+tid\s*\[\s*8\s*\]\s*;"),
-        re.compile(r"terminal_identity_load\s*\(\s*tid\s*\)"),
-        re.compile(r"memcpy\s*\(\s*body\s*\+\s*pos\s*,\s*tid\s*,\s*7\s*\)"),
+        r"jt808_terminal_info_encode\s*\(\s*body\s*,\s*sizeof\s*\(\s*body\s*\)\s*,\s*&length\s*\)"
+    ), None, ()),
+    "src/jt808_terminal_info.c": ("jt808_terminal_info_encode", re.compile(
+        r"terminal_identity_load\s*\(\s*terminal_id\s*\)"
+    ), "terminal_id", (
+        re.compile(r"char\s+terminal_id\s*\[\s*8\s*\]\s*;"),
+        re.compile(r"terminal_identity_load\s*\(\s*terminal_id\s*\)"),
+        re.compile(r"memcpy\s*\(\s*body\s*\+\s*position\s*,\s*terminal_id\s*,\s*7U\s*\)"),
     )),
     "src/terminal_identity.c": ("terminal_identity_load", re.compile(
         r"return\s+terminal_identity_sync\s*\(\s*pid\s*,\s*phone\s*,\s*out\s*\)\s*;"
@@ -81,9 +92,14 @@ CANONICAL_CONSUMER_PATTERNS = {
         re.compile(r"return\s+true\s*;"),
     ),
     "src/jt808_params.c": (
-        re.compile(r"char\s+tid\s*\[\s*8\s*\]\s*;"),
-        re.compile(r"if\s*\(\s*!terminal_identity_load\s*\(\s*tid\s*\)\s*\)\s*\{"),
-        re.compile(r"memcpy\s*\(\s*body\s*\+\s*pos\s*,\s*tid\s*,\s*7\s*\)\s*;"),
+        re.compile(r"uint8_t\s+body\s*\[\s*JT808_TERMINAL_INFO_BODY_LENGTH\s*\]\s*;"),
+        re.compile(r"jt808_terminal_info_encode\s*\(\s*body\s*,\s*sizeof\s*\(\s*body\s*\)\s*,\s*&length\s*\)"),
+        re.compile(r"jt808_send_raw\s*\(\s*0x0107U\s*,\s*sn\s*,\s*body\s*,\s*length\s*\)\s*;"),
+    ),
+    "src/jt808_terminal_info.c": (
+        re.compile(r"char\s+terminal_id\s*\[\s*8\s*\]\s*;"),
+        re.compile(r"if\s*\(\s*!terminal_identity_load\s*\(\s*terminal_id\s*\)\s*\)"),
+        re.compile(r"memcpy\s*\(\s*body\s*\+\s*position\s*,\s*terminal_id\s*,\s*7U\s*\)\s*;"),
     ),
     "src/terminal_identity.c": (
         re.compile(r"char\s+pid\s*\[\s*12\s*\]\s*;"),
@@ -96,17 +112,26 @@ CANONICAL_CONSUMER_PATTERNS = {
     ),
 }
 CANONICAL_CONSUMER_MACROS = {
-    "src/main.c": {"FW_BUILD_DATE", "FW_FULL_VERSION", "FW_MODEL_STR"},
-    "src/jt808_params.c": {"FW_MODEL_STR", "FW_VERSION_STR", "MSG_QUERY_TERMINAL_INFO"},
+    "src/main.c": {"FW_BUILD_DATE", "FW_FULL_VERSION", "FW_JT808_MODEL_STR",
+                   "FW_MANUFACTURER_ID_STR", "WORK_MODE_DEFAULT_STOPPED_REPORT_S"},
+    "src/jt808_params.c": {"JT808_TERMINAL_INFO_BODY_LENGTH",
+                            "MSG_QUERY_TERMINAL_INFO"},
+    "src/jt808_terminal_info.c": {"FW_VERSION_STR", "FW_JT808_MODEL_STR",
+                                    "FW_MANUFACTURER_ID_STR",
+                                    "JT808_TERMINAL_INFO_BODY_LENGTH"},
     "src/f39_reply.c": {"F39_IMEI_MAX_LENGTH"},
 }
 CANONICAL_MACRO_DEFINITIONS = {
     "FW_BUILD_DATE": re.compile(r'"[^"\r\n]*"'),
     "FW_FULL_VERSION": re.compile(rf'"{re.escape(TARGET_VERSION)}"'),
-    "FW_MODEL_STR": re.compile(r'"A300_406"'),
+    "FW_OTA_MODEL_STR": re.compile(rf'"{re.escape(TARGET_OTA_MODEL)}"'),
+    "FW_JT808_MODEL_STR": re.compile(rf'"{re.escape(TARGET_JT808_MODEL)}"'),
+    "FW_MANUFACTURER_ID_STR": re.compile(rf'"{re.escape(TARGET_MANUFACTURER_ID)}"'),
+    "JT808_TERMINAL_INFO_BODY_LENGTH": re.compile(r"83(?:[uU])?"),
     "FW_VERSION_STR": re.compile(rf'"{re.escape(TARGET_VERSION)}"'),
     "MSG_QUERY_TERMINAL_INFO": re.compile(r"0[xX]8107(?:[uUlL]*)"),
     "F39_IMEI_MAX_LENGTH": re.compile(r"15(?:[uU])?"),
+    "WORK_MODE_DEFAULT_STOPPED_REPORT_S": re.compile(r"180(?:[uU])?"),
 }
 C_IDENTIFIER = r"(?:[^\W\d]|\\(?:u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}))(?:\w|\\(?:u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}))*"
 PP_DIRECTIVE = r"(?:#|%:|\?\?=)"
@@ -115,17 +140,19 @@ TRIGRAPHS = {
     "??!": "|", "??<": "{", "??>": "}", "??-": "~",
 }
 CANONICAL_CONSUMER_SHA256 = {
-    "src/main.c": "9ec6e847daca0731aa80b7661036395d84c2f9f6cef32a1b71c8e8cb68738c1f",
+    "src/main.c": "8b76236781631a33a671da7261e45c88405fae9124238e718baa5f26ee85e9d0",
     "src/jt808.c": "d38583fc4d2e47eab4fe184b90a21205dc6e2606266a20e824bff69321871586",
-    "src/jt808_params.c": "2000242a482e339fef40541a46c3e2190b0bdfc9d4b79f7807322f2ab584fd0e",
+    "src/jt808_params.c": "2f4c5cefaa334a336896ec36cc7feaaa56ae1b56dcaef44e4b33a33008dc7a11",
+    "src/jt808_terminal_info.c": "0ce1a9cf82880062c0d84b88bc50ae047c59ec7f6e5e17ea59266b50a0499d49",
     "src/terminal_identity.c": "d8f0d206632b5ecb436d0989e3e9daf8a7fbb734763446a84e27285b3e261d5b",
     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
 }
 CANONICAL_IDENTITY_FILE_SHA256 = {
-    "include/config.h": "a53b11f8799dc85c6c46d33d54901f6dcfd224f57298348ca73eb7bc0a9f939e",
-    "include/build_version.h": "cb8e276f477eb946903af3eb1260d58f3f266e9631f55ee2fb77e08ceec2c484",
-    "include/f39_reply.h": "1f85f901f0c506dd60d4e48a8b898cb8fb719d2e4039f037acb37318de6e659f",
-    "include/jt808.h": "c1e7d6e0a4d07f8db689f940e2f3bc69c6bbbf9aa708e439e0070cc6f9b22668",
+    "include/config.h": "c849150fbd0c04d90190697c825652975c510c16719d25069acfbaab906c4392",
+    "include/build_version.h": "55f08b6d798826fc70a8056c9423d6882ba62a6960bc8d67d0070fe860159bc1",
+    "include/f39_reply.h": "2ed804411ce7eaac804a739764824fd0c4e73342744ea63240a728a2e46f8715",
+    "include/jt808.h": "08c0d611d87d2a919607e256c20ea6ce0d8908ca394b570933331fc9c8b74013",
+    "include/jt808_terminal_info.h": "ed27611b540da8fe8ed50a3d349d52ada04f2e66aa62db8f3d6b85497c35d8df",
 }
 
 
@@ -375,13 +402,23 @@ def canonical_identity_consumer(text: str, relative: str, function_name: str,
 
 def generated_version_is_target(text: str) -> bool:
     """Require the generator's release version source to be the approved target."""
-    match = re.search(r'(?m)^\s*\$FW_VERSION\s*=\s*"([^"]+)"\s*$', text)
-    return match is not None and match.group(1) == TARGET_VERSION
+    return ("release_identity.json" in text and "ConvertFrom-Json" in text and
+            re.search(r"(?m)^\s*\$FW_VERSION\s*=\s*"
+                      r"\$IDENTITY\.firmware_version\s*$", text) is not None)
 
 
 def c_define_is_target(text: str, name: str) -> bool:
     match = re.search(rf'(?m)^\s*#define\s+{re.escape(name)}\s+"([^"]+)"\s*$', text)
     return match is not None and match.group(1) == TARGET_VERSION
+
+
+def c_define_is_counter(text: str) -> bool:
+    match = re.search(r"(?m)^\s*#define\s+FW_VERSION_COUNTER\s+([0-9]+)(?:[uUlL]+)?\s*$", text)
+    return match is not None and int(match.group(1)) == TARGET_VERSION_COUNTER
+
+
+def valid_version_counter(value: object) -> bool:
+    return type(value) is int and 0 < value <= 0xFFFFFFFF
 
 
 def iter_release_files(root: Path, paths: tuple[str, ...] = DEFAULT_PATHS):
@@ -400,6 +437,28 @@ def iter_release_files(root: Path, paths: tuple[str, ...] = DEFAULT_PATHS):
 def scan(root: Path, paths: tuple[str, ...] = DEFAULT_PATHS):
     """Return (file, line, token, text) tuples for forbidden matches."""
     findings = []
+    contract_path = root / "release_identity.json"
+    if contract_path.is_file():
+        try:
+            candidate_contract = json.loads(contract_path.read_text(encoding="utf-8"))
+            revision = candidate_contract.get("firmware_revision")
+            version_counter = candidate_contract.get("firmware_version_counter")
+            internally_valid = (
+                isinstance(revision, int) and 0 <= revision <= 999 and
+                valid_version_counter(version_counter) and
+                candidate_contract.get("firmware_version") ==
+                candidate_contract.get("firmware_version_prefix", "") +
+                f"{revision:03d}"
+            )
+            if candidate_contract != CONTRACT or not internally_valid:
+                token = "<version-counter>" if not valid_version_counter(version_counter) else "<release-contract>"
+                findings.append((contract_path, 0, token,
+                                 "release identity differs from approved contract"))
+        except (OSError, ValueError, TypeError) as exc:
+            findings.append((contract_path, 0, "<release-contract>", str(exc)))
+    elif (root / "gen_version.ps1").is_file():
+        findings.append((contract_path, 0, "<release-contract>",
+                         "release_identity.json is required"))
     patterns = [(token, re.compile(re.escape(token), re.IGNORECASE)) for token in FORBIDDEN]
     release_files = list(iter_release_files(root, paths))
     release_texts: dict[Path, str] = {}
@@ -472,6 +531,9 @@ def scan(root: Path, paths: tuple[str, ...] = DEFAULT_PATHS):
             findings.append((path, 0, "<target-version>", f"FW_VERSION_STR must be {TARGET_VERSION}"))
         if relative == "include/build_version.h" and not c_define_is_target("\n".join(lines), "FW_FULL_VERSION"):
             findings.append((path, 0, "<target-version>", f"FW_FULL_VERSION must be {TARGET_VERSION}"))
+        if relative == "include/build_version.h" and not c_define_is_counter("\n".join(lines)):
+            findings.append((path, 0, "<version-counter>",
+                             f"FW_VERSION_COUNTER must be {TARGET_VERSION_COUNTER}UL"))
     return findings
 
 

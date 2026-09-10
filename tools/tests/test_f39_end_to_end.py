@@ -58,18 +58,24 @@ void jt808_set_server(const char *ip, uint16_t p, bool b) { (void)ip; (void)p; (
 void cfg_save(void) { }
 int dbg_printf(const char *fmt, ...) { (void)fmt; return 0; }
 void tcp_manager_reconnect(void) { effect('N'); }
+bool fota_request_check(void) { return true; }
 void gnss_vendor_set_type(gnss_type_t t) { (void)t; }
 void agnss_init(gnss_type_t t) { (void)t; }
 void jt808_request_reregister(void) { effect('J'); }
+void jt808_set_terminal_profile(const char *model, const char *plate) { (void)model; (void)plate; }
+void jt808_reset_endpoint_auth(uint8_t mask) { (void)mask; }
+uint32_t work_mode_sleep_monotonic_s(void) { return g_tick_ms / 1000U; }
 void relay_set(bool on) { (void)on; }
 bool relay_get(void) { return false; }
 bool gps_is_valid(void) { return true; }
 const gps_data_t *gps_get_data(void) { static gps_data_t g; g.valid=true; return &g; }
 void gps_send_cmd(const char *c) { (void)c; }
 int GPIO_ReadInputDataBit(void *p, unsigned x) { (void)p; (void)x; return 1; }
+bool hw_acc_is_on(void) { return true; }
 void ec800m_get_imei(char *b, uint8_t n) { if (n > 0) { strncpy(b, "123456789012345", n-1); b[n-1]=0; } }
 void ec800m_get_iccid(char *b, uint8_t n) { if (n > 0) { strncpy(b, "89860492192080502719", n-1); b[n-1]=0; } }
 int ec800m_get_csq(void) { return 20; }
+void ec800m_restart_pdp(void) { effect('P'); }
 void NVIC_SystemReset(void) { system_resets++; }
 int sms_send(const char *p, const char *t) { (void)p; (void)t; production_sends++; return production_send_result; }
 void sms_set_send_result_cb(sms_send_result_cb_t cb) { production_result_cb=cb; }
@@ -78,6 +84,7 @@ static void effect(char c) { order[order_len++] = c; order[order_len] = 0; callb
 static bool persist(const device_config_t *candidate, void *ctx) { (void)candidate; (void)ctx; saves++; return true; }
 static void timer(void *ctx) { (void)ctx; effect('T'); }
 static void network(void *ctx) { (void)ctx; effect('N'); }
+static void auth_reset(uint8_t mask, void *ctx) { (void)mask; (void)ctx; effect('A'); }
 static void gnss(gnss_type_t type, uint8_t mode, void *ctx) { (void)type; (void)mode; (void)ctx; effect('G'); }
 static void jt808(void *ctx) { (void)ctx; effect('J'); }
 static void remaining(void *ctx) { (void)ctx; effect('R'); }
@@ -104,6 +111,7 @@ int main(void) {
     strcpy(config.terminal_model, "A300_406"); strcpy(config.server_ip, "old");
     memset(&platform, 0, sizeof platform); platform.config=&config; platform.persist=persist;
     platform.timer_refresh=timer; platform.network_reconnect=network; platform.gnss_set_mode=gnss;
+    platform.jt808_auth_reset=auth_reset;
     platform.jt808_reregister=jt808; platform.remaining_refresh=remaining; platform.relay_set=relay;
     platform.gps_valid=gps_valid; platform.gps_speed_kmh=gps_speed; platform.relay_get=relay_state;
     platform.version="V3"; platform.version_len=2; platform.imei="123456789012345"; platform.imei_len=15;
@@ -119,7 +127,7 @@ int main(void) {
 
     order_len=0; callbacks=0;
     feed("13800000003", "DUALSET,FREQ,10,20*IP,two.example,9002*GPSBDS,2*MODEL,T360#"); sms_ingress_process();
-    assert(!strcmp(order, "TNGJR")); assert(callbacks == 5 && saves == 2);
+    assert(!strcmp(order, "TANGJR")); assert(callbacks == 6 && saves == 2);
 
     callbacks=0; sent_count=0;
     feed("13800000004", "VIBSENSX,1#"); sms_ingress_process();
@@ -193,6 +201,9 @@ static device_config_t config;
 static unsigned saves, reset_scheduled, system_resets;
 static unsigned cfg_saves, timer_calls, network_calls, gnss_calls;
 static unsigned jt808_register_calls, relay_calls, relay_state;
+static unsigned jt808_profile_calls;
+static char runtime_model[CFG_MODEL_LEN];
+static char runtime_plate[CFG_PLATE_LEN];
 static char backup_endpoint[CFG_IP_LEN];
 static uint16_t backup_endpoint_port;
 unsigned inject_cmt_during_tcp_wait;
@@ -202,10 +213,12 @@ unsigned tx_len;
 unsigned modem_write_phase;
 int race_sms_result;
 int tx_stuck;
+unsigned pdp_auto_reply;
 
 void ec800m_test_set_state(ec800m_state_t state);
 void ec800m_test_set_imei(const char *imei);
 void ec800m_test_set_tcp_open(uint8_t ch);
+void ec800m_restart_pdp(void);
 
 /* The modem shim writes every UART5 byte into tx_log and advances the DMA
  * producer.  Responses are injected by the harness after each process step. */
@@ -221,9 +234,17 @@ void jt808_set_heartbeat_s(uint16_t s) { (void)s; ++timer_calls; }
 void jt808_set_report_interval(uint16_t a, uint16_t b) { (void)a; (void)b; ++timer_calls; }
 void jt808_set_server(const char *ip, uint16_t p, bool backup) { if (backup) { strncpy(backup_endpoint, ip, sizeof(backup_endpoint) - 1U); backup_endpoint[sizeof(backup_endpoint) - 1U] = '\0'; backup_endpoint_port = p; } ++network_calls; }
 void tcp_manager_reconnect(void) { ++network_calls; }
+bool fota_request_check(void) { return true; }
 void gnss_vendor_set_type(gnss_type_t t) { (void)t; ++gnss_calls; }
 void agnss_init(gnss_type_t t) { (void)t; ++gnss_calls; }
 void jt808_request_reregister(void) { ++jt808_register_calls; }
+void jt808_reset_endpoint_auth(uint8_t mask) { (void)mask; }
+uint32_t work_mode_sleep_monotonic_s(void) { return g_tick_ms / 1000U; }
+void jt808_set_terminal_profile(const char *model, const char *plate) {
+    ++jt808_profile_calls;
+    strncpy(runtime_model, model, sizeof runtime_model - 1U);
+    strncpy(runtime_plate, plate, sizeof runtime_plate - 1U);
+}
 void relay_set(bool on) { relay_state = on ? 1U : 0U; ++relay_calls; }
 bool relay_get(void) { return relay_state != 0U; }
 bool gps_is_valid(void) { return true; }
@@ -236,6 +257,7 @@ void delay_us(uint32_t us) { (void)us; }
 void GPIO_SetBits(void *p, unsigned pin) { (void)p; (void)pin; }
 void GPIO_ResetBits(void *p, unsigned pin) { (void)p; (void)pin; }
 int GPIO_ReadInputDataBit(void *p, unsigned pin) { (void)p; (void)pin; return 1; }
+bool hw_acc_is_on(void) { return true; }
 
 static void sms_dispatch(const char *from, const char *text) {
     uint16_t n = (uint16_t)strlen(text);
@@ -274,6 +296,34 @@ int main(void) {
     at_config_bind_f39(NULL, NULL, NULL, NULL);
     at_config_init();
 
+    /* A runtime APN change rebuilds context 1 before data traffic resumes. */
+    config.autoapn_en = 0U;
+    strcpy(config.apn, "iot.apn");
+    strcpy(config.apn_user, "user");
+    strcpy(config.apn_pass, "password");
+    tx_len = 0U; tx_log[0] = '\0'; pdp_auto_reply = 1U;
+    ec800m_restart_pdp(); modem_step();
+    assert(ec800m_get_state() == EC800M_STATE_READY);
+    {
+        const char *deact = strstr(tx_log, "AT+QIDEACT=1");
+        const char *profile = strstr(tx_log, "AT+QICSGP=1,1,\"iot.apn\",\"user\",\"password\",1");
+        const char *activate = strstr(tx_log, "AT+QIACT=1");
+        const char *query = strstr(tx_log, "AT+QIACT?");
+        assert(deact && profile && activate && query);
+        assert(deact < profile && profile < activate && activate < query);
+    }
+    config.apn_user[0] = '\0'; config.apn_pass[0] = '\0';
+    tx_len = 0U; tx_log[0] = '\0';
+    ec800m_restart_pdp(); modem_step();
+    assert(ec800m_get_state() == EC800M_STATE_READY);
+    assert(strstr(tx_log, "AT+QICSGP=1,1,\"iot.apn\",\"\",\"\",0") != NULL);
+    config.autoapn_en = 1U;
+    tx_len = 0U; tx_log[0] = '\0';
+    ec800m_restart_pdp(); modem_step();
+    assert(ec800m_get_state() == EC800M_STATE_READY);
+    assert(strstr(tx_log, "AT+QICSGP=1,1,\"\",\"\",\"\",0") != NULL);
+    pdp_auto_reply = 0U;
+
     /* Exercise the real A300_406 default callback chain. */
     feed_cmt("13900000001", "IP,default.example,9001#");
     modem_step(); sms_process(); modem_step(); complete_sms(true);
@@ -296,22 +346,30 @@ int main(void) {
     feed_cmt("13900000001", "PID,76543210987#");
     modem_step(); sms_process(); modem_step(); complete_sms(true);
     assert(!strcmp(config.pid, "76543210987") && jt808_register_calls > 0);
+    feed_cmt("13900000001", "MODEL,T360-A300#");
+    modem_step(); sms_process(); modem_step(); complete_sms(true);
+    assert(!strcmp(runtime_model, "T360-A300") && jt808_profile_calls > 0);
+    feed_cmt("13900000001", "CAR,18B12345#");
+    modem_step(); sms_process(); modem_step(); complete_sms(true);
+    assert(runtime_plate[0] != '\0' && jt808_profile_calls > 1U);
     feed_cmt("13900000001", "RELAY,1#");
     modem_step(); sms_process(); modem_step(); complete_sms(true);
     assert(relay_state == 1 && relay_calls > 0);
+    tx_len = 0U; tx_log[0] = '\0';
     feed_cmt("13900000001", "PARAM#");
     modem_step(); sms_process(); modem_step(); complete_sms(true);
-    assert(strstr(tx_log, ",A=1,") != NULL && strstr(tx_log, ",SV=12,X=4,D=0.8,") != NULL);
+    complete_sms(true);
+    assert(strstr(tx_log, "ACC[1]") != NULL && strstr(tx_log, "GPS[12]") != NULL);
 
     /* Two senders traverse the real DMA -> +CMT -> ingress FIFO path. */
     feed_cmt("13800000001", "PARAM#");
     feed_cmt("13800000002", "PARAM#");
     modem_step(); sms_process(); modem_step();
-    assert(strstr(tx_log, "AT+CMGS=\"13800000001\"") != NULL);
-    complete_sms(true);
+    assert(strstr(tx_log, "AT+QCMGS=\"13800000001\"") != NULL);
+    complete_sms(true); complete_sms(true);
     sms_process(); modem_step();
-    assert(strstr(tx_log, "AT+CMGS=\"13800000002\"") != NULL);
-    complete_sms(true);
+    assert(strstr(tx_log, "AT+QCMGS=\"13800000002\"") != NULL);
+    complete_sms(true); complete_sms(true);
 
     /* Plain ERROR while waiting for the prompt must fail immediately. */
     assert(ec800m_sms_send("13800000003", "X") == 0);
@@ -380,7 +438,7 @@ int main(void) {
     ec800m_test_set_tcp_open(0);
     assert(ec800m_tcp_send(0, (const uint8_t *)"abc", 3) == 0);
     sms_process(); modem_step();
-    assert(strstr(tx_log, "AT+CMGS=\"13900000004\"") != NULL);
+    assert(strstr(tx_log, "AT+QCMGS=\"13900000004\"") != NULL);
     complete_sms(true);
 
     puts("PASS"); return 0;
@@ -389,6 +447,8 @@ int main(void) {
 
 
 def test_f39_production_chain():
+    modem_source = (ROOT / "src" / "ec800m.c").read_text(encoding="utf-8")
+    assert '>> AT+QICSGP=1,1,<redacted>' in modem_source
     cc = compiler()
     if not cc:
         print("SKIP: gcc not found")
@@ -470,11 +530,27 @@ extern unsigned modem_write_phase;
 extern char tx_log[4096];
 extern unsigned tx_len;
 extern int tx_stuck;
+extern unsigned pdp_auto_reply;
 extern unsigned inject_cmt_during_tcp_wait;
 extern int ec800m_sms_send(const char *, const char *);
 void host_feed_rx(const char *s);
 void host_uart_tx(uint8_t b) {
+    static char at_line[256];
+    static unsigned at_line_len;
     if (tx_len + 1 < 4096U) { tx_log[tx_len++] = (char)b; tx_log[tx_len] = '\0'; }
+    if (at_line_len + 1U < sizeof at_line) at_line[at_line_len++] = (char)b;
+    if (b == '\n') {
+        at_line[at_line_len] = '\0';
+        if (pdp_auto_reply != 0U) {
+            if (strstr(at_line, "AT+QIACT?"))
+                host_feed_rx("\r\n+QIACT: 1,1,1,\"10.0.0.1\"\r\nOK\r\n");
+            else if (strstr(at_line, "AT+QIDEACT=1") ||
+                     strstr(at_line, "AT+QICSGP=1,1") ||
+                     strstr(at_line, "AT+QIACT=1"))
+                host_feed_rx("\r\nOK\r\n");
+        }
+        at_line_len = 0U;
+    }
     if (inject_cmt_during_tcp_wait == 1U && b == '\n') {
         host_feed_rx(">\r\n+CMT: \"13900000004\",\"\",\"\"\r\nPARAM#\r\n");
         inject_cmt_during_tcp_wait = 2U;

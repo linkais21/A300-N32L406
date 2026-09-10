@@ -1,82 +1,69 @@
-from pathlib import Path
-import hashlib
+"""Production FOTA and journal with one-way NOR and asynchronous modem replay."""
+from test_fota_platform_flow import HARNESS, run_flow
 
 
-ROOT = Path(__file__).parents[2]
-FOTA_H = (ROOT / "include" / "fota.h").read_text(encoding="utf-8")
-FOTA_C = (ROOT / "src" / "fota.c").read_text(encoding="utf-8")
-
-
-class ResumeModel:
-    def __init__(self, url, length, etag=""):
-        self.url, self.length, self.etag = url, length, etag
-        self.data = bytearray()
-        self.checkpoint = (url, length, etag, 0)
-
-    def reconnect(self, url, length, etag):
-        if (url, length, etag) != self.checkpoint[:3]:
-            self.data.clear()
-            self.checkpoint = (url, length, etag, 0)
-        return len(self.data)
-
-    def chunk(self, payload, offset):
-        if offset > len(self.data):
-            raise ValueError("out-of-order")
-        if offset < len(self.data):
-            if bytes(self.data[offset:offset + len(payload)]) != payload:
-                raise ValueError("duplicate mismatch")
-            return
-        self.data.extend(payload)
-        self.checkpoint = (*self.checkpoint[:3], len(self.data))
-
-
-def test_fota_exposes_resumable_request_status_and_chunk_offset():
-    assert "fota_request_t" in FOTA_H
-    assert "fota_status_t" in FOTA_H
-    assert "fota_get_status" in FOTA_H
-    assert "fota_cancel" in FOTA_H
-    assert "fota_on_chunk" in FOTA_H
-    assert "Range: bytes=" in FOTA_C
-
-
-def test_resume_rejects_identity_mismatch_and_orders_chunks():
-    assert "ETag" in FOTA_C
-    assert "offset>s_received" in FOTA_C
-    assert "offset<s_received" in FOTA_C
-    assert "FOTA_RESUME_MAGIC" in FOTA_C
-
-
-def test_disconnect_range_resume_and_duplicate_chunks():
-    m = ResumeModel("http://fw/a.bin", 6, '"v1"')
-    m.chunk(b"abc", 0)
-    assert m.reconnect("http://fw/a.bin", 6, '"v1"') == 3
-    m.chunk(b"abc", 0)  # exact duplicate is harmless
-    m.chunk(b"def", 3)
-    assert bytes(m.data) == b"abcdef"
-
-
-def test_out_of_order_and_changed_etag_restart_safely():
-    m = ResumeModel("http://fw/a.bin", 6, '"v1"')
-    m.chunk(b"abc", 0)
-    try:
-        m.chunk(b"z", 5)
-    except ValueError as exc:
-        assert "out-of-order" in str(exc)
-    assert m.reconnect("http://fw/a.bin", 6, '"v2"') == 0
-
-
-def test_source_checks_http_split_header_and_range_contract():
-    assert "s_http_header_len" in FOTA_C
-    assert "HTTP/1.1 206" in FOTA_C
-    assert "Content-Range:" in FOTA_C
-    assert "first!=s_received" in FOTA_C
-
-
-def test_duplicate_comparison_covers_full_chunk_in_blocks():
-    assert "while(pos<len)" in FOTA_C
+def test_resume_cleanup_and_boundary_checkpoint():
+    run_flow(HARNESS + r'''
+static void start_download(void){
+    unsigned previous=sends;
+    for(unsigned i=0;i<160 && sends==previous;i++){
+        if(tcp==TCP_STATE_OPENING)tcp=TCP_STATE_OPEN;
+        pump(1);g_tick_ms+=100;
+    }
+    assert(sends==previous+1);assert_auth();
+}
+int main(void){
+    fota_checkpoint_t c,loaded;fota_status_t status;
+    uint8_t package_sha256[32]={0},signature[64]={0};
+    fota_request_t req={"http://fota.lhhn.net/a.bin",13000,"v7",3002,
+                        package_sha256,signature,1U};
+    uint8_t data[5000];unsigned before;
+    fresh();memset(&c,0,sizeof c);strcpy(c.url,req.url);strcpy(c.etag,req.etag);
+    c.expected_length=13000;c.version=3002;c.offset=4096;c.running_crc=0;
+    flash_owner=EXT_FLASH_OWNER_OTA;assert(fota_checkpoint_commit(&c));flash_owner=0;
+    memset(flash+0x10000,0x5a,4096);memset(flash+0x11000,0,12288);memset(flash+0x14000,0x36,4096);erases=0;
+    req.expected_length=0;assert(fota_start_request(&req)<0);req.expected_length=13000;
+    assert(fota_start_request(&req)==0 && !sends);
+    fota_get_status(&status);assert(status.offset==4096 && status.crc32==0xffffffffU);
+    assert(!strcmp(status.etag,"v7") && status.expected_length==13000);
+    start_download();assert(erases==3 && opens==1 && sends==1);
+    assert(erased[0]==0x11000 && erased[1]==0x12000 && erased[2]==0x13000);
+    assert(strstr(request,"Range: bytes=4096-\r\nIf-Range: v7\r\n"));
+    for(unsigned i=0;i<4096;i++){assert(flash[0x10000+i]==0x5a);assert(flash[0x14000+i]==0x36);}
+    for(unsigned i=0;i<12288;i++)assert(flash[0x11000+i]==255);
+    fota_on_http_header("HTTP/1.1 206 Partial Content\r\nContent-Length: 8904\r\nContent-Range: bytes 4096-12999/13000\r\nETag: v7\r\n\r\n");
+    memset(data,0xa5,sizeof data);fota_on_chunk(data,5000,4096);
+    assert(fota_checkpoint_load(req.url,13000,&loaded) && loaded.offset==8192);
+    assert(loaded.running_crc==crc32_update(0,data,4096));
+    assert(loaded.version==3002 && !strcmp(loaded.etag,"v7"));
+    fota_on_chunk(data,5000,4096);assert(fota_get_progress()==9096);
+    fota_cancel();erases=0;assert(fota_start_request(&req)==0);start_download();
+    assert(erases==2 && erased[0]==0x12000 && erased[1]==0x13000);
+    assert(strstr(request,"Range: bytes=8192-"));
+    /* 200 reset is journaled on its own process step, before any prefix erase. */
+    erases=0;before=closes;
+    fota_on_http_header("HTTP/1.1 200 OK\r\nContent-Length: 13000\r\nETag: v7\r\n\r\n");
+    fota_on_chunk(data,1,0);assert(fota_get_progress()==8192);
+    pump(1);assert(closes==before+1 && erases==1 && erased[0]>=0x102000);
+    assert(fota_checkpoint_load(req.url,13000,&loaded) && loaded.offset==0);
+    assert(flash[0x10000]==0x5a);
+    /* Simulate reboot while previously committed prefix has only begun cleanup. */
+    pump(1);assert(flash[0x10000]==255 && flash[0x11000]==0xa5);
+    fota_cancel();fota_init();erases=0;
+    assert(fota_start_request(&req)==0 && fota_get_progress()==0);start_download();
+    assert(erases==4 && erased[0]==0x10000 && erased[3]==0x13000);
+    assert(!strstr(request,"Range:") && flash[0x14000]==0x36);
+    fota_cancel();req.expected_length=14000;erases=0;
+    assert(fota_start_request(&req)==0);start_download();
+    assert(fota_get_progress()==0 && erases==5 && erased[1]==0x10000);
+    fota_on_http_header("HTTP/1.1 206 Partial Content\r\nContent-Length: 14000\r\nContent-Range: bytes 0-13999/16000\r\n\r\n");
+    pump(1);assert(fota_get_state()==FOTA_STATE_ERROR && flash[0x14000]==0x36);
+    fota_cancel();
+    puts("resume: bounded cleanup/boundary CRC/duplicate/identity/unknown size/200 durable reset/reboot during prefix erase PASS");return 0;
+}
+''', "resume")
 
 
 if __name__ == "__main__":
-    test_fota_exposes_resumable_request_status_and_chunk_offset()
-    test_resume_rejects_identity_mismatch_and_orders_chunks()
+    test_resume_cleanup_and_boundary_checkpoint()
     print("test_fota_resume: PASS")

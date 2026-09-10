@@ -52,7 +52,7 @@ def main() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     assert 'if exist "$(BUILD)" rmdir /S /Q "$(BUILD)"' in makefile
     boot_makefile = (ROOT / "bootloader" / "Makefile").read_text(encoding="utf-8")
-    assert "TOOLCHAIN_ROOT :=" in boot_makefile
+    assert "TOOLCHAIN_ROOT ?=" in boot_makefile
     assert "CC := $(TOOLCHAIN_ROOT)/arm-none-eabi-gcc.exe" in boot_makefile
     assert 'if exist "build" rmdir /S /Q "build"' in boot_makefile
     assert "SDK_CFLAGS := -Wno-sign-compare -Wno-unused-parameter" in makefile

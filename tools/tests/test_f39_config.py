@@ -48,6 +48,7 @@ static device_config_t seed_config(void)
     cfg.report_stopped_s = 300U;
     cfg.autoapn_en = 1U;
     cfg.apn[0] = cfg.apn_user[0] = cfg.apn_pass[0] = '\0';
+    cfg.device_api_key[0] = '\0';
     cfg.pid[0] = '\0';
     strcpy(cfg.terminal_model, "A300_406");
     cfg.speed_limit_kmh = 120U;
@@ -113,27 +114,32 @@ static void test_valid_mapping_and_effects(void)
     f39_transaction_t tx;
 
     tx = expect_prepared("IP,host.example,65535", &live, &spy,
-                         F39_EFFECT_NETWORK_RECONNECT);
+                         F39_EFFECT_NETWORK_RECONNECT |
+                         F39_EFFECT_MAIN_AUTH_RESET);
     assert(strcmp(tx.candidate.server_ip, "host.example") == 0);
     assert(tx.candidate.server_port == 65535U);
 
     tx = expect_prepared("FIP,backup.example,1", &live, &spy,
-                         F39_EFFECT_NETWORK_RECONNECT);
+                         F39_EFFECT_NETWORK_RECONNECT |
+                         F39_EFFECT_BACKUP_AUTH_RESET);
     assert(strcmp(tx.candidate.backup_ip, "backup.example") == 0);
     assert(tx.candidate.backup_port == 1U);
     tx = expect_prepared("FIP,0", &live, &spy,
-                         F39_EFFECT_NETWORK_RECONNECT);
+                         F39_EFFECT_NETWORK_RECONNECT |
+                         F39_EFFECT_BACKUP_AUTH_RESET);
     assert(tx.candidate.backup_ip[0] == '\0' && tx.candidate.backup_port == 0U);
 
     tx = expect_prepared("FREQ,1,65535", &live, &spy,
                          F39_EFFECT_TIMER_REFRESH);
     assert(tx.candidate.report_moving_s == 1U);
     assert(tx.candidate.report_stopped_s == 65535U);
+    assert(tx.candidate.sleep_report_mode == 0U);
     tx = expect_prepared("FREQ,300,5", &live, &spy,
                          F39_EFFECT_TIMER_REFRESH);
     assert(tx.candidate.report_moving_s == 300U && tx.candidate.report_stopped_s == 5U);
     tx = expect_prepared("IP,edge,1", &live, &spy,
-                         F39_EFFECT_NETWORK_RECONNECT);
+                         F39_EFFECT_NETWORK_RECONNECT |
+                         F39_EFFECT_MAIN_AUTH_RESET);
     assert(tx.candidate.server_port == 1U);
     tx = expect_prepared("HBT,30", &live, &spy, F39_EFFECT_TIMER_REFRESH);
     assert(tx.candidate.heartbeat_s == 30U);
@@ -150,32 +156,32 @@ static void test_valid_mapping_and_effects(void)
     assert(tx.candidate.speed_limit_kmh == 200U);
 
     tx = expect_prepared("APN,cmnet,user,password", &live, &spy,
-                         F39_EFFECT_NETWORK_RECONNECT);
+                         F39_EFFECT_MODEM_PDP_RESTART);
     assert(tx.candidate.autoapn_en == 0U);
     assert(strcmp(tx.candidate.apn, "cmnet") == 0);
     assert(strcmp(tx.candidate.apn_user, "user") == 0);
     assert(strcmp(tx.candidate.apn_pass, "password") == 0);
     tx = expect_prepared("APN,AUTO", &live, &spy,
-                         F39_EFFECT_NETWORK_RECONNECT);
+                         F39_EFFECT_MODEM_PDP_RESTART);
     assert(tx.candidate.autoapn_en == 1U);
     assert(tx.candidate.apn[0] == '\0' && tx.candidate.apn_user[0] == '\0' &&
            tx.candidate.apn_pass[0] == '\0');
     tx = expect_prepared("APN,0", &live, &spy,
-                         F39_EFFECT_NETWORK_RECONNECT);
+                         F39_EFFECT_MODEM_PDP_RESTART);
     assert(tx.candidate.autoapn_en == 1U);
 
-    tx = expect_prepared("GPSDUP,0", &live, &spy, F39_EFFECT_NONE);
+    tx = expect_prepared("GPSDUP,0", &live, &spy, F39_EFFECT_TIMER_REFRESH);
     assert(tx.candidate.sleep_report_mode == 1U);
-    tx = expect_prepared("GPSDUP,1", &live, &spy, F39_EFFECT_NONE);
+    tx = expect_prepared("GPSDUP,1", &live, &spy, F39_EFFECT_TIMER_REFRESH);
     assert(tx.candidate.sleep_report_mode == 0U);
     tx = expect_prepared("MLG,42949672", &live, &spy, F39_EFFECT_NONE);
     assert(tx.candidate.mileage_m == 4294967200UL);
 
-    tx = expect_prepared("CAR,01B12345", &live, &spy, F39_EFFECT_NONE);
+    tx = expect_prepared("CAR,01B12345", &live, &spy, F39_EFFECT_JT808_REREGISTER);
     assert(strcmp(tx.candidate.plate_no, "\xe4\xba\xac" "B12345") == 0);
-    tx = expect_prepared("CAR,39A1", &live, &spy, F39_EFFECT_NONE);
+    tx = expect_prepared("CAR,39A1", &live, &spy, F39_EFFECT_JT808_REREGISTER);
     assert(strcmp(tx.candidate.plate_no, "\xe5\x8f\xb0" "A1") == 0);
-    tx = expect_prepared("CAR,ABC123", &live, &spy, F39_EFFECT_NONE);
+    tx = expect_prepared("CAR,ABC123", &live, &spy, F39_EFFECT_JT808_REREGISTER);
     assert(strcmp(tx.candidate.plate_no, "ABC123") == 0);
 
     tx = expect_prepared("GPSBDS,1", &live, &spy, F39_EFFECT_GNSS_REFRESH);
@@ -192,6 +198,13 @@ static void test_valid_mapping_and_effects(void)
                          F39_EFFECT_JT808_REREGISTER |
                          F39_EFFECT_REMAINING_REFRESH);
     assert(strcmp(tx.candidate.pid, "01234567890") == 0);
+
+    tx = expect_prepared("FKEY,1234567890ABCDEF", &live, &spy,
+                         F39_EFFECT_FOTA_RECHECK);
+    assert(strcmp(tx.candidate.device_api_key, "1234567890ABCDEF") == 0);
+    tx = expect_prepared("FKEY,1234567890123456789012345678901", &live, &spy,
+                         F39_EFFECT_FOTA_RECHECK);
+    assert(strlen(tx.candidate.device_api_key) == 31U);
 }
 
 static void test_boundaries_and_invalid_inputs_are_atomic(void)
@@ -203,13 +216,16 @@ static void test_boundaries_and_invalid_inputs_are_atomic(void)
         "FREQ,0,5", "FREQ,301,5", "FREQ,1,4", "FREQ,1,65536",
         "HBT,29", "HBT,3601", "MODEL", "MODEL,abc def",
         "MODEL,ABCDEFGHIJKLMNOPQRSTU", "SPEED,19", "SPEED,201",
-        "APN", "APN,AUTO,user", "APN,0,user",
+        "APN", "APN,AUTO,user", "APN,0,user", "APN,bad\"apn",
         "APN,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "APN,a,b,c,d",
         "GPSDUP,2", "MLG,-1", "MLG,42949673", "MLG,1x",
         "CAR,00A1", "CAR,40A1", "CAR,01ABCDEFGHIJKLM",
         "GPSBDS,0", "GPSBDS,4", "GMTSET,E1260", "GMTSET,E1300",
         "GMTSET,X0800", "GMTSET,E800", "PID,1234567890",
-        "PID,123456789012", "PID,1234567890A", "PID"
+        "PID,123456789012", "PID,1234567890A", "PID",
+        "FKEY,1234567890ABCDE",
+        "FKEY,12345678901234567890123456789012",
+        "FKEY,1234567\x1f" "89012345", "FKEY,a,b"
     };
     size_t i;
     for (i = 0U; i < sizeof(invalid) / sizeof(invalid[0]); ++i) {
@@ -240,13 +256,14 @@ static void test_valid_capacity_boundaries_and_all_provinces(void)
     strcpy(text, "IP,");
     memset(text + 3, 'h', 63U);
     strcpy(text + 66, ",1");
-    tx = expect_prepared(text, &live, &spy, F39_EFFECT_NETWORK_RECONNECT);
+    tx = expect_prepared(text, &live, &spy, F39_EFFECT_NETWORK_RECONNECT |
+                         F39_EFFECT_MAIN_AUTH_RESET);
     assert(strlen(tx.candidate.server_ip) == 63U);
 
     strcpy(text, "APN,");
     memset(text + 4, 'a', 31U);
     text[35] = '\0';
-    tx = expect_prepared(text, &live, &spy, F39_EFFECT_NETWORK_RECONNECT);
+    tx = expect_prepared(text, &live, &spy, F39_EFFECT_MODEM_PDP_RESTART);
     assert(strlen(tx.candidate.apn) == 31U);
 
     strcpy(text, "APN,a,");
@@ -254,7 +271,7 @@ static void test_valid_capacity_boundaries_and_all_provinces(void)
     text[37] = ',';
     memset(text + 38, 'p', 31U);
     text[69] = '\0';
-    tx = expect_prepared(text, &live, &spy, F39_EFFECT_NETWORK_RECONNECT);
+    tx = expect_prepared(text, &live, &spy, F39_EFFECT_MODEM_PDP_RESTART);
     assert(strlen(tx.candidate.apn_user) == 31U);
     assert(strlen(tx.candidate.apn_pass) == 31U);
 
@@ -265,7 +282,7 @@ static void test_valid_capacity_boundaries_and_all_provinces(void)
 
     for (code = 1U; code <= 39U; ++code) {
         (void)sprintf(text, "CAR,%02uA", code);
-        tx = expect_prepared(text, &live, &spy, F39_EFFECT_NONE);
+        tx = expect_prepared(text, &live, &spy, F39_EFFECT_JT808_REREGISTER);
         assert(strncmp(tx.candidate.plate_no, provinces[code],
                        strlen(provinces[code])) == 0);
         assert(strcmp(tx.candidate.plate_no + strlen(provinces[code]), "A") == 0);
@@ -291,10 +308,21 @@ static void test_commit_boundary_and_failure(void)
     spy.calls = 0U;
     spy.result = false;
     tx = expect_prepared("IP,new.example,9000", &live, &spy,
-                         F39_EFFECT_NETWORK_RECONNECT);
+                         F39_EFFECT_NETWORK_RECONNECT |
+                         F39_EFFECT_MAIN_AUTH_RESET);
     assert(f39_commit_config(&tx) == F39_RESULT_INVALID);
     assert(spy.calls == 1U);
     assert(memcmp(&live, &before, sizeof(live)) == 0);
+
+    live = before;
+    spy.calls = 0U;
+    spy.result = false;
+    tx = expect_prepared("FKEY,1234567890ABCDEF", &live, &spy,
+                         F39_EFFECT_FOTA_RECHECK);
+    assert(f39_commit_config(&tx) == F39_RESULT_INVALID);
+    assert(spy.calls == 1U);
+    assert(memcmp(&live, &before, sizeof(live)) == 0);
+    assert(live.device_api_key[0] == '\0');
 }
 
 static void test_null_contracts(void)

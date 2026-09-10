@@ -28,11 +28,13 @@
 #include "syscalls.h"
 #include "log_platform.h"
 #include "cfg_query.h"
+#include "overspeed_policy.h"
 #include "n32l40x.h"
 #include <string.h>
 
 /* ── Terminal info loaded from flash at runtime ───────────────────────────── */
 static jt808_terminal_t s_terminal;
+static overspeed_policy_t s_overspeed_policy;
 static void sms_command_execute(const char *from, const char *text)
 {
     uint16_t len = 0;
@@ -42,6 +44,11 @@ static void sms_command_execute(const char *from, const char *text)
 static void agnss_network_rx(uint8_t ch, const uint8_t *data, uint16_t len)
 {
     (void)gnss_vendor_network_rx(ch, data, len);
+}
+
+void ec800m_wait_service_hook(void)
+{
+    gps_process();
 }
 
 static void early_debug_uart_init(void)
@@ -269,6 +276,22 @@ static void scan_alarms(void)
         work_mode_notify_alarm(ALM_POWER_LOW);
     }
     bat_prev_low = bat_low;
+
+    {
+        const gps_data_t *speed_gps = gps_get_data();
+        uint32_t now_ms = TICK_MS();
+        bool fresh_fix = jt808_location_snapshot_valid(speed_gps, now_ms);
+        if (overspeed_policy_step(&s_overspeed_policy, now_ms,
+                                  work_mode_state() == WORK_MODE_REALTIME,
+                                  fresh_fix, speed_gps->speed_kmh,
+                                  cfg_get()->speed_limit_kmh)) {
+            dbg_printf("[ALARM] overspeed speed_x10=%u limit=%u\r\n",
+                       (unsigned)(speed_gps->speed_kmh * 10.0f),
+                       (unsigned)cfg_get()->speed_limit_kmh);
+            jt808_trigger_alarm(ALM_OVERSPEED);
+            work_mode_notify_alarm(ALM_OVERSPEED);
+        }
+    }
 }
 
 /* ── ACC state-change report de-bounce ───────────────────────────────────────
@@ -291,7 +314,37 @@ static void scan_alarms(void)
 /* Upper bound on how long an ACC wake keeps the CPU out of STOP1 while the
  * PA12 debounce commits.  Four times WORK_MODE_ACC_DEBOUNCE_MS leaves room for
  * a bouncing pin without letting one that never settles hold sleep off. */
-#define ACC_WAKE_HOLD_MS 200U
+#define ACC_WAKE_HOLD_MS 2000U
+
+/* Sleep profile.  A300_STOP1_SLEEP=1 restores the STOP1 deep-sleep path
+ * (microamp floor, ACC detection bounded by the 15 s RTC slice).  The default 0
+ * follows the validated reference profile: shallow WFI with SysTick running,
+ * so the loop re-polls PA12 every 1 ms and ACC commits within ~50 ms.  Override
+ * with EXTRA_CFLAGS=-DA300_STOP1_SLEEP=1. */
+#ifndef A300_STOP1_SLEEP
+#define A300_STOP1_SLEEP 0
+#endif
+
+#if !A300_STOP1_SLEEP
+/* Set by work_mode_process(), consumed at the main-loop tail: true while the
+ * mode manager has nothing to do and no wake window is being held open. */
+static bool s_shallow_sleep_allowed;
+static bool s_shallow_retained_clock_active;
+static uint32_t s_shallow_retained_clock_s;
+
+static void shallow_retained_clock_advance(uint32_t now_s)
+{
+    uint32_t elapsed_s;
+
+    if (!s_shallow_retained_clock_active)
+        return;
+    elapsed_s = now_s - s_shallow_retained_clock_s;
+    if (elapsed_s == 0U)
+        return;
+    gps_advance_last_trusted_seconds(elapsed_s);
+    s_shallow_retained_clock_s = now_s;
+}
+#endif
 
 static bool s_acc_report_valid;      /* an ACC level has been announced */
 static bool s_acc_report_level;      /* the level last announced */
@@ -405,13 +458,8 @@ void work_mode_process(void)
     input.vibration_sample_valid = i2c_accel_vibration_sample_due();
     input.vibration_hit = input.vibration_sample_valid ?
                           i2c_accel_vibration_hit(cfg_get()->vib_sens) : false;
-    /* The PB3 interrupt is the first evidence of a vibration wake. Count the
-     * wake sample itself so the six-second confirmation starts immediately,
-     * rather than waiting for a second I2C sample after WFI returns. */
-    if ((wake & WORK_SLEEP_WAKE_VIBRATION) != 0U) {
-        input.vibration_sample_valid = true;
-        input.vibration_hit = true;
-    }
+    /* The PB3 interrupt only opens a sampling window. It is not itself a
+     * threshold hit and cannot authorize a realtime transition. */
     if ((wake & WORK_SLEEP_WAKE_VIBRATION) != 0U) {
         vibration_wake_samples = 0U;
         vibration_wake_window = true;
@@ -433,7 +481,7 @@ void work_mode_process(void)
         ((uint32_t)(TICK_MS() - vibration_wake_started_ms) < 6000U ||
          (uint32_t)(TICK_MS() - vibration_wake_last_hit_ms) <= 1000U);
     /* Hold off STOP1 until the PA12 debounce has had time to commit.  The
-     * window is generous relative to WORK_MODE_ACC_DEBOUNCE_MS (50 ms) so a
+     * window is generous relative to WORK_MODE_ACC_DEBOUNCE_MS (500 ms) so a
      * bouncing pin still gets a decision, and bounded so a pin that never
      * settles cannot keep the device awake. */
     acc_wake_hold = acc_wake_window &&
@@ -461,7 +509,8 @@ void work_mode_process(void)
     s_work_vibration_hit = input.vibration_hit;
     input.rtc_wake = (wake & WORK_SLEEP_WAKE_RTC) != 0U;
     input.alarm_bits = work_mode_take_alarm();
-    input.gps_valid = gps_get_data()->valid;
+    input.gps_valid = jt808_location_snapshot_valid(gps_get_data(),
+                                                    input.now_ms);
     work_mode_step(&input);
 
     if (work_mode_state() == WORK_MODE_REALTIME &&
@@ -499,11 +548,22 @@ void work_mode_process(void)
             dbg_printf("[WORK] logical_acc=%u applied\r\n", (unsigned)action.acc_on);
             break;
         case WORK_ACTION_GPS_ON:
+#if !A300_STOP1_SLEEP
+            /* SysTick keeps running in shallow sleep. Bring the retained UTC
+             * up to the wake instant before an ACC-ON entry report can fall
+             * back to that position while GNSS is reacquiring. */
+            shallow_retained_clock_advance(now_s);
+            s_shallow_retained_clock_active = false;
+#endif
             gps_enable(true);
             gps_resume_after_wake();
             break;
         case WORK_ACTION_GPS_OFF:
             (void)gps_capture_last_trusted();
+#if !A300_STOP1_SLEEP
+            s_shallow_retained_clock_s = now_s;
+            s_shallow_retained_clock_active = true;
+#endif
             gps_enable(false);
             break;
         case WORK_ACTION_REPORT_ENTRY:
@@ -522,6 +582,11 @@ void work_mode_process(void)
                 acc_report_suppressed(action.acc_on, now_s)) {
                 break;
             }
+#if !A300_STOP1_SLEEP
+            /* Keep configured stationary historical reports current even
+             * though their coordinates remain the last trusted sleep fix. */
+            shallow_retained_clock_advance(now_s);
+#endif
             sent = jt808_send_location_work_mode(action.alarm_bits,
                                                  action.historical_position);
             /* Re-queue a transport failure, but never JT808_SEND_NO_POSITION:
@@ -531,19 +596,28 @@ void work_mode_process(void)
              * else in 1131 lines, because the blocking debug UART then starved
              * the very loop that would have acquired the fix.  The scheduler
              * re-arms this report on the next reporting deadline. */
-            if (sent != 0 && sent != JT808_SEND_NO_POSITION)
+            if (sent != 0 && sent != JT808_SEND_NO_POSITION) {
                 work_mode_retry_action(&action);
+                processed = 8U;
+            }
             break;
         }
         case WORK_ACTION_REPORT_HEARTBEAT:
-            if (jt808_send_heartbeat() != 0)
+            if (jt808_send_heartbeat() != 0) {
                 work_mode_retry_action(&action);
+                processed = 8U;
+            }
             break;
         case WORK_ACTION_ENTER_STOP1:
+#if A300_STOP1_SLEEP
             /* `wake` has already been consumed above.  Passing it again as a
              * pending wake aborts STOP1 admission and can leave the unit in
              * GPS-off SLEEP forever (especially after a vibration wake). */
             work_mode_sleep_process(15000U, WORK_SLEEP_WAKE_NONE);
+#endif
+            /* The shallow profile decides at the main-loop tail, once every
+             * _process() has had its pass, so the action only consumes the
+             * wake here. */
             wake = WORK_SLEEP_WAKE_NONE;
             break;
         default:
@@ -552,15 +626,31 @@ void work_mode_process(void)
     }
 
     /* Release a deferred ACC level once the bounce has settled, before the
-     * STOP1 decision below: a suppressed change must never be lost. */
+     * sleep decision below: a suppressed change must never be lost. */
     acc_report_settle(now_s);
 
+#if A300_STOP1_SLEEP
     if (work_mode_state() == WORK_MODE_STATIONARY_SLEEP &&
         !vibration_wake_hold &&
         !acc_wake_hold &&
         !work_mode_sleep_is_in_stop1()) {
         work_mode_sleep_process(15000U, wake);
     }
+#else
+    /* Publish the decision instead of sleeping here.  work_mode_process() runs
+     * mid-loop, so a WFI at this point would delay every _process() after it;
+     * the validated reference profile sleeps at the loop tail.  The gate is
+     * the same one STOP1 used: no sleep while an ACC or vibration hold is
+     * keeping the debounce window open. */
+    if (work_mode_state() == WORK_MODE_STATIONARY_SLEEP &&
+        !vibration_wake_hold &&
+        !acc_wake_hold) {
+        s_shallow_sleep_allowed = true;
+    } else {
+        s_shallow_sleep_allowed = false;
+    }
+    (void)wake;
+#endif
 }
 
 static void log_hardware_contract(void)
@@ -569,6 +659,16 @@ static void log_hardware_contract(void)
                (unsigned)hw_acc_pin_high(), (unsigned)hw_acc_is_on(),
                (unsigned)work_mode_logical_acc(),
                (unsigned)GPIO_ReadInputDataBit(DA218E_INT1_PORT, DA218E_INT1_PIN));
+}
+
+static void idle_sleep_process(void)
+{
+#if !A300_STOP1_SLEEP
+    /* SysTick wakes shallow WFI every millisecond, so PA12 is polled without
+     * delaying the process functions that run before this loop-tail call. */
+    if (s_shallow_sleep_allowed)
+        work_mode_sleep_shallow();
+#endif
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -604,15 +704,21 @@ int main(void)
     /* ── 3. Flash config ─────────────────────────────────────────────────── */
     spi_flash_init();
     cfg_init();
+    overspeed_policy_init(&s_overspeed_policy);
     blind_zone_init();
     device_config_t *c = cfg_get();
-    dbg_printf("[CFG] server=%s:%u hb=%us plate=%s\r\n",
-               c->server_ip, c->server_port, c->heartbeat_s, c->plate_no);
+    dbg_printf("[CFG] server=%s:%u report=%u/%us effective_stop=%us hb=%us plate=%s\r\n",
+               c->server_ip, c->server_port,
+               (unsigned)c->report_moving_s,
+               (unsigned)c->report_stopped_s,
+               (unsigned)(c->report_stopped_s != 0U ?
+                          c->report_stopped_s :
+                          WORK_MODE_DEFAULT_STOPPED_REPORT_S),
+               (unsigned)c->heartbeat_s, c->plate_no);
 
     /* ── 4. Peripheral drivers ───────────────────────────────────────────── */
     adc_monitor_init();
     geofence_init();
-    fota_init();
     agnss_init(cfg_get()->gnss_type);
     agnss_set_inject_callback(gnss_vendor_inject);
     at_config_init();
@@ -621,9 +727,10 @@ int main(void)
 
     /* ── 5. Build JT808 terminal info from flash config ─────────────────── */
     memset(&s_terminal, 0, sizeof(s_terminal));
-    memcpy(s_terminal.manufacturer_id, "CYHLL", 5);
-    memcpy(s_terminal.terminal_model, FW_MODEL_STR,
-           sizeof(s_terminal.terminal_model) - 1U);
+    memcpy(s_terminal.manufacturer_id, FW_MANUFACTURER_ID_STR, 5U);
+    strncpy(s_terminal.terminal_model,
+            c->terminal_model[0] != '\0' ? c->terminal_model : FW_JT808_MODEL_STR,
+            sizeof(s_terminal.terminal_model) - 1U);
     s_terminal.terminal_model[sizeof(s_terminal.terminal_model) - 1U] = '\0';
     s_terminal.terminal_id[0] = '\0';
     strncpy(s_terminal.plate_no,       c->plate_no,    sizeof(s_terminal.plate_no) - 1);
@@ -638,6 +745,8 @@ int main(void)
 
     /* ── 7. 4G modem ─────────────────────────────────────────────────────── */
     ec800m_init();
+    /* Modem initialization clears channel callbacks; bind OTA afterwards. */
+    fota_init();
     ec800m_register_agnss_recv(agnss_network_rx);
     sms_set_recv_cb(sms_command_execute);
 
@@ -658,6 +767,8 @@ int main(void)
         };
         work_mode_init(&wm_cfg, work_mode_sleep_monotonic_s(),
                        hw_acc_is_on());
+        work_mode_set_stationary_location_enabled(c->sleep_report_mode == 0U,
+                                                  work_mode_sleep_monotonic_s());
     }
 
     dbg_printf("[BOOT] ready\r\n");
@@ -691,5 +802,7 @@ int main(void)
         scan_alarms();
         ntp_resync_process();
         periodic_status_log();
+
+        idle_sleep_process();
     }
 }

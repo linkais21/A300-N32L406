@@ -5,6 +5,7 @@
 #include "debug_uart.h"
 #include "config.h"
 #include "terminal_identity.h"
+#include "jt808_terminal_info.h"
 #include "work_mode.h"
 #include <string.h>
 #include <stdlib.h>
@@ -204,45 +205,16 @@ void jt808_params_handle_query(const uint8_t *body, uint16_t len, uint16_t sn)
 /* ── 0x8107 Terminal info query ───────────────────────────────────────────── */
 void jt808_params_handle_info_query(uint16_t sn)
 {
-    uint8_t body[96];
-    uint16_t pos = 0;
-    char tid[8];
+    uint8_t body[JT808_TERMINAL_INFO_BODY_LENGTH];
+    uint16_t length;
+    jt808_terminal_info_result_t result =
+        jt808_terminal_info_encode(body, sizeof(body), &length);
 
-    if (!terminal_identity_load(tid)) {
+    if (result != JT808_TERMINAL_INFO_OK) {
         jt808_send_general_resp(sn, MSG_QUERY_TERMINAL_INFO, 1U);
-        dbg_printf("[808] 0x8107 identity invalid\r\n");
+        dbg_printf("[808] 0x8107 terminal info unavailable reason=%u\r\n",
+                   (unsigned)result);
         return;
     }
-
-    /* Terminal type flags */
-    body[pos++] = 0x00; body[pos++] = 0x07;  /* passenger + dangerous goods + bus */
-    /* Manufacturer ID (5 bytes) */
-    const char *mfr = "CYHLL";
-    memcpy(body + pos, mfr, 5); pos += 5;
-    /* Terminal model (20 bytes) */
-    char model[20]; memset(model, 0, 20);
-    strncpy(model, FW_MODEL_STR, 19);
-    memcpy(body + pos, model, 20); pos += 20;
-    /* Terminal ID (7 bytes) */
-    memcpy(body + pos, tid, 7); pos += 7;
-    /* ICCID (10 bytes BCD) */
-    memset(body + pos, 0, 10); pos += 10;
-    /* HW version length + bytes (no separate hardware version configured). */
-    body[pos++] = 0U;
-    /* FW version length + complete release version. */
-    size_t fwv_len = strlen(FW_VERSION_STR);
-    if (fwv_len > 255U || pos + 1U + fwv_len + 2U > sizeof(body)) {
-        jt808_send_general_resp(sn, MSG_QUERY_TERMINAL_INFO, 1U);
-        return;
-    }
-    body[pos++] = (uint8_t)fwv_len;
-    memcpy(body + pos, FW_VERSION_STR, fwv_len); pos += (uint16_t)fwv_len;
-    /* GNSS properties: BDS+GPS+GLONASS */
-    body[pos++] = 0x07;
-    /* Communication properties: LTE */
-    body[pos++] = 0x04;
-
-    extern int jt808_send_raw(uint16_t msg_id, uint16_t resp_sn,
-                              const uint8_t *body, uint16_t blen);
-    jt808_send_raw(0x0107, sn, body, pos);
+    jt808_send_raw(0x0107U, sn, body, length);
 }

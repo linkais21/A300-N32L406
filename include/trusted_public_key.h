@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #define TRUSTED_KEY_LABEL "DEV-KEY"
+#define TRUSTED_SIGNING_KEY_ID 1UL
 #define TRUSTED_PUBLIC_KEY_SIZE 64U
 
 static const uint8_t trusted_public_key[TRUSTED_PUBLIC_KEY_SIZE] = {

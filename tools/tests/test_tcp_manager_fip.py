@@ -21,6 +21,7 @@ HARNESS = r'''
 #include "tcp_manager.h"
 #include "flash_config.h"
 #include "fota.h"
+#include "config.h"
 
 volatile uint32_t g_tick_ms;
 static device_config_t config;
@@ -33,9 +34,12 @@ static char log_text[1024];
 static size_t log_length;
 static char stub_imei[16] = "123456789012345";
 static char stub_iccid[22] = "89860012345678901234";
+static fota_state_t ota_state;
+static tcp_state_t channel_state[EC800M_CH_MAX];
+static bool modem_ready = true;
 
 device_config_t *cfg_get(void) { return &config; }
-bool ec800m_is_ready(void) { return true; }
+bool ec800m_is_ready(void) { return modem_ready; }
 int ec800m_tcp_open(uint8_t channel, const char *ip, uint16_t port)
 {
     ++open_calls;
@@ -47,7 +51,7 @@ int ec800m_tcp_open(uint8_t channel, const char *ip, uint16_t port)
 }
 void ec800m_tcp_close(uint8_t channel) { (void)channel; ++close_calls; }
 tcp_state_t ec800m_tcp_state(uint8_t channel)
-{ (void)channel; return TCP_STATE_OPENING; }
+{ return channel_state[channel]; }
 void ec800m_get_imei(char *buf, uint8_t size) { snprintf(buf,size,"%s",stub_imei); }
 void ec800m_get_iccid(char *buf, uint8_t size) { snprintf(buf,size,"%s",stub_iccid); }
 int dbg_printf(const char *format, ...) {
@@ -56,7 +60,7 @@ int dbg_printf(const char *format, ...) {
     if(n>0 && (size_t)n<sizeof(log_text)-log_length)log_length+=(size_t)n;
     return n;
 }
-fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
+fota_state_t fota_get_state(void) { return ota_state; }
 
 static void reset_endpoint(const char *backup, uint16_t port)
 {
@@ -70,12 +74,109 @@ static void reset_endpoint(const char *backup, uint16_t port)
     last_ip[0] = '\0';
     last_port = 0U;
     log_length = 0U; log_text[0] = '\0';
+    modem_ready = true;
+    for (unsigned i = 0U; i < EC800M_CH_MAX; ++i)
+        channel_state[i] = TCP_STATE_OPENING;
     tcp_manager_init();
     tcp_manager_process();
 }
 
+static void check_ota_connection_ownership(fota_state_t active)
+{
+    /* A check/download owns modem control even before CH0/CH3 connect. */
+    ota_state = active;
+    reset_endpoint("backup.example", 7018U);
+    assert(open_calls == 0U && close_calls == 0U);
+    g_tick_ms += 60000U;
+    tcp_manager_process();
+    assert(open_calls == 0U && close_calls == 0U);
+    ota_state = FOTA_STATE_IDLE;
+    tcp_manager_process();
+    assert(open_calls == 2U);
+
+    /* A connect timeout may expire during OTA, but must not issue QICLOSE. */
+    ota_state = active;
+    g_tick_ms += 60000U;
+    tcp_manager_process();
+    assert(open_calls == 2U && close_calls == 0U);
+    ota_state = FOTA_STATE_ERROR;
+    tcp_manager_process();
+    assert(close_calls == 2U);
+    ota_state = active;
+    g_tick_ms += 60000U;
+    tcp_manager_process();
+    assert(open_calls == 2U && close_calls == 2U);
+    ota_state = FOTA_STATE_IDLE;
+    tcp_manager_process();
+    assert(open_calls == 4U);
+
+    channel_state[TCP_CH_MAIN] = TCP_STATE_OPEN;
+    channel_state[TCP_CH_BACKUP] = TCP_STATE_OPEN;
+    tcp_manager_process();
+    assert(tcp_manager_ch_online(TCP_CH_MAIN));
+    assert(tcp_manager_ch_online(TCP_CH_BACKUP));
+    assert(tcp_manager_session_generation(TCP_CH_MAIN) == 1U);
+    assert(tcp_manager_session_generation(TCP_CH_BACKUP) == 1U);
+    ota_state = active;
+    tcp_manager_process();
+    /* JT808 consumes these online/generation values for send and session sync. */
+    assert(tcp_manager_is_online());
+    assert(tcp_manager_ch_online(TCP_CH_MAIN));
+    assert(tcp_manager_ch_online(TCP_CH_BACKUP));
+    assert(tcp_manager_session_generation(TCP_CH_MAIN) == 1U);
+    assert(tcp_manager_session_generation(TCP_CH_BACKUP) == 1U);
+
+    /* Configuration-triggered reconnect is retained and coalesced until release. */
+    tcp_manager_reconnect();
+    tcp_manager_reconnect();
+    tcp_manager_process();
+    assert(open_calls == 4U && close_calls == 2U);
+    assert(tcp_manager_ch_online(TCP_CH_MAIN));
+    assert(tcp_manager_ch_online(TCP_CH_BACKUP));
+    assert(tcp_manager_session_generation(TCP_CH_MAIN) == 1U);
+    assert(tcp_manager_session_generation(TCP_CH_BACKUP) == 1U);
+    strcpy(config.server_ip, "new-main.example");
+    ota_state = FOTA_STATE_IDLE;
+    tcp_manager_process();
+    assert(open_calls == 6U && close_calls == 4U);
+    tcp_manager_process();
+    assert(open_calls == 6U && close_calls == 4U);
+
+    /* A live link drop and modem outage must not start recovery under OTA. */
+    tcp_manager_process();
+    ota_state = active;
+    channel_state[TCP_CH_MAIN] = TCP_STATE_ERROR;
+    channel_state[TCP_CH_BACKUP] = TCP_STATE_ERROR;
+    modem_ready = false;
+    tcp_manager_process();
+    assert(open_calls == 6U && close_calls == 4U);
+    ota_state = FOTA_STATE_ERROR;
+    tcp_manager_process();
+    assert(close_calls == 6U);
+    assert(!tcp_manager_is_online());
+}
+
 int main(void)
 {
+    static const fota_state_t active[] = {
+        FOTA_STATE_CHECK_CONNECTING, FOTA_STATE_CHECKING,
+        FOTA_STATE_PREPARING, FOTA_STATE_CONNECTING,
+        FOTA_STATE_DOWNLOADING, FOTA_STATE_VERIFYING, FOTA_STATE_READY
+    };
+    size_t i;
+    /* READY still owns the OTA operation until the reset completes. */
+    ota_state = FOTA_STATE_READY;
+    assert(tcp_manager_ota_active());
+    ota_state = FOTA_STATE_IDLE;
+    assert(!tcp_manager_ota_active());
+    ota_state = FOTA_STATE_ERROR;
+    assert(!tcp_manager_ota_active());
+    for (i = 0U; i < sizeof active / sizeof active[0]; ++i) {
+        ota_state = active[i];
+        assert(tcp_manager_ota_active());
+    }
+    ota_state = FOTA_STATE_IDLE;
+
     reset_endpoint("", 7018U);
     assert(open_calls == 1U);
     assert(strstr(log_text,"[BOOT-ID] IMEI=123456789012345 PID=56789012345 ICCID=89860012345678901234\r\n")!=NULL);
@@ -109,6 +210,9 @@ int main(void)
     assert(open_calls == 2U);
     assert(last_channel == EC800M_CH_BACKUP);
     assert(strcmp(last_ip, "0.example") == 0 && last_port == 7018U);
+
+    for (i = 0U; i < sizeof active / sizeof active[0]; ++i)
+        check_ota_connection_ownership(active[i]);
     return 0;
 }
 '''

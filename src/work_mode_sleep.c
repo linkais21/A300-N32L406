@@ -27,6 +27,15 @@
  * reporting period instead of one per slice. */
 #define STOP1_HISTORICAL_LOG_SLICES 12U
 
+/* Must match the switch in main.c. Printed once at boot below so a field log
+ * unambiguously shows which sleep profile the running binary was built with,
+ * instead of relying on the build-date banner (a static macro that a plain
+ * rebuild does not regenerate) or on a log line that only fires after a
+ * STOP1 episode has actually happened. */
+#ifndef A300_STOP1_SLEEP
+#define A300_STOP1_SLEEP 0
+#endif
+
 static volatile work_sleep_wake_t s_wake;
 static bool s_ready;
 static bool s_in_stop1;
@@ -186,7 +195,9 @@ static const char *stop1_admission_block_reason(void)
         if (ec800m_tcp_state(ch) == TCP_STATE_OPENING) return "TCP";
     if (!ext_flash_try_lock_now(EXT_FLASH_OWNER_CONFIG)) return "FLASH";
     ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
-    if (fota == FOTA_STATE_CONNECTING || fota == FOTA_STATE_DOWNLOADING ||
+    if (fota == FOTA_STATE_CHECK_CONNECTING || fota == FOTA_STATE_CHECKING ||
+        fota == FOTA_STATE_PREPARING ||
+        fota == FOTA_STATE_CONNECTING || fota == FOTA_STATE_DOWNLOADING ||
         fota == FOTA_STATE_VERIFYING || fota == FOTA_STATE_READY) return "FOTA";
     if (blind_zone_replay_busy()) return "BLIND_REPLAY";
     return 0;
@@ -321,6 +332,7 @@ void work_mode_sleep_init(void)
     s_accel_level_wake_latched = false;
     s_acc_on_at_wake = false;
     s_ready = true;
+    dbg_printf("[SLEEP] profile=%s\r\n", A300_STOP1_SLEEP ? "stop1" : "shallow");
 }
 
 bool work_mode_sleep_ready(void) { return s_ready; }
@@ -350,6 +362,42 @@ bool work_mode_sleep_is_in_stop1(void) { return s_in_stop1; }
 uint32_t work_mode_sleep_monotonic_s(void)
 {
     return (TICK_MS() / 1000U) + s_sleep_seconds;
+}
+
+void work_mode_sleep_shallow(void)
+{
+    if (!s_ready) return;
+    IWDG_ReloadKey();
+    /* The default shallow profile bypasses STOP1 admission. Keep OTA's
+     * modem/flash work awake, including the READY-to-reset interval, and do
+     * not issue QSCLK teardown while that operation owns modem control. */
+    if (tcp_manager_ota_active()) return;
+    /* One-shot teardown of any STOP1 residue: an earlier deep-sleep episode
+     * may have left the RTC alarm armed and the modem in QSCLK. Neither is
+     * wanted here -- the modem must stay awake so a downlink (0x8103 and
+     * friends) is serviced on the next main-loop pass, not on a slice
+     * boundary. */
+    if (s_stop1_log_active) {
+        rtc_alarm_clear();
+        ec800m_sleep_disable();
+        s_stop1_log_active = false;
+        s_stop1_slice_count = 0U;
+        dbg_printf("[SLEEP] shallow window active (STOP1 disarmed)\r\n");
+    }
+    /* s_in_stop1 stays false: the device is reachable on every tick, so
+     * log_platform/cfg_query must not treat this as deep sleep.
+     *
+     * s_wake is deliberately left alone. work_mode_process() consumes it via
+     * work_mode_sleep_take_wake() before this runs, and clearing it again here
+     * would drop an edge that landed in between. A still-pending interrupt
+     * simply makes WFI fall through immediately, which is the wanted
+     * behaviour. */
+    /* Teardown above may consume a substantial portion of the watchdog
+     * window; refresh immediately before entering WFI as well as on return. */
+    IWDG_ReloadKey();
+    __DSB();
+    PWR_EnterSLEEPMode(0U, PWR_STOPENTRY_WFI);
+    IWDG_ReloadKey();
 }
 
 void work_mode_sleep_process(uint32_t next_service_ms, work_sleep_wake_t pending_wake)

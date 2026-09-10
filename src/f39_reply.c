@@ -79,8 +79,7 @@ static bool operation_name(f39_operation_t operation, const char **name)
     static const char *const names[] = {
         "", "PARAM", "DUALSET", "RESET", "PID", "IP", "FIP", "FREQ",
         "HBT", "MODEL", "SPEED", "APN", "RELAY", "GPSDUP", "MLG",
-        "CAR", "GPSBDS", "GMTSET", "VIBSENS"
-        , "FOTA", "LOG"
+        "CAR", "GPSBDS", "GMTSET", "VIBSENS", "FKEY", "FOTA", "LOG"
     };
     if (name == NULL || operation <= F39_OPERATION_INVALID ||
         operation > F39_OPERATION_LOG) {
@@ -95,8 +94,22 @@ static void apply_effects(uint32_t effects, f39_platform_t *p)
     if ((effects & F39_EFFECT_TIMER_REFRESH) != 0U && p->timer_refresh != NULL) {
         p->timer_refresh(p->context);
     }
+    if ((effects & (F39_EFFECT_MAIN_AUTH_RESET |
+                    F39_EFFECT_BACKUP_AUTH_RESET)) != 0U &&
+        p->jt808_auth_reset != NULL) {
+        uint8_t channel_mask = 0U;
+        if ((effects & F39_EFFECT_MAIN_AUTH_RESET) != 0U)
+            channel_mask |= F39_AUTH_CHANNEL_MAIN;
+        if ((effects & F39_EFFECT_BACKUP_AUTH_RESET) != 0U)
+            channel_mask |= F39_AUTH_CHANNEL_BACKUP;
+        p->jt808_auth_reset(channel_mask, p->context);
+    }
     if ((effects & F39_EFFECT_NETWORK_RECONNECT) != 0U && p->network_reconnect != NULL) {
         p->network_reconnect(p->context);
+    }
+    if ((effects & F39_EFFECT_MODEM_PDP_RESTART) != 0U &&
+        p->modem_pdp_restart != NULL) {
+        p->modem_pdp_restart(p->context);
     }
     if ((effects & F39_EFFECT_GNSS_REFRESH) != 0U && p->gnss_set_mode != NULL &&
         p->config != NULL) {
@@ -107,6 +120,9 @@ static void apply_effects(uint32_t effects, f39_platform_t *p)
     }
     if ((effects & F39_EFFECT_REMAINING_REFRESH) != 0U && p->remaining_refresh != NULL) {
         p->remaining_refresh(p->context);
+    }
+    if ((effects & F39_EFFECT_FOTA_RECHECK) != 0U && p->fota_recheck != NULL) {
+        p->fota_recheck(p->context);
     }
 }
 
@@ -130,7 +146,8 @@ static bool valid_config_text(const device_config_t *c)
            config_string(c->server_ip, CFG_IP_LEN) &&
            config_string(c->backup_ip, CFG_IP_LEN) &&
            config_string(c->apn, CFG_APN_LEN) &&
-           config_string(c->plate_no, CFG_PLATE_LEN);
+           config_string(c->plate_no, CFG_PLATE_LEN) &&
+           config_string(c->device_api_key, CFG_DEVICE_API_KEY_LEN);
 }
 
 static bool device_id(const device_config_t *c, const f39_platform_t *p,
@@ -147,9 +164,14 @@ static bool effects_ready(uint32_t effects, const f39_platform_t *p)
 {
     if ((effects & F39_EFFECT_TIMER_REFRESH) != 0U && p->timer_refresh == NULL) return false;
     if ((effects & F39_EFFECT_NETWORK_RECONNECT) != 0U && p->network_reconnect == NULL) return false;
+    if ((effects & (F39_EFFECT_MAIN_AUTH_RESET |
+                    F39_EFFECT_BACKUP_AUTH_RESET)) != 0U &&
+        p->jt808_auth_reset == NULL) return false;
+    if ((effects & F39_EFFECT_MODEM_PDP_RESTART) != 0U && p->modem_pdp_restart == NULL) return false;
     if ((effects & F39_EFFECT_GNSS_REFRESH) != 0U && p->gnss_set_mode == NULL) return false;
     if ((effects & F39_EFFECT_JT808_REREGISTER) != 0U && p->jt808_reregister == NULL) return false;
     if ((effects & F39_EFFECT_REMAINING_REFRESH) != 0U && p->remaining_refresh == NULL) return false;
+    if ((effects & F39_EFFECT_FOTA_RECHECK) != 0U && p->fota_recheck == NULL) return false;
     return true;
 }
 
@@ -245,6 +267,11 @@ static f39_result_t query(const f39_request_t *r, f39_platform_t *p,
                             (unsigned)c->report_stopped_s) ? F39_RESULT_OK : failure(out,name,"reply-too-long");
     case F39_OPERATION_HBT:
         reply_clear(out); return reply_append(out,"HBT,%u=Success!\r\n",(unsigned)c->heartbeat_s)?F39_RESULT_OK:failure(out,name,"reply-too-long");
+    case F39_OPERATION_FKEY:
+        reply_clear(out);
+        return reply_append(out, "FKEY,CONFIGURED=%u\r\n",
+                            c->device_api_key[0] == '\0' ? 0U : 1U) ?
+               F39_RESULT_OK : failure(out, name, "reply-too-long");
     case F39_OPERATION_FOTA:
         reply_clear(out); return reply_append(out, "FOTA,STATUS=IDLE\r\n") ? F39_RESULT_OK : failure(out, name, "reply-too-long");
     case F39_OPERATION_LOG:
@@ -334,5 +361,8 @@ f39_result_t f39_execute(const f39_request_t *request,
         return failure(reply,name,"config");
     }
     apply_effects(tx.effects, platform);
+    if (request->operation == F39_OPERATION_FKEY) {
+        return query(request, platform, reply);
+    }
     return success(reply,name);
 }

@@ -5,12 +5,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define SERVICE_WORKSPACE_CAPACITY 512U
+#define SERVICE_WORKSPACE_CAPACITY 1024U
 
 typedef enum {
     SERVICE_WORKSPACE_OWNER_NONE = 0,
     SERVICE_WORKSPACE_OWNER_OTA,
-    SERVICE_WORKSPACE_OWNER_DIAGNOSTIC
+    SERVICE_WORKSPACE_OWNER_DIAGNOSTIC,
+    SERVICE_WORKSPACE_OWNER_AGNSS
 } service_workspace_owner_t;
 
 bool service_workspace_try_acquire(service_workspace_owner_t owner);

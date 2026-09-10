@@ -4,8 +4,10 @@
 #include "n32l40x.h"
 
 /* ── Firmware version ─────────────────────────────────────────────────────── */
-#define FW_VERSION_STR   "T360-A300_406_20260823000000,V3.000"
-#define FW_MODEL_STR     "A300_406"
+#define FW_VERSION_STR          "T360-A300_406_20260823000000,V3.002"
+#define FW_OTA_MODEL_STR        "A300-406"
+#define FW_JT808_MODEL_STR      "T360-A300"
+#define FW_MANUFACTURER_ID_STR  "70110"
 
 /* ── System clock ─────────────────────────────────────────────────────────── */
 #define SYS_CLOCK_HZ     64000000UL   /* SYSCLK = 64 MHz (HSI PLL, SDK-supported) */

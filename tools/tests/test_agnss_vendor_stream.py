@@ -51,7 +51,7 @@ bool ec800m_is_ready(void); tcp_state_t ec800m_tcp_state(uint8_t); int ec800m_tc
 """,
         "fota.h": """#ifndef FOTA_H
 #define FOTA_H
-typedef enum { FOTA_STATE_IDLE=0, FOTA_STATE_CONNECTING, FOTA_STATE_DOWNLOADING, FOTA_STATE_VERIFYING } fota_state_t;
+typedef enum { FOTA_STATE_IDLE=0, FOTA_STATE_CONNECTING, FOTA_STATE_DOWNLOADING, FOTA_STATE_VERIFYING, FOTA_STATE_READY, FOTA_STATE_ERROR, FOTA_STATE_CHECK_CONNECTING, FOTA_STATE_CHECKING, FOTA_STATE_PREPARING } fota_state_t;
 fota_state_t fota_get_state(void);
 #endif
 """,
@@ -89,7 +89,8 @@ int gps_send_raw(const uint8_t *p, uint32_t n) {
     ++gps_calls; gps_bytes += n; return fail_uart ? -1 : 0;
 }
 const gps_data_t *gps_get_data(void) { return &g; }
-fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
+static fota_state_t ota_state=FOTA_STATE_IDLE;
+fota_state_t fota_get_state(void) { return ota_state; }
 bool ec800m_is_ready(void) { return true; }
 tcp_state_t ec800m_tcp_state(uint8_t ch) { (void)ch; return TCP_STATE_OPEN; }
 int ec800m_tcp_send(uint8_t ch, const uint8_t *p, uint16_t n) { (void)ch; (void)p; (void)n; return 0; }
@@ -132,6 +133,13 @@ static uint16_t make_csip(uint8_t *frame, uint8_t cls, uint8_t id,
 int main(void) {
     uint8_t valid[8], oversized[8] = {0xf1, 0xd9, 0x0b, 0x10, 0xff, 0xff, 0, 0};
     make_huada_zero(valid);
+    { const fota_state_t active[]={FOTA_STATE_CONNECTING,FOTA_STATE_DOWNLOADING,FOTA_STATE_VERIFYING,FOTA_STATE_READY,FOTA_STATE_CHECK_CONNECTING,FOTA_STATE_CHECKING,FOTA_STATE_PREPARING};
+      gnss_vendor_set_type(GNSS_TYPE_TAU804M);
+      for(unsigned i=0;i<sizeof active/sizeof active[0];i++){
+        ota_state=active[i];assert(!gnss_vendor_network_rx(EC800M_CH_AGPS,valid,sizeof valid));assert(gps_calls==0);
+      }
+      ota_state=FOTA_STATE_IDLE;
+    }
     fail_uart = 1;
     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) < 0);
     assert(gps_calls == 1);
@@ -145,6 +153,7 @@ int main(void) {
     assert(gps_calls == 3);
     assert(agnss_huada_inject(&(agnss_source_t){valid + 3, 5}, &(gps_context_t){0}) == 0);
     assert(gps_calls == 4);
+    assert(agnss_huada_inject(NULL, &(gps_context_t){0}) == 0);
 
     {
       static const uint8_t payload_a[20] = {
@@ -251,7 +260,13 @@ def test_c_harness():
         _write_harness_headers(directory)
         _write_harness(directory)
         output = directory / "harness.exe"
-        build = subprocess.run([compiler, "-std=c99", "-I", str(directory), "-I", str(ROOT / "src"), str(directory / "harness.c"), "-o", str(output), "-lm"], cwd=ROOT, capture_output=True, text=True)
+        build = subprocess.run([
+            compiler, "-std=c99", "-I", str(directory),
+            "-I", str(ROOT / "include"), "-I", str(ROOT / "src"),
+            str(directory / "harness.c"),
+            str(ROOT / "src" / "agnss_stream_workspace.c"),
+            "-o", str(output), "-lm"
+        ], cwd=ROOT, capture_output=True, text=True)
         if build.returncode:
             raise AssertionError("C harness compile failed:\n" + build.stderr)
         run = subprocess.run([str(output)], cwd=ROOT, capture_output=True, text=True)

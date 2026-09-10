@@ -34,6 +34,7 @@
 #define LOC_FLAG_SOUTH_LAT  (1u << 3)   /* 0=North(默认), 1=South */
 #define LOC_FLAG_OPERATING  (1u << 4)
 #define LOC_FLAG_ENCRYPTED  (1u << 5)
+#define LOC_FLAG_BEIDOU_FIXED (1u << 19)
 
 /* Alarm flags */
 #define ALM_EMERGENCY_SOS   (1u << 0)
@@ -49,10 +50,10 @@ typedef struct {
     char province_id[3];    /* 2-byte BCD */
     char city_id[3];
     char manufacturer_id[6]; /* 5 bytes */
-    char terminal_model[9];  /* 8 bytes */
+    char terminal_model[21]; /* JT808-2013: up to 20 bytes */
     char terminal_id[8];     /* 7 bytes */
     uint8_t color;
-    char plate_no[13];       /* license plate */
+    char plate_no[16];       /* matches CFG_PLATE_LEN */
     char phone[12];          /* MSISDN */
     char auth_code[32];
 } jt808_terminal_t;
@@ -66,6 +67,10 @@ void jt808_on_recv(uint8_t ch, const uint8_t *data, uint16_t len);
 /* Build and send messages */
 int jt808_send_register_to(uint8_t channel);
 void jt808_request_reregister(void);
+#define JT808_ENDPOINT_MAIN_MASK   (1U << 0)
+#define JT808_ENDPOINT_BACKUP_MASK (1U << 1)
+void jt808_reset_endpoint_auth(uint8_t channel_mask);
+void jt808_set_terminal_profile(const char *model, const char *plate);
 int jt808_send_auth_to(uint8_t channel, const char *code);
 int jt808_send_heartbeat(void);
 void jt808_set_logical_acc(bool on);

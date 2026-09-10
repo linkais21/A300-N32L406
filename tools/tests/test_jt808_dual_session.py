@@ -20,6 +20,8 @@ HARNESS = r'''
 #include "blind_zone.h"
 #include "tcp_manager.h"
 #include "jt808_session.h"
+#include "jt808_terminal_info.h"
+#include "work_mode.h"
 
 volatile uint32_t g_tick_ms;
 static device_config_t cfg;
@@ -37,6 +39,9 @@ static bool ambiguous_send[4];
 static bool s_last_ambiguous;
 static bool reenter_send;
 static int reenter_result;
+static work_mode_state_t work_state = WORK_MODE_REALTIME;
+static jt808_terminal_info_result_t terminal_info_result =
+    JT808_TERMINAL_INFO_INVALID_ICCID;
 
 device_config_t *cfg_get(void) { return &cfg; }
 bool cfg_store_candidate(const device_config_t *candidate) { cfg = *candidate; return true; }
@@ -86,6 +91,14 @@ void jt808_params_handle_info_query(uint16_t s) {
     static const uint8_t reply[] = {0x56U, 0x78U};
     jt808_send_raw(0x0107U,s,reply,sizeof(reply));
 }
+jt808_terminal_info_result_t jt808_terminal_info_encode(
+    uint8_t *body, uint16_t capacity, uint16_t *length) {
+    if (terminal_info_result != JT808_TERMINAL_INFO_OK)
+        return terminal_info_result;
+    assert(body != 0 && length != 0 && capacity > 0U);
+    body[0] = 0xA5U; *length = 1U;
+    return JT808_TERMINAL_INFO_OK;
+}
 void blind_zone_replay_reset(void) {}
 void blind_zone_replay_on_general_ack(uint16_t s, uint16_t m, uint8_t r) { (void)s;(void)m;(void)r; }
 blind_zone_result_t blind_zone_append(const blind_zone_record_t *r) { (void)r; return BLIND_ZONE_BUSY; }
@@ -93,6 +106,7 @@ int dbg_printf(const char *fmt, ...) { (void)fmt; return 0; }
 bool hw_acc_is_on(void) { return false; }
 bool gps_get_last_trusted(gps_data_t *out) { (void)out; return false; }
 void log_platform_on_first_online(void) {}
+work_mode_state_t work_mode_state(void) { return work_state; }
 
 static uint16_t decode(uint8_t channel, uint8_t *out) {
     uint16_t i, pos = 0U; assert(last_length[channel] >= 2U);
@@ -128,7 +142,7 @@ static void query(uint8_t ch,uint16_t id) { inject(ch,id,0,0U); }
 
 int main(void) {
     jt808_terminal_t terminal;uint8_t d0[1024],d3[1024];uint16_t sn0,sn3,l0,l3;
-    unsigned before0;
+    unsigned before0,before3;
     memset(&cfg,0,sizeof(cfg));strcpy(cfg.pid,"56789012345");cfg.heartbeat_s=60;cfg.report_moving_s=30;cfg.report_stopped_s=60;
     memset(&terminal,0,sizeof(terminal));memcpy(terminal.manufacturer_id,"CYHLL",5U);strcpy(terminal.terminal_model,"A300_406");
     open_ch[0]=open_ch[3]=true;generation[0]=1U;generation[3]=7U;
@@ -152,16 +166,62 @@ int main(void) {
     auth_resp(0U,sn0,0U);assert(jt808_channel_online(0U));assert(!jt808_channel_online(3U));
     auth_resp(3U,sn3,0U);assert(jt808_channel_online(3U));assert(jt808_online_mask()==0x09U);
 
+    /* Changing only the primary endpoint invalidates only its in-memory
+       credential/session.  The backup stays online while primary registers. */
+    before0=sends[0];before3=sends[3];
+    jt808_reset_endpoint_auth(JT808_ENDPOINT_MAIN_MASK);jt808_process();
+    assert(sends[0]==before0+1U && sends[3]==before3);
+    assert(msg(0U,&sn0,d0,&l0)==0x0100U);assert(jt808_channel_online(3U));
+    reg_resp(0U,sn0,"MAIN-AUTH-2");jt808_process();
+    assert(msg(0U,&sn0,d0,&l0)==0x0102U);auth_resp(0U,sn0,0U);
+    assert(jt808_online_mask()==0x09U);
+
     /* Live 0x0200 uses the complete 67-byte A300 extension profile. */
     gps.lat=31.2057615;gps.lon=121.57613125;gps.altitude_m=78.5f;
     gps.speed_kmh=25.7f;gps.heading=15.0f;gps.fix_quality=1U;gps.satellites=9U;
     gps.hdop=1.3f;gps.year=2026U;gps.month=9U;gps.day=1U;
     gps.hour=8U;gps.minute=2U;gps.second=17U;gps.valid=true;gps.last_update_ms=g_tick_ms;
     cfg.mileage_m=21600U;
+    before0=sends[0];before3=sends[3];jt808_process();
+    assert(sends[0]==before0+1U && sends[3]==before3+1U);
+    assert(msg(0U,&sn0,d0,&l0)==0x0200U);assert(msg(3U,&sn3,d3,&l3)==0x0200U);
+    assert(memcmp(d0+16U,(uint8_t[]){0x00U,0x08U,0x00U,0x02U},4U)==0);
+    assert(memcmp(d3+16U,(uint8_t[]){0x00U,0x08U,0x00U,0x02U},4U)==0);
+    jt808_trigger_alarm(ALM_OVERSPEED);
+    fail_send[3]=true;before0=sends[0];before3=sends[3];
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false)!=0);
+    assert(sends[0]==before0+1U && sends[3]==before3+1U);
+    assert(msg(0U,&sn0,d0,&l0)==0x0200U);
+    assert(memcmp(d0+12U,(uint8_t[]){0x00U,0x00U,0x00U,0x02U},4U)==0);
+    fail_send[3]=false;
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false)==0);
+    assert(jt808_send_location_to(0U,&gps)==0);
+    assert(msg(0U,&sn0,d0,&l0)==0x0200U);
+    assert(memcmp(d0+12U,(uint8_t[]){0x00U,0x00U,0x00U,0x00U},4U)==0);
+    before0=sends[0];before3=sends[3];g_tick_ms+=30001U;gps.last_update_ms=g_tick_ms;
+    jt808_process();
+    assert(sends[0]==before0 && sends[3]==before3);
+    assert(jt808_send_location_work_mode(0U,false)==0);
+    assert(sends[0]==before0+1U && sends[3]==before3+1U);
+    fail_send[0]=fail_send[3]=true;ambiguous_send[0]=ambiguous_send[3]=true;
+    assert(jt808_send_location_work_mode(0U,false)==0);
+    fail_send[0]=fail_send[3]=false;ambiguous_send[0]=ambiguous_send[3]=false;
     assert(jt808_send_location_to(0U,&gps)==0);
     assert(msg(0U,&sn0,d0,&l0)==0x0200U);
     assert((uint16_t)(((d0[2]&0x03U)<<8)|d0[3])==67U);
     assert(l0==80U); /* 12-byte header + 67-byte body + checksum */
+    cfg.gmt_sign=1;cfg.gmt_hour=5U;cfg.gmt_min=30U;
+    gps.year=2024U;gps.month=2U;gps.day=29U;
+    gps.hour=20U;gps.minute=15U;gps.second=16U;
+    assert(jt808_send_location_to(0U,&gps)==0);
+    assert(msg(0U,&sn0,d0,&l0)==0x0200U);
+    assert(memcmp(d0+12U+22U,(uint8_t[]){0x24U,0x03U,0x01U,0x01U,0x45U,0x16U},6U)==0);
+    cfg.gmt_sign=-1;cfg.gmt_hour=12U;cfg.gmt_min=59U;
+    gps.year=2026U;gps.month=1U;gps.day=1U;
+    gps.hour=0U;gps.minute=30U;gps.second=15U;
+    assert(jt808_send_location_to(0U,&gps)==0);
+    assert(msg(0U,&sn0,d0,&l0)==0x0200U);
+    assert(memcmp(d0+12U+22U,(uint8_t[]){0x25U,0x12U,0x31U,0x11U,0x31U,0x15U},6U)==0);
     {
         const uint8_t *body=d0+12U;
         uint16_t p=28U;
@@ -280,6 +340,21 @@ int main(void) {
     assert(sends[3]==1U && cfg.backup_auth_code[0]=='\0');
     jt808_process();
     assert(strcmp(cfg.backup_auth_code,"NEW-AUTH")==0);
+
+    /* CAR remains UTF-8 in config/replies, but 0x0100 requires GBK on wire.
+       The runtime profile must also retain the full 15-byte config value. */
+    memset(&cfg,0,sizeof(cfg));strcpy(cfg.pid,"56789012345");
+    memset(sends,0,sizeof(sends));memset(open_ch,0,sizeof(open_ch));
+    open_ch[0]=true;++generation[0];g_tick_ms+=60000U;
+    jt808_reset_endpoint_auth(JT808_ENDPOINT_MAIN_MASK |
+                              JT808_ENDPOINT_BACKUP_MASK);
+    jt808_init(&terminal);
+    jt808_set_terminal_profile(NULL,"\xe4\xba\xac" "ABCDEFGHIJKL");
+    jt808_process();assert(sends[0]==1U);assert(msg(0U,&sn0,d0,&l0)==0x0100U);
+    assert(memcmp(d0+12U+37U,
+                  (uint8_t[]){0xbeU,0xa9U,'A','B','C','D','E','F','G','H','I','J','K','L'},
+                  14U)==0);
+    assert((uint16_t)(((d0[2]&0x03U)<<8)|d0[3])==51U);
 
     assert(sizeof(jt808_session_t)*2U<128U);
     return 0;

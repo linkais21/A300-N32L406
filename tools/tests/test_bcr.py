@@ -23,6 +23,15 @@ def test_three_trial_failures_roll_back_lkg_then_factory_then_recovery():
     assert select_recovery_image(BcrState.ROLLBACK, 3, True, True) == "lkg"
 
 
+def test_commit_uses_opposite_physical_slot_when_sequence_parity_is_legacy():
+    store = BcrStore()
+    store.slots = [Bcr(sequence=2, state=BcrState.ACTIVE), None]
+    store.active_slot = 1
+    store.commit(Bcr(sequence=3, state=BcrState.PENDING))
+    assert store.slots[0].sequence == 2
+    assert store.load().sequence == 3
+
+
 if __name__ == "__main__":
     test_torn_record_keeps_previous_slot()
     test_three_trial_failures_roll_back_lkg_then_factory_then_recovery()

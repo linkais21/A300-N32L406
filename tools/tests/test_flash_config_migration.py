@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Host contract test for persisted configuration v1-to-v2 migration."""
+"""Host contract test for append-only persisted configuration migration."""
 
 import os
 import pathlib
@@ -21,6 +21,7 @@ HARNESS = r'''
 
 #include "flash_config.h"
 #include "ext_flash_store.h"
+#include "spi_flash.h"
 
 typedef struct __attribute__((packed)) {
     uint32_t magic;
@@ -38,8 +39,10 @@ typedef struct __attribute__((packed)) {
 #define SLOT_BYTES FLASH_SECTOR_SIZE
 #define V1_LEN ((uint16_t)offsetof(device_config_t, pid))
 #define V2_LEN ((uint16_t)offsetof(device_config_t, backup_auth_code))
-#define V3_BODY_LEN (sizeof(test_v3_hdr_t) + sizeof(device_config_t) + 4U)
+#define V3_LEN ((uint16_t)offsetof(device_config_t, device_api_key))
+#define V4_BODY_LEN (sizeof(test_v3_hdr_t) + sizeof(device_config_t) + 4U)
 #define DEPLOYED_V1_LEN 684U
+#define DEPLOYED_V3_LEN 756U
 
 static uint8_t flash_image[2U * SLOT_BYTES];
 static int lock_available;
@@ -124,6 +127,27 @@ static void seed_slot(uint32_t addr, uint16_t version, uint16_t data_len,
     memcpy(raw + sizeof(hdr) + data_len, &crc, sizeof(crc));
 }
 
+static void seed_versioned_slot(uint32_t addr, uint16_t version,
+                                uint16_t data_len, uint32_t generation,
+                                const device_config_t *cfg, int valid_crc)
+{
+    test_v3_hdr_t hdr = { CFG_MAGIC, version, data_len, generation };
+    uint8_t *raw = slot_at(addr);
+    uint32_t crc;
+    uint32_t marker = CFG_COMMIT_MARKER;
+
+    assert((uint32_t)sizeof(hdr) + data_len + 8U <= SLOT_BYTES);
+    memset(raw, 0xFF, SLOT_BYTES);
+    memcpy(raw, &hdr, sizeof(hdr));
+    memcpy(raw + sizeof(hdr), cfg, data_len);
+    crc = test_crc32(raw + offsetof(test_v3_hdr_t, version),
+                     8U + data_len);
+    if (!valid_crc) crc ^= 1U;
+    memcpy(raw + sizeof(hdr) + data_len, &crc, sizeof(crc));
+    memcpy(raw + sizeof(hdr) + data_len + sizeof(crc), &marker,
+           sizeof(marker));
+}
+
 static void assert_native_slot(uint32_t addr, const device_config_t *want)
 {
     const uint8_t *raw = slot_at(addr);
@@ -133,12 +157,12 @@ static void assert_native_slot(uint32_t addr, const device_config_t *want)
 
     memcpy(&hdr, raw, sizeof(hdr));
     assert(hdr.magic == CFG_MAGIC);
-    assert(hdr.version == 3U);
+    assert(hdr.version == 4U);
     assert(hdr.data_len == sizeof(device_config_t));
     memcpy(&stored_crc, raw + sizeof(hdr) + hdr.data_len, sizeof(stored_crc));
     assert(stored_crc == test_crc32(raw + offsetof(test_v3_hdr_t, version),
                                     8U + hdr.data_len));
-    memcpy(&marker, raw + V3_BODY_LEN, sizeof(marker));
+    memcpy(&marker, raw + V4_BODY_LEN, sizeof(marker));
     assert(marker == CFG_COMMIT_MARKER);
     assert(memcmp(raw + sizeof(hdr), want, sizeof(*want)) == 0);
 }
@@ -227,14 +251,64 @@ void dbg_printf(const char *fmt, ...)
     (void)fmt;
 }
 
+void spi_flash_get_diagnostics(spi_flash_diagnostics_t *out)
+{
+    memset(out, 0, sizeof(*out));
+}
+
+const char *spi_flash_failure_name(spi_flash_failure_t failure)
+{
+    (void)failure;
+    return "NONE";
+}
+
 static void assert_default_suffix(const device_config_t *cfg)
 {
     assert(cfg->pid[0] == '\0');
-    assert(strcmp(cfg->terminal_model, "A300_406") == 0);
+    assert(strcmp(cfg->terminal_model, "T360-A300") == 0);
     assert(cfg->speed_limit_kmh == 120U);
     assert(cfg->sleep_report_mode == 0U);
     assert(cfg->gpsbds_mode == 2U);
     assert(cfg->backup_auth_code[0] == '\0');
+    assert(cfg->device_api_key[0] == '\0');
+}
+
+static void test_v3_generation_selection_and_v4_rewrite(void)
+{
+    device_config_t old_a = native_fixture("old-v3-a", "MODEL-A", 81U);
+    device_config_t old_b = native_fixture("old-v3-b", "MODEL-B", 82U);
+    device_config_t want = k_config_defaults;
+    test_v3_hdr_t header;
+
+    strcpy(old_a.backup_auth_code, "OLD-AUTH-A");
+    strcpy(old_b.backup_auth_code, "OLD-AUTH-B");
+    strcpy(old_a.fota_url, "http://fota.lhhn.net");
+    strcpy(old_b.fota_url, "http://fota.lhhn.net");
+    ((uint8_t *)&old_a)[DEPLOYED_V3_LEN - 2U] = 0xA6U;
+    ((uint8_t *)&old_a)[DEPLOYED_V3_LEN - 1U] = 0x5AU;
+    ((uint8_t *)&old_b)[DEPLOYED_V3_LEN - 2U] = 0x3CU;
+    ((uint8_t *)&old_b)[DEPLOYED_V3_LEN - 1U] = 0xC3U;
+    memcpy(&want, &old_b, DEPLOYED_V3_LEN);
+    reset_fake_flash();
+    seed_versioned_slot(CFG_FLASH_ADDR_A, 3U, DEPLOYED_V3_LEN, 41U,
+                        &old_a, 1);
+    seed_versioned_slot(CFG_FLASH_ADDR_B, 3U, DEPLOYED_V3_LEN, 42U,
+                        &old_b, 1);
+
+    cfg_init();
+
+    assert(memcmp(cfg_get(), &old_b, DEPLOYED_V3_LEN) == 0);
+    assert(cfg_get()->device_api_key[0] == '\0');
+    assert(strcmp(cfg_get()->fota_url, "http://fota.lhhn.net") == 0);
+    assert(write_count == 8U);
+    assert(writes[0] == CFG_FLASH_ADDR_A);
+    assert(writes[4] == CFG_FLASH_ADDR_B);
+    assert_native_slot(CFG_FLASH_ADDR_A, &want);
+    assert_native_slot(CFG_FLASH_ADDR_B, &want);
+    memcpy(&header, slot_at(CFG_FLASH_ADDR_A), sizeof(header));
+    assert(header.generation == 43U);
+    memcpy(&header, slot_at(CFG_FLASH_ADDR_B), sizeof(header));
+    assert(header.generation == 44U);
 }
 
 static void assert_legacy_fip_preserved(const device_config_t *cfg)
@@ -349,6 +423,15 @@ static void test_corrupt_and_illegal_shapes_are_rejected(void)
     seed_slot(CFG_FLASH_ADDR_A, 3U, (uint16_t)sizeof(illegal), &illegal, 1);
     cfg_init();
     assert(memcmp(cfg_get(), &k_config_defaults, sizeof(*cfg_get())) == 0);
+
+    reset_fake_flash();
+    seed_versioned_slot(CFG_FLASH_ADDR_A, 3U, DEPLOYED_V3_LEN, 9U,
+                        &corrupt, 0);
+    seed_versioned_slot(CFG_FLASH_ADDR_B, 3U,
+                        (uint16_t)(DEPLOYED_V3_LEN + 1U),
+                        10U, &illegal, 1);
+    cfg_init();
+    assert(memcmp(cfg_get(), &k_config_defaults, sizeof(*cfg_get())) == 0);
 }
 
 static void test_failed_other_slot_preserves_v1_source(void)
@@ -366,6 +449,50 @@ static void test_failed_other_slot_preserves_v1_source(void)
     assert(write_count == 1U);
     assert(writes[0] == CFG_FLASH_ADDR_B);
     assert(memcmp(slot_at(CFG_FLASH_ADDR_A), source_before,
+                  sizeof(source_before)) == 0);
+}
+
+static void test_failed_other_slot_preserves_v3_source(void)
+{
+    device_config_t old = native_fixture("v3-survivor", "V3-SAFE", 91U);
+    uint8_t source_before[SLOT_BYTES];
+    static const char key[CFG_DEVICE_API_KEY_LEN] = "1234567890ABCDEF";
+
+    strcpy(old.backup_auth_code, "V3-BACKUP-AUTH");
+    ((uint8_t *)&old)[DEPLOYED_V3_LEN - 2U] = 0x96U;
+    ((uint8_t *)&old)[DEPLOYED_V3_LEN - 1U] = 0x69U;
+    reset_fake_flash();
+    seed_versioned_slot(CFG_FLASH_ADDR_B, 3U, DEPLOYED_V3_LEN, 71U,
+                        &old, 1);
+    memcpy(source_before, slot_at(CFG_FLASH_ADDR_B), sizeof(source_before));
+    fail_write_addr = CFG_FLASH_ADDR_A;
+
+    cfg_init();
+
+    assert(memcmp(cfg_get(), &old, DEPLOYED_V3_LEN) == 0);
+    assert(cfg_get()->device_api_key[0] == '\0');
+    assert(write_count == 1U);
+    assert(writes[0] == CFG_FLASH_ADDR_A);
+    assert(memcmp(slot_at(CFG_FLASH_ADDR_B), source_before,
+                  sizeof(source_before)) == 0);
+
+    write_count = 0U;
+    fail_write_addr = CFG_FLASH_ADDR_A + V4_BODY_LEN;
+    assert(cfg_set_device_api_key_result(key) == CFG_STORE_WRITE_FAILED);
+    assert(write_count == 4U);
+    assert(writes[0] == CFG_FLASH_ADDR_A);
+    assert(writes[3] == CFG_FLASH_ADDR_A + V4_BODY_LEN);
+    assert(cfg_get()->device_api_key[0] == '\0');
+    assert(memcmp(slot_at(CFG_FLASH_ADDR_B), source_before,
+                  sizeof(source_before)) == 0);
+
+    write_count = 0U;
+    fail_write_addr = CFG_FLASH_ADDR_A;
+    cfg_init();
+    assert(memcmp(cfg_get(), &old, DEPLOYED_V3_LEN) == 0);
+    assert(cfg_get()->device_api_key[0] == '\0');
+    assert(write_count == 1U && writes[0] == CFG_FLASH_ADDR_A);
+    assert(memcmp(slot_at(CFG_FLASH_ADDR_B), source_before,
                   sizeof(source_before)) == 0);
 }
 
@@ -396,11 +523,11 @@ static void test_candidate_store_contract(void)
     assert(memcmp(cfg_get(), &live_before, sizeof(live_before)) == 0);
 
     write_count = 0U;
-    fail_write_addr = CFG_FLASH_ADDR_B + V3_BODY_LEN;
+    fail_write_addr = CFG_FLASH_ADDR_B + V4_BODY_LEN;
     assert(!cfg_store_candidate(&candidate));
     assert(write_count == 4U);
     assert(writes[0] == CFG_FLASH_ADDR_B);
-    assert(writes[3] == CFG_FLASH_ADDR_B + V3_BODY_LEN);
+    assert(writes[3] == CFG_FLASH_ADDR_B + V4_BODY_LEN);
     assert(memcmp(cfg_get(), &live_before, sizeof(live_before)) == 0);
 
     fail_write_addr = UINT32_MAX;
@@ -412,21 +539,56 @@ static void test_candidate_store_contract(void)
     assert(memcmp(cfg_get(), &candidate, sizeof(candidate)) == 0);
 }
 
+static void test_device_api_key_store_rolls_back_on_failure(void)
+{
+    static const char first[CFG_DEVICE_API_KEY_LEN] = "1234567890ABCDEF";
+    static const char second[CFG_DEVICE_API_KEY_LEN] = "ZYXWVUTSRQPONMLK";
+    static const char too_short[CFG_DEVICE_API_KEY_LEN] = "1234567890ABCDE";
+    device_config_t before;
+
+    reset_fake_flash();
+    cfg_init();
+    write_count = 0U;
+    assert(cfg_set_device_api_key_result(first) == CFG_STORE_OK);
+    assert(strcmp(cfg_get()->device_api_key, first) == 0);
+    before = *cfg_get();
+
+    write_count = 0U;
+    assert(cfg_set_device_api_key_result(cfg_get()->device_api_key) ==
+           CFG_STORE_OK);
+    assert(strcmp(cfg_get()->device_api_key, first) == 0);
+    before = *cfg_get();
+
+    fail_write_addr = CFG_FLASH_ADDR_B;
+    assert(cfg_set_device_api_key_result(second) == CFG_STORE_WRITE_FAILED);
+    assert(memcmp(cfg_get(), &before, sizeof(before)) == 0);
+    assert(strcmp(cfg_get()->device_api_key, first) == 0);
+    assert(cfg_set_device_api_key_result(too_short) ==
+           CFG_STORE_INVALID);
+    assert(memcmp(cfg_get(), &before, sizeof(before)) == 0);
+}
+
 int main(void)
 {
-    assert(CFG_VERSION == 3U);
+    assert(CFG_VERSION == 4U);
+    assert(CFG_DEVICE_API_KEY_LEN == 32U);
     assert(CFG_PID_LEN == 12U);
     assert(CFG_MODEL_LEN == 21U);
     assert(V1_LEN == DEPLOYED_V1_LEN);
+    assert(V3_LEN == DEPLOYED_V3_LEN);
     assert(k_config_defaults.backup_ip[0] == '\0');
     assert(k_config_defaults.backup_port == 0U);
+    assert(strcmp(k_config_defaults.fota_url, "http://fota.lhhn.net") == 0);
     test_v1_a_migrates_other_slot_first();
     test_v1_b_migrates_other_slot_first();
     test_native_v2_is_preferred_over_v1();
     test_same_format_keeps_a_before_b_precedence();
+    test_v3_generation_selection_and_v4_rewrite();
     test_corrupt_and_illegal_shapes_are_rejected();
     test_failed_other_slot_preserves_v1_source();
+    test_failed_other_slot_preserves_v3_source();
     test_candidate_store_contract();
+    test_device_api_key_store_rolls_back_on_failure();
     return 0;
 }
 '''

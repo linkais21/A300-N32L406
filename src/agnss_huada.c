@@ -2,6 +2,7 @@
 #include "debug_uart.h"
 #include "ec800m.h"
 #include "fota.h"
+#include "agnss_stream_workspace.h"
 #include <string.h>
 #include <math.h>
 
@@ -15,11 +16,18 @@ bool gnss_vendor_inject(gnss_type_t type, const uint8_t *data, uint16_t len)
 { (void)type; (void)data; (void)len; return false; }
 #else
 #define HUADA_STREAM_MAX 4096U
-static uint8_t s_stream[HUADA_STREAM_MAX];
 static uint32_t s_stream_len;
 static bool s_stream_started;
-static bool agnss_ota_active(void){fota_state_t s=fota_get_state();return s==FOTA_STATE_CONNECTING||s==FOTA_STATE_DOWNLOADING||s==FOTA_STATE_VERIFYING;}
-static void huada_reset_stream(void){s_stream_len=0;s_stream_started=false;}
+static bool agnss_ota_active(void){fota_state_t s=fota_get_state();return s==FOTA_STATE_CHECK_CONNECTING||s==FOTA_STATE_CHECKING||s==FOTA_STATE_PREPARING||s==FOTA_STATE_CONNECTING||s==FOTA_STATE_DOWNLOADING||s==FOTA_STATE_VERIFYING||s==FOTA_STATE_READY;}
+static uint8_t *huada_stream(void)
+{
+    return agnss_stream_workspace_buffer(AGNSS_STREAM_OWNER_HUADA, NULL);
+}
+static void huada_reset_stream(void)
+{
+    s_stream_len=0;s_stream_started=false;
+    agnss_stream_workspace_release(AGNSS_STREAM_OWNER_HUADA);
+}
 
 static int send_frame(const uint8_t *frame, uint32_t len)
 {
@@ -60,7 +68,15 @@ static int inject_location(const gps_context_t *g)
 
 int agnss_huada_inject(const agnss_source_t *src, const gps_context_t *ctx)
 {
-    if (!s_stream_started) { if (inject_time(ctx)<0 || inject_location(ctx)<0) { huada_reset_stream(); return -1; } s_stream_started=true; s_stream_len=0; }
+    uint8_t *s_stream;
+    if (!s_stream_started) {
+        if (!agnss_stream_workspace_try_acquire(AGNSS_STREAM_OWNER_HUADA))
+            return -1;
+        if (inject_time(ctx)<0 || inject_location(ctx)<0) { huada_reset_stream(); return -1; }
+        s_stream_started=true; s_stream_len=0;
+    }
+    s_stream = huada_stream();
+    if (s_stream == NULL) { huada_reset_stream(); return -1; }
     if (!src || !src->data || src->len == 0) { int ok = (s_stream_len==0); huada_reset_stream(); return ok ? 0 : -1; }
     if (src->len > HUADA_STREAM_MAX - s_stream_len) { huada_reset_stream(); return -1; }
     memcpy(s_stream+s_stream_len, src->data, src->len); s_stream_len += src->len;

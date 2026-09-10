@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -45,7 +46,7 @@ def test_platform_is_real_and_bounded():
     for action in ("__disable_irq()", "SysTick->CTRL = 0U", "SCB->VTOR = address", "__set_MSP(msp)"):
         require(source, action, f"safe jump is missing {action}")
     require(source, "__enable_irq();", "App must start with interrupts enabled")
-    recovery = source[source.index("void boot_recovery_step"):source.index("uint32_t boot_rollback_counter")]
+    recovery = source[source.index("void boot_recovery_step"):source.index("bool boot_rollback_counter")]
     assert "__WFI()" not in recovery, \
         "recovery must not sleep indefinitely before the watchdog feed"
     require(recovery, "__NOP();", "recovery must make bounded forward progress")
@@ -55,17 +56,66 @@ def test_lkg_preserves_a_verified_signed_package():
     install = (ROOT / "bootloader" / "src" / "image_install.c").read_text(encoding="utf-8")
     assert "boot_ecdsa_sign" not in install, "Bootloader must never create an LKG signature"
     require(install, "verify_external_manifest", "copied LKG package must be re-verified")
-    require(install, "sizeof(image_manifest_t) + manifest->image_length",
-            "LKG copy must preserve manifest plus payload")
+    contract = (ROOT / "include" / "boot_contract.h").read_text(encoding="utf-8")
+    for item in ("LKG_SLOT_A_BASE 0x0C0000UL", "LKG_SLOT_B_BASE 0x0DB000UL",
+                 "LKG_SLOT_SIZE 0x1B000UL", "LKG_SLOT_B_AUTH_ADDR 0x0F6000UL",
+                 "LKG_SLOT_A_AUTH_ADDR 0x0FF000UL"):
+        require(contract, item, "dual LKG package/auth layout is incomplete")
+    require(install, "select_newest_lkg", "recovery must select by committed generation")
+    require(install, "write_lkg_transaction", "LKG promotion must be transactional")
+    require(install.replace(" ", ""), "FOTA_PACKAGE_HEADER_SIZE+manifest->body_size",
+            "LKG copy must preserve header plus body")
     candidate_install = install[install.index("bool install_candidate"):install.index("bool install_resume")]
     assert "preserve_signed_package_to_lkg" not in candidate_install, \
         "unproven candidate must not overwrite the previous healthy LKG"
     require(install, "r.state == BCR_ACTIVE", "healthy state must trigger candidate promotion")
-    require(install, "r.image_version == m.version_counter",
+    require(install, "r.image_version == m.version",
             "only the healthy BCR version may be promoted to LKG")
     active_body = install[install.index("if (r.state == BCR_ACTIVE)"):install.index("if ((r.state == BCR_TRIAL")]
-    assert "preserve_signed_package_to_lkg(&m);" in active_body.replace("(void)", "")
-    assert "if (!preserve_signed_package_to_lkg(&m)) return false;" not in active_body
+    assert "write_lkg_transaction(&m,&r);" in active_body.replace("(void)", "")
+    assert "if (!write_lkg_transaction(&m)) return false;" not in active_body
+    require(install, "boot_int_flash_erase(target, APP_FLASH_MAX_SIZE)",
+            "verified restore must clear stale bytes beyond a shorter image")
+
+
+def test_legacy_format_is_recovery_only():
+    verify = (ROOT / "bootloader" / "src" / "image_verify.c").read_text(encoding="utf-8")
+    install = (ROOT / "bootloader" / "src" / "image_install.c").read_text(encoding="utf-8")
+    candidate = verify[verify.index("image_verify_result_t verify_candidate"):verify.index("bool verify_external_manifest")]
+    assert "verify_legacy_package" not in candidate
+    require(install, "verify_legacy_package(LKG_SLOT_A_BASE", "legacy LKG recovery was removed")
+    require(install, "verify_legacy_package(FACTORY_BASE", "legacy Factory recovery was removed")
+
+
+def test_candidate_install_is_page_transactional():
+    config = (ROOT / "bootloader" / "include" / "bootloader_config.h").read_text(encoding="utf-8")
+    install = (ROOT / "bootloader" / "src" / "image_install.c").read_text(encoding="utf-8")
+    require(config, "BOOTLOADER_INTERNAL_PAGE_SIZE 2048UL",
+            "N32L406 internal Flash transactions must use 2048-byte pages")
+    require(config, "BOOTLOADER_COPY_CHUNK_SIZE 256UL",
+            "Flash copy chunks must remain at most 256 bytes")
+    candidate = install[install.index("bool install_candidate"):install.index("bool install_resume")]
+    require(candidate, "install_resume(0U)",
+            "candidate installation must enter through the resumable transaction")
+    assert "copy_image(" not in candidate, "candidate path must not use the non-journaled restore copy"
+    resume = install[install.index("bool install_resume"):install.index("bool bootloader_select_image")]
+    require(resume, "offset != r.transaction_offset",
+            "resume must reject offsets that do not match the committed BCR boundary")
+    require(resume, "BOOTLOADER_INTERNAL_PAGE_SIZE",
+            "resume must erase exactly one internal Flash page")
+    require(resume, "transaction_offset % BOOTLOADER_INTERNAL_PAGE_SIZE",
+            "pending offsets must remain page aligned except for the final image length")
+    require(resume, "memcmp(page, verify",
+            "each programmed chunk must be read back and compared immediately")
+    require(resume, "page_offset < page_length",
+            "the complete programmed page or image tail must be read back before BCR commit")
+    require(resume, "r.transaction_offset = page_end",
+            "BCR progress must advance only after the whole-page comparison")
+    select = install[install.index("bool bootloader_select_image"):]
+    require(select, "if (install_resume(r.transaction_offset)) boot_jump_to(APP_FLASH_BASE);",
+            "a completed pending install must jump only after Trial is durable")
+    require(select, "if (r.state == BCR_RECOVERY) return false;",
+            "recovery state must never jump into a stale App")
 
 
 def test_bcr_separates_trial_version_from_rollback_floor():
@@ -75,7 +125,15 @@ def test_bcr_separates_trial_version_from_rollback_floor():
     require(header, "uint32_t rollback_floor;",
             "BCR must preserve the last healthy rollback floor during Trial")
     require(source, "(int32_t)(a - b) > 0", "BCR sequence selection must be wrap-safe")
+    assert "r.rollback_floor = r.image_version" not in source
     require(platform, "record.rollback_floor", "signature rollback checks must use the healthy floor")
+
+
+def test_bcr_commit_alternates_from_physically_valid_slot():
+    source = (ROOT / "bootloader" / "src" / "bcr.c").read_text(encoding="utf-8")
+    require(source, "physically newest valid record",
+            "BCR destination must not infer slot identity from sequence parity")
+    assert "current.sequence & 1U" not in source
 
 
 def test_main_enters_recovery_if_image_jump_returns():
@@ -93,7 +151,7 @@ int bootloader_main(void);
 
 bool boot_platform_init(void) { return true; }
 bool boot_reset_was_fault_or_watchdog(void) { return false; }
-void bcr_note_trial_reset(bool fault_or_watchdog) { (void)fault_or_watchdog; }
+bool bcr_note_trial_reset(bool fault_or_watchdog) { (void)fault_or_watchdog; return true; }
 bool bootloader_select_image(void) { return true; }
 void boot_watchdog_feed(void) {}
 void boot_recovery_step(void)
@@ -140,13 +198,14 @@ def test_invalid_app_paths_report_recovery_to_main():
             "recovery must remain active and feed the watchdog")
     assert "for (unsigned i=0; i<1024U; ++i)" not in main, \
         "recovery must not terminate after a fixed number of iterations"
-    assert install.count("boot_jump_to(APP_FLASH_BASE)") == 5, \
-        "test must cover every App jump path"
-    assert install.count("boot_jump_to(APP_FLASH_BASE); return false;") == 4, \
-        "every compact App jump path must route a returned jump to recovery"
-    active_jump = """boot_jump_to(APP_FLASH_BASE);
-        return false;"""
-    require(install, active_jump, "ACTIVE App jump must route a returned jump to recovery")
+    compact = re.sub(r"\s+", "", install)
+    jump = "boot_jump_to(APP_FLASH_BASE);"
+    tails = compact.split(jump)[1:]
+    assert tails, "Bootloader has no App jump path"
+    for index, tail in enumerate(tails):
+        before_next_jump = tail.split(jump, 1)[0]
+        assert "returnfalse;" in before_next_jump, \
+            f"App jump path {index} can continue after boot_jump_to() returns"
 
 
 def test_external_flash_probe_does_not_block_valid_app_boot():
@@ -160,6 +219,7 @@ def test_external_flash_probe_does_not_block_valid_app_boot():
 if __name__ == "__main__":
     test_platform_is_real_and_bounded()
     test_lkg_preserves_a_verified_signed_package()
+    test_legacy_format_is_recovery_only()
     test_bcr_separates_trial_version_from_rollback_floor()
     test_main_enters_recovery_if_image_jump_returns()
     test_external_flash_probe_does_not_block_valid_app_boot()

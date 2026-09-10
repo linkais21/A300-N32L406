@@ -20,7 +20,7 @@ def run() -> None:
         #include <string.h>
         #include "sms_command.h"
         int main(void) {
-          static const char *ok[] = {"PARAM?", "dualset=IP=1.2.3.4", "RESET", "PID:1", "IP=1", "FIP=1", "FREQ=1", "HBT=1", "MODEL=1", "SPEED=1", "APN=1", "RELAY=ON", "GPSDUP=1", "MLG=1", "CAR=1", "GPSBDS=1", "GMTSET=1", "VIBSENS=1", "DUALSET=VIBSENS=1"};
+          static const char *ok[] = {"PARAM?", "dualset=IP=1.2.3.4", "RESET", "PID:1", "IP=1", "FIP=1", "FREQ=1", "HBT=1", "MODEL=1", "SPEED=1", "APN=1", "RELAY=ON", "GPSDUP=1", "MLG=1", "CAR=1", "GPSBDS=1", "GMTSET=1", "VIBSENS=1", "FKEY?", "FKEY=1234567890ABCDEF", "DUALSET=VIBSENS=1"};
           static const char *bad[] = {"", "VIBSENSX=1", "RTKSW=ON", "PARAMETRIC=1", "IPX=1", "RELAYX=ON", "PARAM?junk", "DUALSET=IP?junk", "DUALSET=VIBSENSX=1", "DUALSET=IPX=1"};
           uint8_t cmd[SMS_COMMAND_MAX_LEN]; uint16_t len = 0;
           unsigned i;

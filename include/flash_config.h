@@ -12,14 +12,14 @@
  *   Slot B: sector 1  @ 0x001000 (4 KB)  — redundant backup
  *   FOTA area:        @ 0x010000 (1 MB)  — firmware download buffer
  *
- * v3 slot: [magic(4)] [version(2)] [len(2)] [generation(4)]
+ * v3/v4 slot: [magic(4)] [version(2)] [len(2)] [generation(4)]
  *          [data(N)] [crc32(4)] [commit_marker(4)]
  */
 
 #define CFG_FLASH_ADDR_A    EXT_FLASH_CONFIG_SLOT_A_ADDR
 #define CFG_FLASH_ADDR_B    EXT_FLASH_CONFIG_SLOT_B_ADDR
 #define CFG_MAGIC           0xA3001406UL
-#define CFG_VERSION         3U
+#define CFG_VERSION         4U
 #define CFG_COMMIT_MARKER   0x43464733UL
 
 /* String field max lengths */
@@ -34,6 +34,7 @@
 #define CFG_AGNSS_PWD_LEN  64
 #define CFG_PID_LEN         12
 #define CFG_MODEL_LEN       21
+#define CFG_DEVICE_API_KEY_LEN 32
 
 typedef struct {
     gnss_type_t gnss_type;
@@ -113,6 +114,12 @@ typedef struct {
 
     /* v3 append-only field; the deployed v2 byte prefix ends before this. */
     char     backup_auth_code[CFG_AUTH_LEN];
+
+    /* Preserve the two trailing bytes included by deployed v3 sizeof(). */
+    uint8_t  v3_tail_padding[2];
+
+    /* v4 append-only field; the deployed v3 byte prefix ends before this. */
+    char     device_api_key[CFG_DEVICE_API_KEY_LEN];
 } device_config_t;
 
 typedef enum {
@@ -131,6 +138,8 @@ void     cfg_save(void);                /* write to both slots */
 bool     cfg_store_candidate(const device_config_t *candidate);
 cfg_store_result_t cfg_store_candidate_result(const device_config_t *candidate);
 cfg_store_result_t cfg_set_pid_result(const char pid[CFG_PID_LEN]);
+cfg_store_result_t cfg_set_device_api_key_result(
+    const char key[CFG_DEVICE_API_KEY_LEN]);
 bool     cfg_set_auth_code(uint8_t channel, const char *code);
 void     cfg_factory_reset(void);       /* restore defaults and save */
 

@@ -12,9 +12,6 @@
 #include <stddef.h>
 #include <string.h>
 
-#define FLASH_TOTAL_SIZE       (2UL * 1024UL * 1024UL)
-#define FLASH_SECTOR_SIZE      4096UL
-#define FLASH_PAGE_SIZE        256UL
 #define INTERNAL_PAGE_SIZE     2048UL
 #define EXT_TIMEOUT_LOOPS      4000000UL
 #define EXT_ERASE_TIMEOUT_LOOPS 32000000UL
@@ -311,20 +308,20 @@ void boot_recovery_step(void)
     }
 }
 
-uint32_t boot_rollback_counter(void)
+bool boot_rollback_counter(uint32_t *out)
 {
     bcr_record_t record;
-    return bcr_load(&record) ? record.rollback_floor : 0U;
+    if (!out || bcr_load(&record) != BCR_LOAD_FOUND) return false;
+    *out = record.rollback_floor;
+    return true;
 }
 
 void boot_jump_to(uint32_t address)
 {
     uint32_t msp, reset;
-    if (address != APP_FLASH_BASE) return;
+    if (!boot_app_vectors_valid(address)) return;
     msp = *(const volatile uint32_t *)(uintptr_t)address;
     reset = *(const volatile uint32_t *)(uintptr_t)(address + 4U);
-    if (msp < 0x20000000UL || msp > 0x20006000UL || (msp & 7U) != 0U ||
-        reset < APP_FLASH_BASE + 1UL || reset >= APP_FLASH_END || (reset & 1U) == 0U) return;
     __disable_irq();
     SysTick->CTRL = 0U;
     SysTick->LOAD = 0U;
@@ -339,6 +336,16 @@ void boot_jump_to(uint32_t address)
     /* The App starts from reset semantics; do not carry Bootloader PRIMASK. */
     __enable_irq();
     ((void (*)(void))(uintptr_t)reset)();
+}
+
+bool boot_app_vectors_valid(uint32_t address)
+{
+    uint32_t msp, reset;
+    if (address != APP_FLASH_BASE) return false;
+    msp = *(const volatile uint32_t *)(uintptr_t)address;
+    reset = *(const volatile uint32_t *)(uintptr_t)(address + 4U);
+    return msp >= 0x20000000UL && msp <= 0x20006000UL && (msp & 7U) == 0U &&
+           reset >= APP_FLASH_BASE + 1UL && reset < APP_FLASH_END && (reset & 1U) != 0U;
 }
 
 bool boot_compute_internal_hash(uint32_t address, uint32_t length, uint8_t hash[32])

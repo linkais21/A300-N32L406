@@ -55,6 +55,7 @@ static void step_ms(uint32_t now_ms, bool acc_high, bool vibration_hit)
         .vibration_sample_valid = true,
         .now_ms = now_ms
     };
+    work_mode_acc_sample(acc_high, now_ms);
     work_mode_step(&input);
 }
 
@@ -202,6 +203,87 @@ static void test_thirty_consecutive_200ms_hits_confirm_six_seconds(void)
     assert(work_mode_logical_acc());
 }
 
+static void test_pa12_requires_500ms_continuous_stability_both_directions(void)
+{
+    work_mode_action_t discarded[12];
+
+    work_mode_init(&DEFAULT_CONFIG, 0U, true);
+    (void)drain(discarded, ARRAY_LEN(discarded));
+    step_ms(1000U, false, false);
+    step_ms(1499U, false, false);
+    assert(work_mode_state() == WORK_MODE_REALTIME);
+    assert(work_mode_logical_acc());
+    step_ms(1500U, false, false);
+    assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
+    assert(!work_mode_logical_acc());
+    (void)drain(discarded, ARRAY_LEN(discarded));
+
+    step_ms(2000U, true, false);
+    step_ms(2499U, true, false);
+    assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
+    assert(!work_mode_logical_acc());
+    step_ms(2500U, true, false);
+    assert(work_mode_state() == WORK_MODE_REALTIME);
+    assert(work_mode_logical_acc());
+}
+
+static void test_pa12_alternating_noise_never_commits(void)
+{
+    uint32_t now_ms;
+    work_mode_action_t discarded[12];
+
+    enter_stationary(0U);
+    for (now_ms = 1000U; now_ms <= 3000U; now_ms += 100U) {
+        step_ms(now_ms, ((now_ms / 100U) & 1U) != 0U, false);
+        assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
+        assert(!work_mode_logical_acc());
+    }
+    (void)drain(discarded, ARRAY_LEN(discarded));
+}
+
+static void test_vibration_misses_do_not_count_and_third_resets(void)
+{
+    work_mode_action_t discarded[12];
+
+    enter_stationary(0U);
+    step_ms(200U, false, true);
+    assert(work_mode_vibration_hits() == 1U);
+    step_ms(400U, false, false);
+    step_ms(600U, false, false);
+    assert(work_mode_vibration_hits() == 1U);
+    step_ms(800U, false, false);
+    assert(work_mode_vibration_hits() == 0U);
+    assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
+    (void)drain(discarded, ARRAY_LEN(discarded));
+}
+
+static void test_sparse_vibration_spikes_do_not_enter_realtime(void)
+{
+    uint32_t sample;
+
+    enter_stationary(0U);
+    for (sample = 1U; sample <= 40U; ++sample) {
+        step_ms(sample * 200U, false, (sample % 3U) == 1U);
+    }
+    assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
+    assert(!work_mode_logical_acc());
+}
+
+static void test_two_vibration_misses_preserve_but_do_not_shorten_confirmation(void)
+{
+    uint32_t sample;
+
+    enter_stationary(0U);
+    for (sample = 1U; sample <= 31U; ++sample) {
+        bool hit = sample != 10U && sample != 11U;
+        step_ms(sample * 200U, false, hit);
+    }
+    assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
+    assert(work_mode_vibration_hits() == 29U);
+    step_ms(6400U, false, true);
+    assert(work_mode_state() == WORK_MODE_REALTIME);
+}
+
 static void test_acc_falling_edge_precedes_same_step_vibration(void)
 {
     work_mode_action_t actions[10];
@@ -232,6 +314,49 @@ static void test_stationary_deadlines_are_independent_and_simultaneous(void)
     assert_actions((const work_mode_action_type_t[]){}, 0U);
     step(180U, false, false, 0U, false);
     assert_actions(expected, ARRAY_LEN(expected));
+}
+
+static void test_zero_stopped_interval_uses_default_sleep_report_period(void)
+{
+    static const work_mode_config_t stopped_period_unset = {
+        30U, 0U, 180U, 300U, 6U
+    };
+    static const work_mode_action_type_t expected[] = {
+        WORK_ACTION_REPORT_LOCATION
+    };
+    work_mode_action_t discarded[8];
+
+    work_mode_init(&stopped_period_unset, 0U, true);
+    (void)drain(discarded, ARRAY_LEN(discarded));
+    step(0U, false, false, 0U, true);
+    assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
+    (void)drain(discarded, ARRAY_LEN(discarded));
+
+    step(1U, false, false, 0U, false);
+    assert_actions((const work_mode_action_type_t[]){}, 0U);
+    step(179U, false, false, 0U, false);
+    assert_actions((const work_mode_action_type_t[]){}, 0U);
+    step(180U, false, false, 0U, false);
+    assert_actions(expected, ARRAY_LEN(expected));
+    step(359U, false, false, 0U, false);
+    assert_actions((const work_mode_action_type_t[]){}, 0U);
+    step(360U, false, false, 0U, false);
+    assert_actions(expected, ARRAY_LEN(expected));
+}
+
+static void test_stationary_location_can_be_disabled(void)
+{
+    work_mode_config_t disabled = DEFAULT_CONFIG;
+    work_mode_action_t discarded[8];
+
+    work_mode_init(&disabled, 0U, true);
+    work_mode_set_stationary_location_enabled(false, 0U);
+    (void)drain(discarded, ARRAY_LEN(discarded));
+    step(0U, false, false, 0U, true);
+    assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
+    (void)drain(discarded, ARRAY_LEN(discarded));
+    step(180U, false, false, 0U, false);
+    assert_actions((const work_mode_action_type_t[]){}, 0U);
 }
 
 static void test_alarm_wakes_realtime_and_reports(void)
@@ -521,6 +646,66 @@ static void test_stationary_acc_high_reenters_realtime(void)
     assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
 }
 
+static void test_acc_wake_reports_first_fresh_fix_once(void)
+{
+    static const work_mode_action_type_t wake_actions[] = {
+        WORK_ACTION_SET_LOGICAL_ACC, WORK_ACTION_GPS_ON,
+        WORK_ACTION_REPORT_ENTRY
+    };
+    work_mode_action_t action;
+
+    enter_stationary(0U);
+    step(1U, true, false, 0U, false);
+    assert(work_mode_state() == WORK_MODE_REALTIME);
+    assert_actions(wake_actions, ARRAY_LEN(wake_actions));
+
+    step(6U, true, false, 0U, false);
+    assert(!work_mode_next_action(&action));
+    step(7U, true, false, 0U, true);
+    assert(work_mode_next_action(&action));
+    assert(action.type == WORK_ACTION_REPORT_LOCATION);
+    assert(action.acc_on);
+    assert(!action.historical_position);
+    assert(!work_mode_next_action(&action));
+
+    step(8U, true, false, 0U, true);
+    assert(!work_mode_next_action(&action));
+    step(31U, true, false, 0U, true);
+    assert(!work_mode_next_action(&action));
+    step(36U, true, false, 0U, true);
+    assert(!work_mode_next_action(&action));
+    step(37U, true, false, 0U, true);
+    assert(work_mode_next_action(&action));
+    assert(action.type == WORK_ACTION_REPORT_LOCATION);
+    assert(!work_mode_next_action(&action));
+}
+
+static void test_vibration_wake_reports_first_fresh_fix_once(void)
+{
+    static const work_mode_action_type_t wake_actions[] = {
+        WORK_ACTION_SET_LOGICAL_ACC, WORK_ACTION_GPS_ON,
+        WORK_ACTION_REPORT_ENTRY
+    };
+    work_mode_action_t action;
+    uint32_t i;
+
+    enter_stationary(0U);
+    for (i = 1U; i <= 31U; ++i)
+        step_ms(i * 200U, false, true);
+    assert(work_mode_state() == WORK_MODE_REALTIME);
+    assert_actions(wake_actions, ARRAY_LEN(wake_actions));
+
+    step(7U, false, false, 0U, true);
+    assert(work_mode_next_action(&action));
+    assert(action.type == WORK_ACTION_REPORT_LOCATION);
+    assert(action.acc_on);
+    assert(!action.historical_position);
+    assert(!work_mode_next_action(&action));
+
+    step(8U, false, false, 0U, true);
+    assert(!work_mode_next_action(&action));
+}
+
 int main(void)
 {
     test_pa12_high_boot_enters_realtime_once();
@@ -530,8 +715,15 @@ int main(void)
     test_boot_monitor_reports_acc_on_every_moving_interval();
     test_boot_noise_does_not_restart_static_timer();
     test_thirty_consecutive_200ms_hits_confirm_six_seconds();
+    test_pa12_requires_500ms_continuous_stability_both_directions();
+    test_pa12_alternating_noise_never_commits();
+    test_vibration_misses_do_not_count_and_third_resets();
+    test_sparse_vibration_spikes_do_not_enter_realtime();
+    test_two_vibration_misses_preserve_but_do_not_shorten_confirmation();
     test_acc_falling_edge_precedes_same_step_vibration();
     test_stationary_deadlines_are_independent_and_simultaneous();
+    test_zero_stopped_interval_uses_default_sleep_report_period();
+    test_stationary_location_can_be_disabled();
     test_alarm_wakes_realtime_and_reports();
     test_deadlines_are_safe_across_uint32_wrap();
     test_action_backlog_is_fixed_and_bounded();
@@ -543,6 +735,8 @@ int main(void)
     test_vibration_millisecond_conversion_does_not_wrap();
     test_realtime_without_acc_enters_sleep_after_static_timeout();
     test_stationary_acc_high_reenters_realtime();
+    test_acc_wake_reports_first_fresh_fix_once();
+    test_vibration_wake_reports_first_fresh_fix_once();
     return 0;
 }
 '''

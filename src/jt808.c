@@ -13,10 +13,12 @@
 #include "i2c_accel.h"
 #include "terminal_identity.h"
 #include "jt808_session.h"
+#include "jt808_terminal_info.h"
 #include "blind_zone.h"
 #include "blind_zone_replay.h"
 #include "log_platform.h"
 #include "motion_corner.h"
+#include "work_mode.h"
 #include "work_mode_sleep.h"
 #include "at_config.h"
 #include <string.h>
@@ -78,6 +80,19 @@ static bool s_boot_identity_logged;
 static terminal_identity_result_t s_boot_identity_source;
 static jt808_session_t s_sessions[2];
 static uint8_t s_response_channel;
+
+#define JT808_TERMINAL_INFO_RETRY_MS   5000U
+#define JT808_TERMINAL_INFO_BACKOFF_MS 60000U
+#define JT808_TERMINAL_INFO_MAX_TRIES  3U
+
+typedef struct {
+    uint32_t retry_at_ms;
+    uint8_t attempts;
+    bool pending;
+    bool sent;
+} boot_terminal_info_t;
+
+static boot_terminal_info_t s_boot_terminal_info[2];
 
 static jt808_session_t *session_for_channel(uint8_t channel)
 {
@@ -215,17 +230,100 @@ static uint8_t checksum(const uint8_t *data, uint16_t len)
 }
 
 static int send_frame_channel(frame_t *body, uint8_t channel);
+static int send_frame_channel_delivered(frame_t *body, uint8_t channel);
+static bool build_header(frame_t *f, uint16_t msg_id, uint16_t body_len);
+
+static int send_terminal_info_to(uint8_t channel)
+{
+    uint8_t body[JT808_TERMINAL_INFO_BODY_LENGTH];
+    uint16_t length;
+    frame_t frame;
+    int send_result;
+    jt808_terminal_info_result_t encode_result =
+        jt808_terminal_info_encode(body, sizeof(body), &length);
+    if (encode_result != JT808_TERMINAL_INFO_OK) {
+        dbg_printf("[808] ch%u 0x0107 unavailable reason=%u\r\n",
+                   channel, (unsigned)encode_result);
+        return -1;
+    }
+    if (!frame_init(&frame)) return -1;
+    if (!build_header(&frame, 0x0107U, length)) {
+        frame_release();
+        return -1;
+    }
+    frame_bytes(&frame, body, length);
+    send_result = send_frame_channel_delivered(&frame, channel);
+    frame_release();
+    return send_result;
+}
+
+static void queue_boot_terminal_info(uint8_t channel)
+{
+    boot_terminal_info_t *state = channel == TCP_CH_MAIN ?
+                                  &s_boot_terminal_info[0] :
+                                  channel == TCP_CH_BACKUP ?
+                                  &s_boot_terminal_info[1] : NULL;
+    if (state == NULL || state->sent || state->pending) return;
+    state->pending = true;
+    state->attempts = 0U;
+    state->retry_at_ms = TICK_MS();
+}
+
+static void process_boot_terminal_info(uint32_t now)
+{
+    static const uint8_t channels[2] = { TCP_CH_MAIN, TCP_CH_BACKUP };
+    uint8_t index;
+    for (index = 0U; index < 2U; ++index) {
+        boot_terminal_info_t *state = &s_boot_terminal_info[index];
+        uint8_t channel = channels[index];
+        if (!state->pending || state->sent || !jt808_channel_online(channel) ||
+            (int32_t)(now - state->retry_at_ms) < 0)
+            continue;
+        if (send_terminal_info_to(channel) == 0) {
+            state->pending = false;
+            state->sent = true;
+            state->attempts = 0U;
+            dbg_printf("[808] ch%u 0x0107 boot attributes sent\r\n", channel);
+            continue;
+        }
+        ++state->attempts;
+        if (state->attempts >= JT808_TERMINAL_INFO_MAX_TRIES) {
+            state->attempts = 0U;
+            state->retry_at_ms = now + JT808_TERMINAL_INFO_BACKOFF_MS;
+        } else {
+            state->retry_at_ms = now + JT808_TERMINAL_INFO_RETRY_MS;
+        }
+    }
+}
 
 /* Escape + wrap in 0x7E and send */
+static int send_frame_broadcast(frame_t *body, bool require_all)
+{
+    bool attempted = false;
+    bool delivered = false;
+    bool failed = false;
+    if (jt808_channel_online(TCP_CH_MAIN)) {
+        attempted = true;
+        if (send_frame_channel_delivered(body, TCP_CH_MAIN) == 0)
+            delivered = true;
+        else
+            failed = true;
+    }
+    if (jt808_channel_online(TCP_CH_BACKUP)) {
+        attempted = true;
+        if (send_frame_channel_delivered(body, TCP_CH_BACKUP) == 0)
+            delivered = true;
+        else
+            failed = true;
+    }
+    frame_release();
+    if (!attempted || !delivered || (require_all && failed)) return -1;
+    return 0;
+}
+
 static int send_frame(frame_t *body)
 {
-    int result = -1;
-    if (jt808_channel_online(TCP_CH_MAIN) &&
-        send_frame_channel(body, TCP_CH_MAIN) == 0) result = 0;
-    if (jt808_channel_online(TCP_CH_BACKUP) &&
-        send_frame_channel(body, TCP_CH_BACKUP) == 0) result = 0;
-    frame_release();
-    return result;
+    return send_frame_broadcast(body, false);
 }
 
 static int finish_frame_channel(frame_t *body, uint8_t channel)
@@ -277,6 +375,13 @@ static int send_frame_channel(frame_t *body, uint8_t channel)
         body->prepared = true;
     }
     return ec800m_tcp_send(channel, out, body->wire_len);
+}
+
+static int send_frame_channel_delivered(frame_t *body, uint8_t channel)
+{
+    int result = send_frame_channel(body, channel);
+    if (result == 0 || ec800m_tcp_send_was_ambiguous()) return 0;
+    return result;
 }
 
 /* Build standard JT808 header */
@@ -348,11 +453,80 @@ static void identity_valid(void)
 }
 
 /* ── Message builders ─────────────────────────────────────────────────────── */
+static uint8_t encode_plate_gbk(const char *plate, uint8_t *out,
+                                uint8_t capacity)
+{
+    typedef struct {
+        uint8_t utf8[3];
+        uint8_t gbk[2];
+    } province_encoding_t;
+    static const province_encoding_t provinces[] = {
+        {{0xe4U, 0xbaU, 0xacU}, {0xbeU, 0xa9U}},
+        {{0xe6U, 0xb5U, 0x99U}, {0xd5U, 0xe3U}},
+        {{0xe6U, 0xb4U, 0xa5U}, {0xbdU, 0xf2U}},
+        {{0xe7U, 0x9aU, 0x96U}, {0xcdU, 0xeeU}},
+        {{0xe6U, 0xb2U, 0xaaU}, {0xbbU, 0xa6U}},
+        {{0xe9U, 0x97U, 0xbdU}, {0xc3U, 0xf6U}},
+        {{0xe6U, 0xb8U, 0x9dU}, {0xd3U, 0xe5U}},
+        {{0xe8U, 0xb5U, 0xa3U}, {0xb8U, 0xd3U}},
+        {{0xe6U, 0xb8U, 0xafU}, {0xb8U, 0xdbU}},
+        {{0xe9U, 0xb2U, 0x81U}, {0xc2U, 0xb3U}},
+        {{0xe6U, 0xbeU, 0xb3U}, {0xb0U, 0xc4U}},
+        {{0xe8U, 0xb1U, 0xabU}, {0xd4U, 0xa5U}},
+        {{0xe8U, 0x92U, 0x99U}, {0xc3U, 0xc9U}},
+        {{0xe9U, 0x84U, 0x82U}, {0xb6U, 0xf5U}},
+        {{0xe6U, 0x96U, 0xb0U}, {0xd0U, 0xc2U}},
+        {{0xe6U, 0xb9U, 0x98U}, {0xcfU, 0xe6U}},
+        {{0xe5U, 0xaeU, 0x81U}, {0xc4U, 0xfeU}},
+        {{0xe7U, 0xb2U, 0xa4U}, {0xd4U, 0xc1U}},
+        {{0xe8U, 0x97U, 0x8fU}, {0xb2U, 0xd8U}},
+        {{0xe7U, 0x90U, 0xbcU}, {0xc7U, 0xedU}},
+        {{0xe6U, 0xa1U, 0x82U}, {0xb9U, 0xf0U}},
+        {{0xe5U, 0xb7U, 0x9dU}, {0xb4U, 0xa8U}},
+        {{0xe8U, 0x9cU, 0x80U}, {0xcaU, 0xf1U}},
+        {{0xe5U, 0x86U, 0x80U}, {0xbcU, 0xbdU}},
+        {{0xe8U, 0xb4U, 0xb5U}, {0xb9U, 0xf3U}},
+        {{0xe9U, 0xbbU, 0x94U}, {0xc7U, 0xadU}},
+        {{0xe6U, 0x99U, 0x8bU}, {0xbdU, 0xfaU}},
+        {{0xe4U, 0xbaU, 0x91U}, {0xd4U, 0xc6U}},
+        {{0xe6U, 0xbbU, 0x87U}, {0xb5U, 0xe1U}},
+        {{0xe8U, 0xbeU, 0xbdU}, {0xc1U, 0xc9U}},
+        {{0xe9U, 0x99U, 0x95U}, {0xc9U, 0xc2U}},
+        {{0xe7U, 0xa7U, 0xa6U}, {0xc7U, 0xd8U}},
+        {{0xe5U, 0x90U, 0x89U}, {0xbcU, 0xaaU}},
+        {{0xe7U, 0x94U, 0x98U}, {0xb8U, 0xcaU}},
+        {{0xe9U, 0x99U, 0x87U}, {0xc2U, 0xa4U}},
+        {{0xe9U, 0xbbU, 0x91U}, {0xbaU, 0xdaU}},
+        {{0xe9U, 0x9dU, 0x92U}, {0xc7U, 0xe0U}},
+        {{0xe8U, 0x8bU, 0x8fU}, {0xcbU, 0xd5U}},
+        {{0xe5U, 0x8fU, 0xb0U}, {0xccU, 0xa8U}},
+    };
+    size_t length = strlen(plate);
+    size_t i;
+
+    if (length >= 3U) {
+        for (i = 0U; i < sizeof(provinces) / sizeof(provinces[0]); ++i) {
+            if (memcmp(plate, provinces[i].utf8, 3U) == 0) {
+                size_t suffix_length = length - 3U;
+                if (suffix_length + 2U > capacity) return 0U;
+                memcpy(out, provinces[i].gbk, 2U);
+                memcpy(out + 2U, plate + 3U, suffix_length);
+                return (uint8_t)(suffix_length + 2U);
+            }
+        }
+    }
+    if (length > capacity) return 0U;
+    memcpy(out, plate, length);
+    return (uint8_t)length;
+}
+
 static int send_register_current_identity(uint8_t channel)
 {
     /* body: province(2)+city(2)+manuf(5)+model(20)+term_id(7)+color(1)+plate
      * 808-2013 Table 7: 终端型号 BYTE[20], 终端ID BYTE[7] */
-    uint8_t model[20] = {0}, tid[7] = {0};
+    uint8_t model[20] = {0}, tid[7] = {0}, plate[CFG_PLATE_LEN] = {0};
+    uint8_t plate_length = encode_plate_gbk(s_term.plate_no, plate,
+                                             sizeof(plate));
     memcpy(model, s_term.terminal_model,
            strlen(s_term.terminal_model) < 20 ? strlen(s_term.terminal_model) : 20);
     memcpy(tid,   s_term.terminal_id,
@@ -366,9 +540,7 @@ static int send_register_current_identity(uint8_t channel)
     memcpy(&body[pos], model, 20);             pos += 20;
     memcpy(&body[pos], tid,   7);              pos += 7;
     body[pos++] = s_term.color;
-    /* plate number GBK; write ASCII for now */
-    uint8_t plen = (uint8_t)strlen(s_term.plate_no);
-    memcpy(&body[pos], s_term.plate_no, plen); pos += plen;
+    memcpy(&body[pos], plate, plate_length); pos += plate_length;
 
     frame_t f;
     if (!frame_init(&f)) {
@@ -522,6 +694,86 @@ bool jt808_location_snapshot_valid(const gps_data_t *gps, uint32_t now)
     return gps->day >= 1U && gps->day <= maximum_day;
 }
 
+void jt808_reset_endpoint_auth(uint8_t channel_mask)
+{
+    if ((channel_mask & JT808_ENDPOINT_MAIN_MASK) != 0U) {
+        s_cfg.auth_code[0] = '\0';
+        memset(&s_pending_auth[0], 0, sizeof(s_pending_auth[0]));
+        jt808_session_init(&s_sessions[0], TCP_CH_MAIN);
+    }
+    if ((channel_mask & JT808_ENDPOINT_BACKUP_MASK) != 0U) {
+        s_cfg.backup_auth_code[0] = '\0';
+        memset(&s_pending_auth[1], 0, sizeof(s_pending_auth[1]));
+        jt808_session_init(&s_sessions[1], TCP_CH_BACKUP);
+    }
+}
+
+static uint8_t jt808_days_in_month(uint16_t year, uint8_t month)
+{
+    static const uint8_t days[13] =
+        { 0U,31U,28U,31U,30U,31U,30U,31U,31U,30U,31U,30U,31U };
+    bool leap = (year % 4U == 0U && year % 100U != 0U) ||
+                (year % 400U == 0U);
+    return month == 2U && leap ? 29U : days[month];
+}
+
+static void jt808_apply_timezone(const gps_data_t *gps,
+                                 uint16_t *year, uint8_t *month,
+                                 uint8_t *day, uint8_t *hour,
+                                 uint8_t *minute)
+{
+    const device_config_t *config = cfg_get();
+    int8_t sign = config->gmt_sign;
+    uint8_t offset_hour = config->gmt_hour;
+    uint8_t offset_minute = config->gmt_min;
+    int32_t local_minutes;
+
+    if ((sign != 1 && sign != -1) || offset_hour > 12U ||
+        offset_minute > 59U) {
+        sign = 1;
+        offset_hour = 8U;
+        offset_minute = 0U;
+    }
+
+    *year = gps->year;
+    *month = gps->month;
+    *day = gps->day;
+    local_minutes = (int32_t)gps->hour * 60 + gps->minute +
+                    (int32_t)sign *
+                    ((int32_t)offset_hour * 60 + offset_minute);
+
+    while (local_minutes < 0) {
+        local_minutes += 24 * 60;
+        if (*day > 1U) {
+            --*day;
+        } else {
+            if (*month > 1U) {
+                --*month;
+            } else {
+                *month = 12U;
+                --*year;
+            }
+            *day = jt808_days_in_month(*year, *month);
+        }
+    }
+    while (local_minutes >= 24 * 60) {
+        local_minutes -= 24 * 60;
+        if (*day < jt808_days_in_month(*year, *month)) {
+            ++*day;
+        } else {
+            *day = 1U;
+            if (*month < 12U) {
+                ++*month;
+            } else {
+                *month = 1U;
+                ++*year;
+            }
+        }
+    }
+    *hour = (uint8_t)(local_minutes / 60);
+    *minute = (uint8_t)(local_minutes % 60);
+}
+
 static uint16_t encode_location_compact(const gps_data_t *g,
                                         uint8_t body[BLIND_ZONE_LOCATION_MAX])
 {
@@ -534,7 +786,8 @@ static uint16_t encode_location_compact(const gps_data_t *g,
     /* 808-2013: bit2=1表示西经(默认东经不置位), bit3=1表示南纬(默认北纬不置位) */
     if (g->lon < 0) status |= LOC_FLAG_WEST_LON;
     if (g->lat < 0) status |= LOC_FLAG_SOUTH_LAT;
-    if (g->fix_quality > 0) status |= LOC_FLAG_GPS_FIXED;
+    if (g->fix_quality > 0)
+        status |= LOC_FLAG_GPS_FIXED | LOC_FLAG_BEIDOU_FIXED;
 
     uint32_t lat_deg = (uint32_t)(fabs(g->lat) * 1e6);
     uint32_t lon_deg = (uint32_t)(fabs(g->lon) * 1e6);
@@ -551,30 +804,18 @@ static uint16_t encode_location_compact(const gps_data_t *g,
     body[p++]=(alt>>8); body[p++]=alt;
     body[p++]=(speed>>8); body[p++]=speed;
     body[p++]=(heading>>8); body[p++]=heading;
-    /* UTC+8 时区转换，处理日期进位 */
-    uint8_t t_hour  = g->hour + 8;
+    uint8_t t_hour;
+    uint8_t t_minute;
     uint8_t t_day   = g->day;
     uint8_t t_month = g->month;
     uint16_t t_year = g->year;
-    if (t_hour >= 24) {
-        t_hour -= 24;
-        t_day++;
-        static const uint8_t days_in_month[] = {0,31,28,31,30,31,30,31,31,30,31,30,31};
-        bool leap = (t_year % 4U == 0U && t_year % 100U != 0U) ||
-                    (t_year % 400U == 0U);
-        uint8_t dim = (t_month == 2U && leap) ? 29U : days_in_month[t_month];
-        if (t_day > dim) {
-            t_day = 1;
-            t_month++;
-            if (t_month > 12) { t_month = 1; t_year++; }
-        }
-    }
-    /* BCD时间: YY MM DD HH mm SS (北京时间) */
+    jt808_apply_timezone(g, &t_year, &t_month, &t_day, &t_hour, &t_minute);
+    /* BCD time: YY MM DD HH mm SS in the configured local timezone. */
     body[p++] = (uint8_t)(((t_year%100)/10)<<4 | (t_year%10));
     body[p++] = (uint8_t)((t_month/10)<<4  | (t_month%10));
     body[p++] = (uint8_t)((t_day/10)<<4    | (t_day%10));
     body[p++] = (uint8_t)((t_hour/10)<<4   | (t_hour%10));
-    body[p++] = (uint8_t)((g->minute/10)<<4 | (g->minute%10));
+    body[p++] = (uint8_t)((t_minute/10)<<4 | (t_minute%10));
     body[p++] = (uint8_t)((g->second/10)<<4 | (g->second%10));
     /* 附加信息项 0x31: GNSS定位卫星数(1字节) */
     body[p++] = 0x31;
@@ -646,7 +887,8 @@ static uint16_t encode_location_online(const gps_data_t *g,
     body[2]=(uint8_t)(alarm_bits>>8); body[3]=(uint8_t)alarm_bits;
     if (jt808_get_logical_acc()) status |= LOC_FLAG_ACC_ON;
     else status &= ~LOC_FLAG_ACC_ON;
-    if (historical_position) status &= ~LOC_FLAG_GPS_FIXED;
+    if (historical_position)
+        status &= ~LOC_FLAG_GPS_FIXED;
     body[4]=(uint8_t)(status>>24); body[5]=(uint8_t)(status>>16);
     body[6]=(uint8_t)(status>>8); body[7]=(uint8_t)status;
 
@@ -679,6 +921,7 @@ int jt808_send_location_to(uint8_t channel, const gps_data_t *snapshot)
     uint8_t body[JT808_LOCATION_ONLINE_MAX];
     frame_t frame;
     uint16_t length;
+    int result;
     if (!jt808_channel_online(channel) ||
         !jt808_location_snapshot_valid(snapshot, TICK_MS()))
         return -1;
@@ -686,7 +929,9 @@ int jt808_send_location_to(uint8_t channel, const gps_data_t *snapshot)
     if (!frame_init(&frame)) return -1;
     if (!build_header(&frame, MSG_LOCATION_REPORT, length)) { frame_release(); return -1; }
     frame_bytes(&frame, body, length);
-    return finish_frame_channel(&frame, channel);
+    result = send_frame_channel_delivered(&frame, channel);
+    frame_release();
+    return result;
 }
 
 int jt808_send_location(void)
@@ -718,9 +963,9 @@ int jt808_send_location(void)
         frame_bytes(&f, online_body, online_length);
     }
     if (jt808_channel_online(TCP_CH_MAIN) &&
-        send_frame_channel(&f, TCP_CH_MAIN) == 0) sent = true;
+        send_frame_channel_delivered(&f, TCP_CH_MAIN) == 0) sent = true;
     if (jt808_channel_online(TCP_CH_BACKUP) &&
-        send_frame_channel(&f, TCP_CH_BACKUP) == 0) sent = true;
+        send_frame_channel_delivered(&f, TCP_CH_BACKUP) == 0) sent = true;
     frame_release();
     if (sent) {
         s_alarm_flags = 0;
@@ -777,6 +1022,7 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
     frame_t frame;
     gps_data_t snapshot;
     uint16_t length;
+    int result;
 
     if (!jt808_is_online()) return -1;
     if (historical_position) {
@@ -812,7 +1058,24 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
         return -1;
     }
     frame_bytes(&frame, body, length);
-    return send_frame(&frame);
+    result = send_frame_broadcast(&frame, alarm_bits != 0U);
+    if (result == 0) {
+        s_last_location_ms = TICK_MS();
+        s_alarm_flags &= ~alarm_bits;
+    }
+    return result;
+}
+
+void jt808_set_terminal_profile(const char *model, const char *plate)
+{
+    if (model != NULL) {
+        strncpy(s_term.terminal_model, model, sizeof(s_term.terminal_model) - 1U);
+        s_term.terminal_model[sizeof(s_term.terminal_model) - 1U] = '\0';
+    }
+    if (plate != NULL) {
+        strncpy(s_term.plate_no, plate, sizeof(s_term.plate_no) - 1U);
+        s_term.plate_no[sizeof(s_term.plate_no) - 1U] = '\0';
+    }
 }
 
 static int send_location_only(uint16_t message_id)
@@ -832,10 +1095,34 @@ static int send_location_only(uint16_t message_id)
 
 static void process_location_timer(uint32_t now)
 {
+    /* WORK_MODE_STATIONARY_SLEEP powers GNSS down.  In that state work_mode.c
+     * is the only owner of 0x0200 scheduling: it emits the sleep-entry report
+     * and any configured retained-position cadence.  Letting this legacy
+     * live-GNSS timer continue turns its stale-fix fallback into a continuous
+     * stream of duplicate historical locations. */
+    if (work_mode_state() == WORK_MODE_STATIONARY_SLEEP) {
+        gps_data_t first_snapshot = *gps_get_data();
+        uint8_t first_index;
+        bool first_sent = false;
+
+        if (jt808_location_snapshot_valid(&first_snapshot, now)) {
+            for (first_index = 0U; first_index < 2U; ++first_index) {
+                jt808_session_t *session = &s_sessions[first_index];
+                if (session->waiting_first_fix &&
+                    jt808_channel_online(session->channel) &&
+                    jt808_send_location_to(session->channel,
+                                           &first_snapshot) == 0) {
+                    session->waiting_first_fix = false;
+                    first_sent = true;
+                }
+            }
+            if (first_sent) s_last_location_ms = now;
+        }
+        return;
+    }
+
     gps_data_t snapshot = *gps_get_data();
     bool valid = jt808_location_snapshot_valid(&snapshot, now);
-    bool moving = i2c_accel_is_moving() || (valid && snapshot.speed_kmh >= 3.0f);
-    uint16_t interval_s = moving ? s_cfg.report_moving_s : s_cfg.report_stopped_s;
     uint8_t index;
     bool first_fix_sent = false;
     bool corner_append_blocked = false;
@@ -926,9 +1213,9 @@ static void process_location_timer(uint32_t now)
                     if (build_header(&frame, MSG_LOCATION_REPORT, length)) {
                         frame_bytes(&frame, body, length);
                         if (jt808_channel_online(TCP_CH_MAIN) &&
-                            send_frame_channel(&frame, TCP_CH_MAIN) == 0) sent = true;
+                            send_frame_channel_delivered(&frame, TCP_CH_MAIN) == 0) sent = true;
                         if (jt808_channel_online(TCP_CH_BACKUP) &&
-                            send_frame_channel(&frame, TCP_CH_BACKUP) == 0) sent = true;
+                            send_frame_channel_delivered(&frame, TCP_CH_BACKUP) == 0) sent = true;
                     }
                     frame_release();
                 }
@@ -978,11 +1265,6 @@ static void process_location_timer(uint32_t now)
             }
         }
         if (first_fix_sent) s_last_location_ms = now;
-    }
-    if (!valid || interval_s == 0U) return;
-    if (now - s_last_location_ms > (uint32_t)interval_s * 1000U) {
-        int result = jt808_send_location();
-        if (result != -2) s_last_location_ms = now;
     }
 }
 
@@ -1124,6 +1406,7 @@ static void __attribute__((noinline)) process_frame(
                 jt808_session_accept_auth(session, generation, reply_serial)) {
                 if (body[4] == 0U) {
                     jt808_session_mark_online(session);
+                    queue_boot_terminal_info(channel);
                     log_platform_on_first_online();
                     dbg_printf("[808] ch%u ONLINE\r\n", channel);
                 } else {
@@ -1285,6 +1568,7 @@ void jt808_init(const jt808_terminal_t *info)
     s_response_channel = TCP_CH_MAIN;
     memset(s_rx, 0, sizeof(s_rx));
     memset(s_pending_auth, 0, sizeof(s_pending_auth));
+    memset(s_boot_terminal_info, 0, sizeof(s_boot_terminal_info));
     s_tx_workspace.busy = false;
     blind_zone_replay_reset();
     corner_init_safe(&s_motion_corner);
@@ -1313,8 +1597,10 @@ void jt808_process(void)
     uint32_t now_s = jt808_monotonic_s();
     static const uint8_t channels[2] = { TCP_CH_MAIN, TCP_CH_BACKUP };
     uint8_t index;
-    process_location_timer(now);
     if (!ec800m_is_ready()) return;
+
+    process_boot_terminal_info(now);
+    process_location_timer(now);
 
     for (index = 0U; index < 2U; ++index) {
         uint8_t channel = channels[index];

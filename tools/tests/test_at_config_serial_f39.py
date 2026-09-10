@@ -44,12 +44,23 @@ HARNESS = r'''
 
 static device_config_t config;
 static unsigned saves, system_resets;
+static unsigned ota_rechecks;
+static unsigned ota_recheck_after_save;
+static bool persist_ok = true;
+static char ota_key[CFG_DEVICE_API_KEY_LEN];
+static uint32_t refreshed_at_s;
 static char console[1024];
 static unsigned console_len;
 
 volatile uint32_t g_tick_ms;
 device_config_t *cfg_get(void) { return &config; }
-bool cfg_store_candidate(const device_config_t *c) { config = *c; saves++; return true; }
+bool cfg_store_candidate(const device_config_t *c) { saves++; if (!persist_ok) return false; config = *c; return true; }
+bool fota_request_check(void) {
+    ++ota_rechecks;
+    ota_recheck_after_save = saves;
+    memcpy(ota_key, config.device_api_key, sizeof ota_key);
+    return true;
+}
 cfg_store_result_t cfg_set_pid_result(const char pid[CFG_PID_LEN])
 { memcpy(config.pid, pid, CFG_PID_LEN); return CFG_STORE_OK; }
 void cfg_save(void) { }
@@ -57,7 +68,13 @@ void jt808_set_heartbeat_s(uint16_t s) { (void)s; }
 void jt808_set_report_interval(uint16_t a, uint16_t b) { (void)a; (void)b; }
 void jt808_set_server(const char *ip, uint16_t p, bool b) { (void)ip; (void)p; (void)b; }
 void jt808_request_reregister(void) { }
+void jt808_set_terminal_profile(const char *model, const char *plate) { (void)model; (void)plate; }
+void jt808_reset_endpoint_auth(uint8_t mask) { (void)mask; }
+uint32_t work_mode_sleep_monotonic_s(void) { return 1234U; }
+void work_mode_config_changed(const device_config_t *c, uint32_t now_s)
+{ (void)c; refreshed_at_s = now_s; }
 void tcp_manager_reconnect(void) { }
+void ec800m_restart_pdp(void) { }
 void gnss_vendor_set_type(gnss_type_t t) { (void)t; }
 void agnss_init(gnss_type_t t) { (void)t; }
 void relay_set(bool on) { (void)on; }
@@ -136,6 +153,7 @@ int main(void) {
     line("FREQ,60,300#");
     assert(strstr(console, "FREQ=Success!") != 0);
     assert(config.report_moving_s == 60 && config.report_stopped_s == 300);
+    assert(refreshed_at_s == 1234U);
 
     line("PARAM#");
     assert(strstr(console, "PRO[JT808_2013]") != 0);
@@ -152,10 +170,42 @@ int main(void) {
     line("TIMER=45,90");
     assert(strstr(console, "OK") != 0);
     assert(config.report_moving_s == 45 && config.report_stopped_s == 90);
+    assert(refreshed_at_s == 1234U);
 
     /* A genuinely unknown line is still reported as unknown. */
     line("NOSUCHCOMMAND");
     assert(strstr(console, "ERR:UNKNOWN CMD") != 0);
+
+    /* Only a durable key update rearms OTA, after publishing the new config.
+       Serial, SMS, and JT808 text ingress all use the default F39 binding. */
+    saves = 0U;
+    line("FKEY,mIxedCase-Key1234#");
+    assert(strstr(console, "FKEY,CONFIGURED=1") != NULL);
+    assert(ota_rechecks == 1U && ota_recheck_after_save == 1U);
+    assert(strcmp(ota_key, "mIxedCase-Key1234") == 0);
+    assert(strstr(console, ota_key) == NULL);
+    line("FKEY?");
+    assert(ota_rechecks == 1U && saves == 1U);
+    line("FKEY,short#");
+    assert(ota_rechecks == 1U && saves == 1U);
+    persist_ok = false;
+    line("FKEY,another-key123456#");
+    assert(ota_rechecks == 1U && saves == 2U);
+    assert(strcmp(config.device_api_key, ota_key) == 0);
+    assert(strstr(console, "another-key123456") == NULL);
+    persist_ok = true;
+    {
+        const char *sms_key = "FKEY,sms-key-123456789";
+        const char *text_key = "FKEY,text-key-12345678";
+        assert(at_config_execute_sms("13800000001", (const uint8_t *)sms_key,
+                                     (uint16_t)strlen(sms_key)));
+        assert(ota_rechecks == 2U && ota_recheck_after_save == 3U);
+        assert(strcmp(ota_key, "sms-key-123456789") == 0);
+        assert(at_config_execute_text_command((const uint8_t *)text_key,
+                                              (uint16_t)strlen(text_key)));
+        assert(ota_rechecks == 3U && ota_recheck_after_save == 4U);
+        assert(strcmp(ota_key, "text-key-12345678") == 0);
+    }
 
     /* RESET over serial schedules the restart rather than resetting inside
        the parser; at_config_process() performs it once the delay elapses. */

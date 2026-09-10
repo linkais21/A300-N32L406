@@ -7,6 +7,7 @@ GPS = (ROOT / "src" / "gps.c").read_text(encoding="utf-8")
 GPS_H = (ROOT / "include" / "gps.h").read_text(encoding="utf-8")
 SLEEP = (ROOT / "src" / "work_mode_sleep.c").read_text(encoding="utf-8")
 ACCEL = (ROOT / "src" / "i2c_accel.c").read_text(encoding="utf-8")
+WORK = (ROOT / "src" / "work_mode.c").read_text(encoding="utf-8")
 
 
 def test_historical_fix_time_can_be_advanced_after_stop():
@@ -19,10 +20,10 @@ def test_historical_fix_time_can_be_advanced_after_stop():
 
 
 def test_vibration_episode_tolerates_short_ema_misses():
-    assert "s_vibration_episode_start_ms" in ACCEL
-    assert "s_vibration_last_hit_ms" in ACCEL
-    assert "VIBRATION_CONFIRM_GAP_MS" in ACCEL
-    assert "vibration_episode" in ACCEL
+    assert "WORK_MODE_VIBRATION_MISS_TOLERANCE 2U" in WORK
+    assert "vibration_miss_count" in WORK
+    assert "vibration_miss_count >" in WORK
+    assert "return s_diag.vibration_hit;" in ACCEL
     assert "TICK_MS() - s_last_vibration_log_ms >= 5000U" in ACCEL
 
 
@@ -32,10 +33,11 @@ def test_stop_entry_latches_active_high_accel_level():
     assert "WORK_SLEEP_WAKE_VIBRATION" in SLEEP
 
 
-def test_first_post_wake_accel_sample_counts_interrupt_as_motion():
+def test_first_post_wake_accel_interrupt_only_opens_sampling_window():
     MAIN = (ROOT / "src" / "main.c").read_text(encoding="utf-8")
     assert "WORK_SLEEP_WAKE_VIBRATION" in MAIN
-    assert "input.vibration_hit = true" in MAIN
+    assert "input.vibration_hit = true" not in MAIN
+    assert "vibration_wake_window = true" in MAIN
 
 
 def test_wake_logs_gnss_snapshot_and_fix_quality():

@@ -4,11 +4,36 @@ import zlib
 import shutil
 import subprocess
 import tempfile
+import struct
 
 
 ROOT = Path(__file__).parents[2]
 FOTA_H = (ROOT / "include" / "fota.h").read_text(encoding="utf-8")
 FOTA_C = (ROOT / "src" / "fota.c").read_text(encoding="utf-8")
+BOOT_CONTRACT = (ROOT / "include" / "boot_contract.h").read_text(encoding="utf-8")
+
+
+def test_a300_wire_header_is_exactly_32_bytes():
+    body = struct.pack("<II", 0x20001000, 0x08006009) + b"a300-body"
+    crc = zlib.crc32(body) & 0xFFFFFFFF
+    wire = struct.pack("<IIIII12s", 0xA300B007, 3002, len(body), crc,
+                       0x41333030, bytes(12))
+    assert len(wire) == 32
+    assert struct.unpack("<IIIII12s", wire) == (
+        0xA300B007, 3002, len(body), crc, 0x41333030, bytes(12))
+    assert "FOTA_PACKAGE_HEADER_MAGIC 0xA300B007UL" in FOTA_H
+    assert "_Static_assert(sizeof(fota_package_header_t) == FOTA_PACKAGE_HEADER_SIZE" in FOTA_H
+    assert "uint8_t reserved[12]" in FOTA_H
+
+
+def test_detached_metadata_is_durable_before_pending_and_reset_is_immediate():
+    assert "package_sha256[32]" in BOOT_CONTRACT
+    assert "signature[64]" in BOOT_CONTRACT
+    assert "signing_key_id" in BOOT_CONTRACT
+    verify = FOTA_C[FOTA_C.index("if (s_state==FOTA_STATE_VERIFYING)"):]
+    assert verify.index("fota_authorization_commit") < verify.index("fota_bcr_commit_pending")
+    assert verify.index("fota_bcr_commit_pending") < verify.index("NVIC_SystemReset()")
+    assert "s_state=FOTA_STATE_READY" not in verify[:verify.index("NVIC_SystemReset()")]
 
 
 def _package(payload, signature=b"ECDSA-VALID"):
@@ -17,14 +42,14 @@ def _package(payload, signature=b"ECDSA-VALID"):
     return body, zlib.crc32(body) & 0xFFFFFFFF
 
 
-def test_package_requires_manifest_hash_signature_and_crc_before_pending():
-    assert "image_manifest" in FOTA_C
+def test_package_requires_header_hash_signature_and_crc_before_pending():
+    assert "fota_package_header_t" in FOTA_C
     assert "sha256" in FOTA_C.lower()
-    assert "ecdsa" in FOTA_C.lower()
+    assert "firmware_signature_verify" in FOTA_C
     assert "crc32" in FOTA_C.lower()
     assert "BCR_PENDING" in FOTA_C
-    assert "fota_signature_digest(m,signature_digest)" in FOTA_C
-    assert "firmware_signature_verify(signature_digest,m->ecdsa_signature)" in FOTA_C
+    assert "memcmp(digest,s_package_sha256" in FOTA_C
+    assert "firmware_signature_verify(digest,s_signature)" in FOTA_C
     assert "fota_ecdsa_verify" not in FOTA_C
 
 
@@ -44,10 +69,9 @@ def test_package_hash_and_signature_failures_are_rejected():
 
 def test_power_loss_checkpoint_is_not_a_pending_handoff():
     # A checkpoint contains progress, but PENDING is only written after verify.
-    assert "s_state=FOTA_STATE_READY" in FOTA_C
-    assert FOTA_C.index("fota_bcr_commit_pending") < FOTA_C.index("s_state=FOTA_STATE_READY")
-    assert "fota_bcr_commit_pending(m.version_counter,m.image_length,m.target_address)" in FOTA_C
-    assert "fota_bcr_commit_pending(m.version_counter,s_received" not in FOTA_C
+    branch = FOTA_C[FOTA_C.index("if (s_state==FOTA_STATE_VERIFYING)"):]
+    assert branch.index("fota_authorization_commit") < branch.index("fota_bcr_commit_pending")
+    assert "fota_bcr_commit_pending(m.version,m.body_size,APP_FLASH_BASE)" in branch
 
 
 def test_bcr_layout_is_shared_with_bootloader():
@@ -60,10 +84,10 @@ def test_bcr_layout_is_shared_with_bootloader():
     assert "uint32_t rollback_floor;" in bcr
 
 
-def test_manifest_enforces_target_version_and_healthy_floor():
-    assert "m->target_address!=APP_FLASH_BASE" in FOTA_C
-    assert "m->version_counter==0U" in FOTA_C
-    assert "m->version_counter<floor" in FOTA_C
+def test_header_enforces_product_version_and_healthy_floor():
+    assert "m->product_id!=FOTA_PACKAGE_PRODUCT_ID" in FOTA_C
+    assert "m->version==0U" in FOTA_C
+    assert "m->version<floor" in FOTA_C
     assert "__attribute__((weak)) bool fota_bcr_commit_pending" not in FOTA_C
     assert "fota_sequence_newer" in FOTA_C
     assert "fota_bcr_valid(&check)&&memcmp(&check,&r,sizeof r)==0" in FOTA_C
@@ -74,88 +98,28 @@ def test_trial_health_is_committed_before_reset():
     assert "void fota_confirm_trial_process(void)" in FOTA_C
     body = FOTA_C[FOTA_C.index("void fota_confirm_trial_process(void)"):]
     assert body.index("ext_flash_try_lock_now(EXT_FLASH_OWNER_OTA)") < body.index("fota_bcr_load(&record)")
-    assert body.index("record.rollback_floor=record.image_version") < body.index("fota_bcr_write_record(&record)")
+    # The floor is raised only after Bootloader has committed a verified LKG.
+    assert "record.rollback_floor=record.image_version" not in body
     assert body.index("fota_bcr_write_record(&record)") < body.index("NVIC_SystemReset()")
     assert "fota_confirm_trial_process();" in (ROOT / "src" / "main.c").read_text(encoding="utf-8")
 
 
 def test_runtime_bcr_handoff_uses_payload_length():
-    """Compile an executable equivalence harness for the VERIFYING handoff."""
-    cc = shutil.which("gcc") or shutil.which("clang") or shutil.which("cc")
-    if not cc:
-        return
-    with tempfile.TemporaryDirectory() as td:
-        t = Path(td)
-        source = r'''
-#include <assert.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-
-typedef struct __attribute__((packed)) {
-    uint32_t magic, product_id, hardware_id, target_address, image_length, version_counter;
-    uint8_t sha256[32], ecdsa_signature[64];
-    uint32_t crc32;
-} image_manifest_t;
-
-enum { FOTA_STATE_VERIFYING = 3, FOTA_STATE_READY = 4, FOTA_STATE_ERROR = 5 };
-static int state = FOTA_STATE_VERIFYING;
-static uint32_t received;
-static image_manifest_t candidate;
-static uint32_t captured_length;
-
-static bool ext_flash_read(uint32_t address, void *out, uint32_t length) {
-    (void)address;
-    if (length != sizeof(candidate)) return false;
-    memcpy(out, &candidate, length);
-    return true;
-}
-static bool fota_verify_manifest(const void *manifest, uint32_t length) {
-    return manifest != 0 && length == sizeof(candidate);
-}
-static bool fota_bcr_commit_pending(uint32_t version, uint32_t length, uint32_t target) {
-    (void)version; (void)target; captured_length = length; return true;
-}
-
-/* Mirrors the production VERIFYING branch and intentionally calls the same API. */
-static void fota_process_verifying(void) {
-    image_manifest_t m;
-    if (received < sizeof m || !ext_flash_read(0, &m, sizeof m) ||
-        m.image_length + sizeof m != received ||
-        !fota_verify_manifest(&m, sizeof m) ||
-        !fota_bcr_commit_pending(m.version_counter, m.image_length, m.target_address)) {
-        state = FOTA_STATE_ERROR;
-        return;
-    }
-    state = FOTA_STATE_READY;
-}
-
-int main(void) {
-    candidate.image_length = 321U;
-    candidate.version_counter = 7U;
-    candidate.target_address = 0x08003000U;
-    received = (uint32_t)sizeof(candidate) + candidate.image_length;
-    fota_process_verifying();
-    assert(state == FOTA_STATE_READY);
-    assert(captured_length == candidate.image_length);
-    assert(captured_length != received);
-    return 0;
-}
-'''
-        c = t / "fota_bcr_length.c"
-        c.write_text(source, encoding="utf-8")
-        exe = t / "fota_bcr_length.exe"
-        subprocess.run([cc, "-std=c99", "-Wall", "-Wextra", "-Werror", str(c), "-o", str(exe)], check=True, capture_output=True, text=True)
-        subprocess.run([str(exe)], check=True, capture_output=True, text=True)
+    branch = FOTA_C[FOTA_C.index("if (s_state==FOTA_STATE_VERIFYING)"):]
+    assert "authorization.package_length=s_expected" in branch
+    assert "authorization.package_version=m.version" in branch
+    assert "authorization.package_crc32=m.body_crc32" in branch
 
 
 if __name__ == "__main__":
-    test_package_requires_manifest_hash_signature_and_crc_before_pending()
+    test_a300_wire_header_is_exactly_32_bytes()
+    test_detached_metadata_is_durable_before_pending_and_reset_is_immediate()
+    test_package_requires_header_hash_signature_and_crc_before_pending()
     test_oversized_and_cancel_paths_release_ota_owner()
     test_package_hash_and_signature_failures_are_rejected()
     test_power_loss_checkpoint_is_not_a_pending_handoff()
     test_bcr_layout_is_shared_with_bootloader()
-    test_manifest_enforces_target_version_and_healthy_floor()
+    test_header_enforces_product_version_and_healthy_floor()
     test_trial_health_is_committed_before_reset()
     test_runtime_bcr_handoff_uses_payload_length()
     print("test_fota_package: PASS")

@@ -1,6 +1,7 @@
 #include "image_verify.h"
 #include "bootloader_config.h"
 #include "firmware_signature.h"
+#include "trusted_public_key.h"
 #include <stddef.h>
 #include <string.h>
 
@@ -45,62 +46,134 @@ static void sha256_init(sha256_ctx_t *c) { static const uint32_t h[8]={0x6a09e66
 static void sha256_update(sha256_ctx_t *c,const uint8_t *p,uint32_t n) { c->bits += n*8U; while(n){ uint32_t room=64U-(uint32_t)c->used; uint8_t take=(uint8_t)((n < room)?n:room); memcpy(c->block+c->used,p,take); c->used += take;p+=take;n-=take; if(c->used==64){sha256_block(c,c->block);c->used=0;} } }
 static void sha256_final(sha256_ctx_t *c,uint8_t out[32]) { uint8_t i; c->block[c->used++]=0x80; while(c->used!=56){if(c->used==64){sha256_block(c,c->block);c->used=0;} c->block[c->used++]=0;} for(i=0;i<8;++i)c->block[56+i]=(uint8_t)(c->bits>>(56-8*i)); sha256_block(c,c->block); for(i=0;i<8;++i){out[4*i]=(uint8_t)(c->h[i]>>24);out[4*i+1]=(uint8_t)(c->h[i]>>16);out[4*i+2]=(uint8_t)(c->h[i]>>8);out[4*i+3]=(uint8_t)c->h[i];} }
 
-static void put_be32(uint8_t *out, uint32_t value)
+static bool authorization_valid(const fota_authorization_t *r)
 {
-    out[0]=(uint8_t)(value>>24); out[1]=(uint8_t)(value>>16);
-    out[2]=(uint8_t)(value>>8); out[3]=(uint8_t)value;
+    fota_authorization_t copy;
+    if (!r || r->magic != FOTA_AUTH_MAGIC || r->format_version != FOTA_AUTH_FORMAT ||
+        r->record_length != sizeof *r || r->commit_marker != FOTA_AUTH_COMMIT_MARKER ||
+        r->package_length < FOTA_PACKAGE_HEADER_SIZE ||
+        r->package_length > CANDIDATE_LIMIT-CANDIDATE_BASE ||
+        r->package_version == 0U || r->target_address != APP_FLASH_BASE ||
+        r->signing_key_id != TRUSTED_SIGNING_KEY_ID) return false;
+    copy=*r;copy.crc32=0U;copy.commit_marker=0xFFFFFFFFUL;
+    return image_crc32(&copy,(uint32_t)offsetof(fota_authorization_t,crc32))==r->crc32;
 }
 
-void image_signature_digest(const image_manifest_t *manifest, uint8_t out[32])
+bool boot_authorization_read_at(uint32_t address, fota_authorization_t *out)
 {
-    uint8_t canonical[56];
-    sha256_ctx_t sha;
-    if (!manifest || !out) return;
-    put_be32(canonical,manifest->magic); put_be32(canonical+4,manifest->product_id);
-    put_be32(canonical+8,manifest->hardware_id); put_be32(canonical+12,manifest->target_address);
-    put_be32(canonical+16,manifest->image_length); put_be32(canonical+20,manifest->version_counter);
-    memcpy(canonical+24,manifest->sha256,32);
-    sha256_init(&sha); sha256_update(&sha,canonical,sizeof canonical); sha256_final(&sha,out);
+    return out && boot_ext_read(address,out,sizeof *out) && authorization_valid(out);
+}
+
+bool boot_authorization_load(fota_authorization_t *out)
+{
+    fota_authorization_t a,b;bool va,vb;
+    if(!out || !boot_ext_read(FOTA_AUTH_SLOT_A_ADDR,&a,sizeof a) ||
+       !boot_ext_read(FOTA_AUTH_SLOT_B_ADDR,&b,sizeof b))return false;
+    va=authorization_valid(&a);vb=authorization_valid(&b);if(!va&&!vb)return false;
+    *out=(!vb||(va&&(int32_t)(a.sequence-b.sequence)>0))?a:b;return true;
+}
+
+static bool body_crc_valid(uint32_t address,uint32_t length,uint32_t expected)
+{
+    uint8_t buf[256];uint32_t crc=0xFFFFFFFFUL;
+    while(length){uint32_t n=length>sizeof buf?sizeof buf:length;if(!boot_ext_read(address,buf,n))return false;for(uint32_t i=0;i<n;i++){crc^=buf[i];for(uint8_t bit=0;bit<8U;bit++)crc=(crc>>1)^(0xEDB88320UL&(uint32_t)-(int32_t)(crc&1U));}address+=n;length-=n;boot_watchdog_feed();}
+    return ~crc==expected;
+}
+
+static bool vectors_valid(uint32_t address,uint32_t length)
+{
+    uint8_t vectors[8];uint32_t msp,reset;
+    if(!boot_ext_read(address,vectors,sizeof vectors))return false;
+    msp=(uint32_t)vectors[0]|(uint32_t)vectors[1]<<8|(uint32_t)vectors[2]<<16|(uint32_t)vectors[3]<<24;
+    reset=(uint32_t)vectors[4]|(uint32_t)vectors[5]<<8|(uint32_t)vectors[6]<<16|(uint32_t)vectors[7]<<24;
+    return msp>=0x20000000UL&&msp<=0x20006000UL&&(msp&7U)==0U&&reset>=APP_FLASH_BASE+1UL&&reset<APP_FLASH_BASE+length&&(reset&1U)!=0U;
 }
 
 image_verify_result_t verify_candidate(const image_manifest_t *m)
 {
-    uint8_t buf[256], digest[32], signature_digest[32];
-    image_manifest_t copy;
+    uint8_t buf[256], digest[32];fota_authorization_t auth;
     sha256_ctx_t sha;
-    if (!m || m->magic != IMAGE_MANIFEST_MAGIC) return IMAGE_VERIFY_CRC;
-    copy = *m; copy.crc32 = 0U;
-    if (image_crc32(&copy, (uint32_t)offsetof(image_manifest_t, crc32)) != m->crc32) return IMAGE_VERIFY_CRC;
-    if (m->target_address != APP_FLASH_BASE || m->target_address > APP_FLASH_END || m->image_length == 0U || m->image_length > (APP_FLASH_END - m->target_address)) return IMAGE_VERIFY_BOUNDS;
-    if (m->image_length > (CANDIDATE_LIMIT - CANDIDATE_BASE - (uint32_t)sizeof(*m))) return IMAGE_VERIFY_BOUNDS;
-    if (m->product_id != BOOTLOADER_PRODUCT_ID || m->hardware_id != BOOTLOADER_HARDWARE_ID) return IMAGE_VERIFY_ID;
-    if (m->version_counter < boot_rollback_counter()) return IMAGE_VERIFY_ROLLBACK;
-    if (!boot_ext_is_complete(CANDIDATE_BASE, (uint32_t)sizeof(*m) + m->image_length)) return IMAGE_VERIFY_INCOMPLETE;
+    static const uint8_t zero[12]={0};
+    if (!m || m->magic != FOTA_PACKAGE_HEADER_MAGIC || memcmp(m->reserved,zero,12)!=0) return IMAGE_VERIFY_CRC;
+    if (m->body_size == 0U || m->body_size > APP_FLASH_MAX_SIZE || m->body_size > APP_FLASH_END-APP_FLASH_BASE) return IMAGE_VERIFY_BOUNDS;
+    if (m->body_size > CANDIDATE_LIMIT-CANDIDATE_BASE-FOTA_PACKAGE_HEADER_SIZE) return IMAGE_VERIFY_BOUNDS;
+    if (m->product_id != FOTA_PACKAGE_PRODUCT_ID || m->product_id != BOOTLOADER_PRODUCT_ID) return IMAGE_VERIFY_ID;
+    uint32_t rollback_floor;
+    if (!boot_rollback_counter(&rollback_floor) || m->version < rollback_floor) return IMAGE_VERIFY_ROLLBACK;
+    if (!boot_authorization_load(&auth) || auth.package_length != FOTA_PACKAGE_HEADER_SIZE+m->body_size ||
+        auth.package_version != m->version || auth.package_crc32 != m->body_crc32) return IMAGE_VERIFY_SIGNATURE;
+    if (!boot_ext_is_complete(CANDIDATE_BASE, auth.package_length)) return IMAGE_VERIFY_INCOMPLETE;
+    if(!vectors_valid(CANDIDATE_BASE+FOTA_PACKAGE_HEADER_SIZE,m->body_size))return IMAGE_VERIFY_BOUNDS;
     sha256_init(&sha);
-    uint32_t left=m->image_length, address=CANDIDATE_BASE+(uint32_t)sizeof(*m);
+    uint32_t left=auth.package_length, address=CANDIDATE_BASE;
     while(left){uint32_t n=left>sizeof(buf)?sizeof(buf):left; if(!boot_ext_read(address,buf,n)) return IMAGE_VERIFY_INCOMPLETE; sha256_update(&sha,buf,n); address+=n;left-=n;}
     sha256_final(&sha,digest);
-    if (memcmp(digest,m->sha256,sizeof digest)!=0) return IMAGE_VERIFY_HASH;
-    image_signature_digest(m,signature_digest);
-    if (!firmware_signature_verify(signature_digest,m->ecdsa_signature)) return IMAGE_VERIFY_SIGNATURE;
+    if (memcmp(digest,auth.package_sha256,sizeof digest)!=0) return IMAGE_VERIFY_HASH;
+    if (!firmware_signature_verify(digest,auth.signature)) return IMAGE_VERIFY_SIGNATURE;
+    if(!body_crc_valid(CANDIDATE_BASE+FOTA_PACKAGE_HEADER_SIZE,m->body_size,m->body_crc32))return IMAGE_VERIFY_CRC;
     return IMAGE_VERIFY_OK;
 }
 
-bool verify_external_manifest(const image_manifest_t *m, uint32_t base)
+static bool verify_external_manifest_policy(const image_manifest_t *m,uint32_t base,
+                                            uint32_t authorization_address,
+                                            bool enforce_rollback)
 {
-    if (!m || m->magic != IMAGE_MANIFEST_MAGIC || m->product_id != BOOTLOADER_PRODUCT_ID || m->hardware_id != BOOTLOADER_HARDWARE_ID) return false;
-    image_manifest_t copy = *m; uint32_t crc = m->crc32; copy.crc32 = 0U;
-    if (image_crc32(&copy, (uint32_t)offsetof(image_manifest_t, crc32)) != crc) return false;
-    uint32_t region_end = (base == 0x010000UL) ? 0x080000UL : (base == 0x080000UL || base == 0x0C0000UL) ? 0x100000UL : 0U;
-    if (region_end == 0U || base > region_end || m->image_length > (region_end - base - sizeof(*m))) return false;
-    if (m->image_length == 0U || m->image_length > APP_FLASH_MAX_SIZE || m->target_address < APP_FLASH_BASE || m->target_address > APP_FLASH_END || m->image_length > (APP_FLASH_END - m->target_address)) return false;
-    if (m->version_counter < boot_rollback_counter()) return false;
-    if (!boot_ext_is_complete(base, (uint32_t)sizeof(*m) + m->image_length)) return false;
-    uint8_t buf[256], digest[32], signature_digest[32]; sha256_ctx_t sha; sha256_init(&sha);
-    uint32_t left=m->image_length, address=base+(uint32_t)sizeof(*m);
-    while (left) { uint32_t n=left>sizeof(buf)?sizeof(buf):left; if(!boot_ext_read(address,buf,n)) return false; sha256_update(&sha,buf,n); address+=n; left-=n; }
+    fota_authorization_t auth;uint8_t zero[12]={0};
+    if (!m || m->magic != FOTA_PACKAGE_HEADER_MAGIC || m->product_id != BOOTLOADER_PRODUCT_ID || memcmp(m->reserved,zero,12)!=0) return false;
+    uint32_t region_end = base==LKG_SLOT_A_BASE||base==LKG_SLOT_B_BASE?base+LKG_SLOT_SIZE:base==0x080000UL?FOTA_FACTORY_AUTH_ADDR:0U;
+    if (region_end == 0U || base > region_end || m->body_size > (region_end - base - FOTA_PACKAGE_HEADER_SIZE)) return false;
+    if (m->body_size == 0U || m->body_size > APP_FLASH_MAX_SIZE) return false;
+    if(enforce_rollback){uint32_t rollback_floor;if(!boot_rollback_counter(&rollback_floor)||m->version<rollback_floor)return false;}
+    if(!boot_authorization_read_at(authorization_address,&auth)||auth.package_version!=m->version||auth.package_length!=FOTA_PACKAGE_HEADER_SIZE+m->body_size||auth.package_crc32!=m->body_crc32)return false;
+    if (!boot_ext_is_complete(base, auth.package_length)) return false;
+    if(!vectors_valid(base+FOTA_PACKAGE_HEADER_SIZE,m->body_size)||!body_crc_valid(base+FOTA_PACKAGE_HEADER_SIZE,m->body_size,m->body_crc32))return false;
+    uint8_t buf[256], digest[32]; sha256_ctx_t sha; sha256_init(&sha);
+    uint32_t left=auth.package_length, address=base;
+    while (left) { uint32_t n=left>sizeof(buf)?sizeof(buf):left; if(!boot_ext_read(address,buf,n)) return false; sha256_update(&sha,buf,n); address+=n; left-=n;boot_watchdog_feed(); }
     sha256_final(&sha,digest);
-    if (memcmp(digest,m->sha256,sizeof digest)!=0) return false;
-    image_signature_digest(m,signature_digest);
-    return firmware_signature_verify(signature_digest,m->ecdsa_signature);
+    return memcmp(digest,auth.package_sha256,sizeof digest)==0 && firmware_signature_verify(digest,auth.signature);
+}
+
+bool verify_external_manifest(const image_manifest_t *m,uint32_t base,uint32_t authorization_address)
+{
+    return verify_external_manifest_policy(m,base,authorization_address,true);
+}
+
+bool verify_external_manifest_for_promotion(const image_manifest_t *m,uint32_t base,
+                                            uint32_t authorization_address)
+{
+    return verify_external_manifest_policy(m,base,authorization_address,false);
+}
+
+static void put_be32(uint8_t *out,uint32_t value){out[0]=(uint8_t)(value>>24);out[1]=(uint8_t)(value>>16);out[2]=(uint8_t)(value>>8);out[3]=(uint8_t)value;}
+
+void legacy_image_signature_digest(const legacy_image_manifest_t *manifest,
+                                   uint8_t digest[IMAGE_SHA256_SIZE])
+{
+    uint8_t canonical[56];
+    sha256_ctx_t sha;
+    if (!manifest || !digest) return;
+    put_be32(canonical,manifest->magic);
+    put_be32(canonical+4,manifest->product_id);
+    put_be32(canonical+8,manifest->hardware_id);
+    put_be32(canonical+12,manifest->target_address);
+    put_be32(canonical+16,manifest->image_length);
+    put_be32(canonical+20,manifest->version_counter);
+    memcpy(canonical+24,manifest->sha256,32);
+    sha256_init(&sha);
+    sha256_update(&sha,canonical,sizeof canonical);
+    sha256_final(&sha,digest);
+}
+
+bool verify_legacy_package(uint32_t base,uint32_t region_end,legacy_image_manifest_t *out)
+{
+    legacy_image_manifest_t legacy,copy;uint8_t buf[256],digest[32],signature_digest[32];sha256_ctx_t sha;uint32_t left,address,floor;
+    if(region_end<=base||region_end-base<sizeof legacy||!boot_ext_read(base,&legacy,sizeof legacy)||legacy.magic!=0x4133464DUL)return false;
+    copy=legacy;copy.crc32=0U;if(image_crc32(&copy,(uint32_t)offsetof(legacy_image_manifest_t,crc32))!=legacy.crc32)return false;
+    if(legacy.product_id!=BOOTLOADER_PRODUCT_ID||legacy.hardware_id!=BOOTLOADER_HARDWARE_ID||legacy.target_address!=APP_FLASH_BASE||legacy.image_length<8U||legacy.image_length>APP_FLASH_MAX_SIZE||legacy.image_length>region_end-base-sizeof legacy)return false;
+    if(!boot_rollback_counter(&floor)||legacy.version_counter<floor||!boot_ext_is_complete(base,sizeof legacy+legacy.image_length)||!vectors_valid(base+sizeof legacy,legacy.image_length))return false;
+    sha256_init(&sha);left=legacy.image_length;address=base+sizeof legacy;while(left){uint32_t n=left>sizeof buf?sizeof buf:left;if(!boot_ext_read(address,buf,n))return false;sha256_update(&sha,buf,n);address+=n;left-=n;boot_watchdog_feed();}sha256_final(&sha,digest);if(memcmp(digest,legacy.sha256,32)!=0)return false;
+    legacy_image_signature_digest(&legacy,signature_digest);if(!firmware_signature_verify(signature_digest,legacy.ecdsa_signature))return false;
+    if(out)*out=legacy;
+    return true;
 }

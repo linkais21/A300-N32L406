@@ -50,6 +50,9 @@ typedef void (*ec800m_recv_cb_t)(uint8_t ch, const uint8_t *data, uint16_t len);
 
 void ec800m_init(void);
 void ec800m_process(void);          /* call from main loop */
+/* Platform hook serviced inside bounded blocking AT waits. The application
+ * implementation must not call modem/JT808/FOTA state machines. */
+void ec800m_wait_service_hook(void);
 
 ec800m_state_t ec800m_get_state(void);
 ec800m_failure_t ec800m_get_failure(void);
@@ -62,6 +65,8 @@ bool ec800m_is_ready(void);
 void ec800m_power_on(void);
 void ec800m_power_off(void);
 void ec800m_reset(void);
+/* Rebuild PDP context 1 using the current persisted APN configuration. */
+void ec800m_restart_pdp(void);
 
 /* TCP */
 int  ec800m_tcp_open(uint8_t ch, const char *ip, uint16_t port);
@@ -93,20 +98,24 @@ int  ec800m_udp_txn_result(void);
 int  ec800m_sms_send(const char *phone, const char *text);
 void ec800m_tcp_close(uint8_t ch);
 tcp_state_t ec800m_tcp_state(uint8_t ch);
+/* Caller holds the OTA service workspace. Refuse a live AT/diagnostic UDP
+ * owner; reconcile an abandoned channel 1 before the next OTA operation. */
+bool ec800m_ota_channel_prepare(void);
 
-/* Info */
+/* Info. Values remain empty until both modem identity queries validate. */
 void ec800m_get_imei(char *buf, uint8_t size);
 void ec800m_get_iccid(char *buf, uint8_t size);
 int  ec800m_get_csq(void);
 
-/* Network time (NTP), UTC after applying the modem-reported timezone offset */
+/* Network time. EC800M QNTP clock fields are already UTC; the response
+ * timezone suffix is metadata and is not applied again. */
 typedef struct {
     uint16_t year;
     uint8_t  month, day, hour, minute, second;
     bool     valid;
 } ec800m_time_t;
-/* Blocking AT+QNTP query against a hardcoded default server; converts the
- * modem's local-time result to UTC. Call only when ec800m_is_ready(). */
+/* Blocking AT+QNTP query against a hardcoded default server. Call only when
+ * ec800m_is_ready(). */
 bool ec800m_ntp_sync(ec800m_time_t *out);
 
 /* Sleep */

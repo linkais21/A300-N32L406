@@ -1,6 +1,7 @@
 #include "at_config.h"
 #include "jt808.h"
 #include "work_mode.h"
+#include "work_mode_sleep.h"
 #include "hw_init.h"
 
 #if defined(__GNUC__)
@@ -20,6 +21,7 @@ __attribute__((weak)) void work_mode_config_changed(const device_config_t *cfg,
 #include "sms_command.h"
 #include "f39_command.h"
 #include "f39_reply.h"
+#include "fota.h"
 #include "tcp_manager.h"
 #include "agnss_vendor.h"
 #include "agnss_manager.h"
@@ -56,16 +58,28 @@ static bool s_retry_in_flight;
 static bool f39_execute_console(const char *line);
 
 static bool f39_persist(const device_config_t *candidate, void *context) { (void)context; return cfg_store_candidate(candidate); }
-static void f39_timer_refresh(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_heartbeat_s(c->heartbeat_s); jt808_set_report_interval(c->report_moving_s, c->report_stopped_s); work_mode_config_changed(c, TICK_MS() / 1000U); }
+static void f39_timer_refresh(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_heartbeat_s(c->heartbeat_s); jt808_set_report_interval(c->report_moving_s, c->report_stopped_s); work_mode_config_changed(c, work_mode_sleep_monotonic_s()); }
 static void f39_network_reconnect(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_server(c->server_ip, c->server_port, false); jt808_set_server(c->backup_ip, c->backup_port, true); tcp_manager_reconnect(); }
+static void f39_jt808_auth_reset(uint8_t channel_mask, void *context)
+{
+    uint8_t jt808_mask = 0U;
+    (void)context;
+    if ((channel_mask & F39_AUTH_CHANNEL_MAIN) != 0U)
+        jt808_mask |= JT808_ENDPOINT_MAIN_MASK;
+    if ((channel_mask & F39_AUTH_CHANNEL_BACKUP) != 0U)
+        jt808_mask |= JT808_ENDPOINT_BACKUP_MASK;
+    jt808_reset_endpoint_auth(jt808_mask);
+}
+static void f39_modem_pdp_restart(void *context) { (void)context; tcp_manager_reconnect(); ec800m_restart_pdp(); }
 static void f39_gnss_mode(gnss_type_t type, uint8_t mode, void *context)
 {
     static const char *const commands[] = { NULL, "$PCAS04,1*18\r\n", "$PCAS04,2*1B\r\n", "$PCAS04,7*1E\r\n" };
     (void)context; gnss_vendor_set_type(type);
     if (mode >= 1U && mode <= 3U) gps_send_cmd(commands[mode]);
 }
-static void f39_jt808_reregister(void *context) { (void)context; jt808_request_reregister(); }
+static void f39_jt808_reregister(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_terminal_profile(c->terminal_model, c->plate_no); jt808_request_reregister(); }
 static void f39_remaining_refresh(void *context) { (void)context; agnss_init(cfg_get()->gnss_type); }
+static void f39_fota_recheck(void *context) { (void)context; (void)fota_request_check(); }
 static bool f39_relay(bool cut, void *context) { (void)context; relay_set(cut); return true; }
 static bool f39_gps_valid(void *context) { (void)context; return gps_is_valid(); }
 static float f39_gps_speed(void *context) { (void)context; return gps_get_data()->speed_kmh; }
@@ -128,9 +142,11 @@ static void f39_bind_defaults(void)
     if (s_f39_bound) return;
     memset(&s_f39_platform, 0, sizeof s_f39_platform);
     s_f39_platform.config = cfg_get(); s_f39_platform.persist = f39_persist;
-    s_f39_platform.timer_refresh = f39_timer_refresh; s_f39_platform.network_reconnect = f39_network_reconnect;
+    s_f39_platform.timer_refresh = f39_timer_refresh; s_f39_platform.network_reconnect = f39_network_reconnect; s_f39_platform.jt808_auth_reset = f39_jt808_auth_reset;
+    s_f39_platform.modem_pdp_restart = f39_modem_pdp_restart;
     s_f39_platform.gnss_set_mode = f39_gnss_mode; s_f39_platform.jt808_reregister = f39_jt808_reregister;
     s_f39_platform.remaining_refresh = f39_remaining_refresh; s_f39_platform.relay_set = f39_relay;
+    s_f39_platform.fota_recheck = f39_fota_recheck;
     s_f39_platform.gps_valid = f39_gps_valid; s_f39_platform.gps_speed_kmh = f39_gps_speed; s_f39_platform.relay_get = f39_relay_get;
     s_f39_platform.version = FW_VERSION_STR; s_f39_platform.version_len = (uint16_t)strlen(FW_VERSION_STR);
     ec800m_get_imei(imei, sizeof imei); s_f39_platform.imei = imei; s_f39_platform.imei_len = (uint16_t)strlen(imei);
@@ -238,7 +254,7 @@ static void handle_cmd(char *line)
         if (s >= 1 && s <= 10) {
             jt808_set_heartbeat_s(s * 60);
             cfg_get()->heartbeat_s = (uint16_t)(s * 60U);
-            work_mode_config_changed(cfg_get(), TICK_MS() / 1000U);
+            work_mode_config_changed(cfg_get(), work_mode_sleep_monotonic_s());
             dbg_printf("OK\r\n");
         } else {
             dbg_printf("ERR:range 1-10 min\r\n");
@@ -254,7 +270,7 @@ static void handle_cmd(char *line)
         jt808_set_report_interval(a, b);
         cfg_get()->report_moving_s = a;
         cfg_get()->report_stopped_s = b;
-        work_mode_config_changed(cfg_get(), TICK_MS() / 1000U);
+        work_mode_config_changed(cfg_get(), work_mode_sleep_monotonic_s());
         dbg_printf("OK\r\n");
         return;
     }

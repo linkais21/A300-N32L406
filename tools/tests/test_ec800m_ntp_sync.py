@@ -107,8 +107,11 @@ HARNESS = r'''
 #include "n32l40x.h"
 #include "config.h"
 #include "ec800m.h"
+#include "flash_config.h"
 
 volatile uint32_t g_tick_ms;
+static device_config_t config;
+device_config_t *cfg_get(void) { return &config; }
 usart_module_t host_uart5;
 
 bool ec800m_test_parse_qntp(const char *line, unsigned *year, unsigned *month,
@@ -116,6 +119,10 @@ bool ec800m_test_parse_qntp(const char *line, unsigned *year, unsigned *month,
                             unsigned *second, int *tz_quarter);
 void ec800m_test_shift_minutes(uint16_t *year, uint8_t *month, uint8_t *day,
                                uint8_t *hour, uint8_t *minute, int offset_min);
+void ec800m_test_qntp_time_to_utc(unsigned year, unsigned month, unsigned day,
+                                  unsigned hour, unsigned minute,
+                                  unsigned second, int tz_quarter,
+                                  ec800m_time_t *out);
 
 uint32_t DMA_GetCurrDataCounter(dma_t *d) { (void)d; return 0U; }
 FlagStatus DMA_GetFlagStatus(uint32_t flag, dma_t *d) { (void)flag; (void)d; return RESET; }
@@ -180,7 +187,27 @@ int main(void)
     assert(!ec800m_test_parse_qntp(
         "+QNTP: 0,\"2026/09/00,10:15:30+32\"", &year, &month, &day, &hour, &minute, &second, &tz_quarter));
 
-    /* Calendar shift: UTC+8 (tz_quarter=32) local 10:15 -> UTC 02:15 same day. */
+    /* EC800M QNTP clock fields are already UTC. The suffix reports the modem
+     * timezone setting and must not be applied a second time. This reproduces
+     * the field capture: Beijing 16:52 corresponds to UTC 08:52, not 00:52. */
+    {
+        ec800m_time_t out;
+        ec800m_test_qntp_time_to_utc(2026U, 9U, 10U, 8U, 52U, 52U,
+                                     32, &out);
+        assert(out.valid && out.year == 2026U && out.month == 9U &&
+               out.day == 10U && out.hour == 8U && out.minute == 52U &&
+               out.second == 52U);
+        ec800m_test_qntp_time_to_utc(2026U, 1U, 1U, 0U, 5U, 0U,
+                                     -20, &out);
+        assert(out.year == 2026U && out.month == 1U && out.day == 1U &&
+               out.hour == 0U && out.minute == 5U);
+        ec800m_test_qntp_time_to_utc(2026U, 6U, 15U, 12U, 0U, 0U,
+                                     0, &out);
+        assert(out.hour == 12U && out.minute == 0U);
+    }
+
+    /* Generic calendar shifting remains independently tested for retained
+     * clock rollover code; QNTP conversion no longer calls it. */
     {
         uint16_t y = 2026U; uint8_t mo = 9U, d = 4U, h = 10U, mi = 15U;
         ec800m_test_shift_minutes(&y, &mo, &d, &h, &mi, -32 * 15);

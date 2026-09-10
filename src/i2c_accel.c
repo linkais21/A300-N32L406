@@ -98,7 +98,6 @@ static void da218e_bus_recover(void)
 
 /* Work-mode product sensitivity levels are not DA218E register values. */
 #define VIBRATION_SAMPLE_INTERVAL_MS 200U
-#define VIBRATION_CONFIRM_GAP_MS 1000U
 #define VIBRATION_SENSITIVITY_LEVEL_10 10U
 #define VIBRATION_SENSITIVITY_LEVEL_COUNT 10U
 /* Product-facing VIBSENS scale from the terminal command spec: 1..50, where a
@@ -122,9 +121,6 @@ static int32_t s_window_ema_x = 0, s_window_ema_y = 0, s_window_ema_z = 0;
 static uint8_t s_window_ema_init = 0;
 static uint32_t s_last_vibration_sample_ms = 0U;
 static bool s_vibration_sample_seen = false;
-static uint32_t s_vibration_episode_start_ms;
-static uint32_t s_vibration_last_hit_ms;
-static uint16_t s_vibration_episode_hits;
 
 /* VIBSENS product scale (1..50, smaller = more sensitive) mapped linearly onto
  * the delta threshold in accelerometer LSB, anchored at level 30 = VIB_THRESH.
@@ -412,9 +408,6 @@ void i2c_accel_prepare_wake_sampling(void)
     i2c_accel_reset_vibration_window();
     s_last_vibration_sample_ms = TICK_MS();
     s_vibration_sample_seen = false;
-    s_vibration_episode_start_ms = 0U;
-    s_vibration_last_hit_ms = 0U;
-    s_vibration_episode_hits = 0U;
 }
 
 bool i2c_accel_vibration_hit(uint8_t sensitivity_level)
@@ -462,15 +455,6 @@ bool i2c_accel_vibration_hit(uint8_t sensitivity_level)
     s_diag.delta = (uint16_t)(delta < 0 ? 0 : delta);
     s_diag.vibration_hit = delta > (int16_t)s_diag.threshold;
     if (s_diag.vibration_hit) {
-        if (s_vibration_episode_hits == 0U ||
-            (uint32_t)(now_ms - s_vibration_last_hit_ms) >
-            VIBRATION_CONFIRM_GAP_MS) {
-            s_vibration_episode_start_ms = now_ms;
-            s_vibration_episode_hits = 0U;
-        }
-        if (s_vibration_episode_hits < UINT16_MAX)
-            ++s_vibration_episode_hits;
-        s_vibration_last_hit_ms = now_ms;
         ++s_diag.vibration_hit_count;
         if (TICK_MS() - s_last_vibration_log_ms >= 5000U) {
             s_last_vibration_log_ms = TICK_MS();
@@ -478,27 +462,6 @@ bool i2c_accel_vibration_hit(uint8_t sensitivity_level)
                        d.x, d.y, d.z, (unsigned)s_diag.delta,
                        (unsigned)s_diag.threshold);
         }
-    }
-    /* A hit remains true for the active episode. This bridges brief EMA
-     * misses while the physical vibration continues and lets work_mode count
-     * the full six-second confirmation window. */
-    if (!s_diag.vibration_hit && s_vibration_episode_hits != 0U &&
-        (uint32_t)(now_ms - s_vibration_last_hit_ms) <= VIBRATION_CONFIRM_GAP_MS) {
-        return true;
-    }
-    if (!s_diag.vibration_hit && s_vibration_episode_hits != 0U &&
-        (uint32_t)(now_ms - s_vibration_last_hit_ms) > VIBRATION_CONFIRM_GAP_MS) {
-        /* The episode ended.  Do not let the six-second completion latch
-         * turn every later quiet sample into a permanent vibration hit. */
-        s_vibration_episode_start_ms = 0U;
-        s_vibration_last_hit_ms = 0U;
-        s_vibration_episode_hits = 0U;
-        return false;
-    }
-    if (s_vibration_episode_hits != 0U &&
-        (uint32_t)(now_ms - s_vibration_episode_start_ms) >= 6000U &&
-        s_vibration_episode_hits >= 20U) {
-        return true;
     }
     return s_diag.vibration_hit;
 }

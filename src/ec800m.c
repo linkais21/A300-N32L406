@@ -4,10 +4,15 @@
 #include "debug_uart.h"
 #include "ec800m_at_response.h"
 #include "peripherals.h"
+#include "flash_config.h"
 #include "n32l40x.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+__attribute__((weak)) void ec800m_wait_service_hook(void)
+{
+}
 
 /* ── RX ring buffer (filled by DMA2_CH5) ─────────────────────────────────── */
 uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];  /* DMA circular buffer (global, used by hw_init.c) */
@@ -26,6 +31,10 @@ static char s_deferred_urc[AT_DEFERRED_URC_MAX][AT_LINE_MAX];
 static uint8_t s_deferred_urc_head;
 static uint8_t s_deferred_urc_tail;
 static uint8_t s_deferred_urc_count;
+/* Modem URCs have no transaction ID. Stamp queued socket events with the
+ * local channel generation so close/open boundaries retire old results. */
+static uint8_t s_deferred_channel[AT_DEFERRED_URC_MAX];
+static uint32_t s_deferred_generation[AT_DEFERRED_URC_MAX];
 static bool s_cmt_body_pending;
 static bool s_cmt_line_active;
 static bool s_deferred_urc_processing;
@@ -80,6 +89,45 @@ static bool iccid_text_valid(const char *iccid)
     return iccid[length] == '\0' && (length == 19U || length == 20U);
 }
 
+static bool imei_text_valid(const char *imei)
+{
+    uint8_t length = 0U;
+    if (imei == NULL) return false;
+    while (imei[length] >= '0' && imei[length] <= '9' && length < 16U)
+        ++length;
+    return length == 15U && imei[length] == '\0';
+}
+
+static bool parse_imei_response(const char *response, char out[16])
+{
+    const char *p;
+    if (response == NULL || out == NULL) return false;
+    p = response;
+    while (*p != '\0') {
+        if (*p >= '0' && *p <= '9') {
+            const char *start = p;
+            uint8_t length = 0U;
+            while (*p >= '0' && *p <= '9') {
+                ++length;
+                ++p;
+            }
+            if (length == 15U) {
+                memcpy(out, start, 15U);
+                out[15] = '\0';
+                return true;
+            }
+        } else {
+            ++p;
+        }
+    }
+    return false;
+}
+
+static bool identity_ready(const char *imei, const char *iccid)
+{
+    return imei_text_valid(imei) && iccid_text_valid(iccid);
+}
+
 static bool iccid_refresh_required(bool sim_identity_ready,
                                    const char *iccid)
 {
@@ -90,14 +138,17 @@ static bool iccid_refresh_required(bool sim_identity_ready,
 static ec800m_state_t s_state      = EC800M_STATE_OFF;
 static uint32_t       s_state_enter_ms = 0;
 static uint32_t       s_init_step   = 0;
+static uint8_t        s_imei_attempts;
 static uint8_t        s_iccid_attempts;
 static bool           s_sim_identity_ready;
 static ec800m_failure_t s_failure = EC800M_FAILURE_NONE;
 static int s_reg_status = -1;
 static uint32_t s_last_diag_ms;
 static uint16_t s_send_fail_streak;
+static bool s_pdp_profile_applied;
+static bool s_pdp_deactivate_required;
 #define EC800M_DIAG_INTERVAL_MS 10000U
-#define EC800M_ICCID_MAX_ATTEMPTS 3U
+#define EC800M_IDENTITY_MAX_ATTEMPTS 3U
 /* READY is the one state with no timeout of its own.  When the module stops
  * answering while we still believe it is READY, every send fails at the
  * AT+QISEND prompt and nothing ever re-arms the link: a field capture showed
@@ -110,19 +161,28 @@ static uint16_t s_send_fail_streak;
  * accumulate only the brief awake windows and effectively never fire. */
 #define EC800M_SEND_FAIL_RESET_STREAK 8U
 
-static bool iccid_retry_should_advance(bool parsed, uint8_t *attempts)
+typedef enum {
+    IDENTITY_QUERY_RETRY = 0,
+    IDENTITY_QUERY_READY,
+    IDENTITY_QUERY_RECOVER
+} identity_query_result_t;
+
+static identity_query_result_t identity_query_result(bool valid,
+                                                     uint8_t *attempts)
 {
-    if (attempts == NULL) return true;
-    if (parsed) {
+    if (attempts == NULL) return IDENTITY_QUERY_RECOVER;
+    if (valid) {
         *attempts = 0U;
-        return true;
+        return IDENTITY_QUERY_READY;
     }
-    if (*attempts < EC800M_ICCID_MAX_ATTEMPTS) ++(*attempts);
-    return *attempts >= EC800M_ICCID_MAX_ATTEMPTS;
+    if (*attempts < EC800M_IDENTITY_MAX_ATTEMPTS) ++(*attempts);
+    return *attempts >= EC800M_IDENTITY_MAX_ATTEMPTS ?
+           IDENTITY_QUERY_RECOVER : IDENTITY_QUERY_RETRY;
 }
 
 /* TCP channels */
 static tcp_channel_t s_tcp[EC800M_CH_MAX];
+static uint32_t s_tcp_generation[EC800M_CH_MAX];
 /* Cooperative UDP transaction.  This deliberately shares the temporary OTA
  * socket and AT owner; no fifth socket or receive buffer is allocated. */
 typedef enum {
@@ -290,8 +350,8 @@ static bool parse_qiopen(const char *line, unsigned *channel,
 }
 
 /* "+QNTP: <err>,\"yyyy/MM/dd,hh:mm:ss[+-]zz\"" — err=0 means the quoted
- * local time is valid; the trailing signed field is a quarter-hour-east-of-
- * UTC offset. Hand-rolled (no sscanf/atof/strtod: forbidden by
+ * UTC time is valid; the trailing signed field reports the modem timezone in
+ * quarter hours but does not change the QNTP clock basis. Hand-rolled (no sscanf/atof/strtod: forbidden by
  * tools/libc_parser_guard.py). */
 static bool parse_qntp(const char *line, unsigned *year, unsigned *month,
                        unsigned *day, unsigned *hour, unsigned *minute,
@@ -329,6 +389,7 @@ static bool parse_qntp(const char *line, unsigned *year, unsigned *month,
  * carrying at most one day in either direction (bounded by a realistic
  * +-14h timezone offset). Mirrors the calendar rollover already used by
  * gps_advance_last_trusted_seconds(). */
+#ifdef EC800M_HOST_TEST
 static void ntp_shift_minutes(uint16_t *year, uint8_t *month, uint8_t *day,
                               uint8_t *hour, uint8_t *minute, int offset_min)
 {
@@ -360,6 +421,7 @@ static void ntp_shift_minutes(uint16_t *year, uint8_t *month, uint8_t *day,
         }
     }
 }
+#endif
 
 static bool is_deferred_urc(const char *line)
 {
@@ -369,12 +431,19 @@ static bool is_deferred_urc(const char *line)
 
 static void defer_urc(const char *line)
 {
-    char *slot;
+    char *slot;unsigned channel,error;
     if (!line || !is_deferred_urc(line) ||
         s_deferred_urc_count >= AT_DEFERRED_URC_MAX) return;
     slot = s_deferred_urc[s_deferred_urc_tail];
     (void)strncpy(slot, line, AT_LINE_MAX - 1U);
     slot[AT_LINE_MAX - 1U] = '\0';
+    s_deferred_channel[s_deferred_urc_tail]=0xffU;
+    if(parse_qiopen(line,&channel,&error) ||
+       parse_prefixed_uint(line,"+QIURC: \"closed\",",EC800M_CH_MAX-1U,&channel) ||
+       parse_prefixed_uint(line,"+QIURC: \"recv\",",EC800M_CH_MAX-1U,&channel)) {
+        s_deferred_channel[s_deferred_urc_tail]=(uint8_t)channel;
+        s_deferred_generation[s_deferred_urc_tail]=s_tcp_generation[channel];
+    }
     s_deferred_urc_tail = (uint8_t)((s_deferred_urc_tail + 1U) % AT_DEFERRED_URC_MAX);
     ++s_deferred_urc_count;
 }
@@ -382,15 +451,19 @@ static void defer_urc(const char *line)
 static void process_deferred_urc_one(void)
 {
     char line[AT_LINE_MAX];
+    uint8_t channel;bool obsolete;
 
     if (s_at_owner != AT_OWNER_NONE || s_deferred_urc_count == 0U ||
         s_deferred_urc_processing) return;
     s_deferred_urc_processing = true;
     (void)strncpy(line, s_deferred_urc[s_deferred_urc_head], sizeof(line) - 1U);
     line[sizeof(line) - 1U] = '\0';
+    channel=s_deferred_channel[s_deferred_urc_head];
+    obsolete=channel<EC800M_CH_MAX &&
+        s_deferred_generation[s_deferred_urc_head]!=s_tcp_generation[channel];
     s_deferred_urc_head = (uint8_t)((s_deferred_urc_head + 1U) % AT_DEFERRED_URC_MAX);
     --s_deferred_urc_count;
-    process_urc(line);
+    if(!obsolete)process_urc(line);
     s_deferred_urc_processing = false;
 }
 
@@ -512,7 +585,10 @@ static bool at_send_wait_owned(const char *cmd, const char *expect,
     s_at_resp_len = 0;
 
 #if EC800M_RX_ECHO
-    if (cmd[0]) dbg_printf(">> %s\r\n", cmd);
+    if (strncmp(cmd, "AT+QICSGP=", 11U) == 0)
+        dbg_printf(">> AT+QICSGP=1,1,<redacted>\r\n");
+    else if (cmd[0])
+        dbg_printf(">> %s\r\n", cmd);
 #endif
     if (cmd[0]) {
         if (!usart_send_str(cmd) || !usart_send_str("\r\n")) return false;
@@ -523,6 +599,7 @@ static bool at_send_wait_owned(const char *cmd, const char *expect,
 
     while ((TICK_MS() - start) < timeout_ms) {
         IWDG_ReloadKey();
+        ec800m_wait_service_hook();
         uint16_t dma_remain = DMA_GetCurrDataCounter(DMA_CH5);
         uint16_t s_rx_wr = EC800M_RX_BUF_SIZE - dma_remain;
 
@@ -553,7 +630,13 @@ static bool at_send_wait_owned(const char *cmd, const char *expect,
             if (end == EC800M_AT_OK) return true;
             if (end == EC800M_AT_ERROR) return false;
         } else {
-            if (expect[0] && strstr(s_at_resp, expect)) return true;
+            if (expect[0] &&
+                ((strcmp(expect, "SEND OK") == 0 &&
+                  ec800m_at_response_has_line(s_at_resp, resp_pos, expect)) ||
+                 (strcmp(expect, "SEND OK") != 0 &&
+                  ec800m_at_response_has_line_prefix(s_at_resp, resp_pos,
+                                                     expect))))
+                return true;
             if (ec800m_at_response_end(s_at_resp, resp_pos) == EC800M_AT_ERROR)
                 return false;
         }
@@ -571,6 +654,7 @@ static bool at_wait_prompt_owned(const char *cmd, uint32_t timeout_ms)
     uint32_t start = TICK_MS();
     while ((TICK_MS() - start) < timeout_ms) {
         IWDG_ReloadKey();
+        ec800m_wait_service_hook();
         uint16_t dma_remain = DMA_GetCurrDataCounter(DMA_CH5);
         uint16_t rx_wr = EC800M_RX_BUF_SIZE - dma_remain;
 
@@ -613,6 +697,7 @@ static bool ec800m_is_alive(uint32_t timeout_ms)
     uint32_t flush_deadline = TICK_MS() + timeout_ms;
     while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_RXDNE) != RESET) {
         IWDG_ReloadKey();
+        ec800m_wait_service_hook();
         if ((int32_t)(TICK_MS() - flush_deadline) >= 0) {
             at_owner_release(AT_OWNER_BLOCKING);
             return false;
@@ -629,6 +714,7 @@ static bool ec800m_is_alive(uint32_t timeout_ms)
     char buf[16]; uint8_t pos = 0;
     while (TICK_MS() - t0 < timeout_ms) {
         IWDG_ReloadKey();
+        ec800m_wait_service_hook();
         if (USART_GetFlagStatus(EC800M_UART, USART_FLAG_RXDNE) != RESET) {
             char c = (char)USART_ReceiveData(EC800M_UART);
             if (pos < 15) buf[pos++] = c;
@@ -675,6 +761,9 @@ void ec800m_reset(void)
     s_state = EC800M_STATE_BOOTING;
     s_state_enter_ms = TICK_MS();
     s_init_step = 0;
+    memset(s_imei, 0, sizeof s_imei);
+    memset(s_iccid, 0, sizeof s_iccid);
+    s_imei_attempts = 0U;
     s_iccid_attempts = 0U;
     s_sim_identity_ready = false;
     s_reg_status = -1;
@@ -697,6 +786,7 @@ static const char *s_init_cmds[] = {
 static void state_machine_init(void)
 {
     bool ok;
+    identity_query_result_t identity_result;
     switch (s_init_step) {
     case 0: /* basic AT test */
         ok = at_send_wait("AT", "OK", 1000);
@@ -714,31 +804,26 @@ static void state_machine_init(void)
         break;
     }
     case 6: /* read IMEI */
-        if (at_send_wait("AT+CGSN", "OK", 2000)) {
-            /* search directly for 15 consecutive digits, no newline dependency */
-            char *p = s_at_resp;
-            while (*p) {
-                if (*p >= '0' && *p <= '9') {
-                    char *start = p;
-                    uint8_t n = 0;
-                    while (*p >= '0' && *p <= '9') { n++; p++; }
-                    if (n == 15) {
-                        memcpy(s_imei, start, 15);
-                        s_imei[15] = '\0';
-                        break;
-                    }
-                } else {
-                    p++;
-                }
-            }
+        ok = at_send_wait("AT+CGSN", "OK", 2000) &&
+             parse_imei_response(s_at_resp, s_imei);
+        identity_result = identity_query_result(ok, &s_imei_attempts);
+        if (identity_result == IDENTITY_QUERY_READY) {
+            ++s_init_step;
+        } else if (identity_result == IDENTITY_QUERY_RECOVER) {
+            dbg_printf("[4G] IMEI query exhausted -> reset\r\n");
+            ec800m_reset();
         }
-        s_init_step++;
         break;
     case 7: /* ICCID */
         ok = at_send_wait("AT+QCCID", "OK", 2000) &&
              parse_iccid_response(s_at_resp, s_iccid);
-        if (iccid_retry_should_advance(ok, &s_iccid_attempts))
-            s_init_step++;
+        identity_result = identity_query_result(ok, &s_iccid_attempts);
+        if (identity_result == IDENTITY_QUERY_READY) {
+            ++s_init_step;
+        } else if (identity_result == IDENTITY_QUERY_RECOVER) {
+            dbg_printf("[4G] ICCID query exhausted -> reset\r\n");
+            ec800m_reset();
+        }
         break;
     case 8:
         s_state = EC800M_STATE_SIM_CHECK;
@@ -752,6 +837,7 @@ static void state_machine_init(void)
 static void state_machine_sim(void)
 {
     bool at_ok, parsed;
+    identity_query_result_t identity_result;
     if (!s_sim_identity_ready) {
         if (at_send_wait("AT+CIMI", "OK", 2000)) {
             s_sim_identity_ready = true;
@@ -772,7 +858,20 @@ static void state_machine_sim(void)
         dbg_printf("[4G] iccid query phase=SIM attempt=%u at=%u resp=%u parsed=%u\r\n",
                    (unsigned)s_iccid_attempts + 1U, at_ok ? 1U : 0U,
                    (unsigned)s_at_resp_len, parsed ? 1U : 0U);
-        if (!iccid_retry_should_advance(parsed, &s_iccid_attempts)) return;
+        identity_result = identity_query_result(parsed, &s_iccid_attempts);
+        if (identity_result == IDENTITY_QUERY_RETRY) return;
+        if (identity_result == IDENTITY_QUERY_RECOVER) {
+            dbg_printf("[4G] ICCID refresh exhausted -> reset\r\n");
+            ec800m_reset();
+            return;
+        }
+    }
+
+    if (!identity_ready(s_imei, s_iccid)) {
+        s_failure = EC800M_FAILURE_SIM_QUERY;
+        dbg_printf("[4G] identity invalid before registration -> reset\r\n");
+        ec800m_reset();
+        return;
     }
 
     dbg_printf("[4G] identity ready imei_len=%u iccid_len=%u\r\n",
@@ -797,6 +896,7 @@ static void state_machine_netreg(void)
 
     if (reg) {
         s_failure = EC800M_FAILURE_NONE;
+        s_pdp_profile_applied = false;
         s_state = EC800M_STATE_PDP_ACTIVE;
         s_state_enter_ms = TICK_MS();
     } else if (TICK_MS() - s_state_enter_ms > 60000) {
@@ -809,7 +909,49 @@ static void state_machine_netreg(void)
 
 static void state_machine_pdp(void)
 {
+    const device_config_t *config = cfg_get();
+    char command[128];
+    int command_length;
+    unsigned int authentication;
     bool activate_ok;
+
+    if (s_pdp_deactivate_required) {
+        if (!at_send_wait("AT+QIDEACT=1", "OK", 10000)) {
+            s_failure = EC800M_FAILURE_PDP_ACTIVATE;
+            if (TICK_MS() - s_state_enter_ms > 30000U) {
+                s_state = EC800M_STATE_NETWORK_REG;
+                s_state_enter_ms = TICK_MS();
+            }
+            return;
+        }
+        s_pdp_deactivate_required = false;
+    }
+
+    if (!s_pdp_profile_applied) {
+        if (config->autoapn_en != 0U) {
+            command_length = snprintf(command, sizeof command,
+                                      "AT+QICSGP=1,1,\"\",\"\",\"\",0");
+        } else {
+            authentication =
+                config->apn_user[0] != '\0' || config->apn_pass[0] != '\0' ?
+                1U : 0U;
+            command_length = snprintf(command, sizeof command,
+                                      "AT+QICSGP=1,1,\"%s\",\"%s\",\"%s\",%u",
+                                      config->apn, config->apn_user,
+                                      config->apn_pass, authentication);
+        }
+        if (command_length < 0 || (size_t)command_length >= sizeof command ||
+            !at_send_wait(command, "OK", 5000)) {
+            s_failure = EC800M_FAILURE_PDP_ACTIVATE;
+            if (TICK_MS() - s_state_enter_ms > 30000U) {
+                s_state = EC800M_STATE_NETWORK_REG;
+                s_state_enter_ms = TICK_MS();
+            }
+            return;
+        }
+        s_pdp_profile_applied = true;
+    }
+
     /* activate PDP context 1 */
     activate_ok = at_send_wait("AT+QIACT=1", "OK", 10000);
     if (!activate_ok) s_failure = EC800M_FAILURE_PDP_ACTIVATE;
@@ -861,6 +1003,7 @@ static void process_urc(const char *line)
         sms_send_complete(false);
     }
     if (parse_qiopen(line, &qiopen_ch, &qiopen_err)) {
+        if(s_tcp[qiopen_ch].state!=TCP_STATE_OPENING)return;
         if (qiopen_err == 0) {
             s_tcp[qiopen_ch].state = TCP_STATE_OPEN;
         } else {
@@ -970,13 +1113,53 @@ void ec800m_init(void)
     s_last_diag_ms = 0U;
     rx_irq_init();
     memset(s_tcp, 0, sizeof(s_tcp));
+    memset(s_tcp_generation,0,sizeof s_tcp_generation);
     s_state = EC800M_STATE_BOOTING;
     s_state_enter_ms = TICK_MS();
     s_init_step = 0;
+    memset(s_imei, 0, sizeof s_imei);
+    memset(s_iccid, 0, sizeof s_iccid);
+    s_imei_attempts = 0U;
     s_iccid_attempts = 0U;
     s_sim_identity_ready = false;
     s_send_fail_streak = 0U;
+    s_pdp_profile_applied = false;
+    s_pdp_deactivate_required = false;
     ec800m_power_on();
+}
+
+static void qntp_time_to_utc(unsigned year, unsigned month, unsigned day,
+                             unsigned hour, unsigned minute, unsigned second,
+                             int tz_quarter, ec800m_time_t *out)
+{
+    /* Field captures show QNTP already returns UTC while retaining the
+     * configured timezone suffix (for example UTC 08:52 with +32). */
+    (void)tz_quarter;
+    out->year = (uint16_t)year;
+    out->month = (uint8_t)month;
+    out->day = (uint8_t)day;
+    out->hour = (uint8_t)hour;
+    out->minute = (uint8_t)minute;
+    out->second = (uint8_t)second;
+    out->valid = true;
+}
+
+void ec800m_restart_pdp(void)
+{
+    uint8_t channel;
+
+    s_pdp_profile_applied = false;
+    s_pdp_deactivate_required =
+        s_state == EC800M_STATE_READY || s_state == EC800M_STATE_PDP_ACTIVE;
+    for (channel = 0U; channel < EC800M_CH_MAX; ++channel) {
+        s_tcp[channel].state = TCP_STATE_CLOSED;
+    }
+    s_send_fail_streak = 0U;
+    if (s_state == EC800M_STATE_READY || s_state == EC800M_STATE_PDP_ACTIVE) {
+        s_failure = EC800M_FAILURE_NONE;
+        s_state = EC800M_STATE_PDP_ACTIVE;
+        s_state_enter_ms = TICK_MS();
+    }
 }
 
 void ec800m_process(void)
@@ -1069,7 +1252,12 @@ void ec800m_test_set_tcp_open(uint8_t ch)
 bool ec800m_test_parse_iccid(const char *response, char out[22])
 { return parse_iccid_response(response, out); }
 bool ec800m_test_iccid_retry_should_advance(bool parsed, uint8_t *attempts)
-{ return iccid_retry_should_advance(parsed, attempts); }
+{ return identity_query_result(parsed, attempts) != IDENTITY_QUERY_RETRY; }
+identity_query_result_t ec800m_test_identity_retry(bool valid,
+                                                   uint8_t *attempts)
+{ return identity_query_result(valid, attempts); }
+bool ec800m_test_identity_ready(const char *imei, const char *iccid)
+{ return identity_ready(imei, iccid); }
 bool ec800m_test_iccid_refresh_required(bool sim_identity_ready,
                                         const char *iccid)
 { return iccid_refresh_required(sim_identity_ready, iccid); }
@@ -1080,6 +1268,13 @@ bool ec800m_test_parse_qntp(const char *line, unsigned *year, unsigned *month,
 void ec800m_test_shift_minutes(uint16_t *year, uint8_t *month, uint8_t *day,
                                uint8_t *hour, uint8_t *minute, int offset_min)
 { ntp_shift_minutes(year, month, day, hour, minute, offset_min); }
+void ec800m_test_qntp_time_to_utc(unsigned year, unsigned month, unsigned day,
+                                  unsigned hour, unsigned minute,
+                                  unsigned second, int tz_quarter,
+                                  ec800m_time_t *out)
+{ qntp_time_to_utc(year, month, day, hour, minute, second, tz_quarter, out); }
+bool ec800m_test_wait_for_ok(uint32_t timeout_ms)
+{ return at_send_wait_owned("", "OK", timeout_ms); }
 #endif
 
 static void sms_tx_process(void)
@@ -1144,6 +1339,7 @@ int ec800m_tcp_open(uint8_t ch, const char *ip, uint16_t port)
     char cmd[128];
     snprintf(cmd, sizeof(cmd),
              "AT+QIOPEN=1,%d,\"TCP\",\"%s\",%u,0,0", ch, ip, port);
+    drain_rx();++s_tcp_generation[ch];
     s_tcp[ch].state = TCP_STATE_OPENING;
     strncpy(s_tcp[ch].ip, ip, sizeof(s_tcp[ch].ip)-1);
     s_tcp[ch].port = port;
@@ -1206,7 +1402,9 @@ int ec800m_tcp_send(uint8_t ch, const uint8_t *data, uint16_t len)
          * the modem actually said -- a bare timeout gave no way to tell an
          * unresponsive module from a rejected send. */
         dbg_printf("[4G-TX] fail stage=result ch=%u resp=\"", ch);
-        at_dump_response();
+        /* OTA HTTP payloads contain a device key; a modem may echo them into
+         * its failed AT response. Never dump channel 1 response bytes. */
+        if (ch != EC800M_CH_OTA) at_dump_response();
         dbg_printf("\"\r\n");
         s_tcp_send_ambiguous = true;
         goto done;
@@ -1228,6 +1426,7 @@ int ec800m_udp_send_once(const char *ip, uint16_t port,
         !ec800m_is_ready() || s_tcp[ch].state != TCP_STATE_CLOSED)
         return -1;
     if (!at_owner_acquire(AT_OWNER_TCP)) return -2;
+    drain_rx();++s_tcp_generation[ch];
     (void)snprintf(cmd, sizeof(cmd), "AT+QIOPEN=1,%u,\"UDP\",\"%s\",%u,0,0",
                    (unsigned)ch, ip, (unsigned)port);
     s_tcp[ch].state = TCP_STATE_OPENING;
@@ -1241,16 +1440,18 @@ int ec800m_udp_send_once(const char *ip, uint16_t port,
                    (unsigned)len);
     if (!at_wait_prompt_owned(cmd, 3000U) || !usart_send_buf(data, len) ||
         !at_send_wait_owned("", "SEND OK", 5000U)) goto fail_close;
+    ++s_tcp_generation[ch];s_tcp[ch].state=TCP_STATE_CLOSED;
     (void)snprintf(cmd, sizeof(cmd), "AT+QICLOSE=%u", (unsigned)ch);
     (void)at_send_wait_owned(cmd, "OK", 2000U);
-    s_tcp[ch].state = TCP_STATE_CLOSED;
+    ++s_tcp_generation[ch];s_tcp[ch].state = TCP_STATE_CLOSED;
     at_owner_release(AT_OWNER_TCP);
     return 0;
 fail_close:
+    ++s_tcp_generation[ch];s_tcp[ch].state=TCP_STATE_CLOSED;
     (void)snprintf(cmd, sizeof(cmd), "AT+QICLOSE=%u", (unsigned)ch);
     (void)at_send_wait_owned(cmd, "OK", 1000U);
 fail:
-    s_tcp[ch].state = TCP_STATE_CLOSED;
+    ++s_tcp_generation[ch];s_tcp[ch].state = TCP_STATE_CLOSED;
     at_owner_release(AT_OWNER_TCP);
     return -1;
 }
@@ -1297,9 +1498,20 @@ void ec800m_tcp_close(uint8_t ch)
 {
     if (ch >= EC800M_CH_MAX) return;
     char cmd[32];
+    ++s_tcp_generation[ch];s_tcp[ch].state=TCP_STATE_CLOSED;
     snprintf(cmd, sizeof(cmd), "AT+QICLOSE=%d", ch);
     at_send_wait(cmd, "OK", 3000);
-    s_tcp[ch].state = TCP_STATE_CLOSED;
+    ++s_tcp_generation[ch];s_tcp[ch].state = TCP_STATE_CLOSED;
+}
+
+bool ec800m_ota_channel_prepare(void)
+{
+    /* The caller has already acquired the shared workspace. The asynchronous
+     * diagnostic state and AT owner are checked as well before stale cleanup. */
+    if(s_at_owner!=AT_OWNER_NONE || udp_txn_active())return false;
+    if(s_tcp[EC800M_CH_OTA].state!=TCP_STATE_CLOSED)
+        ec800m_tcp_close(EC800M_CH_OTA);
+    return s_tcp[EC800M_CH_OTA].state==TCP_STATE_CLOSED;
 }
 
 tcp_state_t ec800m_tcp_state(uint8_t ch)
@@ -1325,7 +1537,6 @@ bool ec800m_ntp_sync(ec800m_time_t *out)
 {
     unsigned year = 0U, month = 0U, day = 0U, hour = 0U, minute = 0U, second = 0U;
     int tz_quarter = 0;
-    uint16_t y; uint8_t mo, d, h, mi;
 
     if (out == NULL) return false;
     memset(out, 0, sizeof(*out));
@@ -1343,14 +1554,7 @@ bool ec800m_ntp_sync(ec800m_time_t *out)
     process_deferred_urc_one();
     if (!ok) return false;
 
-    y = (uint16_t)year; mo = (uint8_t)month; d = (uint8_t)day;
-    h = (uint8_t)hour; mi = (uint8_t)minute;
-    /* Quoted timestamp is local time (already shifted by tz_quarter east of
-     * UTC); subtract that offset to recover UTC. */
-    ntp_shift_minutes(&y, &mo, &d, &h, &mi, -tz_quarter * 15);
-    out->year = y; out->month = mo; out->day = d;
-    out->hour = h; out->minute = mi; out->second = (uint8_t)second;
-    out->valid = true;
+    qntp_time_to_utc(year, month, day, hour, minute, second, tz_quarter, out);
     return true;
 }
 

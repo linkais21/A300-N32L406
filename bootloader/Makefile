@@ -1,4 +1,4 @@
-TOOLCHAIN_ROOT := D:/ST/STM32CubeIDE_2.1.1/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.14.3.rel1.win32_1.0.100.202602081740/tools/bin
+TOOLCHAIN_ROOT ?= $(abspath ../.toolchain/bin)
 SDK := ../sdk/Nations.N32L40x_Library.2.2.0/firmware
 CC := $(TOOLCHAIN_ROOT)/arm-none-eabi-gcc.exe
 OBJCOPY := $(TOOLCHAIN_ROOT)/arm-none-eabi-objcopy.exe
@@ -15,7 +15,7 @@ SDK_SRCS := $(SDK)/CMSIS/device/system_n32l40x.c \
             $(SDK)/n32l40x_std_periph_driver/src/n32l40x_iwdg.c
 OBJS := $(SRCS:src/%.c=build/%.o) build/firmware_signature.o build/uECC.o \
         $(SDK_SRCS:../%.c=build/sdk/%.o) build/startup_n32l40x.o
-all: build/bootloader.elf
+all: build/bootloader.hex build/bootloader.bin
 build:
 	@if not exist "build" mkdir "build"
 build/%.o: src/%.c | build
@@ -32,6 +32,10 @@ build/startup_n32l40x.o: src/startup_n32l40x.s | build
 build/bootloader.elf: $(OBJS)
 	$(CC) $(LDFLAGS) $^ -o $@
 	$(SIZE) $@
+build/bootloader.hex: build/bootloader.elf
+	$(OBJCOPY) -O ihex $< $@
+build/bootloader.bin: build/bootloader.elf
+	$(OBJCOPY) -O binary $< $@
 clean:
 	@if exist "build" rmdir /S /Q "build"
 .PHONY: all clean

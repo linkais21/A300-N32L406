@@ -62,10 +62,15 @@ require("jt808_get_logical_acc()" in online,
 require("alarm_bits" in online and
         re.search(r"body\s*\[\s*0\s*\].*alarm_bits", online) is not None,
         "caller alarm bits do not flow into the online 0x0200 body")
-require("historical_position" in online and
-        re.search(r"historical_position[\s\S]*~LOC_FLAG_GPS_FIXED", online)
-        is not None,
-        "historical reports do not clear the GPS-valid status bit")
+require("LOC_FLAG_BEIDOU_FIXED" in HEADER,
+        "JT808 status contract does not define BeiDou positioning bit19")
+require(re.search(
+    r"historical_position[\s\S]*~\s*LOC_FLAG_GPS_FIXED", online) is not None,
+    "historical reports do not clear the current-fix status bit")
+require(re.search(
+    r"historical_position[\s\S]*~\s*\([^;]*LOC_FLAG_BEIDOU_FIXED", online)
+    is None,
+    "historical reports must preserve the trusted BeiDou source bit")
 
 # The work-mode wrapper must keep the existing complete online extension path;
 # it may not fall back to the compact blind-zone payload.

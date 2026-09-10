@@ -9,14 +9,31 @@
 #define FOTA_MAX_SIZE     EXT_FLASH_CANDIDATE_SIZE
 #define FOTA_PENDING_ADDR EXT_FLASH_RESUME_ADDR
 #define FOTA_PENDING_MAGIC 0xF07AF07AUL
-#define FOTA_RESUME_MAGIC 0x46525331UL
+#define FOTA_PACKAGE_HEADER_MAGIC 0xA300B007UL
+#define FOTA_PACKAGE_HEADER_SIZE 32U
+#define FOTA_PACKAGE_PRODUCT_ID 0x41333030UL
+#define FOTA_PACKAGE_SIGNATURE_SIZE 64U
 
 typedef struct {
     const char *url;
     uint32_t expected_length;
     const char *etag;
     uint32_t version;
+    const uint8_t *package_sha256;
+    const uint8_t *signature;
+    uint32_t signing_key_id;
 } fota_request_t;
+
+typedef struct __attribute__((packed)) {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t body_size;
+    uint32_t body_crc32;
+    uint32_t product_id;
+    uint8_t reserved[12];
+} fota_package_header_t;
+_Static_assert(sizeof(fota_package_header_t) == FOTA_PACKAGE_HEADER_SIZE,
+               "A300 OTA header wire size must remain 32 bytes");
 
 typedef enum {
     FOTA_STATE_IDLE = 0,
@@ -25,6 +42,9 @@ typedef enum {
     FOTA_STATE_VERIFYING,
     FOTA_STATE_READY,
     FOTA_STATE_ERROR,
+    FOTA_STATE_CHECK_CONNECTING,
+    FOTA_STATE_CHECKING,
+    FOTA_STATE_PREPARING,
 } fota_state_t;
 
 typedef struct {
@@ -39,7 +59,11 @@ typedef struct {
 
 void fota_init(void);
 void fota_process(void);
+/* Arm an immediate authenticated check; an active transfer finishes first. */
+bool fota_request_check(void);
 int  fota_start_request(const fota_request_t *req);
+/* expected_length must be known and nonzero. PREPARING erases the candidate
+ * tail incrementally before CONNECTING; explicit URLs must be same-origin. */
 int  fota_start(const char *url);
 void fota_get_status(fota_status_t *out);
 fota_state_t fota_get_state(void);

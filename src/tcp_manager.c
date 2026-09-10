@@ -37,6 +37,7 @@ typedef struct {
 
 static ch_ctx_t s_ch[2];   /* [0]=main  [1]=backup */
 static bool s_boot_summary_logged;
+static bool s_reconnect_pending;
 
 static bool decimal_length_valid(const char *value, size_t first, size_t second)
 {
@@ -200,18 +201,30 @@ static void ch_process(ch_ctx_t *c)
 void tcp_manager_init(void)
 {
     s_boot_summary_logged = false;
+    s_reconnect_pending = false;
     ch_init(&s_ch[0], TCP_CH_MAIN);
     ch_init(&s_ch[1], TCP_CH_BACKUP);
 }
 
 void tcp_manager_process(void)
 {
+    /* OTA owns modem control. Pause connect/close/recovery without invalidating
+     * established JT808 sessions; their data path runs independently. */
+    if (tcp_manager_ota_active()) return;
+    if (s_reconnect_pending) tcp_manager_reconnect();
     ch_process(&s_ch[0]);
     ch_process(&s_ch[1]);
 }
 
 void tcp_manager_reconnect(void)
 {
+    if (tcp_manager_ota_active()) {
+        /* Retain config-triggered reconnects and apply the latest endpoints
+         * once OTA releases control. Repeated requests coalesce here. */
+        s_reconnect_pending = true;
+        return;
+    }
+    s_reconnect_pending = false;
     ec800m_tcp_close(TCP_CH_MAIN);
     ec800m_tcp_close(TCP_CH_BACKUP);
     ch_init(&s_ch[0], TCP_CH_MAIN);
@@ -243,4 +256,11 @@ uint8_t tcp_manager_active_ch(void)
     if (s_ch[1].state == CS_ONLINE) return TCP_CH_BACKUP;
     return TCP_CH_MAIN;
 }
-bool tcp_manager_ota_active(void){fota_state_t s=fota_get_state();return s==FOTA_STATE_CONNECTING||s==FOTA_STATE_DOWNLOADING||s==FOTA_STATE_VERIFYING;}
+bool tcp_manager_ota_active(void)
+{
+    fota_state_t state = fota_get_state();
+    return state == FOTA_STATE_CHECK_CONNECTING || state == FOTA_STATE_CHECKING ||
+           state == FOTA_STATE_PREPARING || state == FOTA_STATE_CONNECTING ||
+           state == FOTA_STATE_DOWNLOADING || state == FOTA_STATE_VERIFYING ||
+           state == FOTA_STATE_READY;
+}

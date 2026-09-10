@@ -7,7 +7,7 @@
 # non-ASCII path. Callers can still override TOOLCHAIN_DIR explicitly.
 # Prefer the repository-local ASCII junction created by the build setup.  The
 # vendor fallback remains available for machines that do not have the junction.
-TOOLCHAIN_DIR ?= $(if $(wildcard .toolchain/bin/arm-none-eabi-gcc.exe),.toolchain/bin,D:/A300_Tools/A300-N32G452/工具链/arm-gnu-toolchain-14.3.rel1/bin)
+TOOLCHAIN_DIR ?= $(abspath .toolchain/bin)
 PROG_CLI      := D:/ST/STM32CubeIDE_2.1.1/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.win32_2.2.400.202601091506/tools/bin/STM32_Programmer_CLI.exe
 
 CC      := $(TOOLCHAIN_DIR)/arm-none-eabi-gcc.exe
@@ -34,14 +34,17 @@ C_SRCS := \
     src/ram_watermark.c  \
     src/ec800m.c         \
     src/ec800m_at_response.c \
+     src/agnss_stream_workspace.c \
      src/service_workspace.c \
      src/log_platform.c    \
      src/cfg_query.c        \
     src/gps.c            \
     src/jt808.c          \
     src/motion_corner.c  \
+    src/overspeed_policy.c \
     src/jt808_session.c  \
     src/jt808_params.c   \
+    src/jt808_terminal_info.c \
     src/terminal_identity.c \
     src/at_config.c      \
     src/adc_monitor.c    \
@@ -53,7 +56,9 @@ C_SRCS := \
     src/i2c_accel.c      \
     src/relay.c          \
     src/flash_config.c   \
+    src/fota_check_parser.c \
     src/fota.c           \
+    src/fota_checkpoint.c \
     src/firmware_signature.c \
     src/agnss_manager.c  \
     src/agnss_huada.c    \

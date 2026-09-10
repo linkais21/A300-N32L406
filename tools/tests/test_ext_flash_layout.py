@@ -110,7 +110,28 @@ def test_layout_header_preprocesses_and_compiles():
         )
         assert result.returncode == 0, result.stderr
 
+def test_checkpoint_slots_leave_bcr_and_resume_bounds_intact():
+    assert (ROOT / "include/fota_checkpoint.h").exists(), "dual-slot checkpoint API missing"
+    from test_fota_checkpoint_powercut import run_host, NOR
+    run_host(NOR + r'''
+#include "boot_contract.h"
+int main(void) {
+    assert(FLASH_SECTOR_SIZE == 4096);
+    assert(EXT_FLASH_CANDIDATE_SIZE == 448U*1024U);
+    assert(FOTA_CHECKPOINT_SLOT_A == 0x102000);
+    assert(FOTA_CHECKPOINT_SLOT_B == 0x103000);
+    assert(BCR_SLOT_A_ADDR + 4096 <= BCR_SLOT_B_ADDR);
+    assert(BCR_SLOT_B_ADDR + 4096 <= FOTA_CHECKPOINT_SLOT_A);
+    assert(FOTA_CHECKPOINT_SLOT_A + 4096 <= FOTA_CHECKPOINT_SLOT_B);
+    assert(FOTA_CHECKPOINT_SLOT_B + 4096 <= EXT_FLASH_RESUME_ADDR + EXT_FLASH_RESUME_SIZE);
+    assert(sizeof(fota_checkpoint_t) <= 4096);
+    puts("checkpoint layout: fixed slots and 4 KiB isolation PASS");
+    return 0;
+}
+''', "layout")
+
 if __name__ == "__main__":
+    test_checkpoint_slots_leave_bcr_and_resume_bounds_intact()
     test_regions_non_overlapping_and_in_bounds()
     test_page_split_formula()
     test_timeout_and_owner_contracts_present()

@@ -127,6 +127,14 @@ def test_stop1_admission_guards_busy_work():
     assert "FOTA_STATE_DOWNLOADING" in guard
     assert "FOTA_STATE_VERIFYING" in guard
     assert "FOTA_STATE_READY" in guard
+    assert "FOTA_STATE_CHECK_CONNECTING" in guard
+    assert "FOTA_STATE_CHECKING" in guard
+    assert "FOTA_STATE_PREPARING" in guard
+
+
+def test_main_keeps_ota_receive_registration_after_modem_reset():
+    source = read(MAIN)
+    assert source.index("ec800m_init();") < source.index("fota_init();")
 
 
 def test_stop1_emits_bounded_admission_and_wake_diagnostics():
@@ -165,6 +173,7 @@ def test_main_integrates_work_mode_and_alarm_routing():
     assert "work_mode_notify_alarm(ALM_POWER_CUT)" in main
     assert "work_mode_notify_alarm(ALM_POWER_LOW)" in main
     assert "input.acc_high = hw_acc_is_on();" in main
+    assert "input.gps_valid = jt808_location_snapshot_valid(" in main
     assert "pwr_process();" not in main
 
 
@@ -215,6 +224,7 @@ if __name__ == "__main__":
     test_stop1_sleep_does_not_reinitialize_modem_before_service_window()
     test_online_service_window_reloads_watchdog_between_services()
     test_stop1_admission_guards_busy_work()
+    test_main_keeps_ota_receive_registration_after_modem_reset()
     test_stop1_emits_bounded_admission_and_wake_diagnostics()
     test_legacy_power_manager_is_only_compatibility_routing()
     test_main_integrates_work_mode_and_alarm_routing()

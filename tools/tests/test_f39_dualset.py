@@ -95,6 +95,7 @@ static void test_success_single_commit_and_effects(void)
     f39_transaction_t tx;
     uint32_t expected = F39_EFFECT_TIMER_REFRESH |
                         F39_EFFECT_NETWORK_RECONNECT |
+                        F39_EFFECT_MAIN_AUTH_RESET |
                         F39_EFFECT_GNSS_REFRESH |
                         F39_EFFECT_JT808_REREGISTER |
                         F39_EFFECT_REMAINING_REFRESH;
