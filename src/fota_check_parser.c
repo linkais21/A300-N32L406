@@ -195,6 +195,21 @@ static bool fota_check_parse_u32(fota_check_cursor_t *cursor, uint32_t *value)
     return true;
 }
 
+static bool fota_check_skip_unknown_value(fota_check_cursor_t *cursor)
+{
+    if (cursor->cursor >= cursor->end) return false;
+    if (*cursor->cursor == '"')
+        return fota_check_parse_string(cursor, NULL, NULL, NULL, 0U);
+    if (*cursor->cursor == 't') return fota_check_parse_literal(cursor, "true", 4U);
+    if (*cursor->cursor == 'f') return fota_check_parse_literal(cursor, "false", 5U);
+    if (*cursor->cursor == 'n') return fota_check_parse_literal(cursor, "null", 4U);
+    if (*cursor->cursor >= '0' && *cursor->cursor <= '9') {
+        uint32_t ignored;
+        return fota_check_parse_u32(cursor, &ignored);
+    }
+    return false;
+}
+
 static uint8_t fota_check_field_bit(fota_check_field_t field)
 {
     switch (field) {
@@ -250,10 +265,10 @@ bool fota_check_parse(const char *json, uint16_t length, fota_check_response_t *
         }
         field = fota_check_field_for_key(key, key_length);
         bit = fota_check_field_bit(field);
-        if (bit == 0U || (seen & bit) != 0U) {
+        if (bit != 0U && (seen & bit) != 0U) {
             return false;
         }
-        seen |= bit;
+        if (bit != 0U) seen |= bit;
         fota_check_skip_whitespace(&cursor);
         if (!fota_check_consume(&cursor, ':')) {
             return false;
@@ -308,7 +323,8 @@ bool fota_check_parse(const char *json, uint16_t length, fota_check_response_t *
             }
             break;
         default:
-            return false;
+            if (!fota_check_skip_unknown_value(&cursor)) return false;
+            break;
         }
 
         fota_check_skip_whitespace(&cursor);

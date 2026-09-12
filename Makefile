@@ -53,6 +53,7 @@ C_SRCS := \
     src/ext_flash_store.c \
     src/blind_zone.c     \
     src/blind_zone_replay.c \
+    src/accel_vibration_filter.c \
     src/i2c_accel.c      \
     src/relay.c          \
     src/flash_config.c   \
@@ -157,6 +158,9 @@ $(BUILD)/src/firmware_signature.o: src/firmware_signature.c
 	@if not exist "$(subst /,\,$(dir $@))" mkdir "$(subst /,\,$(dir $@))"
 	$(CC) $(CFLAGS) -fno-lto -c $< -o $@
 
+# A key/identifier change must invalidate both the verifier and its callers.
+$(BUILD)/src/firmware_signature.o $(BUILD)/src/fota.o: include/trusted_public_key.h
+
 $(BUILD)/third_party/micro-ecc/uECC.o: third_party/micro-ecc/uECC.c
 	@if not exist "$(subst /,\,$(dir $@))" mkdir "$(subst /,\,$(dir $@))"
 	$(CC) $(CFLAGS) -fno-lto -c $< -o $@
@@ -204,11 +208,19 @@ $(STACK_AUDIT_BUILD)/ec800m.o: src/ec800m.c
 	@if not exist "$(subst /,\,$(dir $@))" mkdir "$(subst /,\,$(dir $@))"
 	$(CC) $(STACK_AUDIT_CFLAGS) -c $< -o $@
 
-stack-guard: $(STACK_AUDIT_BUILD)/jt808.o $(STACK_AUDIT_BUILD)/flash_config.o $(STACK_AUDIT_BUILD)/gps.o $(STACK_AUDIT_BUILD)/ec800m.o $(BUILD)/$(TARGET).map
-	python tools/stack_usage_guard.py $(STACK_AUDIT_BUILD)/jt808.su $(STACK_AUDIT_BUILD)/flash_config.su $(STACK_AUDIT_BUILD)/gps.su $(STACK_AUDIT_BUILD)/ec800m.su
+$(STACK_AUDIT_BUILD)/fota.o: src/fota.c
+	@if not exist "$(subst /,\,$(dir $@))" mkdir "$(subst /,\,$(dir $@))"
+	$(CC) $(STACK_AUDIT_CFLAGS) -c $< -o $@
+
+stack-guard: $(STACK_AUDIT_BUILD)/jt808.o $(STACK_AUDIT_BUILD)/flash_config.o $(STACK_AUDIT_BUILD)/gps.o $(STACK_AUDIT_BUILD)/ec800m.o $(STACK_AUDIT_BUILD)/fota.o $(BUILD)/$(TARGET).map
+	python tools/stack_usage_guard.py $(STACK_AUDIT_BUILD)/jt808.su $(STACK_AUDIT_BUILD)/flash_config.su $(STACK_AUDIT_BUILD)/gps.su $(STACK_AUDIT_BUILD)/ec800m.su $(STACK_AUDIT_BUILD)/fota.su
 	python tools/libc_parser_guard.py $(BUILD)/$(TARGET).map
 
-release-gate: release-guard ram-guard stack-guard
+platform-trust-guard:
+	python tools/tests/test_platform_trust_anchor.py
+
+.PHONY: platform-trust-guard
+release-gate: release-guard ram-guard stack-guard platform-trust-guard
 
 print-profile:
 	@echo BUILD=$(BUILD)

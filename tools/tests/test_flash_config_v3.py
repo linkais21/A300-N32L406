@@ -244,6 +244,44 @@ static void test_power_cut_never_loads_mixed_candidate(void)
     }
 }
 
+static void test_mileage_updates_are_deferred(void)
+{
+    uint32_t initial;
+    int before;
+    memset(flash_image, 0xFF, sizeof(flash_image));
+    locked = 0;
+    fail_operation = -1;
+    operation_count = 0;
+    debug_used = 0U;
+    cfg_init();
+    initial = cfg_get()->mileage_m;
+    operation_count = 0;
+    for (unsigned i = 0U; i < 500U; ++i)
+        cfg_add_mileage(1U);
+    assert(cfg_get()->mileage_m == initial + 500U);
+    assert(cfg_mileage_dirty());
+    assert(operation_count == 0);
+    before = operation_count;
+    assert(cfg_flush_mileage());
+    assert(!cfg_mileage_dirty());
+    assert(operation_count > before);
+
+    cfg_add_mileage(7U);
+    operation_count = 0;
+    fail_operation = 1;
+    assert(!cfg_flush_mileage());
+    assert(cfg_mileage_dirty());
+    fail_operation = -1;
+    operation_count = 0;
+    assert(cfg_flush_mileage());
+    assert(!cfg_mileage_dirty());
+
+    cfg_add_mileage(9U);
+    assert(cfg_mileage_dirty());
+    cfg_set_heartbeat((uint16_t)(cfg_get()->heartbeat_s + 1U));
+    assert(!cfg_mileage_dirty());
+}
+
 int main(void)
 {
     assert(CFG_VERSION == 4U);
@@ -254,6 +292,7 @@ int main(void)
     test_default_persistence_failure_is_logged();
     test_independent_auth_codes();
     test_power_cut_never_loads_mixed_candidate();
+    test_mileage_updates_are_deferred();
     return 0;
 }
 '''

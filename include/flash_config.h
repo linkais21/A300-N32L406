@@ -145,11 +145,15 @@ void     cfg_factory_reset(void);       /* restore defaults and save */
 
 device_config_t *cfg_get(void);         /* pointer to live RAM copy */
 
-/* Convenience setters — each calls cfg_save() */
+/* Convenience setters persist immediately except cfg_add_mileage(), which
+ * marks the live RAM total dirty for bounded periodic/forced flushing. */
 void cfg_set_server(const char *ip, uint16_t port, bool backup);
 void cfg_set_heartbeat(uint16_t s);
 void cfg_set_report_interval(uint16_t moving_s, uint16_t stopped_s);
 void cfg_set_mileage(uint32_t metres);
 void cfg_add_mileage(uint32_t delta_m);
+bool cfg_mileage_dirty(void);
+bool cfg_flush_mileage(void);
+uint32_t cfg_persist_generation(void);
 
 #endif /* FLASH_CONFIG_H */

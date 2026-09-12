@@ -150,9 +150,12 @@ def check_acc_wake_hold() -> None:
     require("ACC_WAKE_HOLD_MS" in body,
             "the hold decision does not consult the window")
     # The STOP1 re-entry at the end of the loop is the thing being gated.
-    require(re.search(r"WORK_MODE_STATIONARY_SLEEP[\s\S]{0,300}?"
-                      r"!acc_wake_hold[\s\S]{0,300}?work_mode_sleep_process",
-                      body) is not None,
+    stop_profile = body.find("#if A300_STOP1_SLEEP")
+    sleep_gate = body.find("if (work_mode_state() == WORK_MODE_STATIONARY_SLEEP",
+                           stop_profile)
+    sleep_call = body.find("work_mode_sleep_process", sleep_gate)
+    require(sleep_gate >= 0 and sleep_call > sleep_gate and
+            "!acc_wake_hold" in body[sleep_gate:sleep_call],
             "STOP1 re-entry is not gated on the ACC hold")
     # Reaching REALTIME means the debounce committed: the hold must release.
     require(re.search(r"WORK_MODE_REALTIME\s*\|\|\s*!acc_wake_hold[\s\S]{0,160}?"

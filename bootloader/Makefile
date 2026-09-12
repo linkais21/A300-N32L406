@@ -25,6 +25,7 @@ build/sdk/%.o: ../%.c | build
 	$(CC) $(CFLAGS) $(SDK_CFLAGS) -c $< -o $@
 build/firmware_signature.o: ../src/firmware_signature.c | build
 	$(CC) $(CFLAGS) -c $< -o $@
+build/firmware_signature.o build/image_verify.o: ../include/trusted_public_key.h
 build/uECC.o: ../third_party/micro-ecc/uECC.c | build
 	$(CC) $(CFLAGS) -c $< -o $@
 build/startup_n32l40x.o: src/startup_n32l40x.s | build

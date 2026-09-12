@@ -26,14 +26,15 @@ def test_a300_wire_header_is_exactly_32_bytes():
     assert "uint8_t reserved[12]" in FOTA_H
 
 
-def test_detached_metadata_is_durable_before_pending_and_reset_is_immediate():
+def test_detached_metadata_is_durable_before_bounded_status_and_reset():
     assert "package_sha256[32]" in BOOT_CONTRACT
     assert "signature[64]" in BOOT_CONTRACT
     assert "signing_key_id" in BOOT_CONTRACT
     verify = FOTA_C[FOTA_C.index("if (s_state==FOTA_STATE_VERIFYING)"):]
     assert verify.index("fota_authorization_commit") < verify.index("fota_bcr_commit_pending")
-    assert verify.index("fota_bcr_commit_pending") < verify.index("NVIC_SystemReset()")
-    assert "s_state=FOTA_STATE_READY" not in verify[:verify.index("NVIC_SystemReset()")]
+    assert verify.index("fota_bcr_commit_pending") < verify.index("s_state=FOTA_STATE_READY")
+    assert "FOTA_STATUS_WINDOW_MS 15000UL" in FOTA_C
+    assert verify.index("s_state=FOTA_STATE_READY") < verify.index("fota_apply()")
 
 
 def _package(payload, signature=b"ECDSA-VALID"):
@@ -113,7 +114,7 @@ def test_runtime_bcr_handoff_uses_payload_length():
 
 if __name__ == "__main__":
     test_a300_wire_header_is_exactly_32_bytes()
-    test_detached_metadata_is_durable_before_pending_and_reset_is_immediate()
+    test_detached_metadata_is_durable_before_bounded_status_and_reset()
     test_package_requires_header_hash_signature_and_crc_before_pending()
     test_oversized_and_cancel_paths_release_ota_owner()
     test_package_hash_and_signature_failures_are_rejected()

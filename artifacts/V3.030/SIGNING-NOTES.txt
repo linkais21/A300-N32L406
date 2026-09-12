@@ -1,0 +1,77 @@
+A300-406 OTA V3030 -- signing notes
+
+sha256 = 002800071e6e53053c56cfddc1ea8eb8952725df577d596e01b3dc46338724f0
+size   = 105752
+
+ROOT CAUSE, FOUND
+-----------------
+V3028 pulled V3029 to 100% in a single attempt with no aborts, and the digest
+still failed.  The measurement that mattered:
+
+  [4G-RX] ch=1 qird_lag=768 have_read=81687 acct=82455 unread=7532 reads=4
+
+The surplus appeared once at read 4 and never changed for the remaining 90 KB.
+have_read and acct therefore tracked each other exactly (both are 23 mod 256,
+matching the 179-byte HTTP header read and one short 100-byte read), so the modem
+and the reader agreed on every byte.  Nothing was duplicated and nothing was
+lost.  The bytes were counted correctly and stored wrongly, which moves the fault
+out of QIRD framing entirely.
+
+qird_collect_payload publishes its payload by handing the caller a pointer into
+the shared s_at_resp buffer, and it did so *after* calling
+process_deferred_urc_one():
+
+    at_owner_release(AT_OWNER_BLOCKING);
+    process_deferred_urc_one();          <-- re-enters the reader
+    if (complete) {
+        *payload = (const uint8_t *)s_at_resp;
+        *payload_length = body_length;
+
+The AT owner has just been released, so the deferred-URC guard lets it run.  A
+queued +QIURC: "recv" then reaches process_urc -> the recv handler -> a nested
+qird_collect_payload, which refills s_at_resp.  The outer call returns that
+pointer with its own length, so the caller stores the inner chunk at the outer
+offset.  The inner chunk was already stored at its own offset, so it lands twice
+and the outer chunk is lost.
+
+That accounts for every symptom, including the ones that defeated earlier
+theories: the byte count always reaches the exact expected size, have_read always
+agrees with the accounting, the digest differs every run, and it only happens
+when a deferred URC is queued at that instant -- which is why the interleaved
+"[4G-RX] ch=1 event=recv" lines show up in the middle of read sequences.
+
+THE FIX
+-------
+s_qird_pass_active is held for the duration of a read pass, and
+process_deferred_urc_one() returns early while it is set.  Deferred URCs stay
+queued and are drained after the pass by the existing call at the end of the
+service path, so nothing can re-enter the reader while a payload pointer is
+live.  This covers both re-entry routes: the call inside qird_collect_payload and
+the one inside at_send_wait, which the per-read AT+QIRD=<ch>,0 query goes through.
+
+Retained from V3028: the per-read have_read/acct cross-check with lag tolerance
+(qird_lag / qird_desync=lost / qird_desync=surplus), and the checked-and-retried
+init commands in state_machine_init() case 1..5.
+
+The earlier surplus of exactly 3 x 256 seen in V3026 is consistent with this
+mechanism recurring three times over one socket, so the "modem repeats responses"
+theory can be dropped.
+
+DELIVERY
+--------
+The device in the field runs V3028, whose read path still has this defect, so it
+cannot be trusted to download its own fix.  SWD-flash Combined-N32L406CBL7.bin
+from this directory, then upload artifacts/V3.031 to the platform and let the
+device pull 3031 over the air.
+
+WHAT THE DEVICE ACTUALLY VERIFIES
+--------------------------------
+The FOTA platform re-signs every uploaded package with its own private key
+(fota.security.signing-private-key, CryptoService.signPackage) and serves that
+signature to the device.  The signature supplied at upload time is not what the
+device checks.  The device's trust anchor (include/trusted_public_key.h,
+TRUSTED_KEY_LABEL "FOTA-PLATFORM-C0") is the platform's public key, so only the
+platform can produce a signature this firmware accepts.
+
+dev_key_signature = aa3a9bc86c5fba3fb47fd6e271719441b89b1d21a045945327bc7fe9e2e59953f39c754ec00aa5fe462bb1ab527bba6b483aa96cddbe4c74b1215c027dac780d
+dev_key_note      = NOT device-verifiable; informational only (.keys/dev-p256-private.pem)

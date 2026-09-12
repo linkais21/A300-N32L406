@@ -311,6 +311,25 @@ static void test_v3_generation_selection_and_v4_rewrite(void)
     assert(header.generation == 44U);
 }
 
+static void test_v4_empty_fota_url_repairs_default(void)
+{
+    device_config_t stored = native_fixture("v4-empty", "MODEL-V4", 90U);
+    device_config_t want = stored;
+    want.fota_url[0] = '\0';
+    reset_fake_flash();
+    stored.fota_url[0] = '\0';
+    seed_versioned_slot(CFG_FLASH_ADDR_A, 4U, sizeof(stored), 101U,
+                        &stored, 1);
+
+    cfg_init();
+
+    assert(strcmp(cfg_get()->fota_url, "http://39.108.211.33:8088") == 0);
+    assert(write_count == 4U);
+    assert(writes[0] == CFG_FLASH_ADDR_B);
+    strcpy(want.fota_url, "http://39.108.211.33:8088");
+    assert_native_slot(CFG_FLASH_ADDR_B, &want);
+}
+
 static void assert_legacy_fip_preserved(const device_config_t *cfg)
 {
     assert(strcmp(cfg->backup_ip, "808.lhhn.net") == 0);
@@ -578,12 +597,13 @@ int main(void)
     assert(V3_LEN == DEPLOYED_V3_LEN);
     assert(k_config_defaults.backup_ip[0] == '\0');
     assert(k_config_defaults.backup_port == 0U);
-    assert(strcmp(k_config_defaults.fota_url, "http://fota.lhhn.net") == 0);
+    assert(strcmp(k_config_defaults.fota_url, "http://39.108.211.33:8088") == 0);
     test_v1_a_migrates_other_slot_first();
     test_v1_b_migrates_other_slot_first();
     test_native_v2_is_preferred_over_v1();
     test_same_format_keeps_a_before_b_precedence();
     test_v3_generation_selection_and_v4_rewrite();
+    test_v4_empty_fota_url_repairs_default();
     test_corrupt_and_illegal_shapes_are_rejected();
     test_failed_other_slot_preserves_v1_source();
     test_failed_other_slot_preserves_v3_source();

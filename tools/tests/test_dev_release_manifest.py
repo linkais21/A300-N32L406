@@ -63,8 +63,9 @@ if __name__ == "__main__":
         module = importlib.util.module_from_spec(spec)
         assert spec.loader is not None
         spec.loader.exec_module(module)
-        assert module.release_version_label(identity) == "V3.002"
-        assert module.release_output_dir(Path("artifacts"), identity) == Path("artifacts/V3.002")
+        expected_label = "V" + identity["firmware_version"].rsplit("V", 1)[1]
+        assert module.release_version_label(identity) == expected_label
+        assert module.release_output_dir(Path("artifacts"), identity) == Path("artifacts") / expected_label
         for malformed in (
             {},
             {"firmware_version": "V3.002-extra"},
@@ -79,7 +80,7 @@ if __name__ == "__main__":
         with tempfile.TemporaryDirectory() as temporary:
             output_root = Path(temporary) / "artifacts"
             release_dir = module.reserve_release_dir(output_root, identity)
-            assert release_dir == output_root / "V3.002"
+            assert release_dir == output_root / expected_label
             sentinel = release_dir / "existing.bin"
             sentinel.write_bytes(b"do-not-overwrite")
             try:

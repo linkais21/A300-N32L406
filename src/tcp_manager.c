@@ -119,6 +119,12 @@ static void ch_start_connect(ch_ctx_t *c)
     const char *ip   = (c->ch == TCP_CH_MAIN) ? cfg->server_ip  : cfg->backup_ip;
     uint16_t    port = (c->ch == TCP_CH_MAIN) ? cfg->server_port : cfg->backup_port;
 
+    if (!ec800m_is_ready() || !ec800m_identity_ready()) {
+        c->state = CS_WAIT_MODEM;
+        c->state_ms = TICK_MS();
+        return;
+    }
+
     if (ip[0] == '\0' || port == 0U) {
         c->state = CS_DISABLED;
         return;
@@ -148,10 +154,18 @@ static void ch_on_fail(ch_ctx_t *c)
 static void ch_process(ch_ctx_t *c)
 {
     if (c->state == CS_DISABLED) return;
+    if ((!ec800m_is_ready() || !ec800m_identity_ready()) &&
+        c->state != CS_WAIT_MODEM) {
+        if (c->state == CS_CONNECTING || c->state == CS_ONLINE)
+            ec800m_tcp_close(c->ch);
+        c->state = CS_WAIT_MODEM;
+        c->state_ms = TICK_MS();
+        return;
+    }
 
     switch (c->state) {
     case CS_WAIT_MODEM:
-        if (ec800m_is_ready())
+        if (ec800m_is_ready() && ec800m_identity_ready())
             ch_start_connect(c);
         break;
 
@@ -176,10 +190,6 @@ static void ch_process(ch_ctx_t *c)
         if (st != TCP_STATE_OPEN) {
             dbg_printf("[TCP] ch%u dropped\r\n", c->ch);
             ch_on_fail(c);
-        }
-        if (!ec800m_is_ready()) {
-            c->state    = CS_WAIT_MODEM;
-            c->state_ms = TICK_MS();
         }
         break;
     }

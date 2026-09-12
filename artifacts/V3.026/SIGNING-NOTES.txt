@@ -1,0 +1,52 @@
+A300-406 OTA V3026 -- signing notes
+
+sha256 = cde4ae4fa0089d29cbf87ad5a2fa887bb8599bdc3f901a3105f67e3dcdacd92d
+size   = 105544
+
+WHAT CHANGED SINCE V3025
+------------------------
+V3024 on target proved the corruption mechanism: the RX ring reached
+"pending=829 cap=1024" and the drain then retired 876 bytes containing three
+complete +QIRD responses.  The reader summed the "+QIRD: <n>" headers it saw, so
+a response delivered twice -- or one lost because the DMA overwrote it in place
+once the ring filled -- still added up to the exact expected byte count while
+the content was wrong.  That is why the download reached 100% and the digest
+failed with a different value every run.
+
+V3025's alternating request length (256/255) is replaced by the stronger check
+it was approximating.  Every read is now preceded by AT+QIRD=<ch>,0, which
+answers "+QIRD: <total>,<have_read>,<unread>" and consumes nothing:
+
+  * have_read is the modem's own count of what it has handed over.  It is
+    compared against the reader's accounting (s_qird_acct, keyed to
+    s_tcp_generation so a reopened socket cannot inherit a stale count).
+    A mismatch means the stream position is unknown, so the socket is closed and
+    the download resumes from the last committed offset with a Range request --
+    instead of storing bytes at the wrong offset and failing 100 KB later.
+    Logged as "[4G-RX] ch=<n> qird_desync have_read=.. acct=.. unread=..".
+  * unread bounds each request, so no read is issued for data the modem does not
+    have, and "more pending" is now exact rather than inferred from a full chunk.
+
+Retained from V3025: the init commands in state_machine_init() case 1..5 (ATE0,
+AT+QURCCFG, AT+CMGF, AT+CNMI, AT+CTZU) no longer discard the at_send_wait
+result; each retries once and logs "[4G] init cmd failed step=<n> <cmd>".  A
+lost ATE0 used to leave command echo on for the whole session silently.
+
+The drain still discards residue rather than consuming it as payload.  That is
+now safe: discarded bytes advance the modem's have_read, so the next query
+reports the mismatch and the download resumes cleanly from the committed offset.
+
+Cost: one extra AT round trip per 256-byte read.  The V3024 run moved 105 KB in
+about 15 s; expect roughly 25 s.
+
+WHAT THE DEVICE ACTUALLY VERIFIES
+--------------------------------
+The FOTA platform re-signs every uploaded package with its own private key
+(fota.security.signing-private-key, CryptoService.signPackage) and serves that
+signature to the device.  The signature supplied at upload time is not what the
+device checks.  The device's trust anchor (include/trusted_public_key.h,
+TRUSTED_KEY_LABEL "FOTA-PLATFORM-C0") is the platform's public key, so only the
+platform can produce a signature this firmware accepts.
+
+dev_key_signature = 7d3e2d0aca90037c7c3e35071fc127c8b2213092880fc032a23338c4a2a0cbdd6c61a822d2ad888e907ddc694a4a0425a36b00ff3fa6edcffe7855511c08e1e2
+dev_key_note      = NOT device-verifiable; informational only (.keys/dev-p256-private.pem)

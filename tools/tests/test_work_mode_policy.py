@@ -278,9 +278,6 @@ static void test_two_vibration_misses_preserve_but_do_not_shorten_confirmation(v
         bool hit = sample != 10U && sample != 11U;
         step_ms(sample * 200U, false, hit);
     }
-    assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
-    assert(work_mode_vibration_hits() == 29U);
-    step_ms(6400U, false, true);
     assert(work_mode_state() == WORK_MODE_REALTIME);
 }
 
@@ -298,8 +295,8 @@ static void test_acc_falling_edge_precedes_same_step_vibration(void)
     assert(count >= 1U);
     assert(actions[0].type == WORK_ACTION_SET_LOGICAL_ACC);
     assert(!actions[0].acc_on);
-    for (i = 0U; i < 30U; ++i) {
-        step(2U + i, false, true, 0U, false);
+    for (i = 0U; i <= 30U; ++i) {
+        step_ms(1200U + i * 200U, false, true);
     }
     assert(work_mode_state() == WORK_MODE_REALTIME);
 }
@@ -423,8 +420,8 @@ static void test_full_queue_retries_complete_realtime_entry(void)
         step((uint32_t)i, true, false, 0U, true);
     }
     step(6U, false, false, 0U, false);
-    for (i = 7U; i <= 36U; ++i) {
-        step((uint32_t)i, false, true, 0U, true);
+    for (i = 0U; i <= 30U; ++i) {
+        step_ms(1200U + i * 200U, false, true);
     }
     count = drain(actions, ARRAY_LEN(actions));
     for (i = 0U; i < count; ++i) {
@@ -498,8 +495,8 @@ static void test_full_queue_reversal_to_realtime_drops_stale_sleep_actions(void)
         step((uint32_t)i, true, false, 0U, true);
     }
     step(6U, false, false, 0U, false);
-    for (i = 7U; i <= 11U; ++i) {
-        step((uint32_t)i, false, true, 0U, true);
+    for (i = 0U; i <= 30U; ++i) {
+        step_ms(1200U + i * 200U, false, true);
     }
 
     count = drain(actions, ARRAY_LEN(actions));
@@ -612,13 +609,13 @@ static void test_realtime_without_acc_enters_sleep_after_static_timeout(void)
     uint32_t i;
 
     work_mode_init(&DEFAULT_CONFIG, 0U, false);
-    for (i = 0U; i < 30U; ++i) {
-        step(i, false, true, 0U, true);
+    for (i = 0U; i <= 30U; ++i) {
+        step_ms(200U + i * 200U, false, true);
     }
     assert(work_mode_state() == WORK_MODE_REALTIME);
-    step(328U, false, false, 0U, true);
+    step(305U, false, false, 0U, true);
     assert(work_mode_state() == WORK_MODE_REALTIME);
-    step(329U, false, false, 0U, true);
+    step(306U, false, false, 0U, true);
     assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
 }
 

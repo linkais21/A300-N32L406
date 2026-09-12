@@ -2,6 +2,7 @@
 #include "config.h"
 #include "hw_init.h"
 #include "jt808.h"
+#include "mileage.h"
 #include "n32l40x.h"
 
 static float s_car_v = 0.0f;
@@ -33,8 +34,10 @@ void adc_monitor_process(void)
     s_bat_v = adc_read_ch(ADC_BAT_CH) * ADC_BAT_RATIO;
 
     /* Power cut: car voltage drops from >9 V to <4 V */
-    if (prev_car > 9.0f && s_car_v < 4.0f)
+    if (prev_car > 9.0f && s_car_v < 4.0f) {
         jt808_trigger_alarm(ALM_POWER_CUT);
+        (void)mileage_force_save(TICK_MS());
+    }
 
     if (adc_is_bat_low())
         jt808_trigger_alarm(ALM_POWER_LOW);

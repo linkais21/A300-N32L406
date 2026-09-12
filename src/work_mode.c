@@ -28,6 +28,7 @@ typedef struct {
     uint32_t stopped_deadline_s;
     uint32_t heartbeat_deadline_s;
     uint32_t vibration_hits;
+    uint32_t vibration_samples;
     uint32_t vibration_miss_count;
     uint32_t vibration_started_ms;
     uint32_t vibration_last_hit_ms;
@@ -99,12 +100,33 @@ static uint32_t vibration_samples_required(void)
     return samples == 0U ? 1U : samples;
 }
 
+static uint32_t vibration_hits_required(uint32_t observed_samples)
+{
+    uint32_t samples = observed_samples != 0U ? observed_samples :
+                                                 vibration_samples_required();
+
+    /* Require real motion evidence for at least two thirds of samples that
+     * the cooperative loop actually serviced. The elapsed-time and maximum
+     * gap gates below prevent a slow loop from shortening the six-second
+     * confirmation or accepting sparse isolated spikes. */
+    return (samples * 2U + 2U) / 3U;
+}
+
 static uint32_t vibration_confirm_ms(void)
 {
     uint32_t confirm_s = g_work_mode.config.vibration_confirm_s;
     if (confirm_s > WORK_MODE_MAX_VIBRATION_CONFIRM_S)
         confirm_s = WORK_MODE_MAX_VIBRATION_CONFIRM_S;
     return confirm_s * WORK_MODE_MS_PER_SECOND;
+}
+
+static void reset_vibration_episode(void)
+{
+    g_work_mode.vibration_hits = 0U;
+    g_work_mode.vibration_samples = 0U;
+    g_work_mode.vibration_miss_count = 0U;
+    g_work_mode.vibration_started_ms = 0U;
+    g_work_mode.vibration_last_hit_ms = 0U;
 }
 
 static bool is_mode_entry_action(work_mode_action_type_t type)
@@ -268,6 +290,7 @@ static void enter_realtime(uint32_t now_s)
     g_work_mode.logical_acc = true;
     g_work_mode.wake_fix_pending = waking_from_sleep;
     g_work_mode.vibration_hits = 0U;
+    g_work_mode.vibration_samples = 0U;
     g_work_mode.vibration_miss_count = 0U;
     g_work_mode.vibration_started_ms = 0U;
     g_work_mode.vibration_last_hit_ms = 0U;
@@ -291,6 +314,7 @@ static void enter_stationary(uint32_t now_s, bool gps_valid)
     g_work_mode.logical_acc = false;
     g_work_mode.wake_fix_pending = false;
     g_work_mode.vibration_hits = 0U;
+    g_work_mode.vibration_samples = 0U;
     g_work_mode.vibration_miss_count = 0U;
     g_work_mode.vibration_started_ms = 0U;
     g_work_mode.vibration_last_hit_ms = 0U;
@@ -310,6 +334,8 @@ static void process_vibration(uint32_t now_s, uint32_t now_ms, bool vibration_hi
         now_ms = now_s * WORK_MODE_MS_PER_SECOND;
     if (!vibration_hit) {
         if (g_work_mode.vibration_hits != 0U) {
+            if (g_work_mode.vibration_samples < UINT32_MAX)
+                ++g_work_mode.vibration_samples;
             if (g_work_mode.vibration_miss_count < UINT32_MAX)
                 ++g_work_mode.vibration_miss_count;
         }
@@ -318,10 +344,13 @@ static void process_vibration(uint32_t now_s, uint32_t now_ms, bool vibration_hi
             (g_work_mode.vibration_hits != 0U &&
              (uint32_t)(now_ms - g_work_mode.vibration_last_hit_ms) >
                  WORK_MODE_VIBRATION_MAX_GAP_MS)) {
-            g_work_mode.vibration_hits = 0U;
-            g_work_mode.vibration_miss_count = 0U;
-            g_work_mode.vibration_started_ms = 0U;
-            g_work_mode.vibration_last_hit_ms = 0U;
+            reset_vibration_episode();
+        } else if (g_work_mode.vibration_hits != 0U &&
+                   (uint32_t)(now_ms - g_work_mode.vibration_started_ms) >=
+                   vibration_confirm_ms() &&
+                   g_work_mode.vibration_hits < vibration_hits_required(
+                       g_work_mode.vibration_samples)) {
+            reset_vibration_episode();
         }
         return;
     }
@@ -332,16 +361,28 @@ static void process_vibration(uint32_t now_s, uint32_t now_ms, bool vibration_hi
         WORK_MODE_VIBRATION_MAX_GAP_MS) {
         g_work_mode.vibration_started_ms = now_ms;
         g_work_mode.vibration_hits = 0U;
+        g_work_mode.vibration_samples = 0U;
     }
     g_work_mode.vibration_last_hit_ms = now_ms;
 
-    if (g_work_mode.vibration_hits < vibration_samples_required()) {
+    if (g_work_mode.vibration_samples < UINT32_MAX)
+        ++g_work_mode.vibration_samples;
+    if (g_work_mode.vibration_hits < UINT32_MAX) {
         ++g_work_mode.vibration_hits;
     }
-    if (g_work_mode.vibration_hits >= vibration_samples_required() &&
+    /* Confirmation is an elapsed-time contract. Two tolerated sample misses
+     * must not extend six seconds into 6.4 seconds, and a busy cooperative
+     * loop must not require an impossible fixed number of scheduler passes. */
+    if (g_work_mode.vibration_hits >= vibration_hits_required(
+            g_work_mode.vibration_samples) &&
         (uint32_t)(now_ms - g_work_mode.vibration_started_ms) >=
         vibration_confirm_ms()) {
         enter_realtime(now_s);
+    } else if ((uint32_t)(now_ms - g_work_mode.vibration_started_ms) >=
+               vibration_confirm_ms() &&
+               g_work_mode.vibration_hits < vibration_hits_required(
+                   g_work_mode.vibration_samples)) {
+        reset_vibration_episode();
     }
 }
 
@@ -375,6 +416,7 @@ void work_mode_init(const work_mode_config_t *cfg, uint32_t now_s, bool acc_high
     g_work_mode.pending_count = 0U;
     g_work_mode.mode_generation = 0U;
     g_work_mode.vibration_hits = 0U;
+    g_work_mode.vibration_samples = 0U;
     g_work_mode.vibration_miss_count = 0U;
     g_work_mode.vibration_started_ms = 0U;
     g_work_mode.vibration_last_hit_ms = 0U;
@@ -609,7 +651,7 @@ uint16_t work_mode_vibration_hits(void)
 
 uint16_t work_mode_vibration_required(void)
 {
-    return (uint16_t)vibration_samples_required();
+    return (uint16_t)vibration_hits_required(g_work_mode.vibration_samples);
 }
 
 void work_mode_notify_alarm(uint32_t alarm_bits)

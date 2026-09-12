@@ -113,7 +113,8 @@ CANONICAL_CONSUMER_PATTERNS = {
 }
 CANONICAL_CONSUMER_MACROS = {
     "src/main.c": {"FW_BUILD_DATE", "FW_FULL_VERSION", "FW_JT808_MODEL_STR",
-                   "FW_MANUFACTURER_ID_STR", "WORK_MODE_DEFAULT_STOPPED_REPORT_S"},
+                   "FW_MANUFACTURER_ID_STR", "WORK_MODE_DEFAULT_STOPPED_REPORT_S",
+                   "TICK_MS"},
     "src/jt808_params.c": {"JT808_TERMINAL_INFO_BODY_LENGTH",
                             "MSG_QUERY_TERMINAL_INFO"},
     "src/jt808_terminal_info.c": {"FW_VERSION_STR", "FW_JT808_MODEL_STR",
@@ -132,6 +133,7 @@ CANONICAL_MACRO_DEFINITIONS = {
     "MSG_QUERY_TERMINAL_INFO": re.compile(r"0[xX]8107(?:[uUlL]*)"),
     "F39_IMEI_MAX_LENGTH": re.compile(r"15(?:[uU])?"),
     "WORK_MODE_DEFAULT_STOPPED_REPORT_S": re.compile(r"180(?:[uU])?"),
+    "TICK_MS": re.compile(r"\(\s*g_tick_ms\s*\)"),
 }
 C_IDENTIFIER = r"(?:[^\W\d]|\\(?:u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}))(?:\w|\\(?:u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}))*"
 PP_DIRECTIVE = r"(?:#|%:|\?\?=)"
@@ -140,7 +142,7 @@ TRIGRAPHS = {
     "??!": "|", "??<": "{", "??>": "}", "??-": "~",
 }
 CANONICAL_CONSUMER_SHA256 = {
-    "src/main.c": "8b76236781631a33a671da7261e45c88405fae9124238e718baa5f26ee85e9d0",
+    "src/main.c": "9dea394461c37e553f3e9dbd4f9bb1825e2fd1094d23d9721a4f1c51660df0b4",
     "src/jt808.c": "d38583fc4d2e47eab4fe184b90a21205dc6e2606266a20e824bff69321871586",
     "src/jt808_params.c": "2f4c5cefaa334a336896ec36cc7feaaa56ae1b56dcaef44e4b33a33008dc7a11",
     "src/jt808_terminal_info.c": "0ce1a9cf82880062c0d84b88bc50ae047c59ec7f6e5e17ea59266b50a0499d49",
@@ -148,8 +150,8 @@ CANONICAL_CONSUMER_SHA256 = {
     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
 }
 CANONICAL_IDENTITY_FILE_SHA256 = {
-    "include/config.h": "c849150fbd0c04d90190697c825652975c510c16719d25069acfbaab906c4392",
-    "include/build_version.h": "55f08b6d798826fc70a8056c9423d6882ba62a6960bc8d67d0070fe860159bc1",
+    "include/config.h": "e37beae108e0d65fa3b9bde5f7e9e45c365a294f9d3b12b5b6ab2187ba5a8ad2",
+    "include/build_version.h": "5aac3240e01a111d7d167673153321e6fe55af501b13d6127815776e6b81e2ac",
     "include/f39_reply.h": "2ed804411ce7eaac804a739764824fd0c4e73342744ea63240a728a2e46f8715",
     "include/jt808.h": "08c0d611d87d2a919607e256c20ea6ce0d8908ca394b570933331fc9c8b74013",
     "include/jt808_terminal_info.h": "ed27611b540da8fe8ed50a3d349d52ada04f2e66aa62db8f3d6b85497c35d8df",

@@ -1,9 +1,10 @@
 #include "i2c_accel.h"
+#include "accel_vibration_filter.h"
 #include "config.h"
 #include "hw_init.h"
 #include "debug_uart.h"
 #include "n32l40x.h"
-#include <stdlib.h>
+#include <stddef.h>
 
 /* DA218E register map (datasheet Table 14) */
 #define DA218E_REG_CHIPID      0x01
@@ -87,13 +88,12 @@ static void da218e_bus_recover(void)
                bus_scl(), bus_sda(), BSP_I2C->STS1, BSP_I2C->STS2);
 }
 
-/* EMA基线 + delta阈值方案（与震动唤醒判断统一）
- * EMA_SHIFT=5 → α=1/32，基线缓慢跟踪重力方向变化，去除直流偏置
- * VIB_THRESH：三轴|delta|之和超过此值即单次命中（静止≤89，晃动≥135，250留余量）
+/* G452-compatible adaptive baseline + threshold detector.
+ * Motion is the maximum per-axis deviation from the update-before baseline;
+ * the shared filter then adapts the baseline by 1/8 per sample.
  * VIB_CONFIRM：连续命中次数达到才确认"在运动"（×200ms=持续时间）
  * 中间一次未命中即清零——防单次尖峰误判 */
-#define VIB_EMA_SHIFT  5     /* EMA α = 1/32 */
-#define VIB_THRESH     150   /* LSB，三轴delta之和阈值，不准时只需改此值 */
+#define VIB_THRESH     150   /* LSB, maximum single-axis deviation threshold */
 #define VIB_CONFIRM    15    /* 连续15次×200ms = 3s确认，太敏感改25，唤不醒改10 */
 
 /* Work-mode product sensitivity levels are not DA218E register values. */
@@ -113,12 +113,10 @@ static void da218e_bus_recover(void)
 #define VIBRATION_SENSITIVITY_DEFAULT 30U
 #define VIBRATION_THRESHOLD_STEP 4U
 
-static int32_t s_ema_x = 0, s_ema_y = 0, s_ema_z = 0;  /* EMA × (1<<VIB_EMA_SHIFT) */
-static uint8_t s_ema_init = 0;
+static accel_vibration_filter_t s_motion_filter;
 static uint8_t s_vib_count = 0;
 static bool    s_is_moving = false;
-static int32_t s_window_ema_x = 0, s_window_ema_y = 0, s_window_ema_z = 0;
-static uint8_t s_window_ema_init = 0;
+static accel_vibration_filter_t s_window_filter;
 static uint32_t s_last_vibration_sample_ms = 0U;
 static bool s_vibration_sample_seen = false;
 
@@ -295,6 +293,10 @@ static da218e_fail_stage_t da218e_read_id(uint8_t addr, uint8_t *id)
 /* ── Public ───────────────────────────────────────────────────────────────── */
 void i2c_accel_init(void)
 {
+    accel_vibration_filter_reset(&s_motion_filter);
+    accel_vibration_filter_reset(&s_window_filter);
+    s_vib_count = 0U;
+    s_is_moving = false;
     s_diag.x = 0;
     s_diag.y = 0;
     s_diag.z = 0;
@@ -304,6 +306,9 @@ void i2c_accel_init(void)
     s_diag.threshold = 0U;
     s_diag.vibration_hit_count = 0U;
     s_diag.address = 0U;
+    s_diag.int1_level = 0U;
+    s_diag.int1_rearm_ok = false;
+    s_diag.int1_rearm_fail_count = 0U;
     s_diag.read_ok = false;
     s_diag.vibration_hit = false;
     s_last_vibration_log_ms = 0U;
@@ -329,18 +334,36 @@ void i2c_accel_init(void)
                        id == 0x13 ? " OK" : " WRONG(exp 0x13)");
             if (id != 0x13) continue;
             s_diag.address = s_addr;
-            (void)i2c_write_reg(DA218E_REG_RANGE, DA218E_RANGE_2G);
-            (void)i2c_write_reg(DA218E_REG_ODR_AXIS, DA218E_ODR_125HZ);
-            (void)i2c_write_reg(DA218E_REG_MODE_BW, DA218E_MODE_NORMAL);
+            bool int1_config_ok =
+                i2c_write_reg(DA218E_REG_RANGE, DA218E_RANGE_2G) &&
+                i2c_write_reg(DA218E_REG_ODR_AXIS, DA218E_ODR_125HZ) &&
+                i2c_write_reg(DA218E_REG_MODE_BW, DA218E_MODE_NORMAL);
             /* Active-motion interrupt is the STOP wake source.  Software
              * still confirms six seconds of samples after the wake. */
-            (void)i2c_write_reg(DA218E_REG_INT_CONFIG, 0x81U);
-            (void)i2c_write_reg(DA218E_REG_INT_CONFIG, 0x01U);
-            (void)i2c_write_reg(DA218E_REG_INT_SET1, 0x83U);
-            (void)i2c_write_reg(DA218E_REG_INT_MAP1, 0x04U);
-            (void)i2c_write_reg(DA218E_REG_INT_LATCH, 0x00U);
-            (void)i2c_write_reg(DA218E_REG_ACTIVE_DUR, 0x00U);
-            (void)i2c_write_reg(DA218E_REG_ACTIVE_THS, 0x26U);
+            int1_config_ok = int1_config_ok &&
+                i2c_write_reg(DA218E_REG_INT_CONFIG, 0x81U) &&
+                i2c_write_reg(DA218E_REG_INT_CONFIG, 0x01U) &&
+                i2c_write_reg(DA218E_REG_INT_SET1, 0x83U) &&
+                i2c_write_reg(DA218E_REG_INT_MAP1, 0x04U);
+            /* Latch one active-motion event until the six-second software
+             * decision consumes it. This prevents a held/noisy INT1 signal
+             * from opening the wake window repeatedly. */
+            int1_config_ok = int1_config_ok &&
+                i2c_write_reg(DA218E_REG_INT_LATCH, 0x07U) &&
+                i2c_write_reg(DA218E_REG_ACTIVE_DUR, 0x00U) &&
+                i2c_write_reg(DA218E_REG_ACTIVE_THS, 0x26U);
+            /* Reset any event latched while the motion registers were being
+             * programmed, then sample PB3 for diagnostics only. */
+            s_diag.int1_rearm_ok = int1_config_ok &&
+                                   i2c_accel_rearm_wake_interrupt();
+            s_diag.int1_level = (uint8_t)GPIO_ReadInputDataBit(
+                DA218E_INT1_PORT, DA218E_INT1_PIN);
+            if (!s_diag.int1_rearm_ok)
+                ++s_diag.int1_rearm_fail_count;
+            dbg_printf("[ACCEL] int1 rearm=%u level=%u fails=%lu\r\n",
+                       s_diag.int1_rearm_ok ? 1U : 0U,
+                       (unsigned)s_diag.int1_level,
+                       (unsigned long)s_diag.int1_rearm_fail_count);
             return;
         }
         delay_ms(2);
@@ -361,27 +384,13 @@ bool i2c_accel_read(accel_data_t *out)
 bool i2c_accel_detect_vibration(void)
 {
     accel_data_t d;
+    uint16_t motion;
+    bool hit;
     if (!i2c_accel_read(&d)) return s_is_moving;  /* I2C失败保持上次状态 */
 
-    /* 首次采样直接初始化基线，不做判断 */
-    if (!s_ema_init) {
-        s_ema_x = (int32_t)d.x << VIB_EMA_SHIFT;
-        s_ema_y = (int32_t)d.y << VIB_EMA_SHIFT;
-        s_ema_z = (int32_t)d.z << VIB_EMA_SHIFT;
-        s_ema_init = 1;
-        return false;
-    }
-
-    /* EMA更新：s_ema = s_ema + (sample - s_ema/32) = s_ema×(31/32) + sample */
-    s_ema_x += d.x - (s_ema_x >> VIB_EMA_SHIFT);
-    s_ema_y += d.y - (s_ema_y >> VIB_EMA_SHIFT);
-    s_ema_z += d.z - (s_ema_z >> VIB_EMA_SHIFT);
-
-    int16_t delta = (int16_t)(abs(d.x - (int16_t)(s_ema_x >> VIB_EMA_SHIFT))
-                            + abs(d.y - (int16_t)(s_ema_y >> VIB_EMA_SHIFT))
-                            + abs(d.z - (int16_t)(s_ema_z >> VIB_EMA_SHIFT)));
-
-    if (delta > VIB_THRESH) {
+    hit = accel_vibration_filter_step(&s_motion_filter, d.x, d.y, d.z,
+                                      VIB_THRESH, &motion);
+    if (hit) {
         if (s_vib_count < VIB_CONFIRM) s_vib_count++;
     } else {
         s_vib_count = 0;
@@ -395,10 +404,7 @@ bool i2c_accel_is_moving(void) { return s_is_moving; }
 
 void i2c_accel_reset_vibration_window(void)
 {
-    s_window_ema_x = 0;
-    s_window_ema_y = 0;
-    s_window_ema_z = 0;
-    s_window_ema_init = 0U;
+    accel_vibration_filter_reset(&s_window_filter);
 }
 
 void i2c_accel_prepare_wake_sampling(void)
@@ -410,11 +416,23 @@ void i2c_accel_prepare_wake_sampling(void)
     s_vibration_sample_seen = false;
 }
 
+bool i2c_accel_rearm_wake_interrupt(void)
+{
+    /* DA218E DS rev 0.2, INT_CONFIG.Reset_int: write 1 then restore the
+     * configured active-high push-pull mode. Each transaction is bounded by
+     * i2c_write_reg(), so a missing sensor cannot block sleep admission. */
+    if (!i2c_write_reg(DA218E_REG_INT_CONFIG, 0x81U))
+        return false;
+    if (!i2c_write_reg(DA218E_REG_INT_CONFIG, 0x01U))
+        return false;
+    return true;
+}
+
 bool i2c_accel_vibration_hit(uint8_t sensitivity_level)
 {
     accel_data_t d;
     uint32_t now_ms = TICK_MS();
-    int16_t delta;
+    uint16_t motion;
 
     if (s_vibration_sample_seen &&
         now_ms - s_last_vibration_sample_ms < VIBRATION_SAMPLE_INTERVAL_MS) {
@@ -437,23 +455,10 @@ bool i2c_accel_vibration_hit(uint8_t sensitivity_level)
     s_diag.sample_count++;
     s_diag.read_ok = true;
 
-    if (!s_window_ema_init) {
-        s_window_ema_x = (int32_t)d.x << VIB_EMA_SHIFT;
-        s_window_ema_y = (int32_t)d.y << VIB_EMA_SHIFT;
-        s_window_ema_z = (int32_t)d.z << VIB_EMA_SHIFT;
-        s_window_ema_init = 1U;
-        return false;
-    }
-
-    s_window_ema_x += d.x - (s_window_ema_x >> VIB_EMA_SHIFT);
-    s_window_ema_y += d.y - (s_window_ema_y >> VIB_EMA_SHIFT);
-    s_window_ema_z += d.z - (s_window_ema_z >> VIB_EMA_SHIFT);
-    delta = (int16_t)(abs(d.x - (int16_t)(s_window_ema_x >> VIB_EMA_SHIFT)) +
-                      abs(d.y - (int16_t)(s_window_ema_y >> VIB_EMA_SHIFT)) +
-                      abs(d.z - (int16_t)(s_window_ema_z >> VIB_EMA_SHIFT)));
     s_diag.threshold = vibration_threshold_by_level(sensitivity_level);
-    s_diag.delta = (uint16_t)(delta < 0 ? 0 : delta);
-    s_diag.vibration_hit = delta > (int16_t)s_diag.threshold;
+    s_diag.vibration_hit = accel_vibration_filter_step(
+        &s_window_filter, d.x, d.y, d.z, s_diag.threshold, &motion);
+    s_diag.delta = motion;
     if (s_diag.vibration_hit) {
         ++s_diag.vibration_hit_count;
         if (TICK_MS() - s_last_vibration_log_ms >= 5000U) {

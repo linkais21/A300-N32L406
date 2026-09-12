@@ -76,6 +76,9 @@ def main()->int:
     objcopy=TOOLCHAIN/"arm-none-eabi-objcopy.exe"
     if not objcopy.is_file(): raise RuntimeError(f"ARM objcopy not found: {objcopy}")
 
+    # Verify the actual embedded key against a platform signature before any
+    # release directory or firmware is generated (not a generated test key).
+    run([sys.executable,"tools/tests/test_platform_trust_anchor.py"])
     out=reserve_release_dir(args.output,identity)
     refresh_build_version()
     run([str(MAKE),"-B","all","TOOLCHAIN_DIR=" + str(TOOLCHAIN)])

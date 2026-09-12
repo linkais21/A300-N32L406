@@ -12,9 +12,9 @@ contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 
 assert contract == {
     "firmware_version_prefix": "T360-A300_406_20260823000000,V3.",
-    "firmware_revision": 2,
-    "firmware_version": "T360-A300_406_20260823000000,V3.002",
-    "firmware_version_counter": 3002,
+    "firmware_revision": 37,
+    "firmware_version": "T360-A300_406_20260823000000,V3.037",
+    "firmware_version_counter": 3037,
     "ota_device_model": "A300-406",
     "jt808_terminal_model": "T360-A300",
     "jt808_manufacturer_id": "70110",
@@ -69,8 +69,8 @@ with tempfile.TemporaryDirectory() as temporary:
     )
     header = (ROOT / "include/build_version.h").read_text(encoding="utf-8-sig")
     (include / "build_version.h").write_text(
-        header.replace("#define FW_VERSION_COUNTER  3002UL",
-                       "#define FW_VERSION_COUNTER  3003UL"),
+        header.replace(f"#define FW_VERSION_COUNTER  {contract['firmware_version_counter']}UL",
+                       f"#define FW_VERSION_COUNTER  {contract['firmware_version_counter'] + 1}UL"),
         encoding="ascii",
     )
     findings = guard.scan(temporary_root, ("release_identity.json", "include/build_version.h"))

@@ -1,0 +1,57 @@
+A300-406 OTA V3029 -- signing notes
+
+sha256 = eac243b9bb2baceb03251f06b2bd720054ee04d03dea268f376bfbdb37fb24cd
+size   = 105736
+
+PURPOSE
+-------
+Code-identical to V3028; only the version identity differs (7 bytes in the App
+image: the two version strings and FW_VERSION_COUNTER, same 105704-byte size).
+V3028 is the image that goes on by SWD, so the device ends up running 3028 and
+needs a higher version on the platform to pull.  V3029 is that target.
+
+  1. SWD-flash V3028 (artifacts/V3.028/Combined-N32L406CBL7.bin).
+  2. Upload this package to the FOTA platform and create the task.
+  3. Device checks with currentVersionCode=3028 and pulls 3029 over the air.
+
+WHAT TO LOOK FOR IN THE RUN
+---------------------------
+The verdict hinges on the qird_lag line:
+
+  [4G-RX] ch=1 qird_lag=<bytes> have_read=.. acct=.. unread=.. reads=..
+
+  * appears once (or a few times), settles at a small value, download reaches
+    100% and the digest matches -> the 768-byte surplus V3026 aborted on was
+    reporting lag, the read path is sound, and OTA works.
+  * steps up read after read until "qird_desync=surplus" -> the modem really is
+    repeating responses.  Recovery currently rolls back only to the last
+    committed 4 KiB checkpoint, so already-committed bad bytes survive and the
+    digest will still fail; a deeper rollback is then the next thing to build.
+  * "qird_desync=lost" -> bytes went missing rather than repeated; different
+    mechanism, same recovery path.
+
+CHANGES (carried from V3028)
+---------------------------
+Every read is preceded by AT+QIRD=<ch>,0, which answers
+"+QIRD: <total>,<have_read>,<unread>" and consumes nothing.  have_read is the
+modem's own count of what it has handed over, compared against the reader's
+accounting (s_qird_acct, keyed to s_tcp_generation so a reopened socket cannot
+inherit a stale count).  have_read above the accounting means bytes are lost;
+below it by a bounded, stable amount is treated as reporting lag and logged;
+above EC800M_QIRD_LAG_LIMIT (1024 bytes) is treated as repetition.  unread bounds
+each request exactly.
+
+The init commands in state_machine_init() case 1..5 check their at_send_wait
+result and retry once, logging "[4G] init cmd failed step=<n> <cmd>".
+
+WHAT THE DEVICE ACTUALLY VERIFIES
+--------------------------------
+The FOTA platform re-signs every uploaded package with its own private key
+(fota.security.signing-private-key, CryptoService.signPackage) and serves that
+signature to the device.  The signature supplied at upload time is not what the
+device checks.  The device's trust anchor (include/trusted_public_key.h,
+TRUSTED_KEY_LABEL "FOTA-PLATFORM-C0") is the platform's public key, so only the
+platform can produce a signature this firmware accepts.
+
+dev_key_signature = 726c530e033d61960886a645b8786e91fb9ab0d95be68fa7f9d8340a363e34a2d64b47871f82280f844f19f14b8666438fe98083311bc9b6ada9605e4a104050
+dev_key_note      = NOT device-verifiable; informational only (.keys/dev-p256-private.pem)

@@ -17,6 +17,7 @@ LIMITS = {
     "gps_process": 128,
     "dispatch_nmea": 256,
     "process_urc": 192,
+    "fota_process": 800,
 }
 
 

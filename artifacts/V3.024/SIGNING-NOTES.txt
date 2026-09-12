@@ -1,0 +1,30 @@
+A300-406 OTA V3024 -- signing notes
+
+sha256 = ab72e70cb9c33157d4f0b1dd98ddbafad4a20fb3bebc6e2b3dc3c7fd1d1f0bab
+size   = 105088
+
+WHAT THE DEVICE ACTUALLY VERIFIES
+--------------------------------
+The FOTA platform re-signs every uploaded package with its own private key
+(fota.security.signing-private-key, CryptoService.signPackage) and serves that
+signature to the device.  The signature supplied at upload time is not what the
+device checks.  The device's trust anchor (include/trusted_public_key.h,
+TRUSTED_KEY_LABEL "FOTA-PLATFORM-C0") is the platform's public key, so only the
+platform can produce a signature this firmware accepts.
+
+dev-key signature below is for traceability ONLY.  It is produced with
+.keys/dev-p256-private.pem, which the device no longer trusts.  Do NOT expect the
+platform or the device to accept it.
+
+dev_key_signature = cd5c8e9da58277299c2e64dd6eb060076b380f74abf8cba397a8db5fb744ff4027ad5c786aedf70df63a8ddfcece371e487a20f351cf0dd3e0b581b20204cba3
+dev_key_note      = NOT device-verifiable; informational only
+
+POST-UPLOAD PRE-FLIGHT (run before flashing anything)
+-----------------------------------------------------
+Fetch the check response and verify the platform's signature against the device's
+compiled-in anchor.  If this passes, the device will pass its signature stage.
+
+  curl -s "http://39.108.211.33:8088/api/device/updates/check?deviceId=<id>&deviceModel=A300-406&currentVersionCode=3023" -o chk.json
+
+  then ECDSA-verify chk.json's "signature" (raw r||s, secp256r1) over its
+  "sha256" as a prehashed digest against trusted_public_key.

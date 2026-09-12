@@ -35,6 +35,7 @@
 /* ── Terminal info loaded from flash at runtime ───────────────────────────── */
 static jt808_terminal_t s_terminal;
 static overspeed_policy_t s_overspeed_policy;
+static volatile bool s_iwdg_started;
 static void sms_command_execute(const char *from, const char *text)
 {
     uint16_t len = 0;
@@ -85,27 +86,30 @@ static void early_debug_uart_init(void)
     USART_Enable(DBG_UART, ENABLE);
 }
 
-static void early_uart_raw_puts(const char *s)
+void hardfault_capture(uint32_t *stacked)
+    __attribute__((used, noinline, noreturn));
+void hardfault_capture(uint32_t *stacked)
 {
-    uint32_t guard;
-    while (*s) {
-        guard = 100000U;
-        while (USART_GetFlagStatus(DBG_UART, USART_FLAG_TXDE) == RESET && guard-- != 0U) {
-        }
-        if (guard == 0U) return;
-        USART_SendData(DBG_UART, (uint8_t)*s++);
-    }
-    guard = 100000U;
-    while (USART_GetFlagStatus(DBG_UART, USART_FLAG_TXC) == RESET && guard-- != 0U) {
+    uint32_t pc = stacked != NULL ? stacked[6] : 0U;
+    uint32_t lr = stacked != NULL ? stacked[5] : 0U;
+    reset_diag_record_fault(pc, lr, SCB->CFSR, SCB->HFSR);
+    if (!s_iwdg_started)
+        NVIC_SystemReset();
+    /* Deliberately stop servicing IWDG. The watchdog performs the bounded
+     * recovery reset while the backup record remains available to boot. */
+    while (1) {
     }
 }
 
+void HardFault_Handler(void) __attribute__((naked));
 void HardFault_Handler(void)
 {
-    early_debug_uart_init();
-    early_uart_raw_puts("\r\n[FAULT] HardFault\r\n");
-    while (1) {
-    }
+    __asm volatile (
+        "tst lr, #4\n"
+        "ite eq\n"
+        "mrseq r0, msp\n"
+        "mrsne r0, psp\n"
+        "b hardfault_capture\n");
 }
 
 /* ── TIM8 update interrupt: 1 ms tick ────────────────────────────────────── */
@@ -158,6 +162,29 @@ static void stack_paint(void)
 #define STACK_MARGIN_MIN (4u * 1024u)
 static volatile uint32_t s_stack_margin_fault;
 static volatile bool s_work_vibration_hit;
+static bool s_vibration_rearm_pending;
+static bool s_vibration_rearm_fault;
+static uint8_t s_vibration_rearm_attempts;
+#define VIBRATION_REARM_MAX_ATTEMPTS 3U
+
+static void vibration_rearm_process(void)
+{
+    if (!s_vibration_rearm_pending)
+        return;
+    if (i2c_accel_rearm_wake_interrupt()) {
+        s_vibration_rearm_pending = false;
+        s_vibration_rearm_fault = false;
+        s_vibration_rearm_attempts = 0U;
+        return;
+    }
+    if (s_vibration_rearm_attempts < VIBRATION_REARM_MAX_ATTEMPTS)
+        ++s_vibration_rearm_attempts;
+    if (s_vibration_rearm_attempts >= VIBRATION_REARM_MAX_ATTEMPTS) {
+        s_vibration_rearm_pending = false;
+        s_vibration_rearm_fault = true;
+        dbg_printf("[VIB] interrupt rearm fault; shallow fallback\r\n");
+    }
+}
 
 static const char *work_mode_state_name(work_mode_state_t state)
 {
@@ -325,10 +352,10 @@ static void scan_alarms(void)
 #define A300_STOP1_SLEEP 0
 #endif
 
-#if !A300_STOP1_SLEEP
 /* Set by work_mode_process(), consumed at the main-loop tail: true while the
  * mode manager has nothing to do and no wake window is being held open. */
 static bool s_shallow_sleep_allowed;
+#if !A300_STOP1_SLEEP
 static bool s_shallow_retained_clock_active;
 static uint32_t s_shallow_retained_clock_s;
 
@@ -461,6 +488,8 @@ void work_mode_process(void)
     /* The PB3 interrupt only opens a sampling window. It is not itself a
      * threshold hit and cannot authorize a realtime transition. */
     if ((wake & WORK_SLEEP_WAKE_VIBRATION) != 0U) {
+        s_vibration_rearm_fault = false;
+        s_vibration_rearm_attempts = 0U;
         vibration_wake_samples = 0U;
         vibration_wake_window = true;
         vibration_wake_started_ms = TICK_MS();
@@ -503,9 +532,14 @@ void work_mode_process(void)
                        (unsigned)vibration_wake_samples,
                        (unsigned)vd->delta, (unsigned)vd->threshold);
         }
+        if (vibration_wake_window) {
+            s_vibration_rearm_pending = true;
+        }
         vibration_wake_window = false;
         vibration_wake_hold = false;
     }
+    if (s_vibration_rearm_pending)
+        vibration_rearm_process();
     s_work_vibration_hit = input.vibration_hit;
     input.rtc_wake = (wake & WORK_SLEEP_WAKE_RTC) != 0U;
     input.alarm_bits = work_mode_take_alarm();
@@ -537,6 +571,8 @@ void work_mode_process(void)
                    (unsigned)input.acc_high,
                    (unsigned)work_mode_logical_acc(),
                    (unsigned)input.vibration_hit);
+        if (work_mode_state() == WORK_MODE_STATIONARY_SLEEP)
+            (void)mileage_force_save(TICK_MS());
         last_state = work_mode_state();
     }
 
@@ -630,11 +666,21 @@ void work_mode_process(void)
     acc_report_settle(now_s);
 
 #if A300_STOP1_SLEEP
+    s_shallow_sleep_allowed = false;
     if (work_mode_state() == WORK_MODE_STATIONARY_SLEEP &&
         !vibration_wake_hold &&
         !acc_wake_hold &&
         !work_mode_sleep_is_in_stop1()) {
-        work_mode_sleep_process(15000U, wake);
+        if (s_vibration_rearm_pending) {
+            /* Keep servicing the bounded retry state before another sleep
+             * admission; no un-reset permanent INT1 latch is ignored. */
+        } else if (s_vibration_rearm_fault) {
+            /* Publish the shallow fallback for the main-loop tail. Sleeping
+             * inside work_mode_process() would delay every later service. */
+            s_shallow_sleep_allowed = true;
+        } else {
+            work_mode_sleep_process(15000U, wake);
+        }
     }
 #else
     /* Publish the decision instead of sleeping here.  work_mode_process() runs
@@ -644,7 +690,8 @@ void work_mode_process(void)
      * keeping the debounce window open. */
     if (work_mode_state() == WORK_MODE_STATIONARY_SLEEP &&
         !vibration_wake_hold &&
-        !acc_wake_hold) {
+        !acc_wake_hold &&
+        !s_vibration_rearm_pending) {
         s_shallow_sleep_allowed = true;
     } else {
         s_shallow_sleep_allowed = false;
@@ -663,12 +710,10 @@ static void log_hardware_contract(void)
 
 static void idle_sleep_process(void)
 {
-#if !A300_STOP1_SLEEP
     /* SysTick wakes shallow WFI every millisecond, so PA12 is polled without
      * delaying the process functions that run before this loop-tail call. */
     if (s_shallow_sleep_allowed)
         work_mode_sleep_shallow();
-#endif
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -678,6 +723,7 @@ int main(void)
 {
     /* ── 1. Core hardware init ───────────────────────────────────────────── */
     reset_diag_capture();
+    reset_diag_runtime_init();
     hw_clock_init();   /* 64 MHz PLL from HSI */
     stack_paint();     /* fill unused stack with 0xAAAAAAAA for watermark */
     early_debug_uart_init();
@@ -689,6 +735,7 @@ int main(void)
     hw_adc_init();
     hw_tim_init();     /* TIM8 1 ms tick */
     hw_iwdg_init();
+    s_iwdg_started = true;
 
     enable_debug_rx_irq();
 
@@ -698,6 +745,22 @@ int main(void)
     dbg_printf("  Reset: %s flags=0x%02x\r\n",
                reset_diag_name(reset_diag_reason()),
                (unsigned)reset_diag_raw_flags());
+    {
+        reset_diag_snapshot_t previous;
+        if (reset_diag_previous(&previous) &&
+            (previous.hardfault ||
+             reset_diag_reason() == RESET_REASON_IWDG ||
+             reset_diag_reason() == RESET_REASON_WWDG)) {
+            dbg_printf("[RESET-DIAG] phase=%s seq=%lu fault=%u pc=0x%08lx lr=0x%08lx cfsr=0x%08lx hfsr=0x%08lx\r\n",
+                       reset_diag_phase_name(previous.phase),
+                       (unsigned long)previous.loop_sequence,
+                       previous.hardfault ? 1U : 0U,
+                       (unsigned long)previous.pc,
+                       (unsigned long)previous.lr,
+                       (unsigned long)previous.cfsr,
+                       (unsigned long)previous.hfsr);
+        }
+    }
     dbg_printf("========================================\r\n");
     log_hardware_contract();
 
@@ -741,6 +804,7 @@ int main(void)
     /* ── 6. GPS + DA218E (independent 3.3 V sensor rail) ───────────────────── */
     gps_enable(true);
     i2c_accel_init();
+    s_vibration_rearm_fault = !i2c_accel_get_diag()->int1_rearm_ok;
     gps_init();
 
     /* ── 7. 4G modem ─────────────────────────────────────────────────────── */
@@ -778,31 +842,52 @@ int main(void)
     while (1) {
         IWDG_ReloadKey();
 
+        reset_diag_loop_begin();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_EC800M);
         ec800m_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_GPS);
         gps_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_MILEAGE);
         mileage_update();
+        mileage_persist_process(TICK_MS());
+        reset_diag_mark_phase(RESET_DIAG_PHASE_TCP_MANAGER);
         tcp_manager_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_JT808);
         jt808_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_ADC);
         adc_monitor_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_GEOFENCE);
         geofence_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_FOTA);
         fota_process();
         fota_confirm_trial_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_BLIND_ZONE);
         blind_zone_recovery_process();
         blind_zone_replay_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_LOG_PLATFORM);
         log_platform_process();
         if (!cfg_query_started && ec800m_is_ready() && jt808_is_online() &&
             !work_mode_sleep_is_in_stop1() && fota_get_state() == FOTA_STATE_IDLE &&
             cfg_query_start() == 0)
             cfg_query_started = true;
+        reset_diag_mark_phase(RESET_DIAG_PHASE_CONFIG);
         cfg_query_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_AGNSS);
         agnss_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_WORK_MODE);
         work_mode_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_AT_CONFIG);
         at_config_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_SMS);
         sms_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_ALARMS);
         scan_alarms();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_NTP);
         ntp_resync_process();
+        reset_diag_mark_phase(RESET_DIAG_PHASE_STATUS);
         periodic_status_log();
 
+        reset_diag_mark_phase(RESET_DIAG_PHASE_IDLE_SLEEP);
         idle_sleep_process();
     }
 }

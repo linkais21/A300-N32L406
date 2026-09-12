@@ -8,7 +8,8 @@ $ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
 $IDENTITY = Get-Content -Raw -LiteralPath (Join-Path $ROOT "release_identity.json") | ConvertFrom-Json
 $FW_VERSION = $IDENTITY.firmware_version
 $FW_VERSION_COUNTER = $IDENTITY.firmware_version_counter
-if (($FW_VERSION_COUNTER -isnot [Int64]) -or $FW_VERSION_COUNTER -lt 1 -or $FW_VERSION_COUNTER -gt [UInt32]::MaxValue) {
+if ((($FW_VERSION_COUNTER -isnot [Int32]) -and ($FW_VERSION_COUNTER -isnot [Int64])) -or
+    $FW_VERSION_COUNTER -lt 1 -or $FW_VERSION_COUNTER -gt [UInt32]::MaxValue) {
     throw "release_identity.json firmware_version_counter must be a nonzero unsigned 32-bit integer"
 }
 

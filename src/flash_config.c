@@ -46,6 +46,7 @@ static device_config_t s_cfg;
 static uint32_t s_active_addr;
 static uint32_t s_generation;
 static bool s_active_valid;
+static bool s_mileage_dirty;
 
 const device_config_t k_config_defaults = {
     .gnss_type          = GNSS_TYPE_TAU804M,
@@ -81,7 +82,7 @@ const device_config_t k_config_defaults = {
     .auth_code          = "",
     .plate_no           = "",
     .mileage_m          = 0,
-    .fota_url           = "http://fota.lhhn.net",
+    .fota_url           = "http://39.108.211.33:8088",
     .fota_size          = 0,
     .power_alm_en       = 1,
     .sos_alm_en         = 1,
@@ -284,6 +285,8 @@ void cfg_init(void)
     slot_format_t format_a;
     slot_format_t format_b;
 
+    s_mileage_dirty = false;
+
     if (!ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG)) {
         s_cfg = k_config_defaults;
         return;
@@ -311,6 +314,17 @@ void cfg_init(void)
         s_active_valid = true;
         dbg_printf("[CFG] loaded v4 slot %c gen=%lu\r\n",
                    use_b ? 'B' : 'A', (unsigned long)s_generation);
+        if (s_cfg.fota_url[0] == '\0') {
+            uint32_t repair_addr = use_b ? CFG_FLASH_ADDR_A : CFG_FLASH_ADDR_B;
+            uint32_t repair_generation = s_generation + 1U;
+            memcpy(s_cfg.fota_url, k_config_defaults.fota_url,
+                   sizeof(s_cfg.fota_url));
+            dbg_printf("[CFG] repaired empty fota_url slot=%c gen=%lu\r\n",
+                       use_b ? 'A' : 'B',
+                       (unsigned long)repair_generation);
+            (void)write_and_activate_locked(repair_addr, &s_cfg,
+                                             repair_generation);
+        }
         ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
         return;
     }
@@ -396,6 +410,8 @@ cfg_store_result_t cfg_store_candidate_result(const device_config_t *candidate)
              CFG_FLASH_ADDR_A : CFG_FLASH_ADDR_B;
     generation = s_active_valid ? s_generation + 1U : 1U;
     result = write_and_activate_locked(target, candidate, generation);
+    if (result == CFG_STORE_OK)
+        s_mileage_dirty = false;
     ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
     return result;
 }
@@ -510,11 +526,29 @@ void cfg_set_report_interval(uint16_t moving_s, uint16_t stopped_s)
 void cfg_set_mileage(uint32_t metres)
 {
     s_cfg.mileage_m = metres;
+    s_mileage_dirty = true;
     cfg_save();
 }
 
 void cfg_add_mileage(uint32_t delta_m)
 {
     s_cfg.mileage_m += delta_m;
-    cfg_save();
+    s_mileage_dirty = true;
+}
+
+bool cfg_mileage_dirty(void)
+{
+    return s_mileage_dirty;
+}
+
+bool cfg_flush_mileage(void)
+{
+    if (!s_mileage_dirty)
+        return true;
+    return cfg_store_candidate(&s_cfg);
+}
+
+uint32_t cfg_persist_generation(void)
+{
+    return s_generation;
 }

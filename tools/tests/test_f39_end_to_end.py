@@ -217,6 +217,7 @@ unsigned pdp_auto_reply;
 
 void ec800m_test_set_state(ec800m_state_t state);
 void ec800m_test_set_imei(const char *imei);
+void ec800m_test_set_iccid(const char *iccid);
 void ec800m_test_set_tcp_open(uint8_t ch);
 void ec800m_restart_pdp(void);
 
@@ -285,6 +286,7 @@ int main(void) {
     config.gnss_type = GNSS_TYPE_TAU804M;
     ec800m_test_set_state(EC800M_STATE_READY);
     ec800m_test_set_imei("123456789012345");
+    ec800m_test_set_iccid("89860492192080502719");
     sms_set_recv_cb(sms_dispatch);
     memset(&platform, 0, sizeof platform);
     platform.config = &config; platform.persist = persist;

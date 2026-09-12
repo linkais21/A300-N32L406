@@ -1,0 +1,59 @@
+A300-406 OTA V3032 -- signing notes
+
+sha256 = 42d61956a5c5b028ac8f08f7fbc7a8e4ffc96a16da9f4d6029a01687ec901d79
+size   = 105784
+
+WHAT CHANGED, AND WHY IT COMES FROM THE G452 FIRMWARE
+----------------------------------------------------
+The N32G452 firmware in fota-platform/A300-N32G452 has a working OTA path, and it
+is structured differently in exactly the place this bug lives.  Its comment states
+the hazard outright (app/src/ec800m.c:73):
+
+    /* Socket URCs can arrive while at_send_wait() owns the DMA stream. Preserve
+     * their meaning without recursively running QIRD (which would overwrite the
+     * caller's AT response). ... */
+    static uint8_t s_pending_recv_mask = 0;
+
+There, +QIURC: "recv" only sets a bit.  All QIRD reading happens in
+ec800m_process(), which runs process_pending_socket_urcs() -> drain_rx() ->
+process_pending_socket_urcs() with no AT transaction in flight.
+
+This firmware read the socket inline from process_urc(), and URC context is
+reachable from at_send_wait's byte pump.  A nested read then refilled the shared
+s_at_resp buffer while the outer read was about to publish a pointer into it, so
+the caller stored the inner chunk at the outer offset: one chunk written twice,
+one lost, byte count and modem have_read both still perfectly consistent.
+
+V3032 adopts the G452 arrangement.  The +QIURC: "recv" branch now records the
+channel in s_tcp_qird_pending_mask and returns; the reading is done only when
+ec800m_process() replays the event with the AT owner free, which this firmware
+already did for continuation passes -- the missing piece was the first read.
+Guarded by s_qird_service_context so URC context can never read a socket.
+
+Kept from V3030: s_qird_pass_active, which blocks deferred-URC processing for the
+duration of a read pass.  It is now a second line of defence rather than the
+primary fix.
+
+Kept from V3028: the per-read AT+QIRD=<ch>,0 cross-check of the modem's have_read
+against the reader's accounting, with bounded-lag tolerance (qird_lag,
+qird_desync=lost, qird_desync=surplus), and the checked-and-retried init commands
+in state_machine_init() case 1..5.
+
+DELIVERY
+--------
+The device in the field runs V3028, whose read path still has the defect, so it
+cannot be trusted to download its own fix.  SWD-flash Combined-N32L406CBL7.bin
+from this directory, then upload artifacts/V3.033 to the platform and let the
+device pull 3033 over the air.
+
+WHAT THE DEVICE ACTUALLY VERIFIES
+--------------------------------
+The FOTA platform re-signs every uploaded package with its own private key
+(fota.security.signing-private-key, CryptoService.signPackage) and serves that
+signature to the device.  The signature supplied at upload time is not what the
+device checks.  The device's trust anchor (include/trusted_public_key.h,
+TRUSTED_KEY_LABEL "FOTA-PLATFORM-C0") is the platform's public key, so only the
+platform can produce a signature this firmware accepts.
+
+dev_key_signature = 870ad90478b64921a4d0a73e181ebf9ffa1185a1718069667dffa71760b0878aa1dfb35bd28cf16c41b112e78f5f329933fcee744bef512a4b97582b6a4851f0
+dev_key_note      = NOT device-verifiable; informational only (.keys/dev-p256-private.pem)

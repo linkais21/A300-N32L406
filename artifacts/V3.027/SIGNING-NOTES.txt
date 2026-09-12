@@ -1,0 +1,50 @@
+A300-406 OTA V3027 -- signing notes
+
+sha256 = 9c6fe2591433518c3126555b4dd96ddc50d992f1e5d7aed2829b84a2a8fc1580
+size   = 105544
+
+PURPOSE
+-------
+Code-identical to V3026; only the version identity differs (7 bytes in the App
+image: the two version strings and FW_VERSION_COUNTER).  V3026 is the image that
+goes on by SWD, so the field device ends up running 3026 and needs a higher
+version on the platform to pull.  V3027 exists to be that target: it is what
+actually exercises the over-the-air path end to end.
+
+  1. SWD-flash V3026 (artifacts/V3.026/Combined-N32L406CBL7.bin).
+  2. Upload this package to the FOTA platform and create the task.
+  3. Device checks with currentVersionCode=3026, pulls 3027 over the air.
+
+If step 3 succeeds, the QIRD accounting fix is proven in the field.  If it fails,
+"[4G-RX] ch=<n> qird_desync have_read=.. acct=.. unread=.." now names the exact
+transaction where the modem and the reader disagreed, instead of a sha256
+mismatch 100 KB later.
+
+CHANGES (carried from V3026)
+---------------------------
+Every read is preceded by AT+QIRD=<ch>,0, which answers
+"+QIRD: <total>,<have_read>,<unread>" and consumes nothing.  have_read is the
+modem's own count of what it has handed over; it is compared against the reader's
+accounting (s_qird_acct, keyed to s_tcp_generation so a reopened socket cannot
+inherit a stale count).  On mismatch the socket is closed and the download
+resumes from the last committed offset with a Range request, rather than storing
+bytes whose offset is in doubt.  unread bounds each request exactly.
+
+The init commands in state_machine_init() case 1..5 no longer discard the
+at_send_wait result; each retries once and logs
+"[4G] init cmd failed step=<n> <cmd>".
+
+Cost: one extra AT round trip per 256-byte read; expect roughly 25 s for 105 KB
+where V3024 took about 15 s.
+
+WHAT THE DEVICE ACTUALLY VERIFIES
+--------------------------------
+The FOTA platform re-signs every uploaded package with its own private key
+(fota.security.signing-private-key, CryptoService.signPackage) and serves that
+signature to the device.  The signature supplied at upload time is not what the
+device checks.  The device's trust anchor (include/trusted_public_key.h,
+TRUSTED_KEY_LABEL "FOTA-PLATFORM-C0") is the platform's public key, so only the
+platform can produce a signature this firmware accepts.
+
+dev_key_signature = c2a1e871013baa4ac058851418e4aabc3e811714e132526852b88a092f7656603956f815fc7f91980e7f0bfcf627187206e1440add17ec5361900782d78ac0dd
+dev_key_note      = NOT device-verifiable; informational only (.keys/dev-p256-private.pem)

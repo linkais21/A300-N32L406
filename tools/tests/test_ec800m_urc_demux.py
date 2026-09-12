@@ -122,12 +122,13 @@ static unsigned binary_result_mode;
 static unsigned ota_echo_mode;
 static char ota_test_key[21];
 static unsigned qird_phase;
+static unsigned qird_delivered;
 static char tx_log[1024];
 static unsigned tx_len;
 static char sms_from[32];
 static char sms_body[192];
 static unsigned sms_calls;
-static uint8_t tcp_payload[8];
+static uint8_t tcp_payload[512];
 static uint16_t tcp_payload_len;
 static char diag_log[1024];
 static unsigned diag_len;
@@ -135,6 +136,7 @@ static unsigned diag_len;
 extern uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];
 void ec800m_test_set_state(ec800m_state_t state);
 void ec800m_test_set_imei(const char *imei);
+void ec800m_test_set_iccid(const char *iccid);
 void ec800m_test_set_tcp_open(uint8_t ch);
 bool ec800m_test_parse_iccid(const char *response, char out[22]);
 bool ec800m_test_iccid_retry_should_advance(bool parsed, uint8_t *attempts);
@@ -165,6 +167,19 @@ void host_uart_tx(uint8_t byte)
         tx_log[tx_len++] = (char)byte;
         tx_log[tx_len] = '\0';
     }
+    /* The production reader queries socket counters before requesting bytes.
+     * Keep this distinct from a length-delimited QIRD payload response. */
+    if (byte == '\n' && tx_len >= 13U &&
+        strcmp(tx_log + tx_len - 13U, "AT+QIRD=0,0\r\n") == 0) {
+        unsigned unread = qird_phase == 1U || qird_phase == 4U ? 5U :
+                          qird_phase == 6U ? 8U :
+                          qird_phase == 10U ? EC800M_QIRD_CHUNK : 0U;
+        char counters[80];
+        snprintf(counters,sizeof counters,"\r\n+QIRD: %u,%u,%u\r\nOK\r\n",
+                 qird_delivered+unread,qird_delivered,unread);
+        host_feed_rx(counters);
+        return;
+    }
     if (ota_echo_mode == 1U && byte == '\n' && strstr(tx_log, "AT+QISEND=1,3\r\n") != NULL) {
         host_feed_rx(">\r\n");ota_echo_mode=2U;
     } else if (ota_echo_mode == 2U && byte == 'c') {
@@ -193,14 +208,21 @@ void host_uart_tx(uint8_t byte)
     } else if (injection == 1U && byte == 'c') {
         host_feed_rx("\r\nSEND OK\r\n");
         injection = 2U;
-    } else if (qird_phase == 1U && byte == '\n' && strstr(tx_log, "AT+QIRD=0,1200\r\n") != NULL) {
+    } else if (qird_phase == 1U && byte == '\n' && strstr(tx_log, "AT+QIRD=0,") != NULL) {
         /* With command echo disabled, the response buffer may begin at the
          * QIRD result line rather than with a leading blank line. */
         host_feed_rx("+QIRD: 5\r\n");
         qird_phase = 2U;
-    } else if (qird_phase == 4U && byte == '\n' && strstr(tx_log, "AT+QIRD=0,1200\r\n") != NULL) {
+    } else if (qird_phase == 4U && byte == '\n' && strstr(tx_log, "AT+QIRD=0,") != NULL) {
         host_feed_rx("+QIRD: X\r\n\r\nOK\r\n");
         qird_phase = 5U;
+    } else if (qird_phase == 6U && byte == '\n' && strstr(tx_log, "AT+QIRD=0,") != NULL) {
+        host_feed_rx("+QIRD: 8\r\n");
+        qird_phase = 7U;
+    } else if (qird_phase == 10U && byte == '\n' && strstr(tx_log, "AT+QIRD=0,") != NULL) {
+        { char qh[24]; snprintf(qh, sizeof qh, "+QIRD: %u\r\n",
+            (unsigned)EC800M_QIRD_CHUNK); host_feed_rx(qh); }
+        qird_phase = 11U;
     }
 }
 
@@ -228,7 +250,30 @@ void IWDG_ReloadKey(void)
     if (qird_phase == 2U) {
         static const uint8_t tail[] = { 0x7e, 0x00, 0x0d, 0x0a, 0x7e, '\r', '\n', '\r', '\n', 'O', 'K', '\r', '\n' };
         host_feed_bytes(tail, sizeof tail);
+        qird_delivered += 5U;
         qird_phase = 3U;
+    } else if (qird_phase == 7U) {
+        static const uint8_t embedded_ok_payload[] = {
+            'A', '\r', '\n', 'O', 'K', '\r', '\n', 'B'
+        };
+        host_feed_bytes(embedded_ok_payload, sizeof embedded_ok_payload);
+        qird_delivered += sizeof embedded_ok_payload;
+        qird_phase = 8U;
+    } else if (qird_phase == 8U) {
+        host_feed_rx("\r\nOK\r\n");
+        qird_phase = 9U;
+    } else if (qird_phase == 11U) {
+        uint8_t body[EC800M_QIRD_CHUNK];
+        for (unsigned i = 0U; i < sizeof body; ++i)
+            body[i] = (uint8_t)(i % 251U);
+        host_feed_bytes(body, sizeof body);
+        qird_delivered += sizeof body;
+        qird_phase = 12U;
+    } else if (qird_phase == 12U) {
+        host_feed_rx("\r\n+CSQ: 11,99\r\n+CSQ: 12,99\r\n+CSQ: 13,99\r\n"
+                     "+CSQ: 14,99\r\n+CSQ: 15,99\r\n+CSQ: 16,99\r\n"
+                     "+CSQ: 17,99\r\n+CSQ: 18,99\r\n+CSQ: 19,99\r\nOK\r\n");
+        qird_phase = 13U;
     }
 }
 void GPIO_SetBits(GPIO_Module *p, uint16_t pin) { (void)p; (void)pin; }
@@ -324,6 +369,8 @@ int main(void)
         assert(memcmp(shortened, "123\0", sizeof shortened) == 0);
         ec800m_get_imei(NULL, 0U);
     }
+    ec800m_test_set_imei("123456789012345");
+    ec800m_test_set_iccid("89860012345678901234");
     ec800m_test_set_state(EC800M_STATE_READY);
     ec800m_test_set_tcp_open(0U);
     sms_ingress_set_callback(sms_cb);
@@ -346,6 +393,8 @@ int main(void)
     qird_phase = 1U;
     host_feed_rx("\r\n+QIURC: \"recv\",0\r\n");
     ec800m_process();
+    assert(tcp_payload_len == 0U); /* URC retirement must not recursively read. */
+    ec800m_process();
     assert(tcp_payload_len == 5U);
     assert(tcp_payload[0] == 0x7eU && tcp_payload[1] == 0x00U);
     assert(tcp_payload[2] == 0x0dU && tcp_payload[3] == 0x0aU && tcp_payload[4] == 0x7eU);
@@ -358,12 +407,37 @@ int main(void)
     qird_phase = 4U;
     host_feed_rx("\r\n+QIURC: \"recv\",0\r\n");
     ec800m_process();
+    ec800m_process();
     assert(strstr(diag_log, "qird_fail=FORMAT stage=") != NULL);
     assert(strstr(diag_log, " total=") != NULL);
     assert(strstr(diag_log, " hdr=") != NULL);
     assert(strstr(diag_log, " decl=") != NULL);
     assert(strstr(diag_log, " remain=") != NULL);
     assert(strstr(diag_log, " tail=") != NULL);
+
+    /* An OK-looking line inside length-delimited firmware bytes is payload,
+     * not the modem's terminal result. The real result arrives later. */
+    tcp_payload_len = 0U;
+    qird_phase = 6U;
+    host_feed_rx("\r\n+QIURC: \"recv\",0\r\n");
+    ec800m_process();
+    ec800m_process();
+    assert(qird_phase == 9U);
+    assert(tcp_payload_len == 8U);
+    assert(memcmp(tcp_payload, "A\r\nOK\r\nB", 8U) == 0);
+
+    /* Text URCs may appear after all declared payload bytes but before the
+     * terminal OK. Their aggregate length must not consume payload capacity. */
+    tcp_payload_len = 0U;
+    qird_phase = 10U;
+    host_feed_rx("\r\n+QIURC: \"recv\",0\r\n");
+    ec800m_process();
+    ec800m_process();
+    assert(qird_phase == 13U);
+    assert(tcp_payload_len == EC800M_QIRD_CHUNK);
+    for (unsigned i = 0U; i < tcp_payload_len; ++i)
+        assert(tcp_payload[i] == (uint8_t)(i % 251U));
+    assert(ec800m_get_csq() == 19);
 
     /* scanf-style partial matches must not turn malformed URCs into events. */
     ec800m_test_set_tcp_open(0U);

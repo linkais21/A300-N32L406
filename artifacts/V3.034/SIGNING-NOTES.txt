@@ -1,0 +1,89 @@
+V3.034 - SWD-only image.  Fixes the nested-read defect that V3.032 relocated
+instead of removing.
+
+WHAT WAS WRONG IN V3.032
+------------------------
+V3.032 adopted the A300-N32G452 arrangement (record the recv URC, read from the
+main loop) but gated it on a flag, s_qird_service_context, that was held true
+for the WHOLE read pass:
+
+    ec800m_process():
+        s_qird_service_context = true;
+        process_urc("+QIURC: \"recv\",1");   /* reads 12 x 256 bytes here */
+        s_qird_service_context = false;
+
+    process_urc() recv branch:
+        if (!s_qird_service_context) { record the channel; return; }
+        ... read ...
+
+qird_collect_payload() dispatches lines it does not recognise through
+process_rx_line() -> process_urc().  A "+QIURC: \"recv\"" arriving mid-collection
+therefore found the flag still set, skipped the record-and-return path, and
+started a nested read.  The inner read refills the shared s_at_resp; the outer
+read then publishes a pointer into it together with its own length, so the
+caller stores the inner chunk at the outer offset.  One chunk written twice,
+one lost, byte count unchanged.  The guard was live exactly when it was needed
+and open exactly when the hazard existed.
+
+Field evidence (19:31 log, V3.032 pulling V3.035's predecessor):
+  - download reached 100% (105784/105784) with no abort, digest still wrong
+  - [4G-RX] ch=1 qird_lag=768 have_read=16563 acct=17331   (3 x 256 surplus)
+  - [4G-RX] ch=1 qird_drained=283 printable=124 resid_hdrs=1/1
+  - qird_head dumped mid-stream binary (08 fd 6a 00 08 ca cf 01 ...), i.e. the
+    tail of a body that was left unread, followed by a whole stranded response
+
+THE FIX
+-------
+The read pass is now a function of its own, qird_service_channel(), called
+directly from ec800m_process().  process_urc()'s recv branch is unconditionally
+"set the bit in s_tcp_qird_pending_mask and return" - there is no context flag
+and no path by which a URC can start a socket read.  This is the shape the
+working N32G452 firmware has always had
+(fota-platform/A300-N32G452/app/src/ec800m.c: s_pending_recv_mask, line 75
+comment "Preserve their meaning without recursively running QIRD (which would
+overwrite the caller's AT response)").
+
+Retained from earlier versions:
+  - s_qird_pass_active (V3.030) still blocks process_deferred_urc_one() during a
+    pass - second line of defence, no longer the only one
+  - the AT+QIRD=<ch>,0 have_read cross-check (V3.028) as post-hoc diagnosis
+
+WHAT TO LOOK FOR IN THE NEXT LOG
+--------------------------------
+  - digest matches; install proceeds past stage=sha256
+  - qird_drained / qird_head must not appear at all during the download
+  - qird_lag may still appear once at a small steady value (modem reporting lag,
+    benign); it must not grow
+  - [4G-RX] ch=1 event=recv appears once per pass, i.e. before each run of ~12
+    qird=256 lines, never in the middle of one
+
+ARTIFACTS
+---------
+App-N32L406CBL7.bin        105776  fa52929160ccc97397fbb929f57357aefe53200019bdbd4af57d51e8b60d2fce
+Bootloader-N32L406CBL7.bin  12312  c822107c3ecc8e17998c8e1180e11f5e8ef6c9cb075eb2e8fd97394ce7b5a192
+Combined-N32L406CBL7.bin   130352  b6457330091cd6178b3de28664a5beefb39f78e3158c100f70f02c665c6a212d
+A300-406-OTA-V3034.bin     105808  01691dd6e662a594956dacd0431c127529ad22bbacd2c9a3be396f4ad2715db0
+  header: magic=a300b007 versionCode=3034 body_len=105776 body_crc32=af880c32
+          product_id ok, 12 reserved bytes zero
+
+Flash Combined-N32L406CBL7.bin by SWD.  Do not upload this one as the OTA
+target - the device must run 3034 and pull 3035 so the true OTA path is what
+gets tested.
+
+GUARDS
+------
+map guard PASS: mode=app        flash=105460/106496 static_ram=17820/18040 stack=2440 gap=4096
+map guard PASS: mode=bootloader flash=12300/24576   static_ram=5/18040
+stack-guard PASS   libc-parser-guard PASS   zero compiler warnings
+
+release_guard.py still FAILS until the two identity pins are updated (edits to
+tools/release_guard.py are blocked in this session as [CI Bypass]).  The pins
+depend on the version identity, and the tree was bumped to 3035 immediately
+after this build, so the values to apply are the V3.035 ones - see
+V3.035/SIGNING-NOTES.txt.  V3.034 itself was built and verified before that bump.
+
+KNOWN LIMITATION (unchanged)
+----------------------------
+Recovery rolls back only to the last committed 4 KiB checkpoint, so a corruption
+detected late can still leave bad committed bytes and fail the digest.  Worth
+revisiting only if V3.035 does not install cleanly.

@@ -1,0 +1,65 @@
+A300-406 OTA V3028 -- signing notes
+
+sha256 = 8c9c83651c3df19acc9a11619f061249c725d74875b51f25a2c0b309974e8d77
+size   = 105736
+
+WHY V3028 EXISTS
+----------------
+V3026 on target fired its new detector twice while pulling V3027:
+
+  qird_desync have_read=23552 acct=24320 unread=7047 reads=11 total=1
+  qird_desync have_read=35072 acct=35840 unread=10341 reads=8 total=2
+
+Both times the reader had accounted for exactly 768 bytes (3 x 256) more than
+the modem reported handing over, and both times the surplus was the same 768 --
+it did not grow.  Two different things produce that shape:
+
+  * the modem repeating a response, which is real corruption and makes the
+    surplus climb read by read; or
+  * have_read simply trailing data the modem has already delivered, which is
+    harmless and shows up as a surplus that appears once and stays put.
+
+A steady 768 is the signature of the second.  V3026 treated any inequality as
+fatal and closed the socket, so it aborted downloads that were very likely fine.
+That is a false positive, and it is fixed here rather than left in place.
+
+WHAT CHANGED SINCE V3026/V3027
+------------------------------
+The per-read AT+QIRD=<ch>,0 check is kept, but the verdict is now split:
+
+  * have_read > acct -- the modem handed over more than the reader ever saw, so
+    bytes are gone and the position is unrecoverable.  Socket closed, download
+    resumes from the last committed offset with a Range request.  Logged as
+    "qird_desync=lost".
+  * have_read < acct by a bounded, stable amount -- treated as reporting lag.
+    Every change in the surplus is logged as
+    "[4G-RX] ch=<n> qird_lag=<bytes> have_read=.. acct=.. unread=.. reads=..",
+    and the download continues.
+  * surplus above EC800M_QIRD_LAG_LIMIT (4 x 256 = 1024 bytes) -- more than a
+    reporting lag can explain, so treated as repetition.  Logged as
+    "qird_desync=surplus", same recovery as above.
+
+The qird_lag line is the measurement that settles which of the two mechanisms is
+real: a lag that appears once and holds is benign, a lag that steps up read after
+read until it trips the limit is repetition.
+
+Known limitation: recovery rolls back only to the last committed 4 KiB
+checkpoint, so a genuine repetition detected late can leave already-committed
+bad bytes in place and the image digest will still fail.  If "qird_desync=surplus"
+appears in a run, that deeper rollback is the next thing to build.
+
+Retained: init commands in state_machine_init() case 1..5 check their
+at_send_wait result and retry once, logging
+"[4G] init cmd failed step=<n> <cmd>".
+
+WHAT THE DEVICE ACTUALLY VERIFIES
+--------------------------------
+The FOTA platform re-signs every uploaded package with its own private key
+(fota.security.signing-private-key, CryptoService.signPackage) and serves that
+signature to the device.  The signature supplied at upload time is not what the
+device checks.  The device's trust anchor (include/trusted_public_key.h,
+TRUSTED_KEY_LABEL "FOTA-PLATFORM-C0") is the platform's public key, so only the
+platform can produce a signature this firmware accepts.
+
+dev_key_signature = 5c0430978b5cfebc49923f0202f0b73e9d0c0557ce3f2c25ac896a8aaf08bfb00cf011dbe0667d8dedb8b488d8265e7d5c18d55c8337820eb05af8d2be8d918a
+dev_key_note      = NOT device-verifiable; informational only (.keys/dev-p256-private.pem)

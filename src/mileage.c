@@ -30,6 +30,12 @@ static double s_last_lat  = 0.0;
 static double s_last_lon  = 0.0;
 static float  s_last_hdg  = 0.0f;
 static bool   s_has_first = false;
+#define MILEAGE_PERSIST_INTERVAL_MS (600000UL)
+#define MILEAGE_RETRY_BACKOFF_MS    (30000UL)
+static bool s_persist_schedule_armed;
+static bool s_retry_backoff_active;
+static uint32_t s_persist_due_ms;
+static uint32_t s_seen_persist_generation;
 
 /* ── Haversine distance (metres) ─────────────────────────────────────────── */
 static double haversine_m(double lat1, double lon1, double lat2, double lon2)
@@ -76,4 +82,66 @@ void mileage_update(void)
 
     s_last_lat = g->lat;
     s_last_lon = g->lon;
+}
+
+static bool mileage_flush_at(uint32_t now_ms)
+{
+    if (!cfg_mileage_dirty()) {
+        s_persist_schedule_armed = false;
+        s_retry_backoff_active = false;
+        return true;
+    }
+    if (cfg_flush_mileage()) {
+        s_persist_schedule_armed = false;
+        s_retry_backoff_active = false;
+        return true;
+    }
+    s_persist_schedule_armed = true;
+    s_retry_backoff_active = true;
+    s_persist_due_ms = now_ms + MILEAGE_RETRY_BACKOFF_MS;
+    dbg_printf("[MILE] persist failed; retry_after=%lu\r\n",
+               (unsigned long)s_persist_due_ms);
+    return false;
+}
+
+static void mileage_sync_persist_generation(void)
+{
+    uint32_t generation = cfg_persist_generation();
+    if (generation == s_seen_persist_generation)
+        return;
+    s_seen_persist_generation = generation;
+    s_persist_schedule_armed = false;
+    s_retry_backoff_active = false;
+}
+
+void mileage_persist_process(uint32_t now_ms)
+{
+    mileage_sync_persist_generation();
+    if (!cfg_mileage_dirty()) {
+        s_persist_schedule_armed = false;
+        s_retry_backoff_active = false;
+        return;
+    }
+    if (!s_persist_schedule_armed) {
+        s_persist_schedule_armed = true;
+        s_retry_backoff_active = false;
+        s_persist_due_ms = now_ms + MILEAGE_PERSIST_INTERVAL_MS;
+        return;
+    }
+    if ((int32_t)(now_ms - s_persist_due_ms) >= 0)
+        (void)mileage_flush_at(now_ms);
+}
+
+bool mileage_force_save(uint32_t now_ms)
+{
+    mileage_sync_persist_generation();
+    if (!cfg_mileage_dirty()) {
+        s_persist_schedule_armed = false;
+        s_retry_backoff_active = false;
+        return true;
+    }
+    if (s_retry_backoff_active &&
+        (int32_t)(now_ms - s_persist_due_ms) < 0)
+        return false;
+    return mileage_flush_at(now_ms);
 }

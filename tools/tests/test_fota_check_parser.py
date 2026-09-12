@@ -99,8 +99,10 @@ int main(void)
                    JSON_LENGTH("{\"updateAvailable\":true,\"versionCode\":4294967296,\"size\":1,\"downloadUrl\":\"u\"}"));
     expect_invalid("{\"updateAvailable\":true,\"versionCode\":1,\"size\":1,\"downloadUrl\":\"http:\\\\/\\\\/host\"}",
                    JSON_LENGTH("{\"updateAvailable\":true,\"versionCode\":1,\"size\":1,\"downloadUrl\":\"http:\\\\/\\\\/host\"}"));
-    expect_invalid("{\"updateAvailable\":true,\"versionCode\":1,\"size\":1,\"downloadUrl\":\"u\",\"extra\":0}",
-                   JSON_LENGTH("{\"updateAvailable\":true,\"versionCode\":1,\"size\":1,\"downloadUrl\":\"u\",\"extra\":0}"));
+    expect_valid("{\"updateAvailable\":true,\"versionCode\":3002,\"size\":4096,\"downloadUrl\":\"http://fota.lhhn.net/firmware.bin\",\"sha256\":\"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\",\"signature\":\"202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f\",\"signingKeyId\":1,\"downloadToken\":\"task-token-123\",\"tokenExpiresAt\":\"2026-09-12T03:20:00Z\"}",
+                 JSON_LENGTH("{\"updateAvailable\":true,\"versionCode\":3002,\"size\":4096,\"downloadUrl\":\"http://fota.lhhn.net/firmware.bin\",\"sha256\":\"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\",\"signature\":\"202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f\",\"signingKeyId\":1,\"downloadToken\":\"task-token-123\",\"tokenExpiresAt\":\"2026-09-12T03:20:00Z\"}"),
+                 1, 3002U, 4096U, "http://fota.lhhn.net/firmware.bin",
+                 1U, "task-token-123");
     expect_invalid("{\"updateAvailable\":false}x",
                    JSON_LENGTH("{\"updateAvailable\":false}x"));
     expect_invalid("{\"updateAvailable\":false",

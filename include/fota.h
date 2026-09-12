@@ -59,7 +59,7 @@ typedef struct {
 
 void fota_init(void);
 void fota_process(void);
-/* Arm an immediate authenticated check; an active transfer finishes first. */
+/* Arm an immediate update check; an active transfer finishes first. */
 bool fota_request_check(void);
 int  fota_start_request(const fota_request_t *req);
 /* expected_length must be known and nonzero. PREPARING erases the candidate

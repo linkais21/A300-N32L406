@@ -24,8 +24,8 @@ Firmware for A300-T9 GPS vehicle tracker based on N32L406CDL7 MCU.
 ## JT/T 808-2013 Online Contract
 
 - Release identity is defined by `release_identity.json`. This release is
-  `T360-A300_406_20260823000000,V3.002`; subsequent firmware changes increment
-  only the three-digit revision (`V3.003`, `V3.004`, ...). The OTA model is
+  `T360-A300_406_20260823000000,V3.037`; subsequent firmware changes increment
+  only the three-digit revision (`V3.038`, `V3.039`, ...). The OTA model is
   `A300-406`, while the JT808 terminal model and manufacturer are
   `T360-A300` and `70110`.
 - A valid terminal PID is exactly 11 decimal digits. When PID is empty, the
@@ -62,6 +62,19 @@ Firmware for A300-T9 GPS vehicle tracker based on N32L406CDL7 MCU.
 
 ## Versioned Release Artifacts
 
+The paired validation delivery is
+[`artifacts/OTA-TEST-V3036-V3037/README.md`](artifacts/OTA-TEST-V3036-V3037/README.md):
+flash the V3.036 Combined image over SWD, then upload the V3.037 OTA image.
+
+OTA trust-anchor repair and verification instructions are in
+[`docs/ota-trust-repair-2026-09-12.md`](docs/ota-trust-repair-2026-09-12.md).
+Run `python tools/tests/test_platform_trust_anchor.py` before releasing; it
+compiles the shipped public key and validates a real platform signature, using
+a host GCC or Clang compiler. The release builder runs this check automatically.
+Devices with the former incorrect public key require a coordinated App and
+Bootloader repair over SWD; a new OTA package cannot repair its own rejecting
+verifier. Do not reuse an archived version number for a changed image.
+
 Generate a release from the repository root with:
 
 ```powershell
@@ -70,19 +83,19 @@ python tools/build_dev_release.py
 
 The builder reads the release version from `release_identity.json` and writes
 all outputs to `artifacts/<version>/`. The current release is stored in
-`artifacts/V3.002/` and contains:
+`artifacts/V3.037/` and contains:
 
 - `Combined-N32L406CBL7.bin`: complete Bootloader and App programming image.
 - `App-N32L406CBL7.bin`: App-only programming image.
 - `Bootloader-N32L406CBL7.bin` and `.hex`: Bootloader programming images.
-- `A300-406-OTA-V3002.bin`: firmware package uploaded to the FOTA platform.
+- `A300-406-OTA-V3037.bin`: firmware package uploaded to the FOTA platform.
 - App and Bootloader `.elf`, `.hex`, and `.map` diagnostic artifacts.
 - `SHA256SUMS-N32L406CBL7.json`: artifact sizes and SHA-256 hashes.
 
-Version directories are immutable. If `artifacts/V3.002/` already exists, the
+Version directories are immutable. If `artifacts/V3.006/` already exists, the
 builder fails before compiling and does not overwrite or merge any files. An
 alternate root can be selected with `--output D:\some\root`; the current
-release is then written to `D:\some\root\V3.002` with the same collision rule.
+release is then written to `D:\some\root\V3.006` with the same collision rule.
 
 ## Pin Configuration
 

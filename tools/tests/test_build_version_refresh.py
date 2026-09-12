@@ -70,6 +70,24 @@ with tempfile.TemporaryDirectory() as temporary:
 
     powershell_generator = temporary_root / "gen_version.ps1"
     powershell_generator.write_text(POWERSHELL_GENERATOR, encoding="utf-8")
+    (temporary_root / "release_identity.json").write_text(
+        json.dumps({
+            "firmware_version": "T360-A300_406_20260823000000,V3.001",
+            "firmware_version_counter": 3001,
+        }) + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+         str(powershell_generator)],
+        cwd=temporary_root,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    generated = header.read_text(encoding="ascii")
+    assert '#define FW_VERSION_COUNTER  3001UL' in generated
+
     for invalid_counter in (True, False):
         (temporary_root / "release_identity.json").write_text(
             json.dumps({

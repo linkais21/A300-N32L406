@@ -52,6 +52,14 @@ void ec800m_init(void);
 void ec800m_process(void);          /* call from main loop */
 /* Platform hook serviced inside bounded blocking AT waits. The application
  * implementation must not call modem/JT808/FOTA state machines. */
+/* Bytes requested per AT+QIRD.  This must stay well below both the DMA ring
+ * (EC800M_RX_BUF_SIZE) and the AT response buffer: the modem may interleave a
+ * URC line with the response, so a chunk sized close to either buffer leaves
+ * no room to absorb it.  256 into a 1024-byte ring and a 512-byte response
+ * buffer keeps ~4x and ~2x headroom respectively.  Declared here so the host
+ * modem tests assert against the same value the driver requests. */
+#define EC800M_QIRD_CHUNK  256U
+
 void ec800m_wait_service_hook(void);
 
 ec800m_state_t ec800m_get_state(void);
@@ -60,6 +68,8 @@ int ec800m_get_reg_status(void);
 const char *ec800m_state_name(ec800m_state_t state);
 const char *ec800m_failure_name(ec800m_failure_t failure);
 bool ec800m_is_ready(void);
+/* True only after both modem identity fields have passed exact validation. */
+bool ec800m_identity_ready(void);
 
 /* Power control */
 void ec800m_power_on(void);

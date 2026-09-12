@@ -1,0 +1,49 @@
+A300-406 OTA V3025 -- signing notes
+
+sha256 = 471fb33f6191f83584ba5305f76ff3a8e3da966262c51b56b407fb285b9d60fc
+size   = 105200
+
+WHAT CHANGED SINCE V3024
+------------------------
+Both changes are in the EC800M receive path (src/ec800m.c):
+
+1. AT+QIRD request length now alternates 256/255.  Every request used to be
+   EC800M_QIRD_CHUNK, so the "+QIRD: <n>" header of the previous command's
+   response was indistinguishable from the current one's.  If the reader ever
+   fell one response behind, every chunk after that carried the previous
+   chunk's data while the byte count still added up -- the download reached
+   100% and sha256 failed with a different digest each run.  A response never
+   exceeds its request, so a 256-byte header answering a 255-byte request is
+   provably stale: qird_collect_payload's existing bound check rejects it and
+   the failure path resynchronises via qird_flush_after_failure.
+
+2. The init commands in state_machine_init() case 1..5 (ATE0,
+   AT+QURCCFG, AT+CMGF, AT+CNMI, AT+CTZU) were fire-and-forget; the
+   at_send_wait result was discarded.  A lost or timed-out ATE0 left command
+   echo enabled for the whole session with nothing in the log to say so.  Each
+   command now retries once and logs "[4G] init cmd failed step=<n> <cmd>".
+
+WHAT THE DEVICE ACTUALLY VERIFIES
+--------------------------------
+The FOTA platform re-signs every uploaded package with its own private key
+(fota.security.signing-private-key, CryptoService.signPackage) and serves that
+signature to the device.  The signature supplied at upload time is not what the
+device checks.  The device's trust anchor (include/trusted_public_key.h,
+TRUSTED_KEY_LABEL "FOTA-PLATFORM-C0") is the platform's public key, so only the
+platform can produce a signature this firmware accepts.
+
+dev-key signature below is for traceability ONLY.  It is produced with
+.keys/dev-p256-private.pem, which the device does not trust.  Do NOT expect the
+platform or the device to accept it.
+
+dev_key_signature = 5288592c33c926f632a31d8c6270297c58516c29a79ffc9c930d4a6c32e9e0ac1a3be9d5d8167722453e5c084e3cb72e9147ef63a4ce811fdffa03ff200ca650
+dev_key_note      = NOT device-verifiable; informational only
+
+DELIVERY NOTE -- V3023 CANNOT PULL THIS OVER THE AIR
+----------------------------------------------------
+The device in the field runs V3023, which has neither the drain-to-silence fix
+(V3024) nor the stale-response detection above.  Its receive path is the reason
+downloads corrupt, so it cannot reliably fetch its own fix.  Flash V3025 by SWD
+once (Combined-N32L406CBL7.bin, or App+Bootloader separately -- the trust anchor
+is shared through src/firmware_signature.c so both images must match), then use
+OTA for the next hop.

@@ -1,0 +1,48 @@
+A300-406 OTA V3031 -- signing notes
+
+sha256 = 5d74c30a7a4e677af17327dcacf15b74f020abc86901c5cb28bb9446db7af16e
+size   = 105752
+
+PURPOSE
+-------
+Code-identical to V3030; only the version identity differs (9 bytes in the App
+image: the two version strings and FW_VERSION_COUNTER, same 105720-byte size).
+V3030 is the image that goes on by SWD, so the device ends up running 3030 and
+needs a higher version on the platform to pull.  V3031 is that target.
+
+  1. SWD-flash V3030 (artifacts/V3.030/Combined-N32L406CBL7.bin).
+  2. Upload this package to the FOTA platform and create the task.
+  3. Device checks with currentVersionCode=3030 and pulls 3031 over the air.
+
+WHAT THIS RUN TESTS
+-------------------
+The reader no longer lets a deferred +QIURC: "recv" re-enter it while a payload
+pointer into the shared s_at_resp buffer is still live.  That re-entry is what
+stored one chunk twice and dropped another while the byte count and the modem's
+have_read counter both stayed perfectly consistent -- see
+artifacts/V3.030/SIGNING-NOTES.txt for the full derivation.
+
+Expect the download to reach 100% and the digest to match.  The diagnostics that
+remain are now backstops rather than the main event:
+
+  * qird_lag=<bytes> -- a bounded, stable surplus is the modem's reporting lag and
+    is harmless; it appeared once at 768 in the V3029 run and never moved.
+  * qird_desync=lost / qird_desync=surplus -- would mean bytes genuinely went
+    missing or were repeated.  Neither should appear.
+  * "[4G-RX] ch=1 event=recv" should now only appear between passes, not
+    interleaved inside a run of qird=256 reads.
+
+If the digest matches, the device installs via A/B, reboots into 3031, and
+confirms TRIAL -> ACTIVE at 30 s uptime.
+
+WHAT THE DEVICE ACTUALLY VERIFIES
+--------------------------------
+The FOTA platform re-signs every uploaded package with its own private key
+(fota.security.signing-private-key, CryptoService.signPackage) and serves that
+signature to the device.  The signature supplied at upload time is not what the
+device checks.  The device's trust anchor (include/trusted_public_key.h,
+TRUSTED_KEY_LABEL "FOTA-PLATFORM-C0") is the platform's public key, so only the
+platform can produce a signature this firmware accepts.
+
+dev_key_signature = 3910599ff1a9a6654dfac151d2ab3a212f2aa37f42c5fa42d862614ebea1bb68f4e84a6b04eb3b001e3c2ca1425fbcd3c9e9d5f7b492474df5858495ecb1885b
+dev_key_note      = NOT device-verifiable; informational only (.keys/dev-p256-private.pem)

@@ -13,6 +13,9 @@ typedef struct {
     uint16_t threshold;
     uint32_t vibration_hit_count;
     uint8_t address;
+    uint8_t int1_level;
+    bool int1_rearm_ok;
+    uint32_t int1_rearm_fail_count;
     bool read_ok;
     bool vibration_hit;
 } accel_diag_t;
@@ -25,6 +28,7 @@ bool  i2c_accel_vibration_hit(uint8_t sensitivity_level);
 bool  i2c_accel_vibration_sample_due(void);
 void  i2c_accel_reset_vibration_window(void);
 void  i2c_accel_prepare_wake_sampling(void);
+bool  i2c_accel_rearm_wake_interrupt(void);
 const accel_diag_t *i2c_accel_get_diag(void);
 
 #endif

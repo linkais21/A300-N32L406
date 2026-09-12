@@ -40,6 +40,7 @@ static bool modem_ready = true;
 
 device_config_t *cfg_get(void) { return &config; }
 bool ec800m_is_ready(void) { return modem_ready; }
+bool ec800m_identity_ready(void) { return true; }
 int ec800m_tcp_open(uint8_t channel, const char *ip, uint16_t port)
 {
     ++open_calls;

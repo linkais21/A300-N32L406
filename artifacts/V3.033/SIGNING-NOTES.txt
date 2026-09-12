@@ -1,0 +1,46 @@
+A300-406 OTA V3033 -- signing notes
+
+sha256 = 527f0c311ecd89c0078c3ed27288dd3b4a51a1da54e6fc3b26800195964b61ed
+size   = 105784
+
+PURPOSE
+-------
+Code-identical to V3032; only the version identity differs (6 bytes in the App
+image: the two version strings and FW_VERSION_COUNTER, same 105752-byte size).
+V3032 goes on by SWD, so the device ends up running 3032 and needs a higher
+version on the platform to pull.  V3033 is that target.
+
+  1. SWD-flash V3032 (artifacts/V3.032/Combined-N32L406CBL7.bin).
+  2. Upload this package to the FOTA platform and create the task.
+  3. Device checks with currentVersionCode=3032 and pulls 3033 over the air.
+
+WHAT THIS RUN TESTS
+-------------------
+Socket reads no longer happen in URC context at all.  +QIURC: "recv" records the
+channel and ec800m_process() does the reading with no AT transaction in flight --
+the arrangement the N32G452 firmware has always used.  See
+artifacts/V3.032/SIGNING-NOTES.txt for the derivation and the G452 reference.
+
+Expect the download to reach 100% and the digest to match.  In the log,
+"[4G-RX] ch=1 event=recv" should now appear only between read passes; seeing it
+interleaved inside a run of qird=256 reads was the signature of the re-entry that
+corrupted the image.
+
+Remaining diagnostics are backstops: qird_lag (a bounded, stable surplus is the
+modem's harmless reporting lag -- it sat at 768 all through the V3029 run),
+qird_desync=lost and qird_desync=surplus (neither should appear).
+
+If the digest matches, the device installs via A/B, reboots into 3033, and
+confirms TRIAL -> ACTIVE at 30 s uptime.
+
+WHAT THE DEVICE ACTUALLY VERIFIES
+--------------------------------
+The FOTA platform re-signs every uploaded package with its own private key
+(fota.security.signing-private-key, CryptoService.signPackage) and serves that
+signature to the device.  The signature supplied at upload time is not what the
+device checks.  The device's trust anchor (include/trusted_public_key.h,
+TRUSTED_KEY_LABEL "FOTA-PLATFORM-C0") is the platform's public key, so only the
+platform can produce a signature this firmware accepts.
+
+dev_key_signature = db89836a3cdac0b9af3a90b5eaaf1414dad83312e7f8e92132399fc2f5d26464040567200406f0acbfc866ab34a780cf121990fee1d6c3bfe359a493fd793d3e
+dev_key_note      = NOT device-verifiable; informational only (.keys/dev-p256-private.pem)

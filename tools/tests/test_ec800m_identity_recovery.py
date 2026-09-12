@@ -22,6 +22,7 @@ HARNESS = r'''
 #include <stdarg.h>
 #include "n32l40x.h"
 #include "flash_config.h"
+#include "ec800m.h"
 
 volatile uint32_t g_tick_ms;
 usart_module_t host_uart5;
@@ -61,6 +62,10 @@ typedef enum {
 identity_query_result_t ec800m_test_identity_retry(bool valid,
                                                     uint8_t *attempts);
 bool ec800m_test_identity_ready(const char *imei, const char *iccid);
+void ec800m_test_set_state(ec800m_state_t state);
+void ec800m_test_set_imei(const char *imei);
+void ec800m_test_set_iccid(const char *iccid);
+uint8_t ec800m_test_init_step(void);
 
 int main(void)
 {
@@ -98,6 +103,13 @@ int main(void)
     assert(!ec800m_test_identity_ready("123456789012345", ""));
     assert(!ec800m_test_identity_ready("123456789012345",
                                        "898604121025"));
+
+    ec800m_test_set_state(EC800M_STATE_READY);
+    ec800m_test_set_imei("");
+    ec800m_test_set_iccid("");
+    ec800m_process();
+    assert(ec800m_get_state() == EC800M_STATE_INIT);
+    assert(ec800m_test_init_step() == 6U);
 
     puts("test_ec800m_identity_recovery: PASS");
     return 0;
