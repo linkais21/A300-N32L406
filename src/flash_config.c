@@ -88,7 +88,10 @@ const device_config_t k_config_defaults = {
     .sos_alm_en         = 1,
     .lowbat_alm_en      = 1,
     .lowexbat_alm_en    = 1,
-    .vib_sens           = 30,
+    /* Smaller values are more sensitive; 20 is the shipped wake default.
+     * Field configuration may select 15 for installations needing a more
+     * sensitive trigger. */
+    .vib_sens           = 20,
     .pid                = "",
     .terminal_model     = "T360-A300",
     .speed_limit_kmh    = 120,

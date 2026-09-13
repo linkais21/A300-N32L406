@@ -110,7 +110,7 @@ static void da218e_bus_recover(void)
 #define VIBRATION_SENSITIVITY_MIN 1U
 #define VIBRATION_SENSITIVITY_MAX 50U
 #define VIBRATION_SENSITIVITY_ANCHOR 30U
-#define VIBRATION_SENSITIVITY_DEFAULT 30U
+#define VIBRATION_SENSITIVITY_DEFAULT 20U
 #define VIBRATION_THRESHOLD_STEP 4U
 
 static accel_vibration_filter_t s_motion_filter;
@@ -122,7 +122,7 @@ static bool s_vibration_sample_seen = false;
 
 /* VIBSENS product scale (1..50, smaller = more sensitive) mapped linearly onto
  * the delta threshold in accelerometer LSB, anchored at level 30 = VIB_THRESH.
- * Level 1 gives 34 LSB, level 10 (the shipped default) 70, level 50 230.
+ * Level 1 gives 34 LSB, level 20 (the shipped default) 110, level 50 230.
  * Out-of-range or unconfigured input falls back to the shipped default. */
 static uint16_t vibration_threshold_by_level(uint8_t sensitivity_level)
 {
