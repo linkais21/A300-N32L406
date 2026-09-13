@@ -69,7 +69,7 @@ $fullVer    = "T663B_B409_$buildNum"
 
 Write-Host "Version: $fullVer"
 
-$CFLAGS = "-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -Os -g3 -Wall -Wextra -flto=1 -flto-partition=one -ffunction-sections -fdata-sections -Iinclude -Ithird_party/micro-ecc -I$SDK/CMSIS/core -I$SDK/CMSIS/device -I$SDK/n32l40x_std_periph_driver/inc -DUSE_STDPERIPH_DRIVER -DN32L40X -DSYSCLK_SRC=3 -DSYSCLK_FREQ=64000000 -DuECC_SUPPORTS_secp160r1=0 -DuECC_SUPPORTS_secp192r1=0 -DuECC_SUPPORTS_secp224r1=0 -DuECC_SUPPORTS_secp256k1=0 -DuECC_SUPPORTS_secp256r1=1 -DuECC_SUPPORT_COMPRESSED_POINT=0 -DuECC_PLATFORM=uECC_arch_other -std=c99"
+$CFLAGS = "-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -Os -g0 -Wall -Wextra -flto=1 -flto-partition=one -ffunction-sections -fdata-sections -Iinclude -Ithird_party/micro-ecc -I$SDK/CMSIS/core -I$SDK/CMSIS/device -I$SDK/n32l40x_std_periph_driver/inc -DUSE_STDPERIPH_DRIVER -DN32L40X -DSYSCLK_SRC=3 -DSYSCLK_FREQ=64000000 -DuECC_SUPPORTS_secp160r1=0 -DuECC_SUPPORTS_secp192r1=0 -DuECC_SUPPORTS_secp224r1=0 -DuECC_SUPPORTS_secp256k1=0 -DuECC_SUPPORTS_secp256r1=1 -DuECC_SUPPORT_COMPRESSED_POINT=0 -DuECC_PLATFORM=uECC_arch_other -std=c99"
 
 $sources = @(
     "src/main.c",
@@ -144,7 +144,7 @@ foreach ($src in $sources) {
     if ($forceRebuild -or -not (Test-Path $obj)) {
         Write-Host "Compiling $src..."
         if ($src -like "*.s") {
-            $cmdArgs = "-mcpu=cortex-m4", "-mthumb", "-mfpu=fpv4-sp-d16", "-mfloat-abi=hard", "-g3", "-c", $src, "-o", $obj
+            $cmdArgs = "-mcpu=cortex-m4", "-mthumb", "-mfpu=fpv4-sp-d16", "-mfloat-abi=hard", "-g0", "-c", $src, "-o", $obj
             & $gcc $cmdArgs
         } else {
             $compileFlags = $CFLAGS.Split()
@@ -169,6 +169,7 @@ $objs = foreach ($src in $sources) {
     (Resolve-Path -LiteralPath $obj).Path
 }
 $LDFLAGS = "-mcpu=cortex-m4", "-mthumb", "-mfpu=fpv4-sp-d16", "-mfloat-abi=hard",
+           "-Os", "-g0",
            "-Tldscript/n32l406.ld", "-Wl,--gc-sections",
            "-Wl,-Map=build/a300_firmware.map", "-flto=1", "-flto-partition=one",
            "--specs=nano.specs", "-lc", "-lgcc", "-lm"

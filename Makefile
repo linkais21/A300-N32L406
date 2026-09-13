@@ -112,7 +112,10 @@ INCLUDES := \
 
 # ── Compiler flags ─────────────────────────────────────────────────────────────
 CPU    := -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-CFLAGS := $(CPU) -Os -g3 -Wall -Wextra -flto=1 -flto-partition=one \
+# Debug sections enlarge ELF, not the flashed HEX/BIN. Override with
+# DEBUG_FLAGS=-g3 and force a rebuild (-B) when source-level debugging is needed.
+DEBUG_FLAGS ?= -g0
+CFLAGS := $(CPU) -Os $(DEBUG_FLAGS) -Wall -Wextra -flto=1 -flto-partition=one \
            -ffunction-sections -fdata-sections \
            $(INCLUDES) \
            -DUSE_STDPERIPH_DRIVER \
@@ -132,9 +135,9 @@ CFLAGS := $(CPU) -Os -g3 -Wall -Wextra -flto=1 -flto-partition=one \
 # Keep vendor SPL sources unchanged; suppress only their two known diagnostics.
 SDK_CFLAGS := -Wno-sign-compare -Wno-unused-parameter
 
-ASFLAGS := $(CPU) -g3 -x assembler-with-cpp $(INCLUDES)
+ASFLAGS := $(CPU) $(DEBUG_FLAGS) -x assembler-with-cpp $(INCLUDES)
 
-LDFLAGS := $(CPU) \
+LDFLAGS := $(CPU) -Os $(DEBUG_FLAGS) \
             -Tldscript/n32l406.ld \
             -Wl,-Map=$(BUILD)/$(TARGET).map \
             -Wl,--gc-sections \
