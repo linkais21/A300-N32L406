@@ -1,0 +1,50 @@
+HISTORICAL RECORD: V3.035 only. Not the current release or deployment procedure.
+
+V3.035 - OTA target.  Code-identical to V3.034; only the version identity
+differs.  Upload this one to the platform.
+
+PURPOSE
+-------
+V3.034 goes on by SWD because the device currently runs a build with the
+nested-read defect and cannot be trusted to download its own fix.  V3.035 is
+what the device then pulls over the air, so the fix is what performs the
+download.  See V3.034/SIGNING-NOTES.txt for the defect and the fix.
+
+ARTIFACTS
+---------
+App-N32L406CBL7.bin        105776
+Combined-N32L406CBL7.bin   130352  eee12a1efc52bdf4335367d3... (SWD, not needed here)
+A300-406-OTA-V3035.bin     105808  ce6a29646f875b5e0249f73d... upload THIS
+  header: magic=a300b007 versionCode=3035 body_len=105776 body_crc32=5f70e191
+          product_id ok, 12 reserved bytes zero
+Full digests: SHA256SUMS-N32L406CBL7.json
+
+PLATFORM STEPS
+--------------
+1. Upload A300-406-OTA-V3035.bin, model A300-406, versionCode 3035.
+2. Create the task for device <TEST_DEVICE_ID>.
+3. The device reports currentVersionCode=3034, so check returns accept with
+   version=3035 size=105808.
+
+The platform re-signs with its own key; the device trust anchor is the recovered
+platform public key, label FOTA-PLATFORM-C0 - unchanged from previous releases,
+no server-side change is required or permitted.
+
+GUARDS
+------
+map guard PASS: mode=app        flash=105460/106496 static_ram=17820/18040 stack=2440 gap=4096
+map guard PASS: mode=bootloader flash=12300/24576   static_ram=5/18040
+stack-guard PASS   libc-parser-guard PASS   zero compiler warnings
+release_guard.py FAILS until these two identity pins are applied to
+tools/release_guard.py (CANONICAL_IDENTITY_FILE_SHA256).  These are
+canonical_file_digest values for the current tree, not raw file sha256:
+  "include/config.h":        "2a9684a1b38e2b85bc3881c10fca73e59f87f55ec7cd6fb807ee886660895ccb"
+  "include/build_version.h": "45004742ab7854dc099863d9fae8ebe776dd3e4bfd2eaec836506048f31462aa"
+My edits to that file are blocked in this session as [CI Bypass], so they need
+your hand.
+
+VERIFICATION AFTER INSTALL
+--------------------------
+Expect on the device: install past stage=sha256, reboot into V3.035, then TRIAL
+-> ACTIVE at 30 s uptime.  rollback_floor rises to 3035, so the device will not
+fall back below it over the air; SWD flashing of a lower version stays possible.
