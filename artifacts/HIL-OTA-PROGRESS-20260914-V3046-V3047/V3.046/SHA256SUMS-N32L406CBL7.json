@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "purpose": "user-requested hardware validation only",
+  "release_approved": false,
+  "release_gate": "failed: incomplete stack evidence; necessary known-frame budget passed",
+  "signing": "platform-detached",
+  "ota_format": "a300-header-v1",
+  "mcu": "N32L406CBL7",
+  "memory": {
+    "boot": [
+      134217728,
+      134242304
+    ],
+    "app": [
+      134242304,
+      134348800
+    ]
+  },
+  "version_counter": 3046,
+  "firmware_version": "T360-A300_406_20260823000000,V3.046",
+  "toolchain": "arm-none-eabi-gcc.exe (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) 14.3.1 20250623",
+  "git_revision": "190f930825b15d88e6d668d8ea02c74fae110e43",
+  "git_dirty": true,
+  "app_vectors": {
+    "msp": 536895488,
+    "reset": 134323341
+  },
+  "artifacts": {
+    "app_bin": {
+      "path": "App-N32L406CBL7.bin",
+      "size": 105208,
+      "sha256": "1c169f0a0c4a0e65db2d49c2d4f0fa0be575a5697cd11d5673272274de7efc20"
+    },
+    "app_hex": {
+      "path": "App-N32L406CBL7.hex",
+      "size": 295987,
+      "sha256": "82b324f76ef8ea884f9be429ee3624650bed203c878e63fa8461eb0e4647a8fc"
+    },
+    "app_elf": {
+      "path": "App-N32L406CBL7.elf",
+      "size": 161372,
+      "sha256": "ee2053dec55665f1a2b4cbd4decfbcf3c868a66004c72dff6d1fbc12ac00ae7e"
+    },
+    "app_map": {
+      "path": "App-N32L406CBL7.map",
+      "size": 159058,
+      "sha256": "9d66cca414749bc45ad747a9f3b6b52d9ad3de165b6a4eca5782290d2264b6b4"
+    },
+    "bootloader_bin": {
+      "path": "Bootloader-N32L406CBL7.bin",
+      "size": 22556,
+      "sha256": "7c4de678755bc3476b3a9f2ef0c3b442802d0fd919d472e0298a8ec13d3d8e7e"
+    },
+    "bootloader_hex": {
+      "path": "Bootloader-N32L406CBL7.hex",
+      "size": 39166,
+      "sha256": "f85e6a65a60bb0375a23bd41b456082c519893817d75acffe578aaf185a168d3"
+    },
+    "bootloader_elf": {
+      "path": "Bootloader-N32L406CBL7.elf",
+      "size": 32312,
+      "sha256": "26acf2863d6a20fb48d52dbfcd80945607b6212e5ef1ae861c8077a571f61bbe"
+    },
+    "bootloader_map": {
+      "path": "Bootloader-N32L406CBL7.map",
+      "size": 74880,
+      "sha256": "ec20770df1eb54128592406b8855e7d76effe183cf32da3f2993d0d49ba5e4a8"
+    },
+    "ota_upload_bin": {
+      "path": "A300-406-OTA-V3046.bin",
+      "size": 105240,
+      "sha256": "0d241a01358c6e0087f0a9d155bee96058cd69492f16f74a299c4ff4d3621a5c"
+    },
+    "combined_bin": {
+      "path": "Combined-N32L406CBL7.bin",
+      "size": 129784,
+      "sha256": "829d9330cbeeede072826542a0ca4aecd74e647136527c6e2cab4edc20e3c7cb"
+    },
+    "combined_hex": {
+      "path": "Combined-N32L406CBL7.hex",
+      "size": 365092,
+      "sha256": "e2555f008ff67b5ae9ea6cd0f8cbba1949a08d6ed44ddf78a85f20fba01e118b"
+    },
+    "flash-capacity.json": {
+      "path": "flash-capacity.json",
+      "size": 4542,
+      "sha256": "be6f7f7b30b5d5c572e5b6550300d44216d0d64be5e79c8540ee38c27012e341"
+    },
+    "stack-analysis.json": {
+      "path": "stack-analysis.json",
+      "size": 142355,
+      "sha256": "e74e953350bd162316d5dad6c76d738ced07afda35c4e9e8114ad77b4a44e3be"
+    },
+    "stack-evidence.json": {
+      "path": "stack-evidence.json",
+      "size": 663,
+      "sha256": "a544234398f4f30cb2ea163200bbd42b984a4ce09fe80c5ac3206292fe008761"
+    }
+  },
+  "factory_init": {
+    "request_address": "0x08005800",
+    "completion": "PENDING",
+    "hardware_validated": false,
+    "applies_to": "Combined SWD only; OTA is App-only"
+  }
+}

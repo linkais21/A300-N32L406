@@ -112,7 +112,7 @@ void dbg_printf(const char *f,...){(void)f;} void delay_ms(unsigned m){(void)m;}
 int main(void){assert(ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG));assert(fota_start("http://example.invalid/fw.bin")<0);assert(!ext_flash_try_lock(EXT_FLASH_OWNER_OTA));ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);assert(ext_flash_try_lock(EXT_FLASH_OWNER_OTA));ext_flash_unlock(EXT_FLASH_OWNER_OTA);return 0;}
 """, encoding="utf-8")
         exe=t/"fota_lock_test.exe"
-        subprocess.run([cc,"-std=c99","-I",str(t),"-I",str(ROOT/"include"),"-I",str(ROOT/"bootloader"/"include"),str(ROOT/"src"/"ext_flash_store.c"),str(ROOT/"src"/"service_workspace.c"),str(ROOT/"src"/"fota.c"),str(ROOT/"src"/"fota_checkpoint.c"),str(ROOT/"src"/"fota_check_parser.c"),str(ROOT/"src"/"crc32.c"),str(t/"harness.c"),"-o",str(exe)],check=True,capture_output=True,text=True)
+        subprocess.run([cc,"-std=c99","-I",str(t),"-I",str(ROOT/"include"),"-I",str(ROOT/"bootloader"/"include"),str(ROOT/"src"/"ext_flash_store.c"),str(ROOT/"src"/"service_workspace.c"),str(ROOT/"src"/"fota.c"),str(ROOT/"src"/"sha256.c"),str(ROOT/"src"/"fota_checkpoint.c"),str(ROOT/"src"/"fota_check_parser.c"),str(ROOT/"src"/"crc32.c"),str(t/"harness.c"),"-o",str(exe)],check=True,capture_output=True,text=True)
         subprocess.run([str(exe)],check=True,capture_output=True,text=True)
 
 def test_owner_bounds_alignment_and_error_propagation():

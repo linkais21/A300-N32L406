@@ -28,7 +28,7 @@ def run_flow(source, label="flow", real_crypto=False):
         harness = temp / "harness.c"
         harness.write_text(source, encoding="ascii")
         exe = temp / (label + ".exe")
-        production = ["fota.c", "fota_check_parser.c", "fota_checkpoint.c", "crc32.c"]
+        production = ["fota.c", "sha256.c", "fota_check_parser.c", "fota_checkpoint.c", "crc32.c"]
         crypto = []
         if real_crypto:
             crypto = ["-DuECC_PLATFORM=uECC_arch_other", "-DuECC_WORD_SIZE=4",

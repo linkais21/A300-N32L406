@@ -96,7 +96,7 @@ def test_modem_handoff():
             (temp / name).write_text(content, encoding="ascii")
         (temp / "harness.c").write_text(source + EXTRA, encoding="ascii")
         sources = ["ec800m.c", "ec800m_at_response.c", "sms_ingress.c", "sms_command.c",
-                   "fota.c", "fota_check_parser.c", "fota_checkpoint.c", "crc32.c", "service_workspace.c"]
+                   "fota.c", "sha256.c", "fota_check_parser.c", "fota_checkpoint.c", "crc32.c", "service_workspace.c"]
         command = [cc,"-std=c99","-Wall","-Wextra","-Werror","-Wno-dangling-else",
                    "-ffunction-sections","-fdata-sections","-DEC800M_HOST_TEST","-I",str(temp),"-I",str(ROOT/"include"),
                    str(temp/"harness.c"),*[str(ROOT/"src"/s) for s in sources],"-Wl,--gc-sections","-o",str(temp/"test.exe")]

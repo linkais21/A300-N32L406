@@ -49,6 +49,8 @@ if __name__ == "__main__":
         assert "build_id" not in builder
         assert 'strftime("%Y%m%dT%H%M%SZ")' not in builder
         assert "platform-detached" in builder and "app_vectors" in builder
+        assert "validate_factory_init_marker" in builder
+        assert "build_combined" in builder
         mismatch = subprocess.run(
             [sys.executable, "tools/build_dev_release.py",
              "--version-counter", str(identity["firmware_version_counter"] + 1)],

@@ -6,7 +6,7 @@
 
 /* heap managed by linker symbols */
 extern char _end;
-extern uint32_t _estack;
+extern char _heap_limit;
 static char *s_heap;
 
 void *sys_heap_break(void)
@@ -16,12 +16,19 @@ void *sys_heap_break(void)
 
 void *_sbrk(int incr)
 {
-    char *prev;
-    if (s_heap == NULL) s_heap = &_end;
-    if ((s_heap + incr) > (char *)&_estack) { errno = ENOMEM; return (void *)-1; }
-    prev = s_heap;
-    s_heap += incr;
-    return prev;
+    uintptr_t base = (uintptr_t)&_end;
+    uintptr_t limit = (uintptr_t)&_heap_limit;
+    uintptr_t prev = (uintptr_t)sys_heap_break();
+    /* Compare distances before arithmetic: no out-of-range pointer arithmetic
+     * or signed negation of INT_MIN. Allocation is main-context only. */
+    uintptr_t amount = incr < 0 ? (uintptr_t)(-(incr + 1)) + 1U : (uintptr_t)incr;
+    if (prev < base || prev > limit ||
+        (incr < 0 ? amount > prev - base : amount > limit - prev)) {
+        errno = ENOMEM;
+        return (void *)-1;
+    }
+    s_heap = (char *)(incr < 0 ? prev - amount : prev + amount);
+    return (void *)prev;
 }
 
 int _write(int fd, char *buf, int len) { (void)fd; (void)buf; return len; }

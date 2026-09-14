@@ -1,0 +1,182 @@
+[
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "test_release_identity_contract.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_platform_trust_anchor.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "test_platform_trust_anchor.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_factory_init.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "test_bootloader_factory_init.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_platform_contract.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "test_bootloader_platform_contract.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_bcr_failclosed.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "test_bootloader_bcr_failclosed.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_layout.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "test_ext_flash_layout.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_dev_release_manifest.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "test_dev_release_manifest.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_selftest.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "test_production_selftest.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_flash_combined_script.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "test_flash_combined_script.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "-C",
+      "bootloader",
+      "-B",
+      "all",
+      "TOOLCHAIN_ROOT=D:/A300_406_tools/A300_406/A300-first/.toolchain/bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "boot-build.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "bootloader/build/bootloader.map"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "boot-map.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_factory_init_artifact.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "factory-artifact.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "-B",
+      "-j4",
+      "all",
+      "BUILD=build/hil-factory-init-3043/app",
+      "TOOLCHAIN_DIR=D:/A300_406_tools/A300_406/A300-first/.toolchain/bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "app-build.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "release-gate",
+      "BUILD=build/hil-factory-init-3043/app",
+      "TOOLCHAIN_DIR=D:/A300_406_tools/A300_406/A300-first/.toolchain/bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 2,
+    "log": "release-gate.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\gen_a300_ota_image.py",
+      "--input",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-FACTORY-INIT-20260914-V3043\\V3.043\\App-N32L406CBL7.bin",
+      "--output",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-FACTORY-INIT-20260914-V3043\\V3.043\\A300-406-OTA-V3043.bin",
+      "--version-code",
+      "3043"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3043-ota.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin\\arm-none-eabi-objcopy.exe",
+      "-I",
+      "binary",
+      "-O",
+      "ihex",
+      "--change-addresses",
+      "0x08000000",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-FACTORY-INIT-20260914-V3043\\V3.043\\Combined-N32L406CBL7.bin",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-FACTORY-INIT-20260914-V3043\\V3.043\\Combined-N32L406CBL7.hex"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3043-combined-hex.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_dev_release_manifest.py",
+      "--manifest",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-FACTORY-INIT-20260914-V3043\\V3.043\\SHA256SUMS-N32L406CBL7.json"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3043-manifest.log"
+  }
+]

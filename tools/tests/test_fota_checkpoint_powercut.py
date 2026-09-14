@@ -70,7 +70,7 @@ def run_host(source, name, fota=False):
             }
             for filename, text in stubs.items():
                 (t / filename).write_text(text, encoding="ascii")
-            sources += [ROOT / "src/fota.c", ROOT / "src/service_workspace.c"]
+            sources += [ROOT / "src/fota.c", ROOT / "src/sha256.c", ROOT / "src/service_workspace.c"]
         harness = t / "harness.c"
         harness.write_text(source, encoding="ascii")
         exe = t / (name + ".exe")

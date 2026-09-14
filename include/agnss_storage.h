@@ -31,9 +31,18 @@ bool agnss_storage_read(uint32_t offset, void *buf, uint16_t len);
 bool agnss_storage_get_latest(agnss_meta_t *meta);
 uint32_t agnss_storage_data_base(const agnss_meta_t *meta);
 void agnss_storage_abort(void);
+/* Single-main-loop injection session. Open verifies once and pins a slot;
+ * subsequent opens return that snapshot. All AGNSS mutations must use this
+ * module's APIs, which invalidate the session before changing flash.
+ * Chunk reads check the pinned metadata and release all owners before return.
+ * Close at completion/cancellation; any chunk failure also closes the session.
+ * Legacy get_latest/read continue to perform fresh full-payload verification. */
+bool agnss_storage_read_open(agnss_meta_t *meta);
+bool agnss_storage_read_chunk(uint32_t offset, void *buf, uint16_t len);
+void agnss_storage_read_close(void);
 /* Shared flash-staging scratch buffer, reused by agnss_manager's read/inject
- * loop. Safe because agnss_storage_read() always finishes overwriting it
- * with the requested bytes before returning, and there is only ever one
+ * loop. Successful read/read_chunk calls finish overwriting it with the
+ * requested bytes before returning, and there is only ever one
  * caller (the single-threaded main loop). */
 uint8_t *agnss_storage_scratch(uint16_t *capacity);
 

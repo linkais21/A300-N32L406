@@ -51,6 +51,7 @@ bool boot_rollback_counter(uint32_t*out){*out=floor_value;return true;}
 bool boot_app_vectors_valid(uint32_t a){(void)a;return true;}
 bool boot_compute_internal_hash(uint32_t a,uint32_t n,uint8_t h[32]){(void)a;(void)n;(void)h;return false;}
 bool firmware_signature_verify(const uint8_t*d,const uint8_t*s){(void)d;return s[0]==0x5a;}
+void boot_install_progress(uint32_t done, uint32_t total, bool complete) {(void)done;(void)total;(void)complete;}
 void boot_watchdog_feed(void){}
 bcr_load_result_t bcr_load(bcr_record_t*out){memset(out,0,sizeof *out);out->state=BCR_ACTIVE;out->image_version=3002;out->transaction_length=sizeof(new_pkg)-32;out->target_address=APP_FLASH_BASE;out->rollback_floor=floor_value;return BCR_LOAD_FOUND;}
 bool bcr_commit(const bcr_record_t*r){step();floor_value=r->rollback_floor;step();return true;}

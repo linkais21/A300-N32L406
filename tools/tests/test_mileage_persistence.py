@@ -58,8 +58,15 @@ int main(void)
 {
     point(0.0, 0.0);
     mileage_update();
+    mileage_update();
+    assert(config.mileage_m == 0U);
     point(0.001, 0.0);
     mileage_update();
+    {
+        uint32_t once = config.mileage_m;
+        mileage_update();
+        assert(config.mileage_m == once);
+    }
     assert(config.mileage_m > 100U);
     assert(dirty && flush_count == 0U);
 

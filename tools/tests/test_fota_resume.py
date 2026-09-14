@@ -29,6 +29,7 @@ int main(void){
     assert(!strcmp(status.url,checkpoint_url) && !strstr(status.url,"token="));
     assert(!strcmp(status.etag,"v7") && status.expected_length==13000);
     start_download();assert(erases==3 && opens==1 && sends==1);
+    assert(strstr(logs,"download progress=31% bytes=4096/13000")!=NULL);
     assert(erased[0]==0x11000 && erased[1]==0x12000 && erased[2]==0x13000);
     assert(strstr(request,"Range: bytes=4096-\r\nIf-Range: v7\r\n"));
     for(unsigned i=0;i<4096;i++){assert(flash[0x10000+i]==0x5a);assert(flash[0x14000+i]==0x36);}

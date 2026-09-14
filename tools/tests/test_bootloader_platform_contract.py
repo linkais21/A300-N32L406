@@ -145,23 +145,46 @@ def test_main_enters_recovery_if_image_jump_returns():
 
     harness = r'''
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
+#include "factory_init.h"
 
 int bootloader_main(void);
+static unsigned stage;
+static bool factory_error;
 
-bool boot_platform_init(void) { return true; }
+bool boot_platform_init(void) { if (stage != 0U) abort(); stage = 1U; return true; }
+const factory_init_request_t *factory_init_request(void)
+{
+    static const factory_init_request_t request = {0};
+    if (stage != 1U) abort();
+    stage = 2U;
+    return &request;
+}
+factory_init_result_t factory_init_apply(const factory_init_request_t *request)
+{
+    if (request == NULL || stage != 2U) abort();
+    stage = 3U;
+    return factory_error ? FACTORY_INIT_RESULT_ERROR : FACTORY_INIT_RESULT_ALREADY_DONE;
+}
 bool boot_reset_was_fault_or_watchdog(void) { return false; }
-bool bcr_note_trial_reset(bool fault_or_watchdog) { (void)fault_or_watchdog; return true; }
-bool bootloader_select_image(void) { return true; }
+bool bcr_note_trial_reset(bool fault_or_watchdog)
+{ (void)fault_or_watchdog; if (stage != 3U) abort(); stage = 4U; return true; }
+bool bootloader_select_image(void) { if (stage != 4U) abort(); stage = 5U; return true; }
 void boot_watchdog_feed(void) {}
 void boot_recovery_step(void)
 {
     static unsigned calls;
-    if (++calls == 1025U) exit(0);
+    if (++calls == 1025U) {
+        if (stage != (factory_error ? 3U : 5U)) exit(8);
+        exit(0);
+    }
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    (void)argv;
+    factory_error = argc > 1;
     (void)bootloader_main();
     return 9;
 }
@@ -181,14 +204,16 @@ int main(void)
             check=True,
         )
         subprocess.run(
-            [compiler, str(harness_path), str(main_object), "-o", str(executable)],
+            [compiler, "-I", str(ROOT / "bootloader" / "include"),
+             "-I", str(ROOT / "include"), str(harness_path), str(main_object),
+             "-o", str(executable)],
             check=True,
         )
-        result = subprocess.run([str(executable)], check=False)
-        assert result.returncode == 0, (
-            "Bootloader main returned after an image jump returned instead of "
-            "remaining in watchdog-serviced recovery"
-        )
+        for arguments in ([], ["factory-error"]):
+            result = subprocess.run([str(executable), *arguments], check=False)
+            assert result.returncode == 0, (
+                "Bootloader startup order or watchdog-serviced recovery contract failed"
+            )
 
 
 def test_invalid_app_paths_report_recovery_to_main():
@@ -210,10 +235,26 @@ def test_invalid_app_paths_report_recovery_to_main():
 
 def test_external_flash_probe_does_not_block_valid_app_boot():
     platform = (ROOT / "bootloader" / "src" / "platform_n32l406.c").read_text(encoding="utf-8")
-    init_body = platform[platform.index("bool boot_platform_init"):platform.index("bool boot_ext_read")]
+    init_body = platform[platform.index("bool boot_platform_init"):platform.index("bool boot_ext_device_valid")]
     assert "return jedec_valid();" not in init_body, \
         "optional external Flash probe must not block booting a valid internal App"
     require(init_body, "jedec_valid();", "initialization should still probe external Flash")
+
+
+def test_factory_init_completion_is_fixed_and_relocked():
+    main = (ROOT / "bootloader" / "src" / "main.c").read_text(encoding="utf-8")
+    platform = (ROOT / "bootloader" / "src" / "platform_n32l406.c").read_text(encoding="utf-8")
+    compact_platform = re.sub(r"\s+", "", platform)
+    require(main, "factory_init_apply(factory_init_request())",
+            "factory initialization must run before BCR processing")
+    assert main.index("factory_init_apply(factory_init_request())") < main.index("bcr_note_trial_reset")
+    require(compact_platform, "FACTORY_INIT_PAGE_ADDR+offsetof(factory_init_request_t,completion)",
+            "completion address must be derived from the fixed record contract")
+    require(platform, "completion != FACTORY_INIT_DONE",
+            "platform hook must reject arbitrary completion values")
+    require(platform, "FLASH_ProgramWord", "completion must use one internal word program")
+    require(platform, "FACTORY_INIT_PENDING", "completion may only replace the pending word")
+    require(platform, "FLASH_Lock();", "internal Flash must be relocked")
 
 
 if __name__ == "__main__":
@@ -223,4 +264,5 @@ if __name__ == "__main__":
     test_bcr_separates_trial_version_from_rollback_floor()
     test_main_enters_recovery_if_image_jump_returns()
     test_external_flash_probe_does_not_block_valid_app_boot()
+    test_factory_init_completion_is_fixed_and_relocked()
     print("test_bootloader_platform_contract: PASS")

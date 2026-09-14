@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import json
 import shutil
 import subprocess
 import tempfile
@@ -16,6 +17,8 @@ sys.path.insert(0, str(ROOT / "tools"))
 import release_guard  # noqa: E402
 
 HARNESS = r'''
+#include <stdint.h>
+#include "config.h"
 #include "terminal_identity.h"
 #include "flash_config.h"
 #include "jt808.h"
@@ -237,7 +240,7 @@ int main(void)
                               0x25U,0x00U,0x00U,0x00U,0x01U}, 10U) == 0);
     assert(s_raw_body[44U] == 0U);
     assert(s_raw_body[45U] == 35U);
-    assert(memcmp(s_raw_body + 46U, "T360-A300_406_20260823000000,V3.004", 35U) == 0);
+    assert(memcmp(s_raw_body + 46U, FW_VERSION_STR, sizeof(FW_VERSION_STR) - 1U) == 0);
     assert(s_raw_body[81U] == 0x02U);
     assert(s_raw_body[82U] == 0x20U);
 
@@ -861,7 +864,7 @@ def test_release_guard_behavior() -> None:
     assert not release_guard.fixed_identity_findings(centralized)
     assert not release_guard.fixed_identity_findings('/* "1234567" */\n')
 
-    target = 'T360-A300_406_20260823000000,V3.004'
+    target = release_guard.TARGET_VERSION
     assert release_guard.generated_version_is_target(
         '$IDENTITY = Get-Content release_identity.json | ConvertFrom-Json\n'
         '$FW_VERSION = $IDENTITY.firmware_version\n'
@@ -895,7 +898,7 @@ def test_release_guard_behavior() -> None:
             "#define FW_BUILD_NUMBER  \"20991231_235959\"\n"
             "#define FW_BUILD_DATE    \"Dec 31 2099 - 23:59:59\"\n"
             f"#define FW_FULL_VERSION  \"{target}\"\n"
-            "#define FW_VERSION_COUNTER  3004UL\n\n"
+            f"#define FW_VERSION_COUNTER  {release_guard.TARGET_VERSION_COUNTER}UL\n\n"
             "#endif /* BUILD_VERSION_H */\n"
         )
 
@@ -920,11 +923,9 @@ def test_release_guard_behavior() -> None:
 
         contract_path = root / "release_identity.json"
         contract_original = contract_path.read_text(encoding="utf-8")
-        contract_path.write_text(
-            contract_original.replace('"firmware_revision": 4',
-                                      '"firmware_revision": 5'),
-            encoding="utf-8",
-        )
+        invalid_contract = json.loads(contract_original)
+        invalid_contract["firmware_revision"] = (invalid_contract["firmware_revision"] + 1) % 1000
+        contract_path.write_text(json.dumps(invalid_contract), encoding="utf-8")
         findings = release_guard.scan(root)
         assert any(item[2] == "<release-contract>" for item in findings)
         contract_path.write_text(contract_original, encoding="utf-8")

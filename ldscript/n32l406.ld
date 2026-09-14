@@ -14,6 +14,7 @@ PHDRS
 
 _estack = 0x20006000;
 
+/* Compatibility name: this reservation is also the _sbrk hard capacity. */
 _Min_Heap_Size  = 0x400;
 _Min_Stack_Size = 0x800;
 
@@ -114,6 +115,7 @@ SECTIONS
     PROVIDE(end = .);
     PROVIDE(_end = .);
     . = . + _Min_Heap_Size;
+    _heap_limit = .;
     . = . + _Min_Stack_Size;
     . = ALIGN(4);
   } >RAM :NONE
@@ -130,3 +132,5 @@ SECTIONS
 
 _app_load_end = LOADADDR(.data) + SIZEOF(.data);
 ASSERT(_app_load_end <= 0x08020000, "application exceeds N32L406CBL7 Flash")
+ASSERT(_heap_limit - _end == _Min_Heap_Size, "heap capacity mismatch")
+ASSERT(_heap_limit <= _estack - _Min_Stack_Size, "heap overlaps minimum stack reservation")

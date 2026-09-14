@@ -25,9 +25,10 @@ bool ec800m_is_ready(void){return true;}
 bool gps_is_valid(void){return false;}
 void gnss_vendor_set_type(gnss_type_t t){(void)t;}
 bool gnss_vendor_inject(gnss_type_t t,const uint8_t *p,uint16_t n){(void)t;(void)p;(void)n;return true;}
+void agnss_storage_read_close(void){}
 bool agnss_storage_init(void){return true;}
-bool agnss_storage_get_latest(agnss_meta_t *m){(void)m;++storage_calls;return false;}
-bool agnss_storage_read(uint32_t o,void *p,uint16_t n){(void)o;(void)p;(void)n;return false;}
+bool agnss_storage_read_open(agnss_meta_t *m){(void)m;++storage_calls;return false;}
+bool agnss_storage_read_chunk(uint32_t o,void *p,uint16_t n){(void)o;(void)p;(void)n;return false;}
 uint8_t *agnss_storage_scratch(uint16_t *capacity){static uint8_t buf[32];*capacity=sizeof buf;return buf;}
 int main(void){
     const fota_state_t active[]={FOTA_STATE_CONNECTING,FOTA_STATE_DOWNLOADING,FOTA_STATE_VERIFYING,FOTA_STATE_READY,FOTA_STATE_CHECK_CONNECTING,FOTA_STATE_CHECKING,FOTA_STATE_PREPARING};

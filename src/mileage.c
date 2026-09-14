@@ -64,6 +64,12 @@ void mileage_update(void)
         return;
     }
 
+    /* The main loop may run several times before GPS publishes a new fix.
+     * Reusing the exact same coordinates must not pay for haversine/libm
+     * again or re-evaluate the same sample. */
+    if (g->lat == s_last_lat && g->lon == s_last_lon)
+        return;
+
     double dist_m = haversine_m(s_last_lat, s_last_lon, g->lat, g->lon);
 
     /* Stop-drift filter */

@@ -1,0 +1,206 @@
+[
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_platform_trust_anchor.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "platform-trust.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "-f",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build\\hil-opt-20260913\\boot-hil.mk",
+      "-B",
+      "-j4",
+      "all",
+      "TOOLCHAIN_ROOT=D:/A300_406_tools/A300_406/A300-first/.toolchain/bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first\\bootloader",
+    "exit_code": 0,
+    "log": "boot-build.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build\\hil-opt-20260913\\boot\\bootloader.map"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "boot-guard.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3038-identity.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "-B",
+      "-j4",
+      "all",
+      "BUILD=build/hil-opt-20260913/V3038",
+      "TOOLCHAIN_DIR=D:/A300_406_tools/A300_406/A300-first/.toolchain/bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3038-build.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "release-gate",
+      "BUILD=build/hil-opt-20260913/V3038",
+      "TOOLCHAIN_DIR=D:/A300_406_tools/A300_406/A300-first/.toolchain/bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 2,
+    "log": "V3038-release-gate.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/libc_parser_guard.py",
+      "build/hil-opt-20260913/V3038/a300_firmware.map"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3038-libc.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\gen_a300_ota_image.py",
+      "--input",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-OPT-20260913-V3038-V3039\\V3.038\\App-N32L406CBL7.bin",
+      "--output",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-OPT-20260913-V3038-V3039\\V3.038\\A300-406-OTA-V3038.bin",
+      "--version-code",
+      "3038"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3038-ota.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin\\arm-none-eabi-objcopy.exe",
+      "-I",
+      "binary",
+      "-O",
+      "ihex",
+      "--change-addresses",
+      "0x08000000",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-OPT-20260913-V3038-V3039\\V3.038\\Combined-N32L406CBL7.bin",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-OPT-20260913-V3038-V3039\\V3.038\\Combined-N32L406CBL7.hex"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3038-combined-hex.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_dev_release_manifest.py",
+      "--manifest",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-OPT-20260913-V3038-V3039\\V3.038\\SHA256SUMS-N32L406CBL7.json"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3038-manifest.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3039-identity.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "-B",
+      "-j4",
+      "all",
+      "BUILD=build/hil-opt-20260913/V3039",
+      "TOOLCHAIN_DIR=D:/A300_406_tools/A300_406/A300-first/.toolchain/bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3039-build.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "release-gate",
+      "BUILD=build/hil-opt-20260913/V3039",
+      "TOOLCHAIN_DIR=D:/A300_406_tools/A300_406/A300-first/.toolchain/bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 2,
+    "log": "V3039-release-gate.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/libc_parser_guard.py",
+      "build/hil-opt-20260913/V3039/a300_firmware.map"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3039-libc.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\gen_a300_ota_image.py",
+      "--input",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-OPT-20260913-V3038-V3039\\V3.039\\App-N32L406CBL7.bin",
+      "--output",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-OPT-20260913-V3038-V3039\\V3.039\\A300-406-OTA-V3039.bin",
+      "--version-code",
+      "3039"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3039-ota.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin\\arm-none-eabi-objcopy.exe",
+      "-I",
+      "binary",
+      "-O",
+      "ihex",
+      "--change-addresses",
+      "0x08000000",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-OPT-20260913-V3038-V3039\\V3.039\\Combined-N32L406CBL7.bin",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-OPT-20260913-V3038-V3039\\V3.039\\Combined-N32L406CBL7.hex"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3039-combined-hex.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_dev_release_manifest.py",
+      "--manifest",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-OPT-20260913-V3038-V3039\\V3.039\\SHA256SUMS-N32L406CBL7.json"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3039-manifest.log"
+  }
+]

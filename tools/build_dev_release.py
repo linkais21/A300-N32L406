@@ -13,6 +13,13 @@ MAKE=Path(os.environ.get(
 ))
 LABEL="N32L406CBL7"
 VERSION_LABEL_RE = re.compile(r"(?:^|,)V[0-9]+\.[0-9]{3}$")
+FACTORY_INIT_OFFSET = 0x5800
+APP_OFFSET = 0x6000
+FACTORY_INIT_RECORD = struct.Struct("<IHHIIIII")
+FACTORY_INIT_EXPECTED = (
+    0x494E4946, 1, FACTORY_INIT_RECORD.size, 1, 0x0F,
+    0xAF19BCAA, 0x52455144, 0xFFFFFFFF,
+)
 
 def run(command:list[str],cwd:Path=ROOT)->str:
     result=subprocess.run(command,cwd=cwd,capture_output=True,text=True)
@@ -49,6 +56,36 @@ def reserve_release_dir(output_root: Path, identity: dict) -> Path:
     path.mkdir(parents=True, exist_ok=False)
     return path
 
+def validate_factory_init_marker(blob: bytes, label: str = "Bootloader") -> tuple[int, ...]:
+    end = FACTORY_INIT_OFFSET + FACTORY_INIT_RECORD.size
+    if len(blob) < end:
+        raise RuntimeError(f"{label} is missing the factory-init request")
+    record = FACTORY_INIT_RECORD.unpack_from(blob, FACTORY_INIT_OFFSET)
+    if record != FACTORY_INIT_EXPECTED:
+        raise RuntimeError(f"{label} has an invalid or already-completed factory-init request")
+    return record
+
+def validate_app_vectors(blob: bytes, offset: int = 0) -> tuple[int, int]:
+    if len(blob) < offset + 8:
+        raise RuntimeError("App image is too short for vectors")
+    msp, reset = struct.unpack_from("<II", blob, offset)
+    if not (0x20000000 <= msp <= 0x20006000 and msp % 8 == 0 and
+            0x08006001 <= reset < 0x08020000 and reset & 1):
+        raise RuntimeError("invalid App vectors")
+    return msp, reset
+
+def build_combined(boot: bytes, app: bytes) -> bytes:
+    if len(boot) > APP_OFFSET:
+        raise RuntimeError("Bootloader exceeds the App offset")
+    validate_factory_init_marker(boot)
+    validate_app_vectors(app)
+    combined = bytearray(b"\xFF" * (APP_OFFSET + len(app)))
+    combined[:len(boot)] = boot
+    combined[APP_OFFSET:] = app
+    validate_factory_init_marker(combined, "Combined")
+    validate_app_vectors(combined, APP_OFFSET)
+    return bytes(combined)
+
 def refresh_build_version()->None:
     path=ROOT/"include"/"build_version.h"
     identity=release_identity()
@@ -76,39 +113,56 @@ def main()->int:
     objcopy=TOOLCHAIN/"arm-none-eabi-objcopy.exe"
     if not objcopy.is_file(): raise RuntimeError(f"ARM objcopy not found: {objcopy}")
 
+    out = release_output_dir(args.output.resolve(), identity)
+    if out.exists():
+        raise FileExistsError(f"release directory already exists: {out}")
+
     # Verify the actual embedded key against a platform signature before any
     # release directory or firmware is generated (not a generated test key).
     run([sys.executable,"tools/tests/test_platform_trust_anchor.py"])
-    out=reserve_release_dir(args.output,identity)
     refresh_build_version()
     run([str(MAKE),"-B","all","TOOLCHAIN_DIR=" + str(TOOLCHAIN)])
+    # The same final-LTO/RAM gate as interactive builds, before packaging.
+    run([str(MAKE),"release-gate","TOOLCHAIN_DIR=" + str(TOOLCHAIN)])
     run([str(MAKE),"-C","bootloader","-B","all","TOOLCHAIN_ROOT=" + str(TOOLCHAIN)])
     run([sys.executable,"tools/map_ram_guard.py","app","build/a300_firmware.map"])
     run([sys.executable,"tools/map_ram_guard.py","bootloader","bootloader/build/bootloader.map"])
 
+    app_source = ROOT / "build" / "a300_firmware.bin"
+    boot_source = ROOT / "bootloader" / "build" / "bootloader.bin"
+    app = app_source.read_bytes()
+    boot = boot_source.read_bytes()
+    if not 8 <= len(app) <= 106496 or len(boot) > APP_OFFSET:
+        raise RuntimeError("firmware size outside frozen memory map")
+    validate_factory_init_marker(boot)
+    msp, reset = validate_app_vectors(app)
+    combined = build_combined(boot, app)
+    out = reserve_release_dir(args.output, identity)
+
     app_bin=out/f"App-{LABEL}.bin";boot_bin=out/f"Bootloader-{LABEL}.bin"
-    run([str(objcopy),"-O","binary","build/a300_firmware.elf",str(app_bin)])
-    shutil.copy2(ROOT/"bootloader/build/bootloader.bin",boot_bin)
+    shutil.copy2(app_source, app_bin)
+    capacity_report=out/"flash-capacity.json"
+    print(run([sys.executable,"tools/flash_capacity_guard.py","check",
+               "--bin",str(app_bin),"--map","build/a300_firmware.map",
+               "--elf","build/a300_firmware.elf","--profile","build/flash-build-profile.json",
+               "--output",str(capacity_report)]),end="")
+    shutil.copy2(boot_source,boot_bin)
     sources={
       "app_elf":ROOT/"build/a300_firmware.elf","app_hex":ROOT/"build/a300_firmware.hex","app_map":ROOT/"build/a300_firmware.map",
       "bootloader_elf":ROOT/"bootloader/build/bootloader.elf","bootloader_hex":ROOT/"bootloader/build/bootloader.hex",
       "bootloader_map":ROOT/"bootloader/build/bootloader.map"}
     boot_hex=out/f"Bootloader-{LABEL}.hex"
     shutil.copy2(sources.pop("bootloader_hex"),boot_hex)
-    artifacts={"app_bin":app_bin,"bootloader_bin":boot_bin,"bootloader_hex":boot_hex}
+    artifacts={"app_bin":app_bin,"bootloader_bin":boot_bin,"bootloader_hex":boot_hex,
+               "flash_capacity":capacity_report}
     for key_name,source in sources.items():
         suffix=source.suffix
         name=("App" if key_name.startswith("app") else "Bootloader")+f"-{LABEL}"+suffix
         target=out/name;shutil.copy2(source,target);artifacts[key_name]=target
-    app=app_bin.read_bytes();boot=boot_bin.read_bytes()
-    if not 8<=len(app)<=106496 or len(boot)>24576: raise RuntimeError("firmware size outside frozen memory map")
-    msp,reset=struct.unpack_from("<II",app)
-    if not (0x20000000<=msp<=0x20006000 and msp%8==0 and 0x08006001<=reset<0x08020000 and reset&1): raise RuntimeError("invalid App vectors")
     package=out/f"A300-406-OTA-V{args.version_counter}.bin"
     run([sys.executable,"tools/gen_a300_ota_image.py","--input",str(app_bin),
          "--output",str(package),"--version-code",str(args.version_counter)])
     artifacts["ota_upload_bin"]=package
-    combined=bytearray(b"\xFF"*(0x6000+len(app)));combined[:len(boot)]=boot;combined[0x6000:]=app
     combined_path=out/f"Combined-{LABEL}.bin";combined_path.write_bytes(combined);artifacts["combined_bin"]=combined_path
     revision=run(["git","rev-parse","HEAD"]).strip()
     # Git may emit environment warnings (for example, an unreadable global

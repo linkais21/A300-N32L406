@@ -19,6 +19,7 @@ HARNESS = r'''
 #include "image_install.h"
 #include "image_verify.h"
 #include "bootloader_config.h"
+#include "factory_init.h"
 
 int bootloader_main(void);
 static uint8_t slots[2][4096];
@@ -61,9 +62,17 @@ bool boot_int_flash_erase(uint32_t address, uint32_t length)
 bool firmware_signature_verify(const uint8_t *digest, const uint8_t *signature)
 { (void)digest; (void)signature; return false; }
 bool boot_platform_init(void) { return true; }
+const factory_init_request_t *factory_init_request(void)
+{
+    static const factory_init_request_t request = {0};
+    return &request;
+}
+factory_init_result_t factory_init_apply(const factory_init_request_t *request)
+{ (void)request; return FACTORY_INIT_RESULT_ALREADY_DONE; }
 bool boot_reset_was_fault_or_watchdog(void) { return fault_reset; }
 void boot_jump_to(uint32_t address) { assert(address == APP_FLASH_BASE); ++jumps; }
 bool boot_app_vectors_valid(uint32_t address) { (void)address; return true; }
+void boot_install_progress(uint32_t done, uint32_t total, bool complete) {(void)done;(void)total;(void)complete;}
 void boot_watchdog_feed(void) { ++feeds; }
 void boot_recovery_step(void) { if (++recovery == 4U) longjmp(done, 1); }
 

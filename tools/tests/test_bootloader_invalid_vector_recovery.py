@@ -42,6 +42,7 @@ uint32_t image_crc32(const void*p,uint32_t n){(void)p;(void)n;return 0;}
 image_verify_result_t verify_candidate(const image_manifest_t *m) { (void)m; return IMAGE_VERIFY_OK; }
 void boot_jump_to(uint32_t address) { assert(address == APP_FLASH_BASE); ++jumps; }
 bool boot_app_vectors_valid(uint32_t address) { (void)address; return false; }
+void boot_install_progress(uint32_t done, uint32_t total, bool complete) {(void)done;(void)total;(void)complete;}
 void boot_watchdog_feed(void) {}
 
 int main(void) {
