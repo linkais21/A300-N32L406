@@ -1,0 +1,19 @@
+{
+  "include/at_config.h": "384629807f2627e1d2acac839541c1f6df2cadce73f25bcf87e96d9aa802651b",
+  "include/gps.h": "9efa818e9816750ab44de5cf8e3b70e8696fe6b2971e749fdaffa0e800977d72",
+  "include/log_platform.h": "aa898560101707f5c18f8591b0b9d56012fc0beaf53628718768e4c3e396331c",
+  "src/at_config.c": "a411e359158b568ed6dac8247af6f66a59eceef5947ab5f5aa0e6f5fbf50065f",
+  "src/cfg_query.c": "d363796ee664b8f374b89f46fedf2b548fdb9285eb38835a7aba8b9a49ba8d4f",
+  "src/f39_reply.c": "731930a71961ec150023febb8baff4e1a3f96112a0757af7337b421ca269c9bd",
+  "src/flash_config.c": "651fd4a75f8484195c119459f27ae38d685e2112b2a8153d82921ab3c463019d",
+  "src/fota.c": "f4cfaf37233143ff1295233e1342f337d4b8e085b799d8a0de82f6b9b48b4fa3",
+  "src/gps.c": "bddcdcaa21d29ce8c09da8b955f4b4640591aa7d0cf318bce59dfb109542d51d",
+  "src/jt808.c": "551b665440b55f5d215aa9652a637984b45be9444b65bc1a237fad9ba0c39210",
+  "src/log_platform.c": "71f6e39dd987b771bc39c09803bd1e8586ab7c358a2b6893bb6a295fe347c807",
+  "src/main.c": "ecfb5cf6cca40ccc98010f0636e4c68ede0d28d60970b5abd36475ead11cc2d7",
+  "src/motion_corner.c": "2aa7b4a9f3110529a6c8f281e6a72c059ba1767faed87206b540f54bb37e10a9",
+  "test-platform/server.js": "59e56b406bb2404f9c63ca2dd091f89193132d57b623aeceaa9f83fb9f1c05c7",
+  "tools/release_guard.py": "16be4a5d624d8f0891065fffe2357759d2f2f024003aff21ad992acf3fb3d127",
+  "docs/functional-repair-20260920.md": "bf0a6ba807951f7f0248b09b34c24f3a09df99af04024a7fed1da0afaefeadd8",
+  "docs/superpowers/plans/2026-09-20-functional-repair.md": "920be4e6a4662922b29549124a9087eab8039285408c68155188be4b8e825b6b"
+}

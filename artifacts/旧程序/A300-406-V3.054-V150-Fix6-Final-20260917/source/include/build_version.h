@@ -1,0 +1,10 @@
+/* Auto-generated build version - DO NOT EDIT */
+#ifndef BUILD_VERSION_H
+#define BUILD_VERSION_H
+
+#define FW_BUILD_NUMBER  "202609171550"
+#define FW_BUILD_DATE    "Sep 17 2026 - 15:50:18"
+#define FW_FULL_VERSION  "T360-A300_406_20260823000000,V3.054"
+#define FW_VERSION_COUNTER  3054UL
+
+#endif /* BUILD_VERSION_H */

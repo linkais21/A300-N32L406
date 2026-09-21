@@ -1,0 +1,34 @@
+{
+  "purpose": "User-requested complete SWD image for bench/HIL testing",
+  "release_approved": false,
+  "release_gate": "FAIL: incomplete whole-program stack/heap/exception evidence",
+  "hardware_verified": false,
+  "flashed": false,
+  "mcu": "N32L406CBL7",
+  "firmware_version": "T360-A300_406_20260823000000,V3.054",
+  "package_identity": "A300-406-V3.054-Production-HIL-20260917",
+  "git_revision": "6eab8e68391ead12b0d280aea441e641c2614389",
+  "git_dirty": true,
+  "flash_base": "0x08000000",
+  "app_base": "0x08006000",
+  "app_bytes": 100820,
+  "app_free_bytes": 5676,
+  "combined_bytes": 125396,
+  "factory_init": "First boot resets configuration slots, BCR and FOTA checkpoint/auth slots",
+  "tester_candidate": {
+    "version": "1.6.0",
+    "sha256": "a79ba7e69673848ec463cf8a8ad44efa52739d37bd36bf0e0f5de16509a4a79c",
+    "protocol_test": "PASS: actual C responses parsed by current C# protocol and result logic; GUI/HIL not run"
+  },
+  "original_tester": {
+    "sha256": "c11cd59373bec11c1b46ca29e6dde9b0510ad66cadf717ad185bfeebec6ffc15",
+    "compatibility": "Not established; user selection pending"
+  },
+  "artifact_checks": [
+    "Boot/App vectors",
+    "Factory init marker and ELF section",
+    "Image size and offsets",
+    "HEX to BIN roundtrip",
+    "Source and App hashes"
+  ]
+}

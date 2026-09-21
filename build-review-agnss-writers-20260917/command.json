@@ -1,0 +1,12 @@
+[
+  "C:\\Users\\86166\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\mingw32-make.exe",
+  "-s",
+  "-B",
+  "-f",
+  "Makefile",
+  "-f",
+  "build-review-agnss-writers-20260917/retain-writers.mk",
+  "flash-guard",
+  "size",
+  "BUILD=build-review-agnss-writers-20260917"
+]

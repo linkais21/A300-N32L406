@@ -1,0 +1,55 @@
+[
+  {
+    "label": "app-build",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "SHELL=cmd.exe",
+      "-o",
+      "include/build_version.h",
+      "BUILD=build/field-config-release/final",
+      "TOOLCHAIN_DIR=D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin",
+      "-j4",
+      "all"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "boot-build",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "SHELL=cmd.exe",
+      "TOOLCHAIN_ROOT=D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin",
+      "-j4",
+      "all"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.060-FieldConfig-HIL-20260918\\source\\bootloader",
+    "exit_code": 0
+  },
+  {
+    "label": "release-gate",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "SHELL=cmd.exe",
+      "-o",
+      "include/build_version.h",
+      "BUILD=build/field-config-release/final",
+      "TOOLCHAIN_DIR=D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin",
+      "-k",
+      "release-gate"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 2
+  },
+  {
+    "label": "boot-ram",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.060-FieldConfig-HIL-20260918\\source\\bootloader\\build\\bootloader.map"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  }
+]

@@ -4,6 +4,7 @@
 #include "debug_uart.h"
 #include "n32l40x.h"
 #include <string.h>
+#include <math.h>
 
 #define NMEA_BUF_SIZE  128
 #define NMEA_FIELD_MAX 24
@@ -16,6 +17,8 @@ static volatile uint8_t s_nmea_count;
 enum { NMEA_DROP_NONE, NMEA_DROP_QUEUE, NMEA_DROP_LENGTH };
 static volatile uint8_t s_nmea_drop;
 static gps_data_t s_gps = {0};
+static bool s_enabled = true;
+bool gps_is_enabled(void) { return s_enabled; }
 /* Compact STOP1 snapshot.  Keep the retained copy below 32 bytes; the full
  * gps_data_t contains doubles/floats and would exhaust the SRAM guard. */
 typedef struct __attribute__((packed)) {
@@ -30,7 +33,25 @@ typedef struct __attribute__((packed)) {
 } gps_retained_compact_t;
 static gps_retained_compact_t s_last_trusted;
 static bool s_last_trusted_valid;
+static uint32_t s_last_trusted_tick_ms;
 static volatile gps_diag_t s_diag;
+static uint32_t s_gga_ms;
+static uint32_t s_trace_started;
+static uint8_t s_trace_remaining;
+
+void gps_trace_start(void)
+{
+    s_trace_started = TICK_MS();
+    s_trace_remaining = 32U;
+}
+typedef struct {
+    uint32_t updated;
+    uint16_t sum;
+    uint8_t count, maximum, next, pages, satellites, signal;
+} gsv_cycle_t;
+/* GP, BD/GB, GN: the product's GPS/BDS modes. One signal band avoids
+ * counting the same satellite twice on receivers with NMEA 4.1 GSV. */
+static gsv_cycle_t s_gsv[3];
 
 typedef enum {
     NMEA_PARSE_OK = 0,
@@ -133,6 +154,18 @@ static bool nmea_to_deg(const char *s, double *out)
     return true;
 }
 
+/* GGA and RMC share the same four coordinate/hemisphere fields. Keep one
+ * implementation of conversion, validation and sign handling. */
+static __attribute__((noinline)) bool nmea_coordinates(char **f, double *lat, double *lon)
+{
+    if (!nmea_to_deg(f[0], lat) || !nmea_to_deg(f[2], lon) ||
+        (f[1][0] != 'N' && f[1][0] != 'S') || f[1][1] != '\0' ||
+        (f[3][0] != 'E' && f[3][0] != 'W') || f[3][1] != '\0') return false;
+    if (f[1][0] == 'S') *lat = -*lat;
+    if (f[3][0] == 'W') *lon = -*lon;
+    return true;
+}
+
 /* ── NMEA checksum verify ─────────────────────────────────────────────────── */
 static bool nmea_checksum_ok(const char *sentence)
 {
@@ -163,21 +196,24 @@ static nmea_parse_result_t parse_gga(char *s)
     uint8_t quality, satellites, hour, minute, second;
     double lat, lon, hdop, altitude, geoid = 0.0;
     if (!parse_uint8(f[6], 8U, &quality)) return NMEA_PARSE_FORMAT;
-    if (quality == 0U) return NMEA_PARSE_NO_FIX;
+    if (quality == 0U) {
+        s_gps.fix_quality = 0U;
+        s_gps.valid = false;
+        return NMEA_PARSE_NO_FIX;
+    }
     if (
         !parse_uint8(f[7], 99U, &satellites) ||
         !parse_decimal(f[8], &hdop) || !parse_decimal(f[9], &altitude) ||
         (n >= 12U && f[11][0] != '\0' && !parse_decimal(f[11], &geoid)) ||
-        !nmea_to_deg(f[2], &lat) || !nmea_to_deg(f[4], &lon) ||
+        !nmea_coordinates(f + 2, &lat, &lon) ||
         !parse_six_digits(f[1], &hour, &minute, &second) ||
-        hour > 23U || minute > 59U || second > 59U ||
-        (f[3][0] != 'N' && f[3][0] != 'S') || f[3][1] != '\0' ||
-        (f[5][0] != 'E' && f[5][0] != 'W') || f[5][1] != '\0') return NMEA_PARSE_FORMAT;
+        hour > 23U || minute > 59U || second > 59U) return NMEA_PARSE_FORMAT;
     s_gps.fix_quality = quality; s_gps.satellites = satellites;
+    s_gga_ms = TICK_MS();
     s_gps.hdop = (float)hdop; s_gps.altitude_m = (float)altitude;
     s_gps.geoid_sep_m = (float)geoid;
-    s_gps.lat = f[3][0] == 'S' ? -lat : lat;
-    s_gps.lon = f[5][0] == 'W' ? -lon : lon;
+    s_gps.lat = lat;
+    s_gps.lon = lon;
     s_gps.hour = hour; s_gps.minute = minute; s_gps.second = second;
 
     s_gps.valid          = true;
@@ -192,24 +228,25 @@ static nmea_parse_result_t parse_rmc(char *s)
     char *f[NMEA_FIELD_MAX];
     uint8_t n = nmea_split(s, f, NMEA_FIELD_MAX);
     if (n < 10) return NMEA_PARSE_FORMAT;
-    if (f[2][0] == 'V' && f[2][1] == '\0') return NMEA_PARSE_NO_FIX;
+    if (f[2][0] == 'V' && f[2][1] == '\0') {
+        s_gps.valid = false;
+        return NMEA_PARSE_NO_FIX;
+    }
     if (f[2][0] != 'A' || f[2][1] != '\0') return NMEA_PARSE_FORMAT;
 
     uint8_t hour, minute, second, day, month, year;
     double lat, lon, knots = 0.0, heading = 0.0;
     if (!parse_six_digits(f[1], &hour, &minute, &second) ||
-        !nmea_to_deg(f[3], &lat) || !nmea_to_deg(f[5], &lon) ||
+        !nmea_coordinates(f + 3, &lat, &lon) ||
         (f[7][0] != '\0' && !parse_decimal(f[7], &knots)) ||
         (f[8][0] != '\0' && !parse_decimal(f[8], &heading)) ||
         !parse_six_digits(f[9], &day, &month, &year) ||
         hour > 23U || minute > 59U || second > 59U ||
         day == 0U || day > 31U || month == 0U || month > 12U ||
-        knots < 0.0 || heading < 0.0 || heading >= 360.0 ||
-        (f[4][0] != 'N' && f[4][0] != 'S') || f[4][1] != '\0' ||
-        (f[6][0] != 'E' && f[6][0] != 'W') || f[6][1] != '\0') return NMEA_PARSE_FORMAT;
+        knots < 0.0 || heading < 0.0 || heading >= 360.0) return NMEA_PARSE_FORMAT;
     s_gps.hour = hour; s_gps.minute = minute; s_gps.second = second;
-    s_gps.lat = f[4][0] == 'S' ? -lat : lat;
-    s_gps.lon = f[6][0] == 'W' ? -lon : lon;
+    s_gps.lat = lat;
+    s_gps.lon = lon;
     s_gps.speed_kmh = (float)(knots * 1.852);
     s_gps.heading = (float)heading;
     s_gps.day = day; s_gps.month = month; s_gps.year = (uint16_t)(2000U + year);
@@ -220,11 +257,101 @@ static nmea_parse_result_t parse_rmc(char *s)
     return NMEA_PARSE_OK;
 }
 
+static void parse_gsv(char *sentence)
+{
+    unsigned slot;
+    if (sentence[1] == 'G' && sentence[2] == 'P') slot = 0U;
+    else if ((sentence[1] == 'B' && sentence[2] == 'D') ||
+             (sentence[1] == 'G' && sentence[2] == 'B')) slot = 1U;
+    else if (sentence[1] == 'G' && sentence[2] == 'N') slot = 2U;
+    else return;
+    char *f[NMEA_FIELD_MAX];
+    uint8_t n = nmea_split(sentence, f, NMEA_FIELD_MAX);
+    uint8_t pages, page, sats, signal = 0U;
+    if (n < 5U || !parse_uint8(f[1], 16U, &pages) || pages == 0U ||
+        !parse_uint8(f[2], pages, &page) || page == 0U ||
+        !parse_uint8(f[3], 64U, &sats)) return;
+    bool has_signal = n >= 6U && (n - 6U) % 4U == 0U;
+    unsigned groups;
+    if (has_signal) {
+        groups = (n - 6U) / 4U;
+        if (groups > 4U || !parse_uint8(f[4U + groups * 4U], 15U, &signal)) return;
+    } else {
+        if (pages != (sats ? (sats + 3U) / 4U : 1U)) return;
+        groups = sats == 0U ? 0U : (page < pages ? 4U : sats - (pages - 1U) * 4U);
+        if (n != 5U + groups * 4U) return;
+    }
+    gsv_cycle_t *c = &s_gsv[slot];
+    uint32_t now = TICK_MS();
+    bool expired = (uint32_t)(now - c->updated) > 5000U;
+    /* Huada may number pages across bands (including short non-final pages).
+     * Consume the whole sequence, but count only its first band. Independent
+     * interleaved band cycles must not replace the selected band's cycle. */
+    if (c->next != 0U && !expired && c->signal != signal &&
+        !(page != 1U && page == c->next && pages == c->pages && sats == c->satellites)) return;
+    if (page == 1U) {
+        memset(c, 0, sizeof(*c));
+        c->pages = pages; c->satellites = sats; c->signal = signal; c->next = 1U;
+        c->updated = now;
+    }
+    if (page != c->next || pages != c->pages || sats != c->satellites ||
+        (uint32_t)(now - c->updated) > 5000U) return;
+    for (unsigned i = 0U; i < groups; ++i) {
+        uint8_t cn;
+        const char *v = f[7U + i * 4U];
+        if (!*v) continue;
+        if (!parse_uint8(v, 99U, &cn)) { c->next = 0U; return; }
+        if (cn != 0U && signal == c->signal) {
+            c->sum += cn; ++c->count;
+            if (cn > c->maximum) c->maximum = cn;
+        }
+    }
+    c->next = (uint8_t)(page + 1U);
+    if (page == pages) {
+        c->next = 255U; c->updated = now; /* complete cycle marker */
+        ++s_diag.gsv_complete;
+    }
+}
+
+bool gps_get_quality(gps_quality_t *out)
+{
+    unsigned sum = 0U, count = 0U, maximum = 0U;
+    uint32_t youngest = 5001U;
+    memset(out, 0, sizeof(*out));
+    for (unsigned i = 0U; i < 3U; ++i) {
+        const gsv_cycle_t *c = &s_gsv[i];
+        if (c->next != 255U || (uint32_t)(TICK_MS() - c->updated) > 5000U) continue;
+        /* Mixed GN summaries overlap per-constellation reports. */
+        if (i == 2U && count != 0U) continue;
+        uint32_t age = (uint32_t)(TICK_MS() - c->updated);
+        if (age < youngest) { youngest = age; out->sequence = c->updated; }
+        sum += c->sum; count += c->count;
+        if (c->maximum > maximum) maximum = c->maximum;
+    }
+    if (count == 0U) return false;
+    out->satellites = (uint8_t)(count > 255U ? 255U : count);
+    out->average = (uint8_t)(sum / count); out->maximum = (uint8_t)maximum;
+    return true;
+}
+
+bool gps_quality_fix_fresh(void)
+{
+    return s_gps.valid && s_gps.fix_quality != 0U &&
+           (uint32_t)(TICK_MS() - s_gps.last_update_ms) <= 5000U &&
+           (uint32_t)(TICK_MS() - s_gga_ms) <= 5000U;
+}
+
 /* ── Dispatch NMEA sentence ───────────────────────────────────────────────── */
 static void __attribute__((noinline)) dispatch_nmea(char *sentence)
 {
     nmea_parse_result_t result;
     ++s_diag.sentences;
+    if (s_trace_remaining != 0U) {
+        if ((uint32_t)(TICK_MS() - s_trace_started) <= 5000U) {
+            --s_trace_remaining;
+            dbg_printf("[NMEA] %s", sentence);
+        } else s_trace_remaining = 0U;
+    }
     if (!nmea_checksum_ok(sentence)) {
         ++s_diag.checksum_fail;
         return;
@@ -238,16 +365,64 @@ static void __attribute__((noinline)) dispatch_nmea(char *sentence)
     } else if (strncmp(type, "RMC,", 4) == 0) {
         ++s_diag.rmc;
         result = parse_rmc(sentence);
+    } else if (strncmp(type, "GSV,", 4) == 0) {
+        ++s_diag.gsv_seen;
+        parse_gsv(sentence);
+        return;
     } else return;
     if (result == NMEA_PARSE_OK) ++s_diag.parsed;
     else if (result == NMEA_PARSE_NO_FIX) ++s_diag.no_fix;
     else ++s_diag.format_fail;
-    /* GSV, GSA etc. can be added later */
+}
+
+static uint8_t s_ack_rx[8];
+static volatile uint8_t s_ack_mailbox[8];
+static volatile uint32_t s_ack_sequence;
+static uint16_t s_binary_pos, s_binary_total;
+static uint32_t s_binary_tick;
+
+uint32_t gps_agnss_ack_sequence(void) { return s_ack_sequence; }
+bool gps_agnss_take_ack(uint32_t *sequence,uint8_t frame[10])
+{
+    uint32_t before=s_ack_sequence;
+    if(!sequence || !frame || before==*sequence || (before&1U))return false;
+    frame[0]=0xf1;frame[1]=0xd9;
+    for(unsigned i=0;i<8;i++)frame[i+2]=s_ack_mailbox[i];
+    if(before!=s_ack_sequence)return false;
+    *sequence=before;return true;
+}
+
+/* Bounded byte handoff only: no checksum scan, UART TX, or state-machine
+ * progress in the ISR. Skip entire non-ACK binary frames, including payload
+ * bytes resembling ACK sync. A stalled/truncated frame can resync after gap. */
+static void agnss_rx_byte(uint8_t b)
+{
+    uint32_t now=TICK_MS();
+    if((uint32_t)(now-s_binary_tick)>100U)s_binary_pos=0;
+    s_binary_tick=now;
+    if(!s_binary_pos){if(b==0xf1){s_binary_pos=1;}return;}
+    if(s_binary_pos==1 && b!=0xd9){s_binary_pos=b==0xf1?1:0;return;}
+    if(s_binary_pos>=2 && s_binary_pos<10)s_ack_rx[s_binary_pos-2]=b;
+    ++s_binary_pos;
+    if(s_binary_pos==6) {
+        uint32_t total=(uint32_t)s_ack_rx[2]+((uint32_t)s_ack_rx[3]<<8)+8U;
+        if(total>4096U){s_binary_pos=0;return;}
+        s_binary_total=(uint16_t)total;
+    }
+    if(s_binary_pos>=8 && s_binary_pos==s_binary_total) {
+        if(s_binary_total==10 && s_ack_rx[0]==5 && s_ack_rx[1]<=1) {
+            ++s_ack_sequence;
+            for(unsigned i=0;i<8;i++)s_ack_mailbox[i]=s_ack_rx[i];
+            ++s_ack_sequence;
+        }
+        s_binary_pos=0;
+    }
 }
 
 /* ── Called from UART4 RX interrupt ──────────────────────────────────────── */
 void gps_rx_isr(uint8_t byte)
 {
+    agnss_rx_byte(byte);
     ++s_diag.rx_bytes;
     if (byte == '$') {
         s_nmea_pos = 0;
@@ -288,25 +463,46 @@ void UART4_IRQHandler(void)
 }
 
 /* ── Public API ───────────────────────────────────────────────────────────── */
+static void gps_configure_output(void)
+{
+    /* ALLYSTAR V2.3.6 section 5.4.2: CFG-MSG, F0 NMEA group.
+     * GGA=00, GSV=04, RMC=05; period=1. Volatile settings only. */
+    static const uint8_t ids[] = {0x00U, 0x04U, 0x05U};
+    for (unsigned i = 0U; i < sizeof(ids); ++i) {
+        uint8_t frame[] = {0xF1U,0xD9U,0x06U,0x01U,0x03U,0x00U,0xF0U,0U,1U,0U,0U};
+        frame[7] = ids[i];
+        for (unsigned j = 2U; j < 9U; ++j) {
+            frame[9] += frame[j]; frame[10] += frame[9];
+        }
+        if (gps_send_raw(frame, sizeof(frame)) != 0) {
+            dbg_printf("[GPS] CFG-MSG TX failed\r\n");
+            return;
+        }
+    }
+}
+
 void gps_init(void)
 {
+    s_binary_pos=0;s_binary_total=0;s_ack_sequence=0;
     memset(&s_gps, 0, sizeof(s_gps));
+    memset(s_gsv, 0, sizeof(s_gsv));
     memset(&s_last_trusted, 0, sizeof(s_last_trusted));
     s_last_trusted_valid = false;
     memset((void *)&s_diag, 0, sizeof(s_diag));
+    s_trace_remaining = 0U;
     s_nmea_pos = 0U;
     s_nmea_head = 0U;
     s_nmea_tail = 0U;
     s_nmea_count = 0U;
     s_nmea_drop = false;
-    /* TAU804M: enable NMEA GGA+RMC at 1 Hz via $PCAS03 */
-    /* $PCAS03,1,0,0,0,1,0,0,0,0,0,,,0,0*xx format */
+    /* TAU804M: retain GGA/RMC and enable GSV at 1 Hz for RF quality. */
     delay_ms(500);
-    gps_send_cmd("$PCAS03,1,0,0,0,1,0,0,0,0,0,,,0,0*02\r\n");
+    gps_configure_output();
 }
 
 void gps_enable(bool en)
 {
+    s_enabled = en;
     GPIO_InitType g;
     GPIO_InitStruct(&g);
     g.Pin            = GPS_EN_PIN;
@@ -324,8 +520,21 @@ void gps_enable(bool en)
     }
 }
 
+/* SysTick runs both awake and in shallow WFI. Keep fractional milliseconds
+ * between calls; STOP1's stopped interval is added separately from the RTC. */
+static void retained_clock_advance_awake(void)
+{
+    uint32_t elapsed_seconds;
+    if (s_last_trusted.year < 2000U) return;
+    elapsed_seconds = (uint32_t)(TICK_MS() - s_last_trusted_tick_ms) / 1000U;
+    if (elapsed_seconds == 0U) return;
+    gps_advance_last_trusted_seconds(elapsed_seconds);
+    s_last_trusted_tick_ms += elapsed_seconds * 1000U;
+}
+
 void gps_process(void)
 {
+    retained_clock_advance_awake();
     if (s_nmea_count != 0U) {
         uint8_t slot = s_nmea_head;
         dispatch_nmea(s_nmea_slots[slot]);
@@ -363,16 +572,22 @@ static bool retained_clock_is_newer(uint16_t year, uint8_t month, uint8_t day,
 
 bool gps_capture_last_trusted(void)
 {
+    return gps_capture_last_trusted_snapshot(&s_gps);
+}
+
+bool gps_capture_last_trusted_snapshot(const gps_data_t *snapshot)
+{
     uint32_t now = TICK_MS();
 
-    if (!s_gps.valid || s_gps.fix_quality == 0U ||
-        (uint32_t)(now - s_gps.last_update_ms) > 5000U ||
-        s_gps.lat < -90.0 || s_gps.lat > 90.0 ||
-        s_gps.lon < -180.0 || s_gps.lon > 180.0 ||
-        (s_gps.lat == 0.0 && s_gps.lon == 0.0) ||
-        s_gps.year < 2000U || s_gps.month < 1U || s_gps.month > 12U ||
-        s_gps.day < 1U || s_gps.day > 31U || s_gps.hour > 23U ||
-        s_gps.minute > 59U || s_gps.second > 59U) {
+    if (snapshot == NULL) return false;
+    if (!snapshot->valid || snapshot->fix_quality == 0U ||
+        (uint32_t)(now - snapshot->last_update_ms) > 5000U ||
+        fabs(snapshot->lat) > 90.0 ||
+        fabs(snapshot->lon) > 180.0 ||
+        (snapshot->lat == 0.0 && snapshot->lon == 0.0) ||
+        snapshot->year < 2000U || snapshot->month < 1U || snapshot->month > 12U ||
+        snapshot->day < 1U || snapshot->day > 31U || snapshot->hour > 23U ||
+        snapshot->minute > 59U || snapshot->second > 59U) {
         return false;
     }
     /* Never let the retained clock run backwards.  While asleep this snapshot's
@@ -381,34 +596,37 @@ bool gps_capture_last_trusted(void)
      * value would rewind reported time.  A field capture showed the retained
      * stamp going 06:41:17 -> 06:41:06 when ACC bounce drove repeated sleep
      * entries.  Position is still refreshed; only an older clock is refused. */
+    retained_clock_advance_awake();
     if (s_last_trusted_valid &&
-        !retained_clock_is_newer(s_gps.year, s_gps.month, s_gps.day,
-                                 s_gps.hour, s_gps.minute, s_gps.second)) {
+        !retained_clock_is_newer(snapshot->year, snapshot->month, snapshot->day,
+                                 snapshot->hour, snapshot->minute, snapshot->second)) {
         return false;
     }
-    s_last_trusted.lat_e7 = (int32_t)(s_gps.lat * 10000000.0);
-    s_last_trusted.lon_e7 = (int32_t)(s_gps.lon * 10000000.0);
-    s_last_trusted.speed_x10 = s_gps.speed_kmh <= 0.0f ? 0U :
-        s_gps.speed_kmh >= 6553.5f ? 65535U : (uint16_t)(s_gps.speed_kmh * 10.0f);
-    s_last_trusted.heading_deg = s_gps.heading >= 359.0f ? 359U :
-        s_gps.heading < 0.0f ? 0U : (uint16_t)s_gps.heading;
-    s_last_trusted.altitude_m = s_gps.altitude_m <= -32768.0f ? -32768 :
-        s_gps.altitude_m >= 32767.0f ? 32767 : (int16_t)s_gps.altitude_m;
-    s_last_trusted.year = s_gps.year;
-    s_last_trusted.month = s_gps.month;
-    s_last_trusted.day = s_gps.day;
-    s_last_trusted.hour = s_gps.hour;
-    s_last_trusted.minute = s_gps.minute;
-    s_last_trusted.second = s_gps.second;
-    s_last_trusted.fix_quality = s_gps.fix_quality;
-    s_last_trusted.satellites = s_gps.satellites;
+    s_last_trusted.lat_e7 = (int32_t)(snapshot->lat * 10000000.0);
+    s_last_trusted.lon_e7 = (int32_t)(snapshot->lon * 10000000.0);
+    s_last_trusted.speed_x10 = snapshot->speed_kmh <= 0.0f ? 0U :
+        snapshot->speed_kmh >= 6553.5f ? 65535U : (uint16_t)(snapshot->speed_kmh * 10.0f);
+    s_last_trusted.heading_deg = snapshot->heading >= 359.0f ? 359U :
+        snapshot->heading < 0.0f ? 0U : (uint16_t)snapshot->heading;
+    s_last_trusted.altitude_m = snapshot->altitude_m <= -32768.0f ? -32768 :
+        snapshot->altitude_m >= 32767.0f ? 32767 : (int16_t)snapshot->altitude_m;
+    s_last_trusted.year = snapshot->year;
+    s_last_trusted.month = snapshot->month;
+    s_last_trusted.day = snapshot->day;
+    s_last_trusted.hour = snapshot->hour;
+    s_last_trusted.minute = snapshot->minute;
+    s_last_trusted.second = snapshot->second;
+    s_last_trusted.fix_quality = snapshot->fix_quality;
+    s_last_trusted.satellites = snapshot->satellites;
     s_last_trusted_valid = true;
+    s_last_trusted_tick_ms = snapshot->last_update_ms;
     return true;
 }
 
 bool gps_get_last_trusted(gps_data_t *out)
 {
     if (out == NULL || !s_last_trusted_valid) return false;
+    retained_clock_advance_awake();
     memset(out, 0, sizeof(*out));
     out->lat = (double)s_last_trusted.lat_e7 / 10000000.0;
     out->lon = (double)s_last_trusted.lon_e7 / 10000000.0;
@@ -439,7 +657,7 @@ void gps_advance_last_trusted_seconds(uint32_t elapsed_seconds)
     uint8_t dim;
     bool leap;
 
-    if (!s_last_trusted_valid || elapsed_seconds == 0U)
+    if (s_last_trusted.year < 2000U || elapsed_seconds == 0U)
         return;
     day_seconds = (uint32_t)s_last_trusted.hour * 3600U +
                   (uint32_t)s_last_trusted.minute * 60U +
@@ -468,8 +686,7 @@ void gps_advance_last_trusted_seconds(uint32_t elapsed_seconds)
 void gps_apply_ntp_utc(uint16_t year, uint8_t month, uint8_t day,
                        uint8_t hour, uint8_t minute, uint8_t second)
 {
-    if (!s_last_trusted_valid ||
-        year < 2000U || month < 1U || month > 12U ||
+    if (year < 2000U || month < 1U || month > 12U ||
         day < 1U || day > 31U || hour > 23U || minute > 59U || second > 59U)
         return;
     s_last_trusted.year = year;
@@ -478,13 +695,26 @@ void gps_apply_ntp_utc(uint16_t year, uint8_t month, uint8_t day,
     s_last_trusted.hour = hour;
     s_last_trusted.minute = minute;
     s_last_trusted.second = second;
+    s_last_trusted_tick_ms = TICK_MS();
+}
+
+void gps_get_unfixed_report(gps_data_t *out)
+{
+    retained_clock_advance_awake();
+    memset(out, 0, sizeof(*out));
+    out->year = s_last_trusted.year;
+    out->month = s_last_trusted.month;
+    out->day = s_last_trusted.day;
+    out->hour = s_last_trusted.hour;
+    out->minute = s_last_trusted.minute;
+    out->second = s_last_trusted.second;
 }
 
 void gps_resume_after_wake(void)
 {
-    /* STOP1 leaves the UART configuration intact.  Re-request GGA/RMC
+    /* STOP1 leaves the UART configuration intact.  Re-request GGA/GSV/RMC
      * output only; gps_init() would erase the retained STOP1 snapshot. */
-    gps_send_cmd("$PCAS03,1,0,0,0,1,0,0,0,0,0,,,0,0*02\r\n");
+    gps_configure_output();
 }
 
 const volatile gps_diag_t *gps_get_diag(void) { return &s_diag; }

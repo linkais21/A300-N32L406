@@ -1,0 +1,72 @@
+[
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_report_filter.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_report_wire.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_sleep_wake_timestamp_vibration_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_gnss.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "exit_code": 1
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_internal_flash_layout.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_layout.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_cold_start_recovery.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_flash_combined_script.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_dev_release_manifest.py"
+    ],
+    "exit_code": 0
+  }
+]

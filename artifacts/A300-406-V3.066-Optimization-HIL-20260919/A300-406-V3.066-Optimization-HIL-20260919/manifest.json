@@ -1,0 +1,66 @@
+{
+  "version": "T360-A300_406_20260919194933,V3.066",
+  "versionCode": 3066,
+  "release_approved": false,
+  "hardware_verified": false,
+  "release_gate_exit": 2,
+  "release_gate_reason": "Incomplete whole-program stack/heap/IRQ evidence",
+  "app_bytes": 105432,
+  "ota_bytes": 105464,
+  "flash_remaining": 1064,
+  "host_test_scripts_passed": 38,
+  "files": {
+    "A300-406-OTA-V3066.bin": {
+      "size": 105464,
+      "sha256": "136a3321a28d28af35fb2813d65ecde4cc85f8934f8c79f2b60f628db1adde34"
+    },
+    "App-V3066.bin": {
+      "size": 105432,
+      "sha256": "bd101a38d415999445aea064f343bcfd993ddcc90896ade66b61b81fbb0f5421"
+    },
+    "App-V3066.elf": {
+      "size": 163120,
+      "sha256": "b246a1a89fcf2e4dad2cdebf1b65ca024367fea1f7220949f6c7b793d114621d"
+    },
+    "App-V3066.hex": {
+      "size": 296602,
+      "sha256": "4d9be8593104fa173efd5d3dc55acfe13c5e9061d330457c99be00dff28b9961"
+    },
+    "App-V3066.map": {
+      "size": 110117,
+      "sha256": "a3c475a49ad24521f19b4f26ff6def7f536bbc7b91f782c4d9db99e49d120f5a"
+    },
+    "Bootloader-V3066.bin": {
+      "size": 22556,
+      "sha256": "a457af48a9fc9dd16416b644518a4647ce03ab789c5f5f601f1944bf73d13e54"
+    },
+    "Bootloader-V3066.elf": {
+      "size": 32720,
+      "sha256": "b0ff550354d65667ea6dbf575d8c7d0f3fb9daed27aaa793a744f09feeeb6e15"
+    },
+    "Bootloader-V3066.hex": {
+      "size": 63493,
+      "sha256": "fca95c06649de8af19923fd679b7f218ea07620b2e2021abf653970e44a29bba"
+    },
+    "Bootloader-V3066.map": {
+      "size": 63501,
+      "sha256": "539c1601c01784f69fba3f6b29b680c7e006920697d51a6e0dae61272e0d0ff0"
+    },
+    "OTA-upload.json": {
+      "size": 484,
+      "sha256": "f20a52521dd18b87249d9b51ecdb5181b5f372742e3a8be5f5e814d89982f35b"
+    },
+    "release_identity.json": {
+      "size": 310,
+      "sha256": "52e7d428a2565bb351de2816838d3987e0f54377e1139f5fab2c7e0b2140e265"
+    },
+    "SWD-Combined-V3066.bin": {
+      "size": 130008,
+      "sha256": "5dc694f9882470213733ef3837533973a8640ecc912334f5e9ecce5ecb89a32e"
+    },
+    "SWD-Combined-V3066.hex": {
+      "size": 365722,
+      "sha256": "361a1dbb7e6fdd56ffc3c120af91850f37c9a26e205cb25efab9f41dc65902ba"
+    }
+  }
+}

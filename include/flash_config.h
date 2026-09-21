@@ -72,7 +72,7 @@ typedef struct {
     /* ── Input / motion ──────────────────────────────────────────────────── */
     uint8_t  has_acc;           /* 0=no ACC wire 1=yes */
     uint8_t  stopdrift_en;
-    uint16_t stopdrift_thr;     /* 10–1000 cm */
+    uint16_t stopdrift_thr;     /* Raw value; mileage uses raw / 10 metres. Protocol unit unconfirmed. */
     uint8_t  anglerep_en;
     uint8_t  anglerep_angle;    /* 1–180 deg */
     uint8_t  anglerep_speed;    /* 2–5 */
@@ -103,7 +103,16 @@ typedef struct {
      * sizeof(device_config_t) are unchanged and no slot migration is needed.
      * 0 means "never configured" and falls back to the shipped default. */
     uint8_t  vib_sens;
-    uint8_t  _reserved[31];
+    /* Former zero-filled reserved bytes; byte arrays preserve every deployed
+     * field offset, struct alignment and slot length (including v1/v2). */
+    uint8_t  province_be[2];
+    uint8_t  city_be[2];
+    uint8_t  plate_color;
+    uint8_t  plate_color_valid; /* 1: explicit value, 0: legacy default */
+    /* Former reserved[0]: 0 legacy, 1 sensitivity-default migration applied.
+     * Persist with the value in the same CRC/commit protected A/B record. */
+    uint8_t  vib_default_migrated;
+    uint8_t  _reserved[24];
 
     /* v2 F39 settings; append-only after the complete v1 prefix */
     char     pid[CFG_PID_LEN];
@@ -141,16 +150,12 @@ cfg_store_result_t cfg_set_pid_result(const char pid[CFG_PID_LEN]);
 cfg_store_result_t cfg_set_device_api_key_result(
     const char key[CFG_DEVICE_API_KEY_LEN]);
 bool     cfg_set_auth_code(uint8_t channel, const char *code);
-void     cfg_factory_reset(void);       /* restore defaults and save */
 
 device_config_t *cfg_get(void);         /* pointer to live RAM copy */
 
 /* Convenience setters persist immediately except cfg_add_mileage(), which
  * marks the live RAM total dirty for bounded periodic/forced flushing. */
-void cfg_set_server(const char *ip, uint16_t port, bool backup);
 void cfg_set_heartbeat(uint16_t s);
-void cfg_set_report_interval(uint16_t moving_s, uint16_t stopped_s);
-void cfg_set_mileage(uint32_t metres);
 void cfg_add_mileage(uint32_t delta_m);
 bool cfg_mileage_dirty(void);
 bool cfg_flush_mileage(void);

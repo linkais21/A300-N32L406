@@ -1,0 +1,162 @@
+[
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_end_to_end.py"
+    ],
+    "exit_code": 0,
+    "log": "test_f39_end_to_end-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_relay_sms.py"
+    ],
+    "exit_code": 0,
+    "log": "test_relay_sms-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_firmware_signature.py"
+    ],
+    "exit_code": 0,
+    "log": "test_firmware_signature-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_artifacts.py"
+    ],
+    "exit_code": 0,
+    "log": "test_bootloader_artifacts-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_factory_init_artifact.py"
+    ],
+    "exit_code": 0,
+    "log": "test_factory_init_artifact-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_internal_flash_layout.py"
+    ],
+    "exit_code": 0,
+    "log": "test_internal_flash_layout-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_factory_init.py"
+    ],
+    "exit_code": 0,
+    "log": "test_bootloader_factory_init-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_powercut.py"
+    ],
+    "exit_code": 0,
+    "log": "test_bootloader_powercut-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_lkg_powercut_c.py"
+    ],
+    "exit_code": 0,
+    "log": "test_bootloader_lkg_powercut_c-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_bcr_failclosed.py"
+    ],
+    "exit_code": 0,
+    "log": "test_bootloader_bcr_failclosed-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_invalid_vector_recovery.py"
+    ],
+    "exit_code": 0,
+    "log": "test_bootloader_invalid_vector_recovery-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_legacy_recovery.py"
+    ],
+    "exit_code": 0,
+    "log": "test_bootloader_legacy_recovery-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_bcr_device_gate.py"
+    ],
+    "exit_code": 0,
+    "log": "test_boot_bcr_device_gate-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bcr.py"
+    ],
+    "exit_code": 0,
+    "log": "test_bcr-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_store_host.py"
+    ],
+    "exit_code": 0,
+    "log": "test_ext_flash_store_host-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_store.py"
+    ],
+    "exit_code": 0,
+    "log": "test_blind_zone_store-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_ack_channel.py"
+    ],
+    "exit_code": 0,
+    "log": "test_blind_zone_ack_channel-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_stack_guard.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_stack_guard-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_package.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_package-release.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_checkpoint_powercut.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_checkpoint_powercut-release.log"
+  }
+]

@@ -1,0 +1,386 @@
+{
+  "version": "T360-A300_406_20260919120428,V3.063",
+  "version_counter": 3063,
+  "release_approved": false,
+  "hardware_verified": false,
+  "signing": "platform-detached",
+  "test_scripts_passed": 65,
+  "files": {
+    "A300-406-OTA-V3063.bin": {
+      "size": 106408,
+      "sha256": "8f0267959a2d246bca96b15f893e657547ccf893463999d1dfc9007df49f6ee0"
+    },
+    "App-V3063.bin": {
+      "size": 106376,
+      "sha256": "9210d35283d22e1b41784fef0e132121e896345d684001bd014cedf6d3fd4069"
+    },
+    "App-V3063.elf": {
+      "size": 162692,
+      "sha256": "e4a165fa96bc87843d506d4e3626f8968f96dcf454e3e8e254c8d1fe45e0b42a"
+    },
+    "App-V3063.hex": {
+      "size": 299257,
+      "sha256": "28cb0275d303eea3a1f5787117bf20077f663691307ce7eb5c316811aae75f79"
+    },
+    "App-V3063.map": {
+      "size": 109966,
+      "sha256": "3cafe84e6450cb11cf3efa30cbfe7d3591023ea5cc8c986e13413ed834170f42"
+    },
+    "Bootloader-V3063.bin": {
+      "size": 22556,
+      "sha256": "45f333e45cc6022a210078cc70a4ba545d281b620a46471ce8cddd4d74672b4a"
+    },
+    "Bootloader-V3063.elf": {
+      "size": 32720,
+      "sha256": "84ed61ff12e437337f6c95031e297618dfb3974859c44091cbb2f2ee5cd556ec"
+    },
+    "Bootloader-V3063.hex": {
+      "size": 63493,
+      "sha256": "995ee05d0c1af06c5893bfa6c2b4e0170da52f434ad5c43313cd71c686642f31"
+    },
+    "Bootloader-V3063.map": {
+      "size": 63501,
+      "sha256": "539c1601c01784f69fba3f6b29b680c7e006920697d51a6e0dae61272e0d0ff0"
+    },
+    "OTA-upload.json": {
+      "size": 540,
+      "sha256": "202a57a448fcc8fb570f4c7ea5ddf952ea56a1d9fe3e0c0350e7924b70d292e0"
+    },
+    "README.md": {
+      "size": 1709,
+      "sha256": "edfaf7c60058fcb090520e132fd3e3d0466b6c880454eb461e22d38bdded9d65"
+    },
+    "source-hashes.json": {
+      "size": 275290,
+      "sha256": "649815342da0027e673c9d21b8350ba3d2a0ca8ba0899fedd2d56dd52ca06e7d"
+    },
+    "SWD-Combined-V3063.bin": {
+      "size": 130952,
+      "sha256": "80fa69cf82fffb8b02efba62c8a533766465c8c033c9344df099e56ca17e8faf"
+    },
+    "SWD-Combined-V3063.hex": {
+      "size": 368377,
+      "sha256": "64ef12e3fc9f304b9a12822c636d5a33328dd0dcfc00488bddeccc1fee49b601"
+    },
+    "validation/a300_ota_image.log": {
+      "size": 27,
+      "sha256": "9c49b7a70f52c66c72ced223bc92f115682df973782a34ca25e51bf0ea90af98"
+    },
+    "validation/app-build.log": {
+      "size": 88031,
+      "sha256": "0bb9c3e8f4c4fd23d8b5ea01e0d1866ecb109fea67a799f652882c082695799c"
+    },
+    "validation/artifact-check.log": {
+      "size": 220,
+      "sha256": "0d36829400b6f2246f134fb036bdb998976cb2d8af9490e5681026cd71b15138"
+    },
+    "validation/at_config_serial_f39.log": {
+      "size": 33,
+      "sha256": "f5e1728a9e94b1c8cb512d48b8b202b2f2391cfbb7d3bb770c8b35baa1cc1d42"
+    },
+    "validation/blind_zone_ack_channel.log": {
+      "size": 65,
+      "sha256": "a37702008a1c0da7f2242305bbaeafd3fde9b370a0b58c3cfc315cf5e624b183"
+    },
+    "validation/blind_zone_replay.log": {
+      "size": 69,
+      "sha256": "f8adb6782cdc22e07016c008a2c065c2c48d177008ffea413833f09f3c1d6472"
+    },
+    "validation/blind_zone_store.log": {
+      "size": 29,
+      "sha256": "675ca95e66bb4e768ff9517e951e462506b89b42e7a116a0b352378d0811d301"
+    },
+    "validation/boot-build.log": {
+      "size": 15608,
+      "sha256": "3d8d51f0c5a8529198d0c56db5832b20a6e986f7995dc17fb5a3243aedb65f39"
+    },
+    "validation/boot-ram.log": {
+      "size": 125,
+      "sha256": "1a7d6e5e63c73253d6e9dd2710c52289c125b879617e2972a6eeb1c74ef81ba2"
+    },
+    "validation/boot_bcr_device_gate.log": {
+      "size": 67,
+      "sha256": "c11efd37a020b7459c0629b518c79492ca6665fd95e7c70a690122c220b2b969"
+    },
+    "validation/boot_cold_start_recovery.log": {
+      "size": 66,
+      "sha256": "715c8827ea180f837b88ea4a4b488b85322432f3f94e61763da398ce0e8e59ae"
+    },
+    "validation/boot_progress_uart.log": {
+      "size": 61,
+      "sha256": "aff6970ee780b485e616342bd690d7778b3efe4f0da7d62519a0ad3d026776cf"
+    },
+    "validation/boot_spi_timing.log": {
+      "size": 68,
+      "sha256": "976966d91950c64f085f0d04938ea05779cefe9c53d45ec3244649f73427052d"
+    },
+    "validation/bootloader_bcr_failclosed.log": {
+      "size": 66,
+      "sha256": "736bc3a1582b2310fcc815f6f47f66cc3103a01d56bc47f3f8cbf89de44c58d7"
+    },
+    "validation/bootloader_factory_init.log": {
+      "size": 36,
+      "sha256": "8fd5c10f816109f17cc0ee8ac1cf20396559a8f729af56ea33dfac7a0d0b6c25"
+    },
+    "validation/bootloader_invalid_vector_recovery.log": {
+      "size": 47,
+      "sha256": "749fb51707a2eb91b4ca3a59c27c08b3ccedce4579599f15e52fc045889b86a6"
+    },
+    "validation/bootloader_legacy_recovery.log": {
+      "size": 122,
+      "sha256": "f84edbb0c33439569fef8f2949f6b9e86f1443eeb81aa3c1f820a22f0e1f1c7c"
+    },
+    "validation/bootloader_lkg_powercut_c.log": {
+      "size": 90,
+      "sha256": "07f5c109b8943d5352ff439a5427a7376e768bd09305262e4aa3b49852f63e03"
+    },
+    "validation/bootloader_platform_contract.log": {
+      "size": 41,
+      "sha256": "8555926088204b3c920d376b8bce485a94937c4278d60a5bb5cda701e0ba6867"
+    },
+    "validation/bootloader_powercut.log": {
+      "size": 32,
+      "sha256": "6544af40d524281266006963192e81bbb8e5b365ffed345037afa79b507aa6f6"
+    },
+    "validation/build_version_refresh.log": {
+      "size": 34,
+      "sha256": "026398eceb0281f4342fe6727b8c24fd4b111ed8514776b87bfa5e6fba3c05fc"
+    },
+    "validation/car_reply_encoding.log": {
+      "size": 24,
+      "sha256": "7b6d8f97ffc20492eb87c0962580f973bcc93783beba71ac6c2a184901c111b0"
+    },
+    "validation/cfg_query_f39.log": {
+      "size": 33,
+      "sha256": "4eac85469c7ac0546fa640a5f109db43d2900b859faa663cfb7d3747332224a7"
+    },
+    "validation/cfg_query_pass.log": {
+      "size": 37,
+      "sha256": "72d9d223f1eba5ed443006688703be6b60ca46418e5b110695e57389cccf6f13"
+    },
+    "validation/console_numeric.log": {
+      "size": 33,
+      "sha256": "f5e1728a9e94b1c8cb512d48b8b202b2f2391cfbb7d3bb770c8b35baa1cc1d42"
+    },
+    "validation/corner_blind_zone_replay.log": {
+      "size": 37,
+      "sha256": "534bf4ffe58193d21718e700cf61819199f909c52fbb1a1daf06c01c199c5d97"
+    },
+    "validation/dev_release_manifest.log": {
+      "size": 33,
+      "sha256": "a47cc322e4ae436cc5cfabd6ae93c1bfe5ce097d6ef08d418958f6552c97c9ce"
+    },
+    "validation/diff-check.log": {
+      "size": 480,
+      "sha256": "99c027b9f193a288b2a859edc8c8672db08daf74c9e3e61c16698dc3085019b0"
+    },
+    "validation/ec800m_dma_wrap.log": {
+      "size": 70,
+      "sha256": "dd235ce4c5e4c8788721e470803882a16a96db8b42bf95adb03702738608abdc"
+    },
+    "validation/ec800m_stack_reentry.log": {
+      "size": 226,
+      "sha256": "89a98bb8f1c5a73340ec8ae46a0c9e65a12aaf06805d88ca31b6f82e42785407"
+    },
+    "validation/ec800m_udp_transaction.log": {
+      "size": 34,
+      "sha256": "a5e86d79dab87704d1ab2446f383d095224990401bd8e671e94807cb26d49fc2"
+    },
+    "validation/ec800m_udp_wire.log": {
+      "size": 30,
+      "sha256": "5e2aef20330241f3c4a7373c6c92a4795594237327f48e81ddf5431762fd7f8d"
+    },
+    "validation/ec800m_urc_demux.log": {
+      "size": 29,
+      "sha256": "66fdc2bb3a8319afd768ad413db5045280110dc3f338d550ac377fccca9e4365"
+    },
+    "validation/ext_flash_layout.log": {
+      "size": 86,
+      "sha256": "f368d30c126f02fb5a05575af6e8fc067890f0cd28f3a84b0a9e221f1e15398b"
+    },
+    "validation/ext_flash_store_host.log": {
+      "size": 33,
+      "sha256": "a850a8264f9c59f9d8656999bf88e3180f3d8b06e405580cbb34ce69cff0b498"
+    },
+    "validation/f39_config.log": {
+      "size": 72,
+      "sha256": "fb6871a5ee2106c680df6d3916cf116f1a53d69fd6135a3c537dfcda556ee454"
+    },
+    "validation/factory_init_artifact.log": {
+      "size": 34,
+      "sha256": "190b82a3700a664db8b7e68cf1968c64ede54e92783d6a3cb0ffe5d56f44d10b"
+    },
+    "validation/feature_guards.log": {
+      "size": 27,
+      "sha256": "5746eb09ec6e171cb12aea68ca41aa60bfa588f5c250aec3b0c0c95b3f0e4a92"
+    },
+    "validation/flash-build-profile.json": {
+      "size": 4102,
+      "sha256": "14e8504f60844be89187cc5ebabdb45955ef1b08c2cbda5af3aba71ab477c0cf"
+    },
+    "validation/flash-capacity.json": {
+      "size": 4708,
+      "sha256": "1423fbb5db65c51d9991b3f77bf724a4dfef98b8a9771d408e8ee9f848bfdec8"
+    },
+    "validation/flash_config_v3.log": {
+      "size": 55,
+      "sha256": "2443a433c26e5f46aab0da71143aba71f8fa1d1b227dba30b6bb0f9684d3b464"
+    },
+    "validation/fota_active.log": {
+      "size": 24,
+      "sha256": "4a2e7c4743180c902dec6651fc8f65c5654632b5bdd9a4723cd3a0949f32d8d5"
+    },
+    "validation/fota_check_parser.log": {
+      "size": 30,
+      "sha256": "4b660f527cbc392a8d23b0186d825b51e3df14c7457135be7efcc2cfc712b3a5"
+    },
+    "validation/fota_checkpoint_powercut.log": {
+      "size": 185,
+      "sha256": "2d55a10e97416abf9c22c5c36d179627f7b2e8a30eace38816b5e480b8a02d7d"
+    },
+    "validation/fota_key_config.log": {
+      "size": 82,
+      "sha256": "f36d8576806b747dd0630e4c11e61c91d369f477ad51d5ffea1eb385086f79ec"
+    },
+    "validation/fota_modem_handoff.log": {
+      "size": 116,
+      "sha256": "d9dd7993f98986c5fc2f8bc9c9ecb02df4e612db84866cfef8141474838a345c"
+    },
+    "validation/fota_modem_imei.log": {
+      "size": 30,
+      "sha256": "585f99fa8f81fe2342d1b4ac696e5ac4390c7ab7d5fbf7b83a61f8a30b2d5f34"
+    },
+    "validation/fota_no_api_key_contract.log": {
+      "size": 37,
+      "sha256": "c6bbadb2824731599acb60629287785ab5cf078818adc0eb012eb43265b5d6e0"
+    },
+    "validation/fota_package.log": {
+      "size": 25,
+      "sha256": "370d3e41bfa64a4c5e02738fecee27d5547157ac5bfa354d0c8459223e92ba8a"
+    },
+    "validation/fota_platform_flow.log": {
+      "size": 545,
+      "sha256": "f1b99df9d98ccfbf78f256a9c6cd584729eb021a88c24dc1bfed1e3d3cb5de84"
+    },
+    "validation/fota_resume.log": {
+      "size": 144,
+      "sha256": "da798933e9d40a877503ff3f5a88c67ffb11538f6c7c3a9082a2c58e0311c7e2"
+    },
+    "validation/fota_stack_guard.log": {
+      "size": 29,
+      "sha256": "894d0fa75d3ab251a26038c267e1fba333ae672b1cc21a8a2f2378a1518ef00b"
+    },
+    "validation/fota_verify_scan.log": {
+      "size": 80,
+      "sha256": "9d0ab5edac9fef3e987e2ce391a9b957c9d11917e78b877345a819c2f7350381"
+    },
+    "validation/frame-budget.log": {
+      "size": 101,
+      "sha256": "a942cc50d48fe1e8f6a15ecabe85eb718bea006baff491176342d15a202ad857"
+    },
+    "validation/gps_report_filter.log": {
+      "size": 588,
+      "sha256": "a95be4c96651adcbfcb98c15adff2ad47af293357e0deca11eb3ae8b8ca75940"
+    },
+    "validation/gps_report_wire.log": {
+      "size": 74,
+      "sha256": "23cd130a0204857516678ddbe2aa0b89e62cb7916b23412f74adb11796eb94fd"
+    },
+    "validation/heap_bounds.log": {
+      "size": 59,
+      "sha256": "61ba09d97ebc4ac096ac2fd30d624707270e33c0964a2dd2cc34bee9cedb3f7d"
+    },
+    "validation/internal_flash_layout.log": {
+      "size": 34,
+      "sha256": "08b176f896004746971e2797afa86823d9e1d14266cdfeda8c908d89baff8b7a"
+    },
+    "validation/jt808_boot_terminal_info.log": {
+      "size": 37,
+      "sha256": "a022de65668ad8a9c41b43cab5ad9eb736a4a1b7897c4f5b66ad6eb17d17eaee"
+    },
+    "validation/jt808_params_wire.log": {
+      "size": 30,
+      "sha256": "b44bd40d91847c59ba0e682ef4ed9d0357305f8383ae5532b13f50bc7db310a6"
+    },
+    "validation/libc-parser.log": {
+      "size": 125,
+      "sha256": "c275ef3e5b566a67ac142062a4be95abbbc4b215d85c9fd4b6f7c969611d2207"
+    },
+    "validation/lto_stack_guard.log": {
+      "size": 243,
+      "sha256": "2220452ac6fbef246bb1ee35373bf9683de4317df208df5ede2b4cc0d7ea57ab"
+    },
+    "validation/motion_corner_policy.log": {
+      "size": 28,
+      "sha256": "3c519b06275994c54fd0bd8ddd5c275e09b1247a038df0b21a5f35072186e124"
+    },
+    "validation/platform_trust_anchor.log": {
+      "size": 89,
+      "sha256": "506d6b0fcd0ed21b6f208befe46dbbfd7485809595fc1a903735e217f74ca4f9"
+    },
+    "validation/ram_guard.log": {
+      "size": 22,
+      "sha256": "c2ec1f13997d6a2eee77745a0a7205c72e9493b1f84942dc2de172c41ebaafbd"
+    },
+    "validation/ram_watermark.log": {
+      "size": 33,
+      "sha256": "280e4acc50c5dc80099da00cb465eeef539ea4c2911469215424ecc4a7f18bf3"
+    },
+    "validation/red-flash_config_v3.log": {
+      "size": 183,
+      "sha256": "79c818eaeb3f20a7c28acf8f14fc20fa7036579112b2cd8f173d31da983129d1"
+    },
+    "validation/red-results.json": {
+      "size": 763,
+      "sha256": "8892d1feafa2b625694dbbeb8cce4fb954fa9b8de03a1ec83907f25abef6ad10"
+    },
+    "validation/release-gate.log": {
+      "size": 1189,
+      "sha256": "ddd5722852030a03ac48288787d7b5aa16567af8b8f91d23ce1d2a5f8f629241"
+    },
+    "validation/release_identity_contract.log": {
+      "size": 38,
+      "sha256": "bf751884e4769a9a7f09b7b20ba32d4d2340686e45751d6f5fe4c3acbccd16d6"
+    },
+    "validation/remaining-gates.log": {
+      "size": 676,
+      "sha256": "519feb24b9089bdf3de3191a4b0d03afacffcd1b07263ae3bcfbf0d16080b326"
+    },
+    "validation/results.json": {
+      "size": 19756,
+      "sha256": "ef3b9f48518ed2ec698a0df3ce0a99b9a889913a19dd4a7cdd2ac2eaae5ee637"
+    },
+    "validation/stack-analysis.json": {
+      "size": 319351,
+      "sha256": "c32d963e49f166ab2ac90dcdcfb8b507998fb09df0b2d44ee166734a16487259"
+    },
+    "validation/stack-evidence.json": {
+      "size": 663,
+      "sha256": "bd79494d351f47d1e31099a7331f6a2a71765fd0fddb4fcc3d842dfe8d13631d"
+    },
+    "validation/stack_health_observability.log": {
+      "size": 43,
+      "sha256": "656251b82dfc758247e7b506b686403400362d6968ae01783e160dcb9f6dfb24"
+    },
+    "validation/stack_indirect_evidence.log": {
+      "size": 107,
+      "sha256": "4a203f958ef9d765ff1f89816631e1bdf553b4acf1d56449f1d10ad92bb46ff3"
+    },
+    "validation/stack_machine_frames.log": {
+      "size": 111,
+      "sha256": "6f4b69226e1da006d05172474adec2d1085ecb4b09fb9f8ec664793bb37db5f4"
+    },
+    "validation/stack_table_targets.log": {
+      "size": 109,
+      "sha256": "fa59defc26fd5febca5ba4add6b3520374cf9d7bec67bd8928f4b0654c070fcb"
+    },
+    "validation/stack_tail_evidence.log": {
+      "size": 108,
+      "sha256": "46a59d823d772c3809446eba836399e2612ba33924b6c71abe8e15b736b8f4b7"
+    },
+    "validation/text_ack_order.log": {
+      "size": 33,
+      "sha256": "f5e1728a9e94b1c8cb512d48b8b202b2f2391cfbb7d3bb770c8b35baa1cc1d42"
+    }
+  }
+}

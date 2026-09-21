@@ -62,10 +62,11 @@ int main(void){
     assert(strstr(last_http,"GET /api/device/updates/check?deviceId=12345678901&deviceModel=A300-406&currentVersionCode="));
     assert(!strstr(last_http,"X-Device-Key: "));
     fota_cancel();
-    /* Queue an obsolete error, then open OTA before the deferred event pump:
-     * channel generations must prevent the old event closing the new socket. */
+    /* A failed UDP OPEN must report failure and retire its channel before
+     * OTA starts; the old event must not close the new TCP socket. */
     queued_error=true;udp_opens=tcp_opens=http_requests=0;g_tick_ms=100;fota_init();
-    assert(ec800m_udp_send_once("example.invalid",9000,(const uint8_t *)"abc",3)==0);
+    assert(ec800m_udp_send_once("example.invalid",9000,(const uint8_t *)"abc",3)==-1);
+    assert(udp_opens==1 && ec800m_tcp_state(1)==TCP_STATE_CLOSED);
     for(unsigned i=0;i<20 && !http_requests;i++){fota_process();ec800m_process();}
     assert(tcp_opens==1 && http_requests==1 && fota_get_state()==FOTA_STATE_CHECKING);
     fota_cancel();queued_error=false;
@@ -73,8 +74,13 @@ int main(void){
      * yielded. Preparation must not claim its channel between phases. */
     uint8_t reply[8];assert(ec800m_udp_txn_start("example.invalid",9000,(const uint8_t *)"abc",3,reply,sizeof reply,1000)==0);
     assert(!ec800m_ota_channel_prepare());
-    for(unsigned i=0;i<3;i++)ec800m_udp_txn_process();
-    assert(ec800m_udp_txn_result()>=0);assert(ec800m_ota_channel_prepare());
+    int result=-2;
+    for(unsigned i=0;i<1500 && result==-2;i++){
+        ec800m_process();ec800m_udp_txn_process();
+        result=ec800m_udp_txn_result();++g_tick_ms;
+        if(result==-2)assert(!ec800m_ota_channel_prepare());
+    }
+    assert(result==0);assert(ec800m_ota_channel_prepare());
     /* Abandoned OPEN state is reconciled only after all owners are idle. */
     ec800m_test_set_tcp_open(1);assert(ec800m_ota_channel_prepare());
     assert(ec800m_tcp_state(1)==TCP_STATE_CLOSED);
@@ -95,7 +101,7 @@ def test_modem_handoff():
                 content += "\nvoid NVIC_SystemReset(void);\n"
             (temp / name).write_text(content, encoding="ascii")
         (temp / "harness.c").write_text(source + EXTRA, encoding="ascii")
-        sources = ["ec800m.c", "ec800m_at_response.c", "sms_ingress.c", "sms_command.c",
+        sources = ["ec800m.c", "ec800m_at_response.c", "sms_ingress.c", "sms_command.c", "f39_command.c",
                    "fota.c", "sha256.c", "fota_check_parser.c", "fota_checkpoint.c", "crc32.c", "service_workspace.c"]
         command = [cc,"-std=c99","-Wall","-Wextra","-Werror","-Wno-dangling-else",
                    "-ffunction-sections","-fdata-sections","-DEC800M_HOST_TEST","-I",str(temp),"-I",str(ROOT/"include"),

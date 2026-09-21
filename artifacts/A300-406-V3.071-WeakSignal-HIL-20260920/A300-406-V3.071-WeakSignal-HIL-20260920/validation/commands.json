@@ -1,0 +1,83 @@
+[
+  {
+    "name": "app-build",
+    "command": [
+      "C:\\Users\\86166\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\mingw32-make.exe",
+      "-B",
+      "-o",
+      "include/build_version.h",
+      "all",
+      "BUILD=D:/A300_406_tools/A300_406/outputs/release-v3071-20260920/app"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "name": "boot-build",
+    "command": [
+      "C:\\Users\\86166\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\mingw32-make.exe",
+      "-B",
+      "all",
+      "TOOLCHAIN_ROOT=D:/A300_406_tools/A300_406/A300-first/.toolchain/bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\outputs\\release-v3071-20260920\\source\\bootloader",
+    "exit_code": 0
+  },
+  {
+    "name": "release-gate",
+    "command": [
+      "C:\\Users\\86166\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\mingw32-make.exe",
+      "release-gate",
+      "BUILD=D:/A300_406_tools/A300_406/outputs/release-v3071-20260920/app"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 2
+  },
+  {
+    "name": "boot-capacity",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "D:\\A300_406_tools\\A300_406\\outputs\\release-v3071-20260920\\source\\bootloader\\build\\bootloader.map"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "name": "libc-parser",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/libc_parser_guard.py",
+      "D:\\A300_406_tools\\A300_406\\outputs\\release-v3071-20260920\\app\\a300_firmware.map"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "name": "platform-signature",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_platform_trust_anchor.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "name": "diff-check",
+    "command": [
+      "git",
+      "diff",
+      "--check",
+      "--",
+      "src/jt808.c",
+      "release_identity.json",
+      "include/config.h",
+      "include/build_version.h",
+      "tools/release_guard.py",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  }
+]

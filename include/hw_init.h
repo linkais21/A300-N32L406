@@ -13,7 +13,6 @@ void hw_adc_init(void);      /* ADC ch4(PA3 car) ch2(PA1 bat) */
 void hw_tim_init(void);      /* TIM8 1ms base tick */
 void hw_iwdg_init(void);
 void hw_nvic_init(void);
-bool hw_restore_after_stop2(void);
 bool hw_acc_is_on(void); /* Q9-inverted PA12: physical low means ACC ON. */
 bool hw_acc_pin_high(void);
 

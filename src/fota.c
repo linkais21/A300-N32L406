@@ -35,7 +35,7 @@ typedef void (*ec800m_recv_cb_t)(uint8_t, const uint8_t *, uint16_t);
 #define FOTA_DIAG_RETRY_MS 5000UL
 #define FOTA_HTTP_LIMIT (SERVICE_WORKSPACE_CAPACITY - 1U)
 #define FOTA_TRIAL_HEALTHY_MS 30000UL
-typedef enum { FOTA_OP_CHECK, FOTA_OP_DOWNLOAD, FOTA_OP_STATUS } fota_operation_t;
+typedef enum { FOTA_OP_CHECK, FOTA_OP_DOWNLOAD, FOTA_OP_STATUS, FOTA_OP_SUCCESS } fota_operation_t;
 typedef enum { FOTA_HTTP_OK, FOTA_HTTP_INVALID, FOTA_HTTP_TRANSPORT } fota_http_error_t;
 static fota_state_t s_state = FOTA_STATE_IDLE;
 static fota_operation_t s_operation;
@@ -54,7 +54,7 @@ static uint8_t s_attempts;
 static uint16_t s_http_header_len, s_http_body_len, s_check_length;
 static uint8_t s_package_sha256[32], s_signature[64];
 static uint32_t s_signing_key_id;
-static bool s_authorization_committed;
+static uint8_t s_authorization_committed, s_report_attempts;
 static uint32_t s_diag_due;
 static uint8_t s_diag_last_reason;
 
@@ -108,39 +108,27 @@ static bool same_origin(const char *url)
 
 static bool download_token_from_url(const char *url,char token[32])
 {
-    const char *p;size_t n=0;
+    const char *p,*query;size_t n=0;char end='&';
     if(!url || !token)return false;
-    p=strchr(url,'?');
-    if(p) {
+    query=strchr(url,'?');p=query;
+    while(p) {
         ++p;
-        while(*p) {
-            if(!strncmp(p,"token=",6)) {
-                p+=6;
-                while(p[n] && p[n]!='&') {
-                    uint8_t c=(uint8_t)p[n];
-                    if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||
-                         c=='-'||c=='_'||c=='.'||c=='~') || n>=31U)return false;
-                    ++n;
-                }
-                if(!n)return false;
-                memcpy(token,p,n);token[n]=0;return true;
-            }
-            p=strchr(p,'&');if(!p)break;++p;
-        }
+        if(!strncmp(p,"token=",6)){p+=6;break;}
+        p=strchr(p,'&');
     }
-    p=strstr(url+7,"/d/");
-    if(p) {
-        p+=3;n=0;
-        while(p[n] && p[n]!='?' && p[n]!='/') {
-                uint8_t c=(uint8_t)p[n];
-                if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||
-                     c=='-'||c=='_'||c=='.'||c=='~') || n>=31U)return false;
-                ++n;
-        }
-        if(!n || (p[n]!='?' && p[n]!=0))return false;
-        memcpy(token,p,n);token[n]=0;return true;
+    if(!p) {
+        p=strstr(url+7,"/d/");
+        if(!p || (query && p>query))return false;
+        p+=3;end='?';
     }
-    return false;
+    while(p[n] && p[n]!=end) {
+        uint8_t c=(uint8_t)p[n];
+        if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||
+             c=='-'||c=='_'||c=='.'||c=='~') || n>=31U)return false;
+        ++n;
+    }
+    if(!n)return false;
+    memcpy(token,p,n);token[n]=0;return true;
 }
 
 static bool download_token_matches_url(const char *url,const char *expected)
@@ -195,7 +183,7 @@ static void http_reset(void)
 static void fota_ec800m_rx(uint8_t ch, const uint8_t *data, uint16_t len)
 {
     if(ch==FOTA_TCP_CH && data && len && s_workspace_lock &&
-       s_state==FOTA_STATE_READY && s_operation==FOTA_OP_STATUS) {
+       s_state==FOTA_STATE_READY) {
         while(len && !s_header_done) {
             if(s_http_header_len>=FOTA_HTTP_LIMIT || *data==0) {s_http_error=FOTA_HTTP_INVALID;return;}
             fota_http_header()[s_http_header_len++]=(char)*data++;--len;
@@ -204,7 +192,8 @@ static void fota_ec800m_rx(uint8_t ch, const uint8_t *data, uint16_t len)
                 const char *header=fota_http_header();
                 if(s_http_header_len<12U || strncmp(header,"HTTP/1.1 ",9)!=0 ||
                    header[9]<'0'||header[9]>'9'||header[10]<'0'||header[10]>'9'||
-                   header[11]<'0'||header[11]>'9') {s_http_error=FOTA_HTTP_INVALID;return;}
+                   header[11]<'0'||header[11]>'9'||
+                   (header[12]!=' ' && header[12]!='\r')) {s_http_error=FOTA_HTTP_INVALID;return;}
                 unsigned status=(unsigned)(header[9]-'0')*100U+
                                 (unsigned)(header[10]-'0')*10U+(unsigned)(header[11]-'0');
                 if(status>=200U && status<300U)s_body_complete=true;
@@ -236,20 +225,41 @@ static void fota_ec800m_rx(uint8_t ch, const uint8_t *data, uint16_t len)
 }
 
 /* Request buffers must not inflate every OTA state, including verification. */
+static void format_port(char out[8])
+{
+    out[0]=0;
+    if(s_port!=80U)snprintf(out,8,":%u",s_port);
+}
+
+static void install_progress(const char *stage, uint32_t version)
+{
+    dbg_printf("[FOTA] install progress=%s version=%lu\r\n",stage,(unsigned long)version);
+}
+
 static bool send_request(void) __attribute__((noinline));
 static bool send_request(void)
 {
-    char req[512],authority[72],range[90];int n;
-    n=s_port==80U?snprintf(authority,sizeof authority,"%s",s_host):snprintf(authority,sizeof authority,"%s:%u",s_host,s_port);
-    if(n<0 || (size_t)n>=sizeof authority)return false;
+    char req[512],port_text[8],range[90];int n;
+    format_port(port_text);
     range[0]=0;
+    if(s_operation==FOTA_OP_CHECK) {
+        /* Optional asset metadata; reuse the otherwise empty Range buffer.
+         * Never send it to download hosts or log the full modem identity. */
+        ec800m_get_imei(range+14,17);
+        unsigned i=0;
+        while(i<15U && range[14+i]>='0' && range[14+i]<='9')++i;
+        if(i==15U && range[29]==0) {
+            memcpy(range,"X-Modem-IMEI: ",14);
+            memcpy(range+29,"\r\n",3);
+        }
+    }
     if(s_operation==FOTA_OP_DOWNLOAD && s_received) {
         n=snprintf(range,sizeof range,"Range: bytes=%lu-\r\n%s%s%s",(unsigned long)s_received,
                    s_etag[0]?"If-Range: ":"",s_etag,s_etag[0]?"\r\n":"");
         if(n<0 || (size_t)n>=sizeof range)return false;
     }
-    n=snprintf(req,sizeof req,"GET %s HTTP/1.1\r\nHost: %s\r\n%sConnection: close\r\n\r\n",
-               s_path,authority,range);
+    n=snprintf(req,sizeof req,"GET %s HTTP/1.1\r\nHost: %s%s\r\n%sConnection: close\r\n\r\n",
+               s_path,s_host,port_text,range);
     if(n<0 || (size_t)n>=sizeof req)return false;
     /* Request and response bodies are never debug-logged. */
     if (ec800m_tcp_send(FOTA_TCP_CH,(const uint8_t *)req,(uint16_t)n)!=0) return false;
@@ -274,7 +284,12 @@ static bool checkpoint_save(void)
     fota_checkpoint_t c;bool committed;
     memset(&c,0,sizeof c); c.offset=s_received; c.expected_length=s_expected;
     c.version=s_version; c.running_crc=s_crc;
-    if(!checkpoint_url_from_download_url(s_url,c.url))return false;
+    if(s_received==s_expected) {
+        /* Keep the task token through install/trial/confirmation resets.
+         * A pre-install reset may safely redownload from zero. Never pair a
+         * rounded-down offset with the full-image running CRC. */
+        strcpy(c.url,s_url);c.offset=0U;c.running_crc=0xFFFFFFFFUL;
+    } else if(!checkpoint_url_from_download_url(s_url,c.url))return false;
     memcpy(c.etag,s_etag,sizeof c.etag);
     if(!s_ota_lock)return false;
     IWDG_ReloadKey();committed=fota_checkpoint_commit(&c);IWDG_ReloadKey();
@@ -283,7 +298,7 @@ static bool checkpoint_save(void)
 
 static bool send_status_request(void)
 {
-    char pid[12],phone[13],terminal[8],token[32],body[144];char *req;
+    char pid[12],phone[13],terminal[8],token[32],body[144],port_text[8];char *req;
     int body_len,n;size_t length;
     if(!download_token_from_url(s_url,token) || !terminal_identity_sync(pid,phone,terminal) ||
        !parse_url(cfg_get()->fota_url,s_host,&s_port,s_path))return false;
@@ -291,20 +306,17 @@ static bool send_status_request(void)
     n=snprintf(s_path+length,sizeof s_path-length,"/api/device/updates/progress");
     if(n<0 || (size_t)n>=sizeof s_path-length)return false;
     body_len=snprintf(body,sizeof body,
-        "{\"deviceId\":\"%s\",\"versionCode\":%lu,\"state\":\"downloaded\","
+        "{\"deviceId\":\"%s\",\"versionCode\":%lu,\"state\":\"%s\","
         "\"progress\":100,\"bytesReceived\":%lu}",pid,(unsigned long)s_version,
+        s_operation==FOTA_OP_SUCCESS?"success":"downloaded",
         (unsigned long)s_received);
     if(body_len<=0 || (size_t)body_len>=sizeof body)return false;
     http_reset();req=fota_http_header();
-    n=s_port==80U?
-        snprintf(req,FOTA_HTTP_LIMIT,
-                 "POST %s HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\n"
+    format_port(port_text);
+    n=snprintf(req,FOTA_HTTP_LIMIT,
+                 "POST %s HTTP/1.1\r\nHost: %s%s\r\nContent-Type: application/json\r\n"
                  "Content-Length: %d\r\nX-OTA-Token: %s\r\nConnection: close\r\n\r\n%s",
-                 s_path,s_host,body_len,token,body):
-        snprintf(req,FOTA_HTTP_LIMIT,
-                 "POST %s HTTP/1.1\r\nHost: %s:%u\r\nContent-Type: application/json\r\n"
-                 "Content-Length: %d\r\nX-OTA-Token: %s\r\nConnection: close\r\n\r\n%s",
-                 s_path,s_host,s_port,body_len,token,body);
+                 s_path,s_host,port_text,body_len,token,body);
     if(n<0 || (size_t)n>=FOTA_HTTP_LIMIT)return false;
     if(ec800m_tcp_send(FOTA_TCP_CH,(const uint8_t *)req,(uint16_t)n)!=0)return false;
     s_check_length=1U;return true;
@@ -325,14 +337,11 @@ __attribute__((weak)) uint32_t fota_hardware_id(void) { return 0x343036UL; }
 
 static bool fota_bcr_valid(const bcr_record_t *record)
 {
-    bcr_record_t copy;
     if (record == NULL || record->magic != BCR_MAGIC ||
         record->commit_marker != BCR_COMMIT_MARKER)
         return false;
-    copy = *record;
-    copy.crc32 = 0U;
-    copy.commit_marker = 0xFFFFFFFFUL;
-    return crc32_compute(&copy, (uint32_t)offsetof(bcr_record_t, crc32)) ==
+    /* CRC excludes crc32 and commit_marker; no temporary copy is needed. */
+    return crc32_compute(record, (uint32_t)offsetof(bcr_record_t, crc32)) ==
            record->crc32;
 }
 
@@ -342,13 +351,13 @@ typedef enum { FOTA_BCR_IO_ERROR=-1, FOTA_BCR_ABSENT=0, FOTA_BCR_FOUND=1 } fota_
 
 static fota_bcr_result_t fota_bcr_load(bcr_record_t *out)
 {
-    bcr_record_t a,b; bool va,vb;
+    bcr_record_t b; bool va,vb;
     if(!out)return FOTA_BCR_IO_ERROR;
-    if(!ext_flash_read(EXT_FLASH_OWNER_OTA,BCR_SLOT_A_ADDR,&a,sizeof a) ||
+    if(!ext_flash_read(EXT_FLASH_OWNER_OTA,BCR_SLOT_A_ADDR,out,sizeof *out) ||
        !ext_flash_read(EXT_FLASH_OWNER_OTA,BCR_SLOT_B_ADDR,&b,sizeof b))return FOTA_BCR_IO_ERROR;
-    va=fota_bcr_valid(&a);vb=fota_bcr_valid(&b);
+    va=fota_bcr_valid(out);vb=fota_bcr_valid(&b);
     if(!va&&!vb)return FOTA_BCR_ABSENT;
-    *out=(!vb||(va&&fota_sequence_newer(a.sequence,b.sequence)))?a:b;
+    if(vb && (!va || !fota_sequence_newer(out->sequence,b.sequence)))*out=b;
     return FOTA_BCR_FOUND;
 }
 
@@ -380,9 +389,36 @@ static void fota_diag_hex(const uint8_t *src, uint8_t count, char *out)
     uint8_t i; for(i=0;i<count;i++){out[2*i]=digits[src[i]>>4];out[2*i+1]=digits[src[i]&15U];} out[2*count]=0;
 }
 
+/* Share the package and body-diagnostic scan. Its SHA schedule and read buffer
+ * must be gone before ECDSA verification starts, not live on that call chain. */
+static bool fota_hash_region(uint32_t addr, uint32_t left, uint32_t crc_skip,
+                             uint8_t digest[32], uint32_t *body_crc)
+    __attribute__((noinline));
+static bool fota_hash_region(uint32_t addr, uint32_t left, uint32_t crc_skip,
+                             uint8_t digest[32], uint32_t *body_crc)
+{
+    sha256_ctx_t sha;
+    uint8_t buf[256];
+    *body_crc = 0xFFFFFFFFUL;
+    sha256_init(&sha);
+    while (left) {
+        uint32_t n = left > sizeof buf ? sizeof buf : left;
+        IWDG_ReloadKey();
+        if (!ext_flash_read(EXT_FLASH_OWNER_OTA, addr, buf, n)) return false;
+        sha256_update(&sha, buf, n);
+        *body_crc = crc32_update(*body_crc, buf + crc_skip, n - crc_skip);
+        crc_skip = 0U;
+        addr += n;
+        left -= n;
+    }
+    sha256_final(&sha, digest);
+    return true;
+}
+
 bool fota_verify_manifest(const void *manifest, uint32_t length)
 {
-    const fota_package_header_t *m=(const fota_package_header_t *)manifest; sha256_ctx_t sha; uint8_t digest[32], buf[256]; uint32_t left,addr,body_crc=0xFFFFFFFFUL;
+    const fota_package_header_t *m=(const fota_package_header_t *)manifest;
+    uint8_t digest[32]; uint32_t body_crc;
     bcr_record_t current; uint32_t floor=0U;fota_bcr_result_t bcr;
     static const uint8_t zero[12]={0};
     if (!m || length<sizeof *m || m->magic!=FOTA_PACKAGE_HEADER_MAGIC ||
@@ -401,9 +437,11 @@ bool fota_verify_manifest(const void *manifest, uint32_t length)
     }
     if(bcr==FOTA_BCR_FOUND)floor=current.rollback_floor;
     if(m->version<floor)return false;
-    sha256_init(&sha); left=s_expected; addr=FOTA_FLASH_ADDR;
-    while(left){uint32_t n=left>sizeof buf?sizeof buf:left; IWDG_ReloadKey();if(!ext_flash_read(EXT_FLASH_OWNER_OTA,addr,buf,n)){dbg_printf("[FOTA] install failed stage=package-read\r\n");return false;} sha256_update(&sha,buf,n); addr+=n; left-=n;}
-    sha256_final(&sha,digest);
+    /* Validated header + body always exceeds the 32-byte first-chunk skip. */
+    if (!fota_hash_region(FOTA_FLASH_ADDR, s_expected, sizeof *m, digest, &body_crc)) {
+        dbg_printf("[FOTA] install failed stage=package-read\r\n");
+        return false;
+    }
     if (memcmp(digest,s_package_sha256,sizeof digest)!=0) {
         /* body-only digest and body CRC32 separate a hash-range mismatch from corrupted bytes */
         char hexbuf[25];
@@ -412,12 +450,8 @@ bool fota_verify_manifest(const void *manifest, uint32_t length)
                    hexbuf,(unsigned long)s_expected);
         fota_diag_hex(s_package_sha256,12,hexbuf);
         dbg_printf("[FOTA] sha256 want=%s\r\n",hexbuf);
-        sha256_init(&sha); left=m->body_size; addr=FOTA_FLASH_ADDR+sizeof *m;
-        while(left){uint32_t n=left>sizeof buf?sizeof buf:left; IWDG_ReloadKey();
-            if(!ext_flash_read(EXT_FLASH_OWNER_OTA,addr,buf,n))break;
-            sha256_update(&sha,buf,n); body_crc=crc32_update(body_crc,buf,n); addr+=n; left-=n;}
-        if(left==0U){
-            sha256_final(&sha,digest); fota_diag_hex(digest,12,hexbuf);
+        if(fota_hash_region(FOTA_FLASH_ADDR+sizeof *m, m->body_size, 0U, digest, &body_crc)){
+            fota_diag_hex(digest,12,hexbuf);
             dbg_printf("[FOTA] sha256 diag body=%s body_match=%d body_crc=%08lx hdr_crc=%08lx\r\n",
                        hexbuf,memcmp(digest,s_package_sha256,sizeof digest)==0?1:0,
                        (unsigned long)(~body_crc),(unsigned long)m->body_crc32);
@@ -428,8 +462,6 @@ bool fota_verify_manifest(const void *manifest, uint32_t length)
         dbg_printf("[FOTA] install failed stage=signature\r\n");
         return false;
     }
-    left=m->body_size;addr=FOTA_FLASH_ADDR+sizeof *m;
-    while(left){uint32_t n=left>sizeof buf?sizeof buf:left;if(!ext_flash_read(EXT_FLASH_OWNER_OTA,addr,buf,n)){dbg_printf("[FOTA] install failed stage=body-read\r\n");return false;}body_crc=crc32_update(body_crc,buf,n);addr+=n;left-=n;}
     if((~body_crc)!=m->body_crc32){dbg_printf("[FOTA] install failed stage=crc\r\n");return false;}
     uint8_t vectors[8];
     if (!ext_flash_read(EXT_FLASH_OWNER_OTA, FOTA_FLASH_ADDR + sizeof *m, vectors, sizeof vectors)) {
@@ -465,7 +497,7 @@ void fota_confirm_trial_process(void)
     if(!ext_flash_try_lock_now(EXT_FLASH_OWNER_OTA))return;
     bcr=fota_bcr_load(&record);
     if(bcr==FOTA_BCR_IO_ERROR){ext_flash_unlock(EXT_FLASH_OWNER_OTA);return;}
-    if(bcr==FOTA_BCR_ABSENT||record.state!=BCR_TRIAL){
+    if(bcr==FOTA_BCR_ABSENT||record.state!=BCR_TRIAL || record.image_version!=FW_VERSION_COUNTER){
         s_trial_checked=true;
         ext_flash_unlock(EXT_FLASH_OWNER_OTA);
         return;
@@ -490,6 +522,7 @@ static void release_resources(void)
 
 static void finish_check(void)
 {
+    if(s_operation==FOTA_OP_CHECK)s_report_attempts=0U;
     s_state=FOTA_STATE_IDLE;s_next_check=TICK_MS()+FOTA_CHECK_INTERVAL_MS;
     release_resources();ec800m_tcp_close(FOTA_TCP_CH);
 }
@@ -497,6 +530,9 @@ static void finish_check(void)
 static void fail_download(void)
 {
     s_state=FOTA_STATE_ERROR;
+    /* Keep the durable checkpoint. A recovered network must not wait six
+     * hours, and a bad image must not create a tight retry loop. */
+    s_check_armed=false;s_next_check=TICK_MS()+60000UL;
     release_resources();ec800m_tcp_close(FOTA_TCP_CH);
 }
 
@@ -504,7 +540,7 @@ static void transport_failure(void)
 {
     ec800m_tcp_close(FOTA_TCP_CH);s_connect_started=false;
     if(s_attempts>=FOTA_TRANSPORT_ATTEMPTS) {
-        if(s_operation==FOTA_OP_CHECK)finish_check();else fail_download();
+        fail_download();
         return;
     }
     s_retry_due=TICK_MS()+(uint32_t)s_attempts*1000U;
@@ -594,7 +630,10 @@ void fota_on_http_header(const char *header)
             have_range=true;
         } else if(header_name(cursor,"etag")) {
             if(have_etag || strlen(value)>=sizeof s_etag)return;
-            if(s_received&&s_etag[0]&&strcmp(value,s_etag)!=0)return;
+            /* If-Range mismatch legitimately returns a whole new entity (200).
+             * The zero checkpoint below must commit before its old prefix is
+             * erased. A partial response must still match the retained bytes. */
+            if(status==206U&&s_received&&s_etag[0]&&strcmp(value,s_etag)!=0)return;
             strcpy(s_etag,value);have_etag=true;
         }
         cursor=end+2;
@@ -642,7 +681,7 @@ void fota_on_chunk(const uint8_t *data, uint16_t len, uint32_t offset)
                            (unsigned long)s_expected);
             }
         }
-        if (s_received%FLASH_SECTOR_SIZE==0U && !checkpoint_save()) { s_http_error=FOTA_HTTP_INVALID; return; }
+        if (s_received!=s_expected && s_received%FLASH_SECTOR_SIZE==0U && !checkpoint_save()) { s_http_error=FOTA_HTTP_INVALID; return; }
     }
     if (s_expected && s_received==s_expected) {
         dbg_printf("[FOTA] install progress=verify-start bytes=%lu/%lu\r\n",
@@ -651,7 +690,6 @@ void fota_on_chunk(const uint8_t *data, uint16_t len, uint32_t offset)
     }
 }
 
-void fota_on_data(const uint8_t *data, uint16_t len) { fota_on_chunk(data,len,s_received); }
 
 void fota_init(void)
 {
@@ -660,7 +698,7 @@ void fota_init(void)
     s_diag_download_percent=0U;s_diag_erase_logged=UINT32_MAX;
     s_workspace_lock=false;s_trial_checked=false;s_check_armed=true;
     s_next_check=TICK_MS();s_attempts=0;s_connect_started=false;s_signing_key_id=0U;
-    s_authorization_committed=false;
+    s_authorization_committed=false;s_report_attempts=0U;
     s_diag_due=0U;s_diag_last_reason=0U;
     memset(s_package_sha256,0,sizeof s_package_sha256);memset(s_signature,0,sizeof s_signature);
     ec800m_register_ota_recv(fota_ec800m_rx);
@@ -702,6 +740,33 @@ int fota_start(const char *url)
     fota_request_t r={0}; r.url=url; r.expected_length=cfg_get()->fota_size; return fota_start_request(&r);
 }
 
+/* Load only a committed report for this confirmed executable. Old compact
+ * download checkpoints already contain the token and are compatible. */
+static int restore_success(const bcr_record_t *b)
+{
+    fota_checkpoint_t c;char token[32];int result;
+    if(s_report_attempts>=FOTA_TRANSPORT_ATTEMPTS || b->state!=BCR_ACTIVE ||
+       b->image_version!=FW_VERSION_COUNTER)return 0;
+    result=fota_checkpoint_read(&c);
+    if(result<=0)return result;
+    if(c.version!=FW_VERSION_COUNTER || c.expected_length<FOTA_PACKAGE_HEADER_SIZE ||
+       c.expected_length-FOTA_PACKAGE_HEADER_SIZE!=b->transaction_length ||
+       !same_origin(c.url) || !download_token_from_url(c.url,token))return 0;
+    strcpy(s_url,c.url);s_version=c.version;s_received=c.expected_length;
+    s_operation=FOTA_OP_SUCCESS;s_state=FOTA_STATE_READY;s_connect_started=false;
+    ++s_report_attempts;http_reset();s_deadline=TICK_MS()+FOTA_STATUS_WINDOW_MS;
+    s_retry_due=TICK_MS();release_resources();
+    return 1;
+}
+
+static void status_retry(uint32_t now) __attribute__((noinline));
+static void status_retry(uint32_t now)
+{
+    release_resources();ec800m_tcp_close(FOTA_TCP_CH);
+    s_connect_started=false;s_check_length=0U;s_http_error=FOTA_HTTP_OK;
+    s_retry_due=now+FOTA_STATUS_RETRY_MS;
+}
+
 static void begin_check(void)
 {
     char pid[12],phone[13],terminal[8],encoded[34],base_path[128];
@@ -719,6 +784,13 @@ static void begin_check(void)
     if(bcr==FOTA_BCR_IO_ERROR ||
        (bcr==FOTA_BCR_FOUND && (record.state==BCR_TRIAL || record.state==BCR_PENDING))) {
         fota_diag_block(bcr==FOTA_BCR_IO_ERROR?7U:8U);release_resources();return;
+    }
+    if(bcr==FOTA_BCR_FOUND) {
+        int restored=restore_success(&record);
+        if(restored) {
+            if(restored<0){release_resources();s_check_armed=false;s_next_check=TICK_MS()+60000UL;}
+            return;
+        }
     }
     size_t length=strlen(base_path);if(length && base_path[length-1]=='/')base_path[--length]=0;
     n=snprintf(s_path,sizeof s_path,"%s/api/device/updates/check?deviceId=%s&deviceModel=A300-406&currentVersionCode=%lu",
@@ -740,7 +812,7 @@ void fota_process(void)
     }
     if(s_http_error!=FOTA_HTTP_OK && s_state!=FOTA_STATE_READY) {
         if(s_http_error==FOTA_HTTP_TRANSPORT)transport_failure();
-        else if(s_operation==FOTA_OP_CHECK)finish_check();else fail_download();
+        else fail_download();
         return;
     }
     if(s_restart_zero) {
@@ -837,17 +909,19 @@ void fota_process(void)
                 dbg_printf("[FOTA] install failed stage=authorization\r\n");
                 fail_download(); return;
             }
-            s_authorization_committed=true;
-            dbg_printf("[FOTA] install progress=authorized version=%lu\r\n",
-                       (unsigned long)m.version);
+            s_authorization_committed=1U;
+            install_progress("authorized",m.version);
             return;
+        }
+        if(s_authorization_committed==1U) {
+            if(!checkpoint_save()){fail_download();return;}
+            s_authorization_committed=2U;return;
         }
         if(!fota_bcr_commit_pending(m.version,m.body_size,APP_FLASH_BASE)) {
             dbg_printf("[FOTA] install failed stage=pending\r\n");
             fail_download(); return;
         }
-        dbg_printf("[FOTA] install progress=pending version=%lu\r\n",
-                   (unsigned long)m.version);
+        install_progress("pending",m.version);
         http_reset();release_resources();ec800m_tcp_close(FOTA_TCP_CH);
         s_operation=FOTA_OP_STATUS;s_state=FOTA_STATE_READY;s_connect_started=false;
         s_deadline=now+FOTA_STATUS_WINDOW_MS;s_retry_due=now;
@@ -859,15 +933,13 @@ void fota_process(void)
             fota_apply();return;
         }
         if(s_http_error!=FOTA_HTTP_OK) {
-            release_resources();ec800m_tcp_close(FOTA_TCP_CH);http_reset();
-            s_connect_started=false;s_retry_due=now+FOTA_STATUS_RETRY_MS;
+            status_retry(now);
             return;
         }
         if(s_check_length) {
             if(ec800m_tcp_state(FOTA_TCP_CH)==TCP_STATE_CLOSED ||
                ec800m_tcp_state(FOTA_TCP_CH)==TCP_STATE_ERROR) {
-                release_resources();ec800m_tcp_close(FOTA_TCP_CH);
-                s_connect_started=false;s_check_length=0U;s_retry_due=now+FOTA_STATUS_RETRY_MS;
+                status_retry(now);
             }
             return;
         }
@@ -875,29 +947,46 @@ void fota_process(void)
         if(!s_workspace_lock) {
             if(!service_workspace_try_acquire(SERVICE_WORKSPACE_OWNER_OTA))return;
             s_workspace_lock=true;http_reset();
-            if(!ec800m_ota_channel_prepare()){release_resources();s_retry_due=now+FOTA_STATUS_RETRY_MS;return;}
+            if(!ec800m_ota_channel_prepare()){status_retry(now);return;}
         }
         if(!s_connect_started) {
             s_connect_started=true;
             if(ec800m_tcp_open(FOTA_TCP_CH,s_host,s_port)!=0) {
-                release_resources();s_connect_started=false;s_retry_due=now+FOTA_STATUS_RETRY_MS;
+                status_retry(now);
             }
             return;
         }
         if(ec800m_tcp_state(FOTA_TCP_CH)==TCP_STATE_OPEN) {
             if(!send_status_request()) {
-                release_resources();ec800m_tcp_close(FOTA_TCP_CH);
-                s_connect_started=false;s_retry_due=now+FOTA_STATUS_RETRY_MS;
+                status_retry(now);
             }
         } else if(ec800m_tcp_state(FOTA_TCP_CH)==TCP_STATE_CLOSED ||
                   ec800m_tcp_state(FOTA_TCP_CH)==TCP_STATE_ERROR) {
-            release_resources();s_connect_started=false;s_retry_due=now+FOTA_STATUS_RETRY_MS;
+            status_retry(now);
         }
     }
 }
 
 void fota_cancel(void) { if(s_state==FOTA_STATE_READY){fota_apply();return;}release_resources();ec800m_tcp_close(FOTA_TCP_CH);s_state=FOTA_STATE_IDLE;s_check_armed=false;s_next_check=TICK_MS()+FOTA_CHECK_INTERVAL_MS; }
-void fota_apply(void) { if(s_state==FOTA_STATE_READY){dbg_printf("[FOTA] install progress=reboot version=%lu\r\n",(unsigned long)s_version);release_resources();ec800m_tcp_close(FOTA_TCP_CH);IWDG_ReloadKey();NVIC_SystemReset();} }
+void fota_apply(void)
+{
+    if(s_state!=FOTA_STATE_READY)return;
+    if(s_operation==FOTA_OP_SUCCESS) {
+        bool cleared=false;
+        if(s_body_complete && ext_flash_try_lock_now(EXT_FLASH_OWNER_OTA)) {
+            IWDG_ReloadKey();cleared=fota_checkpoint_clear();IWDG_ReloadKey();
+            ext_flash_unlock(EXT_FLASH_OWNER_OTA);
+        }
+        dbg_printf("[FOTA] success ack=%u clear=%u\r\n",
+                   (unsigned)s_body_complete,(unsigned)cleared);
+        if(cleared)s_report_attempts=FOTA_TRANSPORT_ATTEMPTS;
+        finish_check();s_check_armed=false;
+        s_next_check=TICK_MS()+(cleared?0U:60000UL);
+        return;
+    }
+    install_progress("reboot",s_version);
+    release_resources();ec800m_tcp_close(FOTA_TCP_CH);IWDG_ReloadKey();NVIC_SystemReset();
+}
 fota_state_t fota_get_state(void) { return s_state; }
 uint32_t fota_get_progress(void) { return s_received; }
 void fota_get_status(fota_status_t *out) { if(!out)return; memset(out,0,sizeof *out); out->state=s_state; out->offset=s_received; out->expected_length=s_expected; out->crc32=~s_crc; out->resumable=(s_received!=0); (void)checkpoint_url_from_download_url(s_url,out->url); strncpy(out->etag,s_etag,sizeof out->etag-1); }

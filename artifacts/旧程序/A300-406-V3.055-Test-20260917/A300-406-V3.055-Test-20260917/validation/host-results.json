@@ -1,0 +1,578 @@
+[
+  {
+    "name": "at_config_serial_f39",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_at_config_serial_f39.py"
+    ],
+    "exit_code": 0,
+    "seconds": 1.11
+  },
+  {
+    "name": "at_config_handoff",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_at_config_handoff.py"
+    ],
+    "exit_code": 0,
+    "seconds": 2.97
+  },
+  {
+    "name": "f39_parser",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_parser.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.54
+  },
+  {
+    "name": "f39_config",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_config.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.67
+  },
+  {
+    "name": "f39_dualset",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_dualset.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.66
+  },
+  {
+    "name": "f39_actions",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_actions.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.86
+  },
+  {
+    "name": "f39_end_to_end",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_end_to_end.py"
+    ],
+    "exit_code": 0,
+    "seconds": 2.71
+  },
+  {
+    "name": "gps_huada_output",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_huada_output.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.6
+  },
+  {
+    "name": "gps_huada_gsv",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_huada_gsv.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.72
+  },
+  {
+    "name": "production_test",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_test.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.83
+  },
+  {
+    "name": "production_gnss",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_gnss.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.86
+  },
+  {
+    "name": "nmea_replay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_nmea_replay.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.92
+  },
+  {
+    "name": "gps_drop_diagnostics",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_drop_diagnostics.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.91
+  },
+  {
+    "name": "gps_tx_bounded",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_tx_bounded.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.89
+  },
+  {
+    "name": "gps_ntp_apply",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_ntp_apply.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.62
+  },
+  {
+    "name": "production_adc",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_adc.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.54
+  },
+  {
+    "name": "production_relay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_relay.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.52
+  },
+  {
+    "name": "relay_sms",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_relay_sms.py"
+    ],
+    "exit_code": 0,
+    "seconds": 1.12
+  },
+  {
+    "name": "remote_relay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_remote_relay.py"
+    ],
+    "exit_code": 0,
+    "seconds": 1.76
+  },
+  {
+    "name": "feature_guards",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_feature_guards.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.15
+  },
+  {
+    "name": "log_platform_wire",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_log_platform_wire.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.47
+  },
+  {
+    "name": "log_platform_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_log_platform_contract.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.04
+  },
+  {
+    "name": "build_version_refresh",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_build_version_refresh.py"
+    ],
+    "exit_code": 0,
+    "seconds": 1.03
+  },
+  {
+    "name": "release_identity_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.07
+  },
+  {
+    "name": "terminal_identity",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_terminal_identity.py"
+    ],
+    "exit_code": 0,
+    "seconds": 10.59
+  },
+  {
+    "name": "jt808_dual_session",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_dual_session.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.9
+  },
+  {
+    "name": "jt808_params",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_params.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.67
+  },
+  {
+    "name": "jt808_params_wire",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_params_wire.py"
+    ],
+    "exit_code": 0,
+    "seconds": 1.08
+  },
+  {
+    "name": "blind_zone_store",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_store.py"
+    ],
+    "exit_code": 0,
+    "seconds": 14.31
+  },
+  {
+    "name": "blind_zone_replay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_replay.py"
+    ],
+    "exit_code": 0,
+    "seconds": 1.88
+  },
+  {
+    "name": "blind_zone_ack_channel",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_ack_channel.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.91
+  },
+  {
+    "name": "corner_blind_zone_replay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_corner_blind_zone_replay.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.04
+  },
+  {
+    "name": "ext_flash_layout",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_layout.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.86
+  },
+  {
+    "name": "ext_flash_store_host",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_store_host.py"
+    ],
+    "exit_code": 0,
+    "seconds": 2.05
+  },
+  {
+    "name": "fota_active",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_active.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.43
+  },
+  {
+    "name": "fota_verify_scan",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_verify_scan.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.75
+  },
+  {
+    "name": "fota_resume",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_resume.py"
+    ],
+    "exit_code": 0,
+    "seconds": 1.55
+  },
+  {
+    "name": "fota_package",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_package.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.05
+  },
+  {
+    "name": "fota_check_parser",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_check_parser.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.55
+  },
+  {
+    "name": "fota_checkpoint_powercut",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_checkpoint_powercut.py"
+    ],
+    "exit_code": 0,
+    "seconds": 2.19
+  },
+  {
+    "name": "fota_platform_flow",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_platform_flow.py"
+    ],
+    "exit_code": 0,
+    "seconds": 7.44
+  },
+  {
+    "name": "a300_ota_image",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_a300_ota_image.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.25
+  },
+  {
+    "name": "firmware_signature",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_firmware_signature.py"
+    ],
+    "exit_code": 0,
+    "seconds": 3.86
+  },
+  {
+    "name": "platform_trust_anchor",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_platform_trust_anchor.py"
+    ],
+    "exit_code": 0,
+    "seconds": 3.23
+  },
+  {
+    "name": "bootloader_factory_init",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_factory_init.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.59
+  },
+  {
+    "name": "bootloader_powercut",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_powercut.py"
+    ],
+    "exit_code": 0,
+    "seconds": 35.93
+  },
+  {
+    "name": "bootloader_lkg_powercut_c",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_lkg_powercut_c.py"
+    ],
+    "exit_code": 0,
+    "seconds": 1.0
+  },
+  {
+    "name": "bootloader_bcr_failclosed",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_bcr_failclosed.py"
+    ],
+    "exit_code": 0,
+    "seconds": 1.23
+  },
+  {
+    "name": "bootloader_legacy_recovery",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_legacy_recovery.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.87
+  },
+  {
+    "name": "bootloader_invalid_vector_recovery",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_invalid_vector_recovery.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.58
+  },
+  {
+    "name": "boot_cold_start_recovery",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_cold_start_recovery.py"
+    ],
+    "exit_code": 0,
+    "seconds": 1.1
+  },
+  {
+    "name": "boot_bcr_device_gate",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_bcr_device_gate.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.43
+  },
+  {
+    "name": "boot_spi_timing",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_spi_timing.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.47
+  },
+  {
+    "name": "boot_flash_probe_retry",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_flash_probe_retry.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.42
+  },
+  {
+    "name": "bootloader_platform_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_platform_contract.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.63
+  },
+  {
+    "name": "flash_config_v3",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_flash_config_v3.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.66
+  },
+  {
+    "name": "flash_config_migration",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_flash_config_migration.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.7
+  },
+  {
+    "name": "internal_flash_layout",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_internal_flash_layout.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.57
+  },
+  {
+    "name": "service_workspace_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_service_workspace_contract.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.42
+  },
+  {
+    "name": "mileage_quantization",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_mileage_quantization.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.52
+  },
+  {
+    "name": "mileage_persistence",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_mileage_persistence.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.55
+  },
+  {
+    "name": "i2c_accel_vibration_filter",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_i2c_accel_vibration_filter.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.04
+  },
+  {
+    "name": "i2c_accel_vibration_adapter",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_i2c_accel_vibration_adapter.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.04
+  },
+  {
+    "name": "status_led",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_status_led.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.53
+  }
+]

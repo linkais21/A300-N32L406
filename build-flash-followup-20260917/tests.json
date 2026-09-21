@@ -1,0 +1,54 @@
+[
+  {
+    "test": "test_f39_query_equivalence",
+    "exit_code": 0
+  },
+  {
+    "test": "test_f39_parser",
+    "exit_code": 0
+  },
+  {
+    "test": "test_f39_config",
+    "exit_code": 0
+  },
+  {
+    "test": "test_f39_dualset",
+    "exit_code": 0
+  },
+  {
+    "test": "test_f39_actions",
+    "exit_code": 0
+  },
+  {
+    "test": "test_f39_end_to_end",
+    "exit_code": 0
+  },
+  {
+    "test": "test_at_config_serial_f39",
+    "exit_code": 0
+  },
+  {
+    "test": "test_sms_execute_boundary",
+    "exit_code": 0
+  },
+  {
+    "test": "test_sms_ingress",
+    "exit_code": 0
+  },
+  {
+    "test": "test_sms_whitelist",
+    "exit_code": 0
+  },
+  {
+    "test": "test_feature_guards",
+    "exit_code": 0
+  },
+  {
+    "test": "test_agnss_online",
+    "exit_code": 0
+  },
+  {
+    "test": "test_fota_modem_imei",
+    "exit_code": 0
+  }
+]

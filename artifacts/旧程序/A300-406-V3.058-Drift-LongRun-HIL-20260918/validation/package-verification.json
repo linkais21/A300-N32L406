@@ -1,0 +1,13 @@
+{
+  "app_bytes": 106420,
+  "flash_remaining_bytes": 76,
+  "combined_bytes": 130996,
+  "hex_bin_match": true,
+  "app_hex_padding_normalized_bytes": 8,
+  "factory_init_marker_verified": true,
+  "app_vectors": [
+    536895488,
+    134331717
+  ],
+  "embedded_version": "T360-A300_406_20260918103729,V3.058"
+}

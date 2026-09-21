@@ -1,0 +1,11 @@
+{
+  "unique_scripts": 77,
+  "passed": 76,
+  "incomplete": [
+    "tools/tests/test_at_config_handoff.py"
+  ],
+  "host_lto_unavailable": true,
+  "handoff_O0_Os_passed": true,
+  "release_approved": false,
+  "hardware_verified": false
+}

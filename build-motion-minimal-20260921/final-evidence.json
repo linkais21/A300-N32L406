@@ -1,0 +1,31 @@
+{
+  "source_sha256": {
+    "src/gps_report_filter.c": "51c6e4bb2474e0444f07c6d7b68c329ec0a1754474a54cae9c800e7d0d503dba",
+    "include/gps_report_filter.h": "062d4950101d6cab6a3dbe86680f5bca77dbdc5ee24dd6b1d5e924ef0df00c42",
+    "src/jt808.c": "267d760c3be222ccc2d6e02db41cb1cb10884703313d23f02978eb705cb61eaf",
+    "tools/tests/gps_report_filter_host.c": "531d1e8173da4a270d9cb9ee9ed800eda7d0ef203dfb3f66425cf89c653b61ed",
+    "tools/tests/test_gps_report_wire.py": "3a65931020a1794689e0baf027a2c0dfad4955ac06e81644f8fd70c83b59014c",
+    "docs/minimal-motion-filter-20260921.md": "bbd327bae14422437cee7ce5d797d2f7f3de4dcb5ca6ce3058cec8c58e2abce1",
+    "docs/superpowers/plans/2026-09-21-minimal-motion-filter.md": "618672c7686558c4133671cf9e4bbec6e363dc159a1e11fa774615e823ff88dd"
+  },
+  "baseline_flash": 105164,
+  "final_flash": 106332,
+  "remaining_flash": 164,
+  "same_build_configuration": true,
+  "hardware_verified": false,
+  "release_approved": false,
+  "checks_observed": {
+    "test_gps_report_filter.py": "PASS (actual C, UBSAN)",
+    "test_gps_report_wire.py": "PASS (actual filter and JT808 C)",
+    "test_location_numeric_equivalence.py": "PASS",
+    "test_stationary_location_owner.py": "PASS",
+    "test_gps_retained_clock.py": "PASS",
+    "test_gps_ntp_apply.py": "PASS",
+    "test_feature_guards.py": "PASS",
+    "test_ram01_frame_budget.py compact": "PASS (necessary budget only)",
+    "release-guard": "PASS (gates.log)",
+    "ram-guard": "FAIL: incomplete whole-program stack evidence (gates.log)",
+    "size flash-guard": "PASS, LOW_HEADROOM (final-flash.log)",
+    "scope whitespace/conflict check": "PASS"
+  }
+}

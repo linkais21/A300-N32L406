@@ -1,0 +1,275 @@
+[
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_jt808_dual_session.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_work_mode_policy.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_production_adc.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_adc_power_loss_mileage.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_work_mode_jt808_contract.py"
+    ],
+    "exit": 1
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_work_mode_contract.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_two_mode_acc_stop1.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_acc_debounce.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_vibration_wake_optimization.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_gps_report_wire.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_jt808_first_location.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_terminal_identity.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_feature_guards.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_agnss_scheduler.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_agnss_storage.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_agnss_snapshot.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_agnss_vendor_stream.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_agnss_workspace_ownership.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_work_mode_jt808_contract.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_work_mode_policy.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_jt808_dual_session.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_production_adc.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_adc_power_loss_mileage.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_gps_report_wire.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_jt808_first_location.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_acc_debounce.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_two_mode_acc_stop1.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_vibration_wake_optimization.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_corner_blind_zone_replay.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_jt808_params.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_blind_zone_store.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_blind_zone_replay.py"
+    ],
+    "exit": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_ram01_frame_budget.py",
+      "build-review-fixes-20260917"
+    ],
+    "exit": 0
+  }
+]

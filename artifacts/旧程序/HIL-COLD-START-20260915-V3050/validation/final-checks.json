@@ -1,0 +1,47 @@
+[
+  {
+    "name": "final-manifest",
+    "command": [
+      "python",
+      "tools/tests/test_dev_release_manifest.py",
+      "--manifest",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-COLD-START-20260915-V3050\\V3.050\\SHA256SUMS-N32L406CBL7.json"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "final-build-contract",
+    "command": [
+      "python",
+      "tools/tests/test_bootloader_artifacts.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "final-platform-contract",
+    "command": [
+      "python",
+      "tools/tests/test_bootloader_platform_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "final-boot-map",
+    "command": [
+      "python",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "build/cold-start-3050/boot/bootloader.map"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "diff-check",
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit_code": 0
+  }
+]

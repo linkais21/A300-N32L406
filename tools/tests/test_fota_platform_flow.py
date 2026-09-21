@@ -89,6 +89,8 @@ static unsigned event_count;
 static void event(char c){assert(event_count+1<sizeof events);events[event_count++]=c;events[event_count]=0;}
 config_t *cfg_get(void){return &cfg;}
 bool ec800m_is_ready(void){return ready;}
+static const char *modem_imei="860123456789012";
+void ec800m_get_imei(char *out,uint8_t capacity){snprintf(out,capacity,"%s",modem_imei);}
 bool terminal_identity_sync(char pid[12],char phone[13],char terminal[8]){
     if(!identity_ready)return false;
     strcpy(pid,identity);strcpy(phone,"012345678901");strcpy(terminal,"5678901");return true;
@@ -234,11 +236,16 @@ int main(void){
         if(scenario==4)copy[sizeof copy-1]^=1;
         if(scenario==5)copy[12]^=1;
         if(scenario==6){bytes(copy,sizeof copy-1);tcp=TCP_STATE_CLOSED;pump(1);assert(!resets);continue;}
-        bytes(copy,sizeof copy);assert(!resets);if(scenario==7)bytes("x",1);pump(2);
+        bytes(copy,sizeof copy);assert(!resets);if(scenario==7)bytes("x",1);pump(3);
         if(scenario==0){
             bcr_record_t b;memcpy(&b,flash+BCR_SLOT_B_ADDR,sizeof b);
             assert(!resets && fota_get_state()==FOTA_STATE_READY && signature_calls==1);
             assert(b.state==BCR_PENDING && b.image_version==FW_VERSION_COUNTER+1 && b.transaction_length==sizeof package-FOTA_PACKAGE_HEADER_SIZE);
+            fota_checkpoint_t saved;flash_owner=EXT_FLASH_OWNER_OTA;
+            assert(fota_checkpoint_read(&saved)==1);flash_owner=0;
+            assert(!strcmp(saved.url,"http://fota.lhhn.net/fw?token=task-token-123"));
+            assert(saved.version==FW_VERSION_COUNTER+1 && saved.expected_length==sizeof package);
+            assert(saved.offset==0 && saved.running_crc==0xffffffffUL);
             assert(strstr(events,"VFWC") && strchr(events,'S')<strchr(events,'V'));
             pump(1);assert(opens==3);tcp=TCP_STATE_OPEN;pump(1);assert(sends==3);
             assert(strstr(request,"POST /api/device/updates/progress HTTP/1.1\r\n"));
@@ -259,19 +266,19 @@ int main(void){
     /* Status reporting is best-effort: a silent platform cannot hold a
        verified, committed candidate in READY forever. */
     fresh();expected_signature_digest=canonical_digest;connect_check();update_metadata(FW_VERSION_COUNTER+1,sizeof package,"http://fota.lhhn.net/fw?token=task-token-123","__SHA256__","__SIGNATURE__");download_open();
-    snprintf(header,sizeof header,"HTTP/1.1 200 OK\r\nContent-Length: %u\r\nContent-Type: application/octet-stream\r\n\r\n",(unsigned)sizeof package);bytes(header,strlen(header));bytes(package,sizeof package);pump(3);
+    snprintf(header,sizeof header,"HTTP/1.1 200 OK\r\nContent-Length: %u\r\nContent-Type: application/octet-stream\r\n\r\n",(unsigned)sizeof package);bytes(header,strlen(header));bytes(package,sizeof package);pump(4);
     assert(fota_get_state()==FOTA_STATE_READY && !resets);g_tick_ms+=15000; pump(1);assert(resets==1);
     fresh();inline_status_response=true;expected_signature_digest=canonical_digest;connect_check();update_metadata(FW_VERSION_COUNTER+1,sizeof package,"http://fota.lhhn.net/fw?token=task-token-123","__SHA256__","__SIGNATURE__");download_open();
-    snprintf(header,sizeof header,"HTTP/1.1 200 OK\r\nContent-Length: %u\r\nContent-Type: application/octet-stream\r\n\r\n",(unsigned)sizeof package);bytes(header,strlen(header));bytes(package,sizeof package);pump(3);
+    snprintf(header,sizeof header,"HTTP/1.1 200 OK\r\nContent-Length: %u\r\nContent-Type: application/octet-stream\r\n\r\n",(unsigned)sizeof package);bytes(header,strlen(header));bytes(package,sizeof package);pump(4);
     tcp=TCP_STATE_OPEN;pump(2);assert(resets==1);
     fresh();expected_signature_digest=canonical_digest;connect_check();update_metadata(FW_VERSION_COUNTER+1,sizeof package,"http://fota.lhhn.net/fw?token=task-token-123","__SHA256__","__SIGNATURE__");download_open();
-    snprintf(header,sizeof header,"HTTP/1.1 200 OK\r\nContent-Length: %u\r\nContent-Type: application/octet-stream\r\n\r\n",(unsigned)sizeof package);bytes(header,strlen(header));bytes(package,sizeof package);pump(2);
+    snprintf(header,sizeof header,"HTTP/1.1 200 OK\r\nContent-Length: %u\r\nContent-Type: application/octet-stream\r\n\r\n",(unsigned)sizeof package);bytes(header,strlen(header));bytes(package,sizeof package);pump(3);
     assert(fota_get_state()==FOTA_STATE_READY && !resets);fota_cancel();assert(resets==1);
     fresh();strcpy(cfg.fota_url,"http://fota.lhhn.net:8088");expected_signature_digest=canonical_digest;connect_check();update_metadata(FW_VERSION_COUNTER+1,sizeof package,"http://fota.lhhn.net:8088/fw?token=task-token-123","__SHA256__","__SIGNATURE__");download_open();
-    snprintf(header,sizeof header,"HTTP/1.1 200 OK\r\nContent-Length: %u\r\nContent-Type: application/octet-stream\r\n\r\n",(unsigned)sizeof package);bytes(header,strlen(header));bytes(package,sizeof package);pump(3);
+    snprintf(header,sizeof header,"HTTP/1.1 200 OK\r\nContent-Length: %u\r\nContent-Type: application/octet-stream\r\n\r\n",(unsigned)sizeof package);bytes(header,strlen(header));bytes(package,sizeof package);pump(4);
     tcp=TCP_STATE_OPEN;pump(1);assert(strstr(request,"Host: fota.lhhn.net:8088\r\n") && strstr(request,"\"state\":\"downloaded\""));g_tick_ms+=15000;pump(1);assert(resets==1);
     fresh();expected_signature_digest=canonical_digest;connect_check();update_metadata(FW_VERSION_COUNTER+1,sizeof package,"http://fota.lhhn.net/fw?token=task-token-123","__SHA256__","__SIGNATURE__");download_open();
-    snprintf(header,sizeof header,"HTTP/1.1 200 OK\r\nContent-Length: %u\r\nContent-Type: application/octet-stream\r\n\r\n",(unsigned)sizeof package);bytes(header,strlen(header));bytes(package,sizeof package);pump(3);
+    snprintf(header,sizeof header,"HTTP/1.1 200 OK\r\nContent-Length: %u\r\nContent-Type: application/octet-stream\r\n\r\n",(unsigned)sizeof package);bytes(header,strlen(header));bytes(package,sizeof package);pump(4);
     tcp=TCP_STATE_OPEN;pump(1);assert(sends==3);bytes("HTTP/1.1 500 Error\r\nContent-Length: 0\r\n\r\n",44);pump(1);
     assert(fota_get_state()==FOTA_STATE_READY && !resets);g_tick_ms+=1000;pump(1);tcp=TCP_STATE_OPEN;pump(1);assert(sends==4);
     g_tick_ms+=14000;pump(1);assert(resets==1);

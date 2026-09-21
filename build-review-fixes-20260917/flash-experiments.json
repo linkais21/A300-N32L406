@@ -1,0 +1,53 @@
+[
+  {
+    "case": "build-review-fixes-20260917",
+    "used_bytes": 105992,
+    "remaining_bytes": 504,
+    "bin_sha256": "e01645f05ca4c2b9cfde3c68bba21452e9b1dca6a3b056e2da741b77ae784dba",
+    "static": 18024,
+    "known_frames": 2400,
+    "remaining_before_heap_IRQ_unknowns": 4152
+  },
+  {
+    "case": "build-review-oz-20260917",
+    "used_bytes": 105992,
+    "remaining_bytes": 504,
+    "bin_sha256": "afb2ffa821dcb26c46357e327cc85b079c28e97c63dd4f08bd1e626004eda705"
+  },
+  {
+    "case": "build-review-inline-20260917",
+    "used_bytes": 104256,
+    "remaining_bytes": 2240,
+    "bin_sha256": "be3c4a25e08a10f3eaf5e4aee4b9c7c42bb79be7dfb1ae13a3da0e33d1796221",
+    "static": 18000,
+    "known_frames": 2496,
+    "remaining_before_heap_IRQ_unknowns": 4080
+  },
+  {
+    "case": "build-review-selective-20260917",
+    "used_bytes": 104444,
+    "remaining_bytes": 2052,
+    "bin_sha256": "bc81a4a607bb03200aab178a6f7f1097519985b717fb8a2fee23332b2e49d690",
+    "static": 17992,
+    "known_frames": 2528,
+    "remaining_before_heap_IRQ_unknowns": 4056
+  },
+  {
+    "case": "build-review-agnss-boundary-20260917",
+    "used_bytes": 104312,
+    "remaining_bytes": 2184,
+    "bin_sha256": "d730a1d89d8af76ae4597e590fcf1c20e7e13db86af1c2e31a02db1e4cf04c83",
+    "static": 18004,
+    "known_frames": 2496,
+    "remaining_before_heap_IRQ_unknowns": 4076
+  },
+  {
+    "case": "build-review-local-inline-20260917",
+    "used_bytes": 104380,
+    "remaining_bytes": 2116,
+    "bin_sha256": "351a9e38dec45a646f80f5ab285fd984583334907e92412b9177e4f188157924",
+    "static": 18008,
+    "known_frames": 2440,
+    "remaining_before_heap_IRQ_unknowns": 4128
+  }
+]

@@ -1,0 +1,66 @@
+[
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_at_config_serial_f39.py"
+    ],
+    "exit_code": 0,
+    "log": "test_at_config_serial_f39.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_end_to_end.py"
+    ],
+    "exit_code": 0,
+    "log": "test_f39_end_to_end.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_drop_diagnostics.py"
+    ],
+    "exit_code": 0,
+    "log": "test_gps_drop_diagnostics.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_nmea_replay.py"
+    ],
+    "exit_code": 0,
+    "log": "test_nmea_replay.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_ntp_apply.py"
+    ],
+    "exit_code": 0,
+    "log": "test_gps_ntp_apply.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_tx_bounded.py"
+    ],
+    "exit_code": 0,
+    "log": "test_gps_tx_bounded.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_adc_power_loss_mileage.py"
+    ],
+    "exit_code": 0,
+    "log": "test_adc_power_loss_mileage.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_selftest.py"
+    ],
+    "exit_code": 0,
+    "log": "test_production_selftest.log"
+  }
+]

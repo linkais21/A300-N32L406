@@ -1,0 +1,60 @@
+{
+  "firmware_version": "T360-A300_406_20260917193928,V3.055",
+  "version_counter": 3055,
+  "mcu": "N32L406CBL7",
+  "purpose": "User-requested SWD bench test of log fields, creation timestamp and stationary drift filter",
+  "release_approved": false,
+  "release_gate": "FAIL: incomplete whole-program stack/heap/exception evidence",
+  "host_tests_passed": 31,
+  "app_bytes": 105848,
+  "combined_bytes": 130424,
+  "app_flash_free": 648,
+  "addresses": {
+    "combined": "0x08000000",
+    "app": "0x08006000"
+  },
+  "factory_initialization": "First boot resets configuration and upgrade state; back up parameters before flashing",
+  "hardware_tested": false,
+  "artifacts": {
+    "App-N32L406CBL7.bin": {
+      "bytes": 105848,
+      "sha256": "b6d2674574c7a3f3328f673cdf98d13eac8d988ea15ebebb9eaab1c9ac6f6504"
+    },
+    "App-N32L406CBL7.elf": {
+      "bytes": 170284,
+      "sha256": "e1ab84587d94673d52b08acab55707dd99554f9dfa86cc3b29157c2b3d91b561"
+    },
+    "App-N32L406CBL7.hex": {
+      "bytes": 297782,
+      "sha256": "d388e73f9d5fede40d58eb615682df1b358927b273fba2bb0a3724338aae2b78"
+    },
+    "App-N32L406CBL7.map": {
+      "bytes": 141249,
+      "sha256": "a291d9795df293b89cced9f8539ffd0c44d82eb2797e6d2d7e35f7d96d3a184b"
+    },
+    "Bootloader-N32L406CBL7.bin": {
+      "bytes": 22556,
+      "sha256": "9ae0b35872943445e34e8ede414a7afd7243b3baa605bbfae4eb7f83fafefd8e"
+    },
+    "Bootloader-N32L406CBL7.elf": {
+      "bytes": 32720,
+      "sha256": "aeb194a43591012252ebcd8b3b768596446e2e59cc6710c26cd2c37f59ff1afa"
+    },
+    "Bootloader-N32L406CBL7.hex": {
+      "bytes": 40667,
+      "sha256": "9faf51b4e9a0b7267d66011038196a1f3ab8a9d670be5f152c53ec04de0bf9f4"
+    },
+    "Bootloader-N32L406CBL7.map": {
+      "bytes": 63501,
+      "sha256": "539c1601c01784f69fba3f6b29b680c7e006920697d51a6e0dae61272e0d0ff0"
+    },
+    "SWD-Combined-N32L406CBL7.bin": {
+      "bytes": 130424,
+      "sha256": "9dbb3ab6c13f677932014c3db950064c03fd713d5483648a4aeec57ac8550169"
+    },
+    "SWD-Combined-N32L406CBL7.hex": {
+      "bytes": 366892,
+      "sha256": "2bb619e31e76dd472a9747b7930fb104238ff42af4cda41997518766330f7972"
+    }
+  }
+}

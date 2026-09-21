@@ -1,0 +1,25 @@
+[
+  {
+    "name": "app-build",
+    "command": [
+      ".\\make.CMD",
+      "-B",
+      "all",
+      "BUILD=build/cold-start-3050/app"
+    ],
+    "exit_code": 0,
+    "warnings": []
+  },
+  {
+    "name": "boot-build",
+    "command": [
+      ".\\make.CMD",
+      "-B",
+      "-f",
+      "../build/cold-start-3050/validation/boot-hil.mk",
+      "all"
+    ],
+    "exit_code": 1,
+    "warnings": []
+  }
+]

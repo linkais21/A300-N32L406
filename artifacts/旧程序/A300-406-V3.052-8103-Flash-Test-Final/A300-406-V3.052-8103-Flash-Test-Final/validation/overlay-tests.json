@@ -1,0 +1,30 @@
+[
+  {
+    "test": "test_jt808_params",
+    "exit_code": 0
+  },
+  {
+    "test": "test_jt808_params_wire",
+    "exit_code": 0
+  },
+  {
+    "test": "test_jt808_dual_session",
+    "exit_code": 0
+  },
+  {
+    "test": "test_mileage_persistence",
+    "exit_code": 0
+  },
+  {
+    "test": "test_ec800m_qisend",
+    "exit_code": 0
+  },
+  {
+    "test": "test_jt808_session_send_failure",
+    "exit_code": 0
+  },
+  {
+    "test": "test_production_selftest",
+    "exit_code": 0
+  }
+]

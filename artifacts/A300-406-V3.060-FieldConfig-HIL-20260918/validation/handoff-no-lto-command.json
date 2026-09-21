@@ -1,0 +1,7 @@
+{
+  "command": [
+    "C:\\Python314\\python.exe",
+    "build/field-config-release/handoff_no_lto.py"
+  ],
+  "exit_code": 0
+}

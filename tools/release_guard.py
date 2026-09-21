@@ -112,7 +112,7 @@ CANONICAL_CONSUMER_PATTERNS = {
     ),
 }
 CANONICAL_CONSUMER_MACROS = {
-    "src/main.c": {"FW_BUILD_DATE", "FW_FULL_VERSION", "FW_JT808_MODEL_STR",
+    "src/main.c": {"FW_BUILD_DATE", "FW_BUILD_NUMBER", "FW_FULL_VERSION", "FW_JT808_MODEL_STR",
                    "FW_MANUFACTURER_ID_STR", "WORK_MODE_DEFAULT_STOPPED_REPORT_S",
                    "TICK_MS"},
     "src/jt808_params.c": {"JT808_TERMINAL_INFO_BODY_LENGTH",
@@ -124,6 +124,7 @@ CANONICAL_CONSUMER_MACROS = {
 }
 CANONICAL_MACRO_DEFINITIONS = {
     "FW_BUILD_DATE": re.compile(r'"[^"\r\n]*"'),
+    "FW_BUILD_NUMBER": re.compile(r'"[0-9]{12}"'),
     "FW_FULL_VERSION": re.compile(rf'"{re.escape(TARGET_VERSION)}"'),
     "FW_OTA_MODEL_STR": re.compile(rf'"{re.escape(TARGET_OTA_MODEL)}"'),
     "FW_JT808_MODEL_STR": re.compile(rf'"{re.escape(TARGET_JT808_MODEL)}"'),
@@ -142,7 +143,8 @@ TRIGRAPHS = {
     "??!": "|", "??<": "{", "??>": "}", "??-": "~",
 }
 CANONICAL_CONSUMER_SHA256 = {
-    "src/main.c": "9dea394461c37e553f3e9dbd4f9bb1825e2fd1094d23d9721a4f1c51660df0b4",
+    # Reviewed: OTA ERROR permits config polling; identity initialization unchanged.
+    "src/main.c": "23d778bff85cc6dae773751666afe39513aa886dfb362c443073c85715e5ce5c",
     "src/jt808.c": "d38583fc4d2e47eab4fe184b90a21205dc6e2606266a20e824bff69321871586",
     "src/jt808_params.c": "2f4c5cefaa334a336896ec36cc7feaaa56ae1b56dcaef44e4b33a33008dc7a11",
     "src/jt808_terminal_info.c": "0ce1a9cf82880062c0d84b88bc50ae047c59ec7f6e5e17ea59266b50a0499d49",
@@ -150,10 +152,12 @@ CANONICAL_CONSUMER_SHA256 = {
     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
 }
 CANONICAL_IDENTITY_FILE_SHA256 = {
-    "include/config.h": "0613a21400a16309c08ec3e4bbec615b5ecff6407ee9fc68b3877b54afb26119",
-    "include/build_version.h": "285631e56a01b11dd3802a557e283d87b597611847a69168501b8676ab05cc3c",
-    "include/f39_reply.h": "2ed804411ce7eaac804a739764824fd0c4e73342744ea63240a728a2e46f8715",
-    "include/jt808.h": "08c0d611d87d2a919607e256c20ea6ce0d8908ca394b570933331fc9c8b74013",
+    # Reviewed: V3.071 identity/counter only; generated timestamps stay normalized.
+    "include/config.h": "65035af4d3c34932ded7df54c47c5cd558b7763eb80a60420f75ae97dd80c612",
+    "include/build_version.h": "fa5217260129bb93b55ded2090be088888d04e459171fe17aa489492a13eadf5",
+    "include/f39_reply.h": "4519c084bcc677d23c02aa4ac509f2390527f16111139f011052017f08c615ed",
+    # Reviewed: remove unused heartbeat getter declaration only; identity/wire unchanged.
+    "include/jt808.h": "d1f6f11e0fcfb1ee85062080501c1e8a3901f8d313ae96d0b206393ab694e71d",
     "include/jt808_terminal_info.h": "ed27611b540da8fe8ed50a3d349d52ada04f2e66aa62db8f3d6b85497c35d8df",
 }
 
@@ -356,6 +360,10 @@ def canonical_body_digest(body: str) -> str:
 def canonical_file_digest(text: str, relative: str) -> str:
     """Hash reviewed dependency text, ignoring generator-only volatile fields."""
     normalized = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    if relative in ("include/build_version.h", "include/config.h"):
+        normalized = re.sub(
+            r'(?m)^(\s*#define\s+FW_(?:FULL_VERSION|VERSION_STR)\s+"[^"\r\n]*_)\d{14}(,V)',
+            r'\g<1><creation-time>\2', normalized)
     if relative == "include/build_version.h":
         normalized = re.sub(
             r"\A/\* Auto-generated build version - DO NOT EDIT \*/\n",

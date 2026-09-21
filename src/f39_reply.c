@@ -1,5 +1,8 @@
 #include "f39_reply.h"
 #include "terminal_identity.h"
+#include "plate_encoding.h"
+#include "fota.h"
+#include "log_platform.h"
 
 #include <stdarg.h>
 #include <math.h>
@@ -74,22 +77,24 @@ static f39_result_t success(f39_reply_t *reply, const char *name)
     return F39_RESULT_OK;
 }
 
-static bool operation_name(f39_operation_t operation, const char **name)
+/* Share scalar query formatting, including truncation/error handling. */
+static f39_result_t query_unsigned(f39_reply_t *reply, const char *name,
+                                   unsigned long value)
 {
-    static const char *const names[] = {
-        "", "PARAM", "DUALSET", "RESET", "PID", "IP", "FIP", "FREQ",
-        "HBT", "MODEL", "SPEED", "APN", "RELAY", "GPSDUP", "MLG",
-        "CAR", "GPSBDS", "GMTSET", "VIBSENS", "FKEY", "FOTA", "LOG"
-    };
-    if (name == NULL || operation <= F39_OPERATION_INVALID ||
-        operation > F39_OPERATION_LOG) {
-        return false;
-    }
-    *name = names[operation];
-    return true;
+    reply_clear(reply);
+    return reply_append(reply, "%s,%lu=Success!\r\n", name, value) ?
+        F39_RESULT_OK : failure(reply, name, "reply-too-long");
 }
 
-static void apply_effects(uint32_t effects, f39_platform_t *p)
+static f39_result_t query_text(f39_reply_t *reply, const char *name,
+                               const char *value, int capacity)
+{
+    reply_clear(reply);
+    return reply_append(reply, "%s,%.*s=Success!\r\n", name, capacity, value) ?
+        F39_RESULT_OK : failure(reply, name, "reply-too-long");
+}
+
+void f39_apply_effects(uint32_t effects, f39_platform_t *p)
 {
     if ((effects & F39_EFFECT_TIMER_REFRESH) != 0U && p->timer_refresh != NULL) {
         p->timer_refresh(p->context);
@@ -181,7 +186,7 @@ static f39_result_t query(const f39_request_t *r, f39_platform_t *p,
     const device_config_t *c = p->config;
     const char *name;
     char terminal_id[8];
-    if (!operation_name(r->operation, &name) || c == NULL || !valid_config_text(c)) {
+    if (!f39_operation_name(r->operation, &name) || c == NULL || !valid_config_text(c)) {
         return F39_RESULT_INVALID;
     }
     switch (r->operation) {
@@ -231,83 +236,109 @@ static f39_result_t query(const f39_request_t *r, f39_platform_t *p,
         {
             /* Terminal command spec sheet1: PID# echoes the full 11-digit
              * device ID, not the 7-byte JT808 terminal id derived from it. */
-            char pid_text[CFG_PID_LEN];
+            const char *pid_text = c->pid;
             if (!device_id(c, p, terminal_id)) return failure(out,name,"identity");
-            if (c->pid[0] != '\0') {
-                (void)memcpy(pid_text, c->pid, CFG_PID_LEN - 1U);
-                pid_text[CFG_PID_LEN - 1U] = '\0';
-            } else {
-                char imei[F39_IMEI_MAX_LENGTH + 1U];
+            if (c->pid[0] == '\0') {
                 if (p->imei_len != 15U) return failure(out,name,"identity");
-                (void)memcpy(imei, p->imei, 15U);
-                imei[15] = '\0';
-                (void)memcpy(pid_text, imei + 4U, 11U);
-                pid_text[11] = '\0';
+                pid_text = p->imei + 4U;
             }
-            return reply_append(out, "PID,%s=Success!\r\n", pid_text) ?
+            return reply_append(out, "PID,%.*s=Success!\r\n", (int)(CFG_PID_LEN - 1U), pid_text) ?
             F39_RESULT_OK : failure(out, name, "reply-too-long");
         }
     case F39_OPERATION_IP:
+    case F39_OPERATION_FIP: {
+        bool backup = r->operation == F39_OPERATION_FIP;
         reply_clear(out);
-        return reply_append(out, "IP,%.*s,%u=Success!\r\n", (int)CFG_IP_LEN, c->server_ip,
-                            (unsigned)c->server_port) ? F39_RESULT_OK :
-            failure(out, name, "reply-too-long");
-    case F39_OPERATION_FIP:
-        reply_clear(out);
-        if (c->backup_ip[0] != '\0') {
-            return reply_append(out, "FIP,%.*s,%u=Success!\r\n", (int)CFG_IP_LEN, c->backup_ip,
-                                (unsigned)c->backup_port) ? F39_RESULT_OK :
+        if (backup && c->backup_ip[0] == '\0') {
+            return reply_append(out, "FIP,0=Success!\r\n") ? F39_RESULT_OK :
                 failure(out, name, "reply-too-long");
         }
-        return reply_append(out, "FIP,0=Success!\r\n") ? F39_RESULT_OK :
+        return reply_append(out, "%s,%.*s,%u=Success!\r\n", name, (int)CFG_IP_LEN,
+                            backup ? c->backup_ip : c->server_ip,
+                            (unsigned)(backup ? c->backup_port : c->server_port)) ? F39_RESULT_OK :
             failure(out, name, "reply-too-long");
+    }
     case F39_OPERATION_FREQ:
         reply_clear(out);
         return reply_append(out, "FREQ,%u,%u=Success!\r\n", (unsigned)c->report_moving_s,
                             (unsigned)c->report_stopped_s) ? F39_RESULT_OK : failure(out,name,"reply-too-long");
     case F39_OPERATION_HBT:
-        reply_clear(out); return reply_append(out,"HBT,%u=Success!\r\n",(unsigned)c->heartbeat_s)?F39_RESULT_OK:failure(out,name,"reply-too-long");
+        return query_unsigned(out, name, c->heartbeat_s);
     case F39_OPERATION_FKEY:
         reply_clear(out);
         return reply_append(out, "FKEY,CONFIGURED=%u\r\n",
                             c->device_api_key[0] == '\0' ? 0U : 1U) ?
                F39_RESULT_OK : failure(out, name, "reply-too-long");
     case F39_OPERATION_FOTA:
-        reply_clear(out); return reply_append(out, "FOTA,STATUS=IDLE\r\n") ? F39_RESULT_OK : failure(out, name, "reply-too-long");
+        reply_clear(out); return reply_append(out, "FOTA,STATUS=%u\r\n", (unsigned)fota_get_state()) ? F39_RESULT_OK : failure(out, name, "reply-too-long");
     case F39_OPERATION_LOG:
-        reply_clear(out); return reply_append(out, "LOG,STATUS=READY\r\n") ? F39_RESULT_OK : failure(out, name, "reply-too-long");
+        reply_clear(out); return reply_append(out, "LOG,SEND_RESULT=%d\r\n", log_platform_send_result()) ? F39_RESULT_OK : failure(out, name, "reply-too-long");
     case F39_OPERATION_MODEL:
-        reply_clear(out); return reply_append(out,"MODEL,%.*s=Success!\r\n",(int)CFG_MODEL_LEN,c->terminal_model)?F39_RESULT_OK:failure(out,name,"reply-too-long");
+        return query_text(out, name, c->terminal_model, CFG_MODEL_LEN);
     case F39_OPERATION_SPEED:
-        reply_clear(out); return reply_append(out,"SPEED,%u=Success!\r\n",(unsigned)c->speed_limit_kmh)?F39_RESULT_OK:failure(out,name,"reply-too-long");
+        return query_unsigned(out, name, c->speed_limit_kmh);
     case F39_OPERATION_APN:
-        reply_clear(out); return c->autoapn_en ? (reply_append(out,"APN,AUTO=Success!\r\n")?F39_RESULT_OK:failure(out,name,"reply-too-long")) : (reply_append(out,"APN,%.*s=Success!\r\n",(int)CFG_APN_LEN,c->apn)?F39_RESULT_OK:failure(out,name,"reply-too-long"));
+        return query_text(out, name, c->autoapn_en ? "AUTO" : c->apn, CFG_APN_LEN);
     case F39_OPERATION_GPSDUP:
-        reply_clear(out); return reply_append(out,"GPSDUP,%u=Success!\r\n",c->sleep_report_mode?0U:1U)?F39_RESULT_OK:failure(out,name,"reply-too-long");
+        return query_unsigned(out, name, c->sleep_report_mode ? 0UL : 1UL);
     case F39_OPERATION_MLG:
-        reply_clear(out); return reply_append(out,"MLG,%lu=Success!\r\n",(unsigned long)(c->mileage_m/100U))?F39_RESULT_OK:failure(out,name,"reply-too-long");
-    case F39_OPERATION_CAR:
-        reply_clear(out); return reply_append(out,"CAR,%.*s=Success!\r\n",(int)CFG_PLATE_LEN,c->plate_no)?F39_RESULT_OK:failure(out,name,"reply-too-long");
+        return query_unsigned(out, name, c->mileage_m / 100U);
+    case F39_OPERATION_CAR: {
+        uint8_t plate[CFG_PLATE_LEN + 1U];
+        uint8_t n = plate_encode_gbk(c->plate_no, plate, CFG_PLATE_LEN);
+        plate[n] = '\0';
+        return query_text(out, name, (const char *)plate, sizeof plate);
+    }
     case F39_OPERATION_GPSBDS:
-        reply_clear(out); return reply_append(out,"GPSBDS,%u=Success!\r\n",(unsigned)c->gpsbds_mode)?F39_RESULT_OK:failure(out,name,"reply-too-long");
+        return query_unsigned(out, name, c->gpsbds_mode);
     case F39_OPERATION_GMTSET:
         reply_clear(out); return reply_append(out,"GMTSET,%c%02u%02u=Success!\r\n",c->gmt_sign<0?'W':'E',(unsigned)c->gmt_hour,(unsigned)c->gmt_min)?F39_RESULT_OK:failure(out,name,"reply-too-long");
     case F39_OPERATION_VIBSENS:
-        reply_clear(out); return reply_append(out,"VIBSENS,%u=Success!\r\n",(unsigned)c->vib_sens)?F39_RESULT_OK:failure(out,name,"reply-too-long");
+        return query_unsigned(out, name, c->vib_sens);
     default: return F39_RESULT_INVALID;
     }
 }
 
-f39_result_t f39_execute(const f39_request_t *request,
+/* Keep the 808-byte transaction off query/action paths; no shared mutable
+ * workspace is introduced and commit/effect ordering remains unchanged. */
+static f39_result_t execute_config(const f39_request_t *request,
+                                    f39_platform_t *platform, f39_reply_t *reply,
+                                    uint32_t *effects, const char *name)
+    __attribute__((noinline));
+static f39_result_t execute_config(const f39_request_t *request,
+                                    f39_platform_t *platform, f39_reply_t *reply,
+                                    uint32_t *effects, const char *name)
+{
+    f39_transaction_t tx;
+    if (platform->config == NULL || platform->persist == NULL) return failure(reply,name,"invalid");
+    f39_transaction_init(&tx, platform->config, platform->persist, platform->context);
+    if (!f39_prepare_config(request, platform->config, &tx)) {
+        return failure(reply,name,"config");
+    }
+    if (!effects_ready(tx.effects, platform) ||
+        ((tx.effects & F39_EFFECT_GNSS_REFRESH) != 0U &&
+        (platform->gnss_set_mode == NULL ||
+         (tx.candidate.gnss_type != GNSS_TYPE_TAU804M)))) {
+        return failure(reply,name,"unsupported-receiver");
+    }
+    if (f39_commit_config(&tx) != F39_RESULT_OK) {
+        return failure(reply,name,"config");
+    }
+    *effects = tx.effects;
+    return F39_RESULT_OK;
+}
+
+f39_result_t f39_execute_deferred(const f39_request_t *request,
                          f39_platform_t *platform,
-                         f39_reply_t *reply)
+                         f39_reply_t *reply, uint32_t *effects)
 {
     const char *name;
-    f39_transaction_t tx;
     char value[32];
+    if (effects == NULL) return F39_RESULT_INVALID;
+    *effects = F39_EFFECT_NONE;
     if (reply == NULL) return F39_RESULT_INVALID;
     reply_clear(reply);
-    if (request == NULL || platform == NULL || !operation_name(request->operation, &name)) {
+    if (request == NULL || platform == NULL || !f39_operation_name(request->operation, &name)) {
         return failure(reply, "F39", "invalid");
     }
     if (request->operation == F39_OPERATION_PARAM ||
@@ -330,7 +361,8 @@ f39_result_t f39_execute(const f39_request_t *request,
             reply_clear(reply);
             return reply_append(reply,"RELAY,%u=Success!\r\n",state?1U:0U)?F39_RESULT_OK:failure(reply,name,"reply-too-long");
         }
-        if (!arg_text(request,0U,value,sizeof(value)) || platform->relay_set == NULL ||
+        if (request->argc != 1U ||
+            !arg_text(request,0U,value,sizeof(value)) || platform->relay_set == NULL ||
             (strcmp(value,"0") != 0 && strcmp(value,"1") != 0)) return failure(reply,name,"invalid");
         cut = (value[0] == '1');
         if (cut) {
@@ -345,24 +377,20 @@ f39_result_t f39_execute(const f39_request_t *request,
         reply_clear(reply);
         return reply_append(reply,"RELAY,%u=Success!\r\n",cut?1U:0U)?F39_RESULT_OK:failure(reply,name,"reply-too-long");
     }
-    if (platform->config == NULL || platform->persist == NULL) return failure(reply,name,"invalid");
-    f39_transaction_init(&tx, platform->config, platform->persist, platform->context);
-    if (!f39_prepare_config(request, platform->config, &tx)) {
-        return failure(reply,name,"config");
-    }
-    if (!effects_ready(tx.effects, platform) ||
-        ((tx.effects & F39_EFFECT_GNSS_REFRESH) != 0U &&
-        (platform->gnss_set_mode == NULL ||
-         (tx.candidate.gnss_type != GNSS_TYPE_TAU804M &&
-          tx.candidate.gnss_type != GNSS_TYPE_ATGM332D_F7N)))) {
-        return failure(reply,name,"unsupported-receiver");
-    }
-    if (f39_commit_config(&tx) != F39_RESULT_OK) {
-        return failure(reply,name,"config");
-    }
-    apply_effects(tx.effects, platform);
-    if (request->operation == F39_OPERATION_FKEY) {
+    if (execute_config(request, platform, reply, effects, name) != F39_RESULT_OK)
+        return F39_RESULT_INVALID;
+    /* Formatting must happen after the configuration transaction frame has
+     * returned, especially FKEY's query/stdio path. */
+    if (request->operation == F39_OPERATION_FKEY)
         return query(request, platform, reply);
-    }
     return success(reply,name);
+}
+
+f39_result_t f39_execute(const f39_request_t *request,
+                         f39_platform_t *platform, f39_reply_t *reply)
+{
+    uint32_t effects;
+    f39_result_t result = f39_execute_deferred(request, platform, reply, &effects);
+    if (effects != F39_EFFECT_NONE) f39_apply_effects(effects, platform);
+    return result;
 }

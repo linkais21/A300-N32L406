@@ -1,0 +1,12 @@
+{
+  "file": "A300-406-OTA-V3068.bin",
+  "deviceModel": "A300-406",
+  "versionCode": 3068,
+  "versionName": "T360-A300_406_20260920090943,V3.068",
+  "size": 105116,
+  "sha256": "74951ea422ecf6cff0bac7106589fd1361da6d6ee4b14fcac5e57a9028df5db5",
+  "active": false,
+  "mandatory": false,
+  "signing": "platform-detached",
+  "releaseNotes": "实机验证版：修复 APN 配置确认失败及重复下发导致每分钟重连。"
+}

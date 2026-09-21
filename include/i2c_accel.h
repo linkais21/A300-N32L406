@@ -22,8 +22,6 @@ typedef struct {
 
 void  i2c_accel_init(void);
 bool  i2c_accel_read(accel_data_t *out);
-bool  i2c_accel_detect_vibration(void);  /* 采样+更新状态，每200ms由scan_alarms调用 */
-bool  i2c_accel_is_moving(void);         /* 读缓存结果，任意时刻可调用 */
 bool  i2c_accel_vibration_hit(uint8_t sensitivity_level);
 bool  i2c_accel_vibration_sample_due(void);
 void  i2c_accel_reset_vibration_window(void);

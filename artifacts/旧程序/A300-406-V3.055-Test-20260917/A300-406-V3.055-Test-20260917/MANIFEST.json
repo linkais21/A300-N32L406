@@ -1,0 +1,71 @@
+{
+  "firmware_version": "T360-A300_406_20260823000000,V3.055",
+  "version_counter": 3055,
+  "mcu": "N32L406CBL7",
+  "release_approved": false,
+  "purpose": "User-requested SWD and OTA bench test candidate",
+  "release_gate": "FAIL: incomplete whole-program stack/heap/exception evidence",
+  "host_tests_passed": 64,
+  "build_stamp": "202609171900",
+  "app_bytes": 102328,
+  "app_flash_free": 4168,
+  "signing": "platform-detached; OTA upload image is unsigned",
+  "addresses": {
+    "combined": "0x08000000",
+    "app": "0x08006000"
+  },
+  "artifacts": {
+    "App-N32L406CBL7.bin": {
+      "bytes": 102328,
+      "sha256": "2f4ce000b01bec7f99db9ed649566654e58b87b14b1d4b3e6996ce5af75710f8"
+    },
+    "Bootloader-N32L406CBL7.bin": {
+      "bytes": 22556,
+      "sha256": "9ae0b35872943445e34e8ede414a7afd7243b3baa605bbfae4eb7f83fafefd8e"
+    },
+    "App-N32L406CBL7.hex": {
+      "bytes": 287895,
+      "sha256": "c4fa7a49e12602d34076eb96739f6d539a6e12f89a8f1f5a634a997d31732060"
+    },
+    "Bootloader-N32L406CBL7.hex": {
+      "bytes": 40667,
+      "sha256": "9faf51b4e9a0b7267d66011038196a1f3ab8a9d670be5f152c53ec04de0bf9f4"
+    },
+    "App-N32L406CBL7.elf": {
+      "bytes": 156448,
+      "sha256": "39b98fce7e6ebfb9194488d0f6212b666b5c51af3dc0a87ea62c99c2bd2e33dd"
+    },
+    "Bootloader-N32L406CBL7.elf": {
+      "bytes": 32720,
+      "sha256": "aeb194a43591012252ebcd8b3b768596446e2e59cc6710c26cd2c37f59ff1afa"
+    },
+    "App-N32L406CBL7.map": {
+      "bytes": 138780,
+      "sha256": "11badf62ac9b86e6d7dfb3103d530fc4e4f6a9e690e81c8d34c1861b1de5ea8d"
+    },
+    "Bootloader-N32L406CBL7.map": {
+      "bytes": 63501,
+      "sha256": "539c1601c01784f69fba3f6b29b680c7e006920697d51a6e0dae61272e0d0ff0"
+    },
+    "SWD-Combined-N32L406CBL7.bin": {
+      "bytes": 126904,
+      "sha256": "a0fe472c3adeea6ada8d33caca0c6fcb888489f7d15a6505b50602600b989a21"
+    },
+    "SWD-Combined-N32L406CBL7.hex": {
+      "bytes": 356992,
+      "sha256": "5a6652eeb8637daaaa1d8c70274e5fa30693d3cf478766911ffbc391e73c1afa"
+    },
+    "A300-406-OTA-V3055.bin": {
+      "bytes": 102360,
+      "sha256": "9f23f7f4804bcc8070b846917592cee778c143f71ec044e5101a32825d57dbc3"
+    },
+    "CLEANUP-REVIEW.md": {
+      "bytes": 3114,
+      "sha256": "c0b6d6829f5f6ff1d8f0929199bfdd4aad00ec31bc39b072e8da5efc6aabc164"
+    }
+  },
+  "baseline": "A300-406-V3.054-V150-Fix-20260917",
+  "git_revision": "6eab8e68391ead12b0d280aea441e641c2614389",
+  "git_dirty": true,
+  "source_snapshot_sha256": "ba3006f122ab3f458331050436045645f2e66a4dd4891bd10650fa7b1ea815d2"
+}

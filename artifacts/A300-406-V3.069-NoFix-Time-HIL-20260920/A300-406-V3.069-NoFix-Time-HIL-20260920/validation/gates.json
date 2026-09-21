@@ -1,0 +1,31 @@
+[
+  {
+    "name": "release-gate",
+    "command": [
+      "D:\\ST\\STM32CubeIDE_2.1.1\\STM32CubeIDE\\plugins\\com.st.stm32cube.ide.mcu.externaltools.make.win32_2.2.100.202601091506\\tools\\bin\\make.exe",
+      "-k",
+      "release-gate",
+      "BUILD=build-v3069-nofix"
+    ],
+    "exit_code": 2
+  },
+  {
+    "name": "boot-ram",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "bootloader/build/bootloader.map"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "libc-parser",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/libc_parser_guard.py",
+      "build-v3069-nofix/a300_firmware.map"
+    ],
+    "exit_code": 0
+  }
+]

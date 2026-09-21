@@ -1,0 +1,7 @@
+{
+  "src/gps_report_filter.c": "92dd968f21147f890cf1c53574d9bde4a02dfe3a3ac614b8497906e96e5f7c61",
+  "include/gps_report_filter.h": "726ea6f87f88aeed3bdcc14267982315954bfb96bc8550f229da1329dda53a58",
+  "src/jt808.c": "89f4774f1c1359fc49756b6df3c76c55af8d4d752e4e9f349ceaa2dd872ab1c1",
+  "tools/tests/gps_report_filter_host.c": "9b5a71a72bd48ba8af27439fef2402b46a62a3c3738774ba9f59fe622c31a393",
+  "tools/tests/test_gps_report_wire.py": "0ea80672a9ef03a7dbd920bd8e80b4f3a14c0892a6072b906e0456ccbabed3c2"
+}

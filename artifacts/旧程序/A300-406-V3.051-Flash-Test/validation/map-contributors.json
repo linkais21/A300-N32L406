@@ -1,0 +1,915 @@
+{
+  "input_section_sums": {
+    "app/sdk/startup": 86429,
+    "libc_nano.a": 3596,
+    "libgcc.a": 2676,
+    "firmware_signature": 112,
+    "micro-ecc": 3488,
+    "libm.a": 8252
+  },
+  "sections": [
+    {
+      "section": ".isr_vector",
+      "address": 134242304,
+      "bytes": 328,
+      "owner": "build/flash-audit-3051/app/src/startup_n32l40x.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".text",
+      "address": 134242640,
+      "bytes": 64572,
+      "owner": "C:\\Users\\86166\\AppData\\Local\\Temp\\ccu4vkik.ltrans0.ltrans.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".text",
+      "address": 134307212,
+      "bytes": 20,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-strcmp.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text",
+      "address": 134307232,
+      "bytes": 160,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-memchr.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text",
+      "address": 134307392,
+      "bytes": 16,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-strlen.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text",
+      "address": 134307408,
+      "bytes": 888,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard\\libgcc.a(_arm_addsubdf3.o)",
+      "group": "libgcc.a"
+    },
+    {
+      "section": ".text",
+      "address": 134308296,
+      "bytes": 1060,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard\\libgcc.a(_arm_muldivdf3.o)",
+      "group": "libgcc.a"
+    },
+    {
+      "section": ".text",
+      "address": 134309356,
+      "bytes": 272,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard\\libgcc.a(_arm_cmpdf2.o)",
+      "group": "libgcc.a"
+    },
+    {
+      "section": ".text",
+      "address": 134309628,
+      "bytes": 44,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard\\libgcc.a(_arm_unorddf2.o)",
+      "group": "libgcc.a"
+    },
+    {
+      "section": ".text",
+      "address": 134309672,
+      "bytes": 80,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard\\libgcc.a(_arm_fixdfsi.o)",
+      "group": "libgcc.a"
+    },
+    {
+      "section": ".text",
+      "address": 134309752,
+      "bytes": 64,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard\\libgcc.a(_arm_fixunsdfsi.o)",
+      "group": "libgcc.a"
+    },
+    {
+      "section": ".text",
+      "address": 134309816,
+      "bytes": 160,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard\\libgcc.a(_arm_truncdfsf2.o)",
+      "group": "libgcc.a"
+    },
+    {
+      "section": ".text.deregister_tm_clones",
+      "address": 134309976,
+      "bytes": 28,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard/crtbegin.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".text.register_tm_clones",
+      "address": 134310004,
+      "bytes": 36,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard/crtbegin.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".text.__do_global_dtors_aux",
+      "address": 134310040,
+      "bytes": 40,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard/crtbegin.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".text.frame_dummy",
+      "address": 134310080,
+      "bytes": 36,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard/crtbegin.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".text.startup",
+      "address": 134310120,
+      "bytes": 9256,
+      "owner": "C:\\Users\\86166\\AppData\\Local\\Temp\\ccu4vkik.ltrans0.ltrans.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".text.firmware_signature_verify",
+      "address": 134319376,
+      "bytes": 48,
+      "owner": "build/flash-audit-3051/app/src/firmware_signature.o",
+      "group": "firmware_signature"
+    },
+    {
+      "section": ".text.uECC_vli_clear",
+      "address": 134319424,
+      "bytes": 22,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_isZero",
+      "address": 134319446,
+      "bytes": 30,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_testBit",
+      "address": 134319476,
+      "bytes": 18,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_numBits",
+      "address": 134319494,
+      "bytes": 54,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_set",
+      "address": 134319548,
+      "bytes": 24,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_cmp_unsafe",
+      "address": 134319572,
+      "bytes": 42,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_rshift1",
+      "address": 134319614,
+      "bytes": 26,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_add",
+      "address": 134319640,
+      "bytes": 46,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_sub",
+      "address": 134319686,
+      "bytes": 48,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_modAdd",
+      "address": 134319734,
+      "bytes": 50,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.vli_mmod_fast_secp256r1",
+      "address": 134319784,
+      "bytes": 384,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_bytesToNative",
+      "address": 134320168,
+      "bytes": 60,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.bits2int",
+      "address": 134320228,
+      "bytes": 140,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_modSub",
+      "address": 134320368,
+      "bytes": 36,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.vli_modInv_update",
+      "address": 134320404,
+      "bytes": 56,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_modInv",
+      "address": 134320460,
+      "bytes": 264,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_mult",
+      "address": 134320724,
+      "bytes": 214,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_modMult",
+      "address": 134320938,
+      "bytes": 324,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_modMult_fast",
+      "address": 134321262,
+      "bytes": 32,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_vli_modSquare_fast",
+      "address": 134321294,
+      "bytes": 8,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.double_jacobian_default",
+      "address": 134321302,
+      "bytes": 338,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.x_side_default",
+      "address": 134321640,
+      "bytes": 94,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.apply_z",
+      "address": 134321734,
+      "bytes": 62,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.XYcZ_add",
+      "address": 134321796,
+      "bytes": 206,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_secp256r1",
+      "address": 134322004,
+      "bytes": 8,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.uECC_verify",
+      "address": 134322012,
+      "bytes": 726,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".text.Reset_Handler",
+      "address": 134322740,
+      "bytes": 72,
+      "owner": "build/flash-audit-3051/app/src/startup_n32l40x.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".text.Default_Handler",
+      "address": 134322812,
+      "bytes": 2,
+      "owner": "build/flash-audit-3051/app/src/startup_n32l40x.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".text.atoi",
+      "address": 134322814,
+      "bytes": 8,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-atoi.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text._strtol_l.isra.0",
+      "address": 134322824,
+      "bytes": 244,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-strtol.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.strtol",
+      "address": 134323068,
+      "bytes": 20,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-strtol.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.memset",
+      "address": 134323088,
+      "bytes": 16,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-memset.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.__errno",
+      "address": 134323104,
+      "bytes": 12,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-errno.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.__libc_init_array",
+      "address": 134323116,
+      "bytes": 72,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-init.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.__retarget_lock_acquire_recursive",
+      "address": 134323188,
+      "bytes": 2,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-lock.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.__retarget_lock_release_recursive",
+      "address": 134323190,
+      "bytes": 2,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-lock.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text._free_r",
+      "address": 134323192,
+      "bytes": 148,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-freer.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.sbrk_aligned",
+      "address": 134323340,
+      "bytes": 68,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-mallocr.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text._malloc_r",
+      "address": 134323408,
+      "bytes": 256,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-mallocr.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.__malloc_lock",
+      "address": 134323664,
+      "bytes": 12,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-mlock.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.__malloc_unlock",
+      "address": 134323676,
+      "bytes": 12,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-mlock.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text._sbrk_r",
+      "address": 134323688,
+      "bytes": 32,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-sbrkr.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.snprintf",
+      "address": 134323720,
+      "bytes": 108,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-snprintf.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text._vsnprintf_r",
+      "address": 134323828,
+      "bytes": 92,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-vsnprintf.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.vsnprintf",
+      "address": 134323920,
+      "bytes": 28,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-vsnprintf.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.memcmp",
+      "address": 134323948,
+      "bytes": 32,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-memcmp.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.memmove",
+      "address": 134323980,
+      "bytes": 50,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-memmove.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.strchr",
+      "address": 134324030,
+      "bytes": 26,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-strchr.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.strncmp",
+      "address": 134324056,
+      "bytes": 36,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-strncmp.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.strncpy",
+      "address": 134324092,
+      "bytes": 38,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-strncpy.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.strstr",
+      "address": 134324130,
+      "bytes": 44,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-strstr.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.strcpy",
+      "address": 134324174,
+      "bytes": 16,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-strcpy.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.memcpy",
+      "address": 134324190,
+      "bytes": 28,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-memcpy-stub.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.__ssputs_r",
+      "address": 134324218,
+      "bytes": 192,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-nano-svfprintf.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text._svfprintf_r",
+      "address": 134324412,
+      "bytes": 496,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-nano-svfprintf.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text._printf_common",
+      "address": 134324908,
+      "bytes": 218,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-nano-vfprintf_i.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text._printf_i",
+      "address": 134325128,
+      "bytes": 588,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-nano-vfprintf_i.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text._realloc_r",
+      "address": 134325716,
+      "bytes": 92,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-reallocr.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text._malloc_usable_size_r",
+      "address": 134325808,
+      "bytes": 16,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-msizer.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".text.atan2",
+      "address": 134325824,
+      "bytes": 4,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-w_atan2.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.sqrt",
+      "address": 134325828,
+      "bytes": 104,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-w_sqrt.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.cos",
+      "address": 134325936,
+      "bytes": 136,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-s_cos.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.sin",
+      "address": 134326072,
+      "bytes": 144,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-s_sin.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.fmodf",
+      "address": 134326216,
+      "bytes": 72,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-wf_fmod.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.llround",
+      "address": 134326288,
+      "bytes": 208,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-s_llround.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.__ieee754_sqrt",
+      "address": 134326496,
+      "bytes": 496,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-e_sqrt.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.__kernel_cos",
+      "address": 134326992,
+      "bytes": 620,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-k_cos.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.__kernel_sin",
+      "address": 134327616,
+      "bytes": 388,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-k_sin.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.__ieee754_atan2",
+      "address": 134328008,
+      "bytes": 428,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-e_atan2.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.__ieee754_rem_pio2",
+      "address": 134328440,
+      "bytes": 1060,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-e_rem_pio2.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.atan",
+      "address": 134329504,
+      "bytes": 856,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-s_atan.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.fabs",
+      "address": 134330360,
+      "bytes": 16,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-s_fabs.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.__ieee754_fmodf",
+      "address": 134330376,
+      "bytes": 388,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-ef_fmod.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.__kernel_rem_pio2",
+      "address": 134330768,
+      "bytes": 2184,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-k_rem_pio2.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.scalbn",
+      "address": 134332952,
+      "bytes": 276,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-s_scalbn.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.floor",
+      "address": 134333232,
+      "bytes": 264,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-s_floor.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".text.__fixdfdi",
+      "address": 134333496,
+      "bytes": 48,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard\\libgcc.a(_fixdfdi.o)",
+      "group": "libgcc.a"
+    },
+    {
+      "section": ".text.__fixunsdfdi",
+      "address": 134333544,
+      "bytes": 60,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard\\libgcc.a(_fixunsdfdi.o)",
+      "group": "libgcc.a"
+    },
+    {
+      "section": ".eh_frame",
+      "address": 134333604,
+      "bytes": 0,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard/crtbegin.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".init",
+      "address": 134333604,
+      "bytes": 4,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard/crti.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".init",
+      "address": 134333608,
+      "bytes": 8,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard/crtn.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".fini",
+      "address": 134333616,
+      "bytes": 4,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard/crti.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".fini",
+      "address": 134333620,
+      "bytes": 8,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard/crtn.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".iplt",
+      "address": 134333628,
+      "bytes": 0,
+      "owner": ".iplt          0x0801c4bc        0x0 D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard/crtbegin.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".rodata",
+      "address": 134333632,
+      "bytes": 1556,
+      "owner": "C:\\Users\\86166\\AppData\\Local\\Temp\\ccu4vkik.ltrans0.ltrans.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".rodata.str1.1",
+      "address": 134335188,
+      "bytes": 10255,
+      "owner": "C:\\Users\\86166\\AppData\\Local\\Temp\\ccu4vkik.ltrans0.ltrans.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".rodata.trusted_public_key",
+      "address": 134345443,
+      "bytes": 64,
+      "owner": "build/flash-audit-3051/app/src/firmware_signature.o",
+      "group": "firmware_signature"
+    },
+    {
+      "section": ".rodata.curve_secp256r1",
+      "address": 134345508,
+      "bytes": 176,
+      "owner": "build/flash-audit-3051/app/third_party/micro-ecc/uECC.o",
+      "group": "micro-ecc"
+    },
+    {
+      "section": ".rodata._ctype_",
+      "address": 134345684,
+      "bytes": 257,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-ctype_.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".rodata._svfprintf_r.str1.1",
+      "address": 134345941,
+      "bytes": 17,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-nano-svfprintf.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".rodata._printf_i.str1.1",
+      "address": 134345941,
+      "bytes": 34,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-nano-vfprintf_i.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".rodata.tiny",
+      "address": 134345944,
+      "bytes": 8,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-e_sqrt.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".rodata.one",
+      "address": 134345952,
+      "bytes": 8,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-e_sqrt.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".rodata.CSWTCH.9",
+      "address": 134345960,
+      "bytes": 24,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-e_atan2.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".rodata.CSWTCH.8",
+      "address": 134345984,
+      "bytes": 24,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-e_atan2.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".rodata.npio2_hw",
+      "address": 134346008,
+      "bytes": 128,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-e_rem_pio2.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".rodata.two_over_pi",
+      "address": 134346136,
+      "bytes": 264,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-e_rem_pio2.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".rodata.atanlo",
+      "address": 134346400,
+      "bytes": 32,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-s_atan.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".rodata.atanhi",
+      "address": 134346432,
+      "bytes": 32,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-s_atan.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".rodata.Zero",
+      "address": 134346464,
+      "bytes": 8,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-ef_fmod.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".rodata.PIo2",
+      "address": 134346472,
+      "bytes": 64,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-k_rem_pio2.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".rodata.init_jk",
+      "address": 134346536,
+      "bytes": 16,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libm.a(libm_a-k_rem_pio2.o)",
+      "group": "libm.a"
+    },
+    {
+      "section": ".ARM.exidx",
+      "address": 134346552,
+      "bytes": 8,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-strcmp.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".ARM.exidx",
+      "address": 134346560,
+      "bytes": 0,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-memchr.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".ARM.exidx",
+      "address": 134346560,
+      "bytes": 0,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-strlen.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".rel.dyn",
+      "address": 134346560,
+      "bytes": 0,
+      "owner": ".rel.iplt      0x0801f740        0x0 D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard/crtbegin.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".init_array",
+      "address": 134346560,
+      "bytes": 4,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard/crtbegin.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".fini_array",
+      "address": 134346564,
+      "bytes": 4,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/thumb/v7e-m+fp/hard/crtbegin.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".data",
+      "address": 536870912,
+      "bytes": 216,
+      "owner": "C:\\Users\\86166\\AppData\\Local\\Temp\\ccu4vkik.ltrans0.ltrans.o",
+      "group": "app/sdk/startup"
+    },
+    {
+      "section": ".data._impure_ptr",
+      "address": 536871128,
+      "bytes": 4,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-impure.o)",
+      "group": "libc_nano.a"
+    },
+    {
+      "section": ".data._impure_data",
+      "address": 536871132,
+      "bytes": 76,
+      "owner": "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+fp/hard\\libc_nano.a(libc_a-impure.o)",
+      "group": "libc_nano.a"
+    }
+  ]
+}

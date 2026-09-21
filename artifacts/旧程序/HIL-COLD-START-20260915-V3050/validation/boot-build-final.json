@@ -1,0 +1,12 @@
+{
+  "command": [
+    "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+    "-B",
+    "-j4",
+    "-f",
+    "D:\\A300_406_tools\\A300_406\\A300-first\\build\\cold-start-3050\\validation\\boot-hil.mk",
+    "all",
+    "TOOLCHAIN_ROOT=D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin"
+  ],
+  "exit_code": 0
+}

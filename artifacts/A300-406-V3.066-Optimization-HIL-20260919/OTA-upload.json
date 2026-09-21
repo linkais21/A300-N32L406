@@ -1,0 +1,12 @@
+{
+  "file": "A300-406-OTA-V3066.bin",
+  "deviceModel": "A300-406",
+  "versionCode": 3066,
+  "versionName": "T360-A300_406_20260919194933,V3.066",
+  "size": 105464,
+  "sha256": "136a3321a28d28af35fb2813d65ecde4cc85f8934f8c79f2b60f628db1adde34",
+  "active": false,
+  "mandatory": false,
+  "signing": "platform-detached",
+  "releaseNotes": "HIL candidate: shared default configuration and session-send bookkeeping; 1064-byte App headroom. Incomplete RAM release evidence."
+}

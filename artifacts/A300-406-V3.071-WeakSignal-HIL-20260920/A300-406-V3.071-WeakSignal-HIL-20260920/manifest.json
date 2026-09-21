@@ -1,0 +1,211 @@
+{
+  "version": "T360-A300_406_20260920230201,V3.071",
+  "versionCode": 3071,
+  "release_approved": false,
+  "hardware_verified": false,
+  "release_gate_exit": 2,
+  "release_gate_reason": "Incomplete whole-program stack/heap/IRQ evidence",
+  "package_validation": "passed",
+  "host_tests_passed": 17,
+  "host_tests_failed": 1,
+  "swd_factory_initializes": true,
+  "ota_updates_bootloader": false,
+  "app_bytes": 105164,
+  "boot_bytes": 22556,
+  "flash_remaining": 1332,
+  "app_sha256": "1c9b3f216fa49d8325a82b0d681f95e4e3d448a0df1e97d1c22b76623d08d416",
+  "files": {
+    "A300-406-OTA-V3071.bin": {
+      "size": 105196,
+      "sha256": "feaac8be9fa291c5f966a283856c50a4008d1d80d0e40e1c443090db190f8729"
+    },
+    "flash-equivalent-optimization-20260920.md": {
+      "size": 4273,
+      "sha256": "63aa146e82487647b9e08578b95c9edf4524906507512b5381df9ccfe960f027"
+    },
+    "OTA-upload.json": {
+      "size": 331,
+      "sha256": "aaf79c9e5ad85728ec3120d56ac94aa278e653921e19be1e269c729b9dd2a9ce"
+    },
+    "README.md": {
+      "size": 3201,
+      "sha256": "510c762b51d4421df335d180699b5983ebfb74e6a8cd5dbc6563597ee2161ac8"
+    },
+    "release_identity.json": {
+      "size": 310,
+      "sha256": "77cfc474ad20ade39b9833722f38bb8b7fd408c2e5acd62c506d0359801fec7a"
+    },
+    "SWD-Combined-V3071.bin": {
+      "size": 129740,
+      "sha256": "bb2d0419dd61791f866bfed1e02e23f7b2b4decfb2a51ca5fbe8c27b09b39227"
+    },
+    "SWD-Combined-V3071.hex": {
+      "size": 364965,
+      "sha256": "93828e48aeb9d71acfd114c8ab5c56ecfc1bb8974dff085fcb104b4291930822"
+    },
+    "weak-signal-stationary-20260920.md": {
+      "size": 4304,
+      "sha256": "04bd224267ce76876f400ed750243d1510f213d86b9ff1dab983fc2aac4b89cd"
+    },
+    "diagnostics/App-V3071.bin": {
+      "size": 105164,
+      "sha256": "1c9b3f216fa49d8325a82b0d681f95e4e3d448a0df1e97d1c22b76623d08d416"
+    },
+    "diagnostics/App-V3071.elf": {
+      "size": 163100,
+      "sha256": "55ab8120a719ed0b75c675f764883d8b73a5d7dffb8acd038321cfd97d708a7f"
+    },
+    "diagnostics/App-V3071.hex": {
+      "size": 295881,
+      "sha256": "ab0557c0391c02fc206e0712d4133d3eee4a4a668d57c4dab585838c67a5bdfb"
+    },
+    "diagnostics/App-V3071.map": {
+      "size": 115269,
+      "sha256": "6b538df583d0560ff92851d54e7d60900f19f1d5054f0d8de553d13631c379a2"
+    },
+    "diagnostics/Bootloader-V3071.bin": {
+      "size": 22556,
+      "sha256": "e8d366f26b8c9373cf44f40a24a74b13479c79051ed3bc3232e91ea23b4a7858"
+    },
+    "diagnostics/Bootloader-V3071.elf": {
+      "size": 32720,
+      "sha256": "a83f71dfc14ad683683671bff5ea2995306b91f41105481c01941b67afca17e4"
+    },
+    "diagnostics/Bootloader-V3071.hex": {
+      "size": 40913,
+      "sha256": "b3d9dd80faa8d5d4ff9cc6424f2852126504059e5d5bb7897e7578e3ccc1ff3c"
+    },
+    "diagnostics/Bootloader-V3071.map": {
+      "size": 63501,
+      "sha256": "0ee4ef6d88a54e2146d99efe3249015955a0ef34be7c5a99cbc85b9c17daa6e1"
+    },
+    "validation/app-build.log": {
+      "size": 96348,
+      "sha256": "6f55ae8927901217ca1a60c9adf0a481b91b515462d5863386b36488d66c20ea"
+    },
+    "validation/boot-build.log": {
+      "size": 15608,
+      "sha256": "477c199a515f1a956021064f5986d77bcc9d4b04b31363590a4e7c074ca427b5"
+    },
+    "validation/boot-capacity.log": {
+      "size": 125,
+      "sha256": "1a7d6e5e63c73253d6e9dd2710c52289c125b879617e2972a6eeb1c74ef81ba2"
+    },
+    "validation/commands.json": {
+      "size": 2642,
+      "sha256": "736d617e49010c73172ccb4bfd895b9c139b49b2200e1d1d53aa369f829eea4f"
+    },
+    "validation/diff-check.log": {
+      "size": 104,
+      "sha256": "a53199bb38c19d944a11cdc0d8784f0e9575e746443c33a1fe54acfded2d65c5"
+    },
+    "validation/flash-build-profile.json": {
+      "size": 4102,
+      "sha256": "0fbf59d19ce7bb6cc15084de82fe656aca8656436c9f0727ae955aca6d1023da"
+    },
+    "validation/flash-capacity.json": {
+      "size": 4710,
+      "sha256": "9500d3f1c625af23e3017ffcd3015f908373b87ac0bafd079ee64b7b6c40e391"
+    },
+    "validation/host-tests.json": {
+      "size": 3273,
+      "sha256": "b0c2ad85ecaf5512a2de49269aa3880d27967057aa1f450f6f32e18ec0c3a669"
+    },
+    "validation/libc-parser.log": {
+      "size": 125,
+      "sha256": "c275ef3e5b566a67ac142062a4be95abbbc4b215d85c9fd4b6f7c969611d2207"
+    },
+    "validation/platform-signature.log": {
+      "size": 89,
+      "sha256": "506d6b0fcd0ed21b6f208befe46dbbfd7485809595fc1a903735e217f74ca4f9"
+    },
+    "validation/release-gate.log": {
+      "size": 1392,
+      "sha256": "12f02b143dd47e870a038677aaae10d92d92968cab41262b616d65890f0a210d"
+    },
+    "validation/source-hashes.json": {
+      "size": 462817,
+      "sha256": "9a400489a45eb6981c76c301fbc049462fe4444ac234811c0ecaf8422c76c7d2"
+    },
+    "validation/stack-analysis.json": {
+      "size": 327719,
+      "sha256": "531e86dfd8d1a97b84592ee188fc7df9d628126c2798feb15b14469739e83cc9"
+    },
+    "validation/stack-evidence.json": {
+      "size": 663,
+      "sha256": "f5a99509d1f0eef4fccf45c9f1e96e6a4e0db13d271bf046a5ef794a4b118f75"
+    },
+    "validation/test_a300_ota_image.log": {
+      "size": 27,
+      "sha256": "9c49b7a70f52c66c72ced223bc92f115682df973782a34ca25e51bf0ea90af98"
+    },
+    "validation/test_blind_zone_replay.log": {
+      "size": 3570,
+      "sha256": "d0038d1bebcca993174f0f8f11989b1a0ea39bcfeddf5f803fa99cb187f0dae0"
+    },
+    "validation/test_boot_bcr_device_gate.log": {
+      "size": 67,
+      "sha256": "c11efd37a020b7459c0629b518c79492ca6665fd95e7c70a690122c220b2b969"
+    },
+    "validation/test_boot_resume_integrity.log": {
+      "size": 55,
+      "sha256": "d2c84a50afa59ab5692acad054abf672da794523cc4206025188911dbb305df0"
+    },
+    "validation/test_ext_flash_layout.log": {
+      "size": 86,
+      "sha256": "f368d30c126f02fb5a05575af6e8fc067890f0cd28f3a84b0a9e221f1e15398b"
+    },
+    "validation/test_feature_guards.log": {
+      "size": 27,
+      "sha256": "5746eb09ec6e171cb12aea68ca41aa60bfa588f5c250aec3b0c0c95b3f0e4a92"
+    },
+    "validation/test_fota_package.log": {
+      "size": 25,
+      "sha256": "370d3e41bfa64a4c5e02738fecee27d5547157ac5bfa354d0c8459223e92ba8a"
+    },
+    "validation/test_gps_ntp_apply.log": {
+      "size": 26,
+      "sha256": "1f411f2bdad6d7605d3470c272fa8f8099681c06dce9154cf51ccadbc06c4a91"
+    },
+    "validation/test_gps_report_filter.log": {
+      "size": 817,
+      "sha256": "cd947b072d32a3d97494a7b8ad0e627b64a58b4cfe510b993af116ab25484063"
+    },
+    "validation/test_gps_report_wire.log": {
+      "size": 74,
+      "sha256": "23cd130a0204857516678ddbe2aa0b89e62cb7916b23412f74adb11796eb94fd"
+    },
+    "validation/test_gps_retained_clock.log": {
+      "size": 26,
+      "sha256": "1f411f2bdad6d7605d3470c272fa8f8099681c06dce9154cf51ccadbc06c4a91"
+    },
+    "validation/test_internal_flash_layout.log": {
+      "size": 34,
+      "sha256": "08b176f896004746971e2797afa86823d9e1d14266cdfeda8c908d89baff8b7a"
+    },
+    "validation/test_location_numeric_equivalence.log": {
+      "size": 71,
+      "sha256": "97ddd609f1999a6ccb243cfdbf52027875368957e5e99696632f6dd8ba9919fb"
+    },
+    "validation/test_mileage_persistence.log": {
+      "size": 32,
+      "sha256": "114fe90a0c3380a5400dee734fbc239b9f64bcc2dc1267a533daae7672a58163"
+    },
+    "validation/test_mileage_quantization.log": {
+      "size": 63,
+      "sha256": "2a566938a772d8baac97b8d88a55306abdb73af4dfb80329a46dcbd570d45388"
+    },
+    "validation/test_release_identity_contract.log": {
+      "size": 38,
+      "sha256": "bf751884e4769a9a7f09b7b20ba32d4d2340686e45751d6f5fe4c3acbccd16d6"
+    },
+    "validation/test_stationary_location_owner.log": {
+      "size": 38,
+      "sha256": "a93ce47d2ec85e24d767dcd4810d12e43131413f41429ead3d5cd7ded3c29f8d"
+    },
+    "validation/test_stationary_math.log": {
+      "size": 76,
+      "sha256": "046b40314f42163c797bcf614f510fef8861e795c188f1b413be8e73be922c21"
+    }
+  }
+}

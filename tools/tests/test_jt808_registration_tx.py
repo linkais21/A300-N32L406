@@ -5,7 +5,12 @@ SOURCE = (ROOT / "src/jt808.c").read_text(encoding="utf-8")
 
 assert "static jt808_session_t s_sessions[2];" in SOURCE
 assert "jt808_session_next_action(session, auth[0] != '\\0', now)" in SOURCE
-assert "jt808_session_mark_sent(session, JT808_ACTION_REGISTER" in SOURCE
+# Both operations must reach the shared bookkeeping with their own action.
+# Runtime success/failure/late-ACK behavior is exercised by dual_session.
+assert "note_session_send(channel, session, JT808_ACTION_REGISTER, result)" in SOURCE
+assert "note_session_send(channel, session, JT808_ACTION_AUTH, result)" in SOURCE
+assert "jt808_session_mark_sent(session, action," in SOURCE
+assert "ec800m_tcp_send_was_ambiguous()" in SOURCE
 assert "send_register_current_identity(channel)" in SOURCE
 assert "finish_frame_channel(&f, channel)" in SOURCE
 assert "pending->valid = true;" in SOURCE

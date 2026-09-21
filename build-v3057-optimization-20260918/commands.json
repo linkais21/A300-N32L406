@@ -1,0 +1,386 @@
+[
+  {
+    "label": "test_release_identity_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_build_version_refresh",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_build_version_refresh.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_debug_log_levels",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_debug_log_levels.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_heap_bounds",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_heap_bounds.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_dev_release_manifest",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_dev_release_manifest.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_lto_stack_guard",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_lto_stack_guard.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_flash_gate_build",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_flash_gate_build.py"
+    ],
+    "cwd": ".",
+    "exit_code": 1
+  },
+  {
+    "label": "test_platform_trust_anchor",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_platform_trust_anchor.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_feature_guards",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_feature_guards.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_nmea_replay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_nmea_replay.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_jt808_params_wire",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_params_wire.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_jt808_dual_session",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_dual_session.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_jt808_first_location",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_first_location.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_jt808_boot_terminal_info",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_boot_terminal_info.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_terminal_identity",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_terminal_identity.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_mileage_persistence",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_mileage_persistence.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_size_trial",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_size_trial.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_log_platform_wire",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_log_platform_wire.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_log_platform_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_log_platform_contract.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_blind_zone_store",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_store.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_blind_zone_replay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_replay.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_ext_flash_store_host",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_store_host.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_ext_flash_layout",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_layout.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_internal_flash_layout",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_internal_flash_layout.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_fota_check_parser",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_check_parser.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_fota_checkpoint_powercut",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_checkpoint_powercut.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_fota_modem_handoff",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_modem_handoff.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_fota_platform_flow",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_platform_flow.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_agnss_vendor_stream",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_agnss_vendor_stream.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_agnss_scheduler",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_agnss_scheduler.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_agnss_snapshot",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_agnss_snapshot.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_agnss_workspace_ownership",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_agnss_workspace_ownership.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_bootloader_bcr_failclosed",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_bcr_failclosed.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "test_bootloader_platform_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_platform_contract.py"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "app-build",
+    "command": [
+      "mingw32-make",
+      "-j4",
+      "BUILD=build-v3057-optimization-20260918/app",
+      "size",
+      "flash-guard"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "release-gate",
+    "command": [
+      "mingw32-make",
+      "BUILD=build-v3057-optimization-20260918/app",
+      "release-gate"
+    ],
+    "cwd": ".",
+    "exit_code": 2
+  },
+  {
+    "label": "libc-parser",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/libc_parser_guard.py",
+      "build-v3057-optimization-20260918/app/a300_firmware.map"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  },
+  {
+    "label": "boot-build",
+    "command": [
+      "mingw32-make",
+      "-j4",
+      "-f",
+      "../build-v3057-optimization-20260918/boot.mk",
+      "all"
+    ],
+    "cwd": "bootloader",
+    "exit_code": 2
+  },
+  {
+    "label": "boot-ram",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "build-v3057-optimization-20260918/boot/bootloader.map"
+    ],
+    "cwd": ".",
+    "exit_code": 1
+  },
+  {
+    "label": "boot-build-fixed",
+    "command": [
+      "mingw32-make",
+      "-j4",
+      "-f",
+      "../build-v3057-optimization-20260918/boot.mk",
+      "all"
+    ],
+    "cwd": "bootloader",
+    "exit_code": 0
+  },
+  {
+    "label": "boot-ram-fixed",
+    "command": [
+      "python",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "build-v3057-optimization-20260918/boot/bootloader.map"
+    ],
+    "cwd": ".",
+    "exit_code": 0
+  }
+]

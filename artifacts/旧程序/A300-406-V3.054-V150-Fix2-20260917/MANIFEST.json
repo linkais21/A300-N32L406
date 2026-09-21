@@ -1,0 +1,17 @@
+{
+  "release_approved": false,
+  "release_gate": "FAIL: incomplete stack/heap/exception evidence",
+  "purpose": "V1.5.0 parameter compatibility fix, user-requested HIL image",
+  "firmware_version": "V3.054",
+  "app_bytes": 101176,
+  "app_free_bytes": 5320,
+  "combined_bytes": 125752,
+  "bin_address": "0x08000000",
+  "original_exe_sha256": "c11cd59373bec11c1b46ca29e6dde9b0510ad66cadf717ad185bfeebec6ffc15",
+  "verified": "Original EXE ParseParam/IsSuccess against real C console responses; no GUI/HIL",
+  "changed_sources": [
+    "src/at_config.c",
+    "src/f39_command.c"
+  ],
+  "bootloader": "Unchanged verified build from prior package"
+}

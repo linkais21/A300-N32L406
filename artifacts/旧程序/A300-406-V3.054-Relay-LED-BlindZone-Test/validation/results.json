@@ -1,0 +1,287 @@
+[
+  {
+    "label": "test_remote_relay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_remote_relay.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_relay_sms",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_relay_sms.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_status_led",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_status_led.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_blind_zone_ack_channel",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_ack_channel.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_blind_zone_store",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_store.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_blind_zone_replay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_replay.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_corner_blind_zone_replay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_corner_blind_zone_replay.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_ext_flash_store_host",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_store_host.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_ext_flash_layout",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_layout.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_feature_guards",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_feature_guards.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_sms_ingress",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_sms_ingress.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_jt808_dual_session",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_dual_session.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_terminal_identity",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_terminal_identity.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 1
+  },
+  {
+    "label": "test_release_identity_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_platform_trust_anchor",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_platform_trust_anchor.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_bootloader_factory_init",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_factory_init.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_boot_progress_uart",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_progress_uart.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_a300_ota_image",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_a300_ota_image.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "test_dev_release_manifest",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_dev_release_manifest.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "app-build",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+      "-B",
+      "all",
+      "TOOLCHAIN_DIR=D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.054-Relay-LED-BlindZone-Test\\source",
+    "exit_code": 2
+  },
+  {
+    "label": "app-build-cmd",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+      "-B",
+      "all",
+      "SHELL=cmd.exe",
+      "TOOLCHAIN_DIR=D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.054-Relay-LED-BlindZone-Test\\source",
+    "exit_code": 0
+  },
+  {
+    "label": "boot-build",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+      "-B",
+      "all",
+      "SHELL=cmd.exe",
+      "TOOLCHAIN_ROOT=D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.054-Relay-LED-BlindZone-Test\\source\\bootloader",
+    "exit_code": 0
+  },
+  {
+    "label": "release-guard",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+      "release-guard",
+      "SHELL=cmd.exe"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "release-gate",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+      "release-gate",
+      "SHELL=cmd.exe",
+      "TOOLCHAIN_DIR=D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.054-Relay-LED-BlindZone-Test\\source",
+    "exit_code": 2
+  },
+  {
+    "label": "boot-ram",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.054-Relay-LED-BlindZone-Test\\source\\bootloader\\build\\bootloader.map"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "combined-hex",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin\\arm-none-eabi-objcopy.exe",
+      "-I",
+      "binary",
+      "-O",
+      "ihex",
+      "--change-addresses",
+      "0x08000000",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.054-Relay-LED-BlindZone-Test\\SWD-Combined-V3054.bin",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.054-Relay-LED-BlindZone-Test\\SWD-Combined-V3054.hex"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "ota-generate",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/gen_a300_ota_image.py",
+      "--input",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.054-Relay-LED-BlindZone-Test\\App-V3054.bin",
+      "--output",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.054-Relay-LED-BlindZone-Test\\OTA-A300-406-V3054.bin",
+      "--version-code",
+      "3054"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  },
+  {
+    "label": "diff-check",
+    "command": [
+      "git",
+      "diff",
+      "--check",
+      "--",
+      "release_identity.json",
+      "include/config.h",
+      "include/build_version.h",
+      "tools/release_guard.py",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0
+  }
+]

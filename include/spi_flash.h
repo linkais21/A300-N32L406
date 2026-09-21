@@ -44,7 +44,6 @@ bool     spi_flash_write(uint32_t addr, const uint8_t *buf, uint32_t len);
 spi_flash_program_result_t spi_flash_write_result(
     uint32_t addr, const uint8_t *buf, uint32_t len);
 bool     spi_flash_erase_sector(uint32_t addr);
-bool     spi_flash_erase_chip(void);
 void     spi_flash_get_diagnostics(spi_flash_diagnostics_t *out);
 const char *spi_flash_failure_name(spi_flash_failure_t failure);
 void     spi_flash_note_verify_failure(void);

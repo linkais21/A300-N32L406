@@ -1,0 +1,232 @@
+#include "gps_report_filter.h"
+#include "i2c_accel.h"
+#include "flash_config.h"
+#include <math.h>
+#include <string.h>
+
+#define REPORT_WINDOW_COUNT      5u
+#define REPORT_ACCEL_PERIOD_MS   200u
+#define REPORT_ACCEL_GAP_MS      1000u
+#define REPORT_FIX_MAX_AGE_MS    3000u
+#define REPORT_MOVE_FIXES        3u
+#define REPORT_ACCEL_LSB_PER_G   1024u
+
+typedef enum {
+    REPORT_UNKNOWN = 0,
+    REPORT_MOVING,
+    REPORT_CANDIDATE,
+    REPORT_LOCKED
+} report_state_t;
+
+/* L406 uses the reference defaults; no additional configuration storage. */
+static const gps_report_filter_config_t s_config = {
+    1.0f, 2.0f, 30u, 60u, 30000u
+};
+static struct {
+    uint8_t state; /* report_state_t; compact to avoid alignment padding */
+    accel_data_t acceleration[REPORT_WINDOW_COUNT];
+    /* Candidate samples and locked anchor have disjoint lifetimes.
+     * 1e-7 degree samples preserve centimetre precision without 80 B doubles. */
+    union {
+        struct { int32_t lat[REPORT_WINDOW_COUNT], lon[REPORT_WINDOW_COUNT]; } fixes;
+        struct { double lat, lon; } anchor;
+    } position;
+    uint32_t last_poll_ms, last_rmc_ms, candidate_ms;
+    uint8_t fix_count, fix_next, move_count;
+    /* Five-entry ring and evidence flags fit in one byte; no persisted ABI. */
+    uint8_t accel_count : 3;
+    uint8_t accel_next : 3;
+    uint8_t have_poll : 1;
+    uint8_t have_rmc : 1;
+} s_report;
+
+static bool report_enabled(void)
+{
+    const device_config_t *config = cfg_get();
+    return config != NULL && config->stopdrift_en != 0u && gps_is_enabled();
+}
+
+static bool report_fix_fresh(const gps_data_t *gps, uint32_t now_ms)
+{
+    return (gps != NULL && gps->valid && gps_is_valid()) &&
+           isfinite(gps->lat) && isfinite(gps->lon) &&
+           gps->lat >= -90.0 && gps->lat <= 90.0 &&
+           gps->lon >= -180.0 && gps->lon <= 180.0 &&
+           isfinite(gps->speed_kmh) && gps->speed_kmh >= 0.0f &&
+           now_ms - gps->last_update_ms <= REPORT_FIX_MAX_AGE_MS &&
+           now_ms - gps->heading_update_ms <= REPORT_FIX_MAX_AGE_MS;
+}
+
+static void clear_candidate(report_state_t state)
+{
+    s_report.state = state;
+    s_report.fix_count = 0u;
+    s_report.fix_next = 0u;
+    s_report.candidate_ms = 0u;
+}
+
+/* Retain poll deadline after failed reads: recovery must not busy-poll I2C. */
+static void invalidate_evidence(void)
+{
+    clear_candidate(REPORT_UNKNOWN);
+    s_report.accel_count = 0u;
+    s_report.accel_next = 0u;
+    s_report.move_count = 0u;
+    s_report.have_rmc = false;
+}
+
+void gps_report_filter_reset(void)
+{
+    memset(&s_report, 0, sizeof(s_report));
+}
+
+void gps_report_filter_init(void)
+{
+    gps_report_filter_reset();
+}
+
+static bool acceleration_legal(const accel_data_t *a)
+{
+    /* Existing driver's signed >>4 representation has range -2048..2047.
+     * Reject railed/zero samples; no-motion must not mean an unplugged sensor. */
+    return a->x > -2048 && a->x < 2047 &&
+           a->y > -2048 && a->y < 2047 &&
+           a->z > -2048 && a->z < 2047 &&
+           (a->x != 0 || a->y != 0 || a->z != 0);
+}
+
+static uint32_t acceleration_span(void)
+{
+    accel_data_t low = s_report.acceleration[0];
+    accel_data_t high = low;
+    for (uint8_t i = 1u; i < s_report.accel_count; i++) {
+        const accel_data_t *a = &s_report.acceleration[i];
+        if (a->x < low.x) low.x = a->x;
+        if (a->y < low.y) low.y = a->y;
+        if (a->z < low.z) low.z = a->z;
+        if (a->x > high.x) high.x = a->x;
+        if (a->y > high.y) high.y = a->y;
+        if (a->z > high.z) high.z = a->z;
+    }
+    uint32_t span = (uint32_t)((int32_t)high.x - (int32_t)low.x);
+    uint32_t y = (uint32_t)((int32_t)high.y - (int32_t)low.y);
+    uint32_t z = (uint32_t)((int32_t)high.z - (int32_t)low.z);
+    if (y > span) span = y;
+    if (z > span) span = z;
+    return span;
+}
+
+static double trimmed_mean(const int32_t *values, bool longitude)
+{
+    double origin = (double)values[0] / 10000000.0;
+    double sum = origin, low = origin, high = origin;
+    for (uint8_t i = 1u; i < REPORT_WINDOW_COUNT; i++) {
+        double value = (double)values[i] / 10000000.0;
+        /* Longitude is circular: unwrap around the first fix so stationary
+         * samples at +180/-180 cannot average into a different continent. */
+        if (longitude) {
+            if (value - origin > 180.0) value -= 360.0;
+            else if (value - origin < -180.0) value += 360.0;
+        }
+        sum += value;
+        if (value < low) low = value;
+        if (value > high) high = value;
+    }
+    double mean = (sum - low - high) / 3.0;
+    if (longitude) {
+        if (mean > 180.0) mean -= 360.0;
+        else if (mean < -180.0) mean += 360.0;
+    }
+    return mean;
+}
+
+void gps_report_filter_process(uint32_t now_ms)
+{
+    const gps_data_t *gps = gps_get_data();
+    if (!report_enabled() || !report_fix_fresh(gps, now_ms)) {
+        invalidate_evidence();
+        return;
+    }
+    if (s_report.have_poll &&
+        now_ms - s_report.last_poll_ms > REPORT_ACCEL_GAP_MS) {
+        invalidate_evidence();
+    }
+    if (!s_report.have_poll ||
+        now_ms - s_report.last_poll_ms >= REPORT_ACCEL_PERIOD_MS) {
+        accel_data_t a;
+        s_report.last_poll_ms = now_ms;
+        s_report.have_poll = true;
+        if (!i2c_accel_read(&a) || !acceleration_legal(&a)) {
+            invalidate_evidence();
+            return;
+        }
+        s_report.acceleration[s_report.accel_next] = a;
+        s_report.accel_next = (uint8_t)((s_report.accel_next + 1u) % REPORT_WINDOW_COUNT);
+        if (s_report.accel_count < REPORT_WINDOW_COUNT) s_report.accel_count++;
+    }
+    if (s_report.accel_count == 0u) return;
+
+    bool new_rmc = !s_report.have_rmc || gps->heading_update_ms != s_report.last_rmc_ms;
+    if (new_rmc) {
+        if (s_report.have_rmc &&
+            gps->heading_update_ms - s_report.last_rmc_ms > REPORT_FIX_MAX_AGE_MS) {
+            s_report.move_count = 0u;
+            clear_candidate(REPORT_UNKNOWN);
+        }
+        s_report.have_rmc = true;
+        s_report.last_rmc_ms = gps->heading_update_ms;
+        if (gps->speed_kmh >= s_config.move_speed_kmh) {
+            if (s_report.move_count < REPORT_MOVE_FIXES) s_report.move_count++;
+        } else {
+            s_report.move_count = 0u;
+        }
+    }
+
+    /* Exact integer mg comparison; 4094 LSB *1000 fits uint32.
+     * Check partial window too so a new jolt releases within one poll. */
+    uint32_t span_milli_lsb = acceleration_span() * 1000u;
+    if (span_milli_lsb >= (uint32_t)s_config.move_accel_mg * REPORT_ACCEL_LSB_PER_G ||
+        s_report.move_count >= REPORT_MOVE_FIXES) {
+        clear_candidate(REPORT_MOVING);
+        return;
+    }
+    if (s_report.state == REPORT_LOCKED) return;
+    if (s_report.accel_count < REPORT_WINDOW_COUNT ||
+        span_milli_lsb > (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G ||
+        gps->speed_kmh > s_config.stop_speed_kmh) {
+        clear_candidate(REPORT_MOVING);
+        return;
+    }
+    if (s_report.state != REPORT_CANDIDATE) {
+        clear_candidate(REPORT_CANDIDATE);
+        s_report.candidate_ms = now_ms;
+    }
+    if (new_rmc) {
+        s_report.position.fixes.lat[s_report.fix_next] = (int32_t)(gps->lat * 10000000.0);
+        s_report.position.fixes.lon[s_report.fix_next] = (int32_t)(gps->lon * 10000000.0);
+        s_report.fix_next = (uint8_t)((s_report.fix_next + 1u) % REPORT_WINDOW_COUNT);
+        if (s_report.fix_count < REPORT_WINDOW_COUNT) s_report.fix_count++;
+    }
+    if (s_report.fix_count == REPORT_WINDOW_COUNT &&
+        now_ms - s_report.candidate_ms >= s_config.stationary_ms) {
+        double lat = trimmed_mean(s_report.position.fixes.lat, false);
+        double lon = trimmed_mean(s_report.position.fixes.lon, true);
+        s_report.position.anchor.lat = lat;
+        s_report.position.anchor.lon = lon;
+        s_report.state = REPORT_LOCKED;
+    }
+}
+
+bool gps_report_filter_copy(const gps_data_t *raw, gps_data_t *out, uint32_t now_ms)
+{
+    if (raw == NULL || out == NULL || raw == out) return false;
+    *out = *raw;
+    if (!report_enabled() || s_report.state != REPORT_LOCKED ||
+        !report_fix_fresh(raw, now_ms) || !s_report.have_poll ||
+        now_ms - s_report.last_poll_ms > REPORT_ACCEL_GAP_MS) return false;
+    out->lat = s_report.position.anchor.lat;
+    out->lon = s_report.position.anchor.lon;
+    out->speed_kmh = 0.0f;
+    out->heading = 0.0f;
+    return true;
+}

@@ -1,0 +1,1 @@
+Pre-fix actual C module: new stationary noise regression failed locked() at line 92 after 60 s. gcc -Wall -Wextra -Werror with UBSan trap; test process exit 3221226505. Synthetic 200 ms samples, not hardware replay.

@@ -68,6 +68,8 @@ int ec800m_get_reg_status(void);
 const char *ec800m_state_name(ec800m_state_t state);
 const char *ec800m_failure_name(ec800m_failure_t failure);
 bool ec800m_is_ready(void);
+/* Current modem session has passed SIM identity query. */
+bool ec800m_sim_ready(void);
 /* True only after both modem identity fields have passed exact validation. */
 bool ec800m_identity_ready(void);
 
@@ -137,9 +139,6 @@ void ec800m_register_recv(ec800m_recv_cb_t cb);
 /* Dedicated OTA stream callback; channel 1 is not delivered to JT808. */
 void ec800m_register_ota_recv(ec800m_recv_cb_t cb);
 void ec800m_register_agnss_recv(ec800m_recv_cb_t cb);
-
-/* Called from DMA IRQ */
-void ec800m_dma_rx_complete(void);
 
 /* Called from USART3 IDLE line IRQ (if used) */
 void ec800m_usart_idle(void);

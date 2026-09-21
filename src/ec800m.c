@@ -14,6 +14,21 @@ __attribute__((weak)) void ec800m_wait_service_hook(void)
 {
 }
 
+/* A stopped timer must not turn a watchdog-serviced wait into a permanent
+ * hang. This is a secondary guard only: normal deadlines remain tick based.
+ * At 64 MHz, 640000 loop iterations exceed many 1 ms timer periods even at
+ * one cycle per iteration. Each wait owns its guard, including nested waits. */
+typedef struct { uint32_t tick, spins; } wait_tick_guard_t;
+static bool wait_tick_alive(wait_tick_guard_t *guard)
+{
+    uint32_t now = TICK_MS();
+    if (now != guard->tick) {
+        guard->tick = now;
+        guard->spins = 0U;
+    }
+    return ++guard->spins < 640000U;
+}
+
 /* ── RX ring buffer (filled by DMA2_CH5) ─────────────────────────────────── */
 uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];  /* DMA circular buffer (global, used by hw_init.c) */
 static uint16_t s_rx_rd = 0;   /* read pointer (software-maintained); DMA write pointer is hardware-maintained */
@@ -198,7 +213,9 @@ static identity_query_result_t identity_query_result(bool valid,
 }
 
 /* TCP channels */
-static tcp_channel_t s_tcp[EC800M_CH_MAX];
+/* Endpoints/backoff belong to tcp_manager/cfg. Only modem state is read here;
+ * keep the public tcp_channel_t ABI for external users. */
+static struct { tcp_state_t state; } s_tcp[EC800M_CH_MAX];
 static uint32_t s_tcp_generation[EC800M_CH_MAX];
 /* Cooperative UDP transaction.  This deliberately shares the temporary OTA
  * socket and AT owner; no fifth socket or receive buffer is allocated. */
@@ -210,28 +227,24 @@ typedef enum {
     UDP_TXN_WAIT_PROMPT,
     UDP_TXN_WAIT_SEND_OK,
     UDP_TXN_WAIT_RECV,
-    UDP_TXN_QIRD_CMD,
-    UDP_TXN_WAIT_QIRD,
     UDP_TXN_CLOSE_CMD,
     UDP_TXN_WAIT_CLOSE,
     UDP_TXN_DONE
 } udp_txn_state_t;
-#define UDP_TXN_OPEN UDP_TXN_OPEN_CMD
-#define UDP_TXN_SEND UDP_TXN_SEND_CMD
-#define UDP_TXN_CLOSE UDP_TXN_CLOSE_CMD
-static udp_txn_state_t s_udp_txn_state;
-static const char *s_udp_ip; static uint16_t s_udp_port, s_udp_len, s_udp_timeout;
-static const uint8_t *s_udp_data; static uint8_t *s_udp_rx; static uint16_t s_udp_rx_cap;
-static int s_udp_result;
-static bool s_udp_cmd_ok, s_udp_cmd_error, s_udp_open_urc;
-static bool s_udp_prompt, s_udp_recv_urc, s_udp_qird_done;
-static uint16_t s_udp_qird_received;
-static bool s_udp_qird_overflow;
-static uint16_t s_udp_resp_len;
+static struct {
+    const char *ip;
+    const uint8_t *data;
+    uint8_t *rx;
+    uint32_t since;
+    int result;
+    uint16_t port, len, timeout, rx_cap;
+    uint8_t state;
+    bool cmd_ok, cmd_error, open_urc, prompt, recv_urc;
+} s_udp;
 static bool udp_txn_active(void)
 {
-    return s_udp_txn_state != UDP_TXN_IDLE &&
-           s_udp_txn_state != UDP_TXN_DONE;
+    return s_udp.state != UDP_TXN_IDLE &&
+           s_udp.state != UDP_TXN_DONE;
 }
 
 /* Upper-layer receive callback */
@@ -331,7 +344,7 @@ static void process_deferred_urc_one(void);
  * why this survived every accounting check -- the bytes were counted correctly
  * and stored wrongly. */
 static bool s_qird_pass_active;
-static void udp_note_line(const char *line);
+static bool udp_note_line(const char *line);
 
 static bool parse_uint_field(const char **cursor, unsigned maximum,
                              unsigned *value)
@@ -481,7 +494,7 @@ static void process_deferred_urc_one(void)
     char line[AT_LINE_MAX];
     uint8_t channel;bool obsolete;
 
-    if (s_at_owner != AT_OWNER_NONE || s_deferred_urc_count == 0U ||
+    if (s_at_owner != AT_OWNER_NONE || udp_txn_active() || s_deferred_urc_count == 0U ||
         s_deferred_urc_processing || s_qird_pass_active) return;
     s_deferred_urc_processing = true;
     (void)strncpy(line, s_deferred_urc[s_deferred_urc_head], sizeof(line) - 1U);
@@ -501,7 +514,6 @@ static void process_rx_line(void)
     bool cmt_body;
 
     s_line_buf[s_line_len] = '\0';
-    udp_note_line(s_line_buf);
     if (s_line_len == 0U) {
         if (s_cmt_body_pending) {
             sms_process_urc(s_line_buf);
@@ -528,6 +540,8 @@ static void process_rx_line(void)
         return;
     }
 
+    if (udp_note_line(s_line_buf)) return;
+
     /* Socket URCs may trigger blocking AT commands (QIRD/QICLOSE).  Always
      * queue them until the current line has been fully retired, otherwise a
      * nested receive wait reuses s_line_buf/s_line_len while they still hold
@@ -540,33 +554,13 @@ static void process_rx_line(void)
 
 static void process_rx_byte(char c)
 {
-    /* UDP QIRD payload is length-delimited binary data and cannot be parsed
-     * reliably through the line accumulator.  Copy it byte-for-byte into the
-     * caller's bounded buffer while the cooperative transaction owns QIRD. */
-    if (s_udp_txn_state == UDP_TXN_WAIT_QIRD && !s_udp_qird_done) {
-        static const uint8_t qird_tail[] = "\r\nOK\r\n";
-        if (s_udp_resp_len < s_udp_rx_cap)
-            s_udp_rx[s_udp_resp_len++] = (uint8_t)c;
-        else
-            s_udp_qird_overflow = true;
-        if (!s_udp_qird_overflow && s_udp_resp_len >= sizeof(qird_tail) - 1U &&
-            memcmp(&s_udp_rx[s_udp_resp_len - (sizeof(qird_tail) - 1U)],
-                   qird_tail, sizeof(qird_tail) - 1U) == 0) {
-            const uint8_t *payload = NULL;
-            uint16_t payload_len = 0U;
-            if (ec800m_parse_qird_response(s_udp_rx, s_udp_resp_len,
-                                           &payload, &payload_len)) {
-                s_udp_qird_received = payload_len;
-                s_udp_qird_done = true;
-            }
-        }
-    }
     if (c == '>' && s_sms_tx_state == SMS_TX_WAIT_PROMPT &&
         s_line_len == 0U && s_sms_prompt_line_start) {
         s_sms_prompt = true;
     }
-    if (c == '>' && s_udp_txn_state == UDP_TXN_WAIT_PROMPT)
-        s_udp_prompt = true;
+    if (c == '>' && !s_cmt_body_pending && s_line_len == 0U &&
+        s_udp.state == UDP_TXN_WAIT_PROMPT)
+        s_udp.prompt = true;
     if (c == '\r') return;
     if (c == '\n') {
         process_rx_line();
@@ -587,23 +581,33 @@ static void process_rx_byte(char c)
 /* AT command/URC lines are observed by the normal RX pump.  This function is
  * intentionally side-effect free apart from transaction flags; it never
  * sends another command from inside the parser (avoiding nested waits). */
-static void udp_note_line(const char *line)
+static bool udp_note_line(const char *line)
 {
     unsigned channel;
     unsigned error;
-    if (!udp_txn_active() || line == NULL) return;
-    if (strcmp(line, "OK") == 0 || strcmp(line, "SEND OK") == 0)
-        s_udp_cmd_ok = true;
+    if (!udp_txn_active() || line == NULL) return false;
+    if ((s_udp.state != UDP_TXN_WAIT_SEND_OK && strcmp(line, "OK") == 0) ||
+        (s_udp.state == UDP_TXN_WAIT_SEND_OK && strcmp(line, "SEND OK") == 0))
+        s_udp.cmd_ok = true;
     else if (strcmp(line, "ERROR") == 0 || strncmp(line, "+CME ERROR", 10U) == 0)
-        s_udp_cmd_error = true;
+        s_udp.cmd_error = true;
     if (parse_qiopen(line, &channel, &error) && channel == EC800M_CH_OTA) {
-        if (error == 0U) s_udp_open_urc = true;
-        else s_udp_cmd_error = true;
+        if (error == 0U) s_udp.open_urc = true;
+        else s_udp.cmd_error = true;
+        return true;
     }
     if (parse_prefixed_uint(line, "+QIURC: \"recv\",",
                             EC800M_CH_MAX - 1U, &channel) &&
-        channel == EC800M_CH_OTA)
-        s_udp_recv_urc = true;
+        channel == EC800M_CH_OTA) {
+        s_udp.recv_urc = true;
+        return true;
+    }
+    if (parse_prefixed_uint(line, "+QIURC: \"closed\",", EC800M_CH_MAX - 1U, &channel) &&
+        channel == EC800M_CH_OTA) {
+        s_udp.cmd_error = true;
+        return true;
+    }
+    return false;
 }
 
 static bool at_send_wait_owned(const char *cmd, const char *expect,
@@ -623,9 +627,10 @@ static bool at_send_wait_owned(const char *cmd, const char *expect,
     }
 
     uint32_t start = TICK_MS();
+    wait_tick_guard_t guard = {start, 0U};
     uint16_t resp_pos = 0;
 
-    while ((TICK_MS() - start) < timeout_ms) {
+    while ((TICK_MS() - start) < timeout_ms && wait_tick_alive(&guard)) {
         IWDG_ReloadKey();
         ec800m_wait_service_hook();
         uint16_t s_rx_wr = rx_write_position();
@@ -679,7 +684,8 @@ static bool at_wait_prompt_owned(const char *cmd, uint32_t timeout_ms)
     if (!usart_send_str(cmd) || !usart_send_str("\r\n")) return false;
 
     uint32_t start = TICK_MS();
-    while ((TICK_MS() - start) < timeout_ms) {
+    wait_tick_guard_t guard = {start, 0U};
+    while ((TICK_MS() - start) < timeout_ms && wait_tick_alive(&guard)) {
         IWDG_ReloadKey();
         ec800m_wait_service_hook();
         uint16_t rx_wr = rx_write_position();
@@ -807,7 +813,9 @@ static uint16_t qird_drain_before_command(void)
     qird_note_ring_level(pending);
     if (pending == 0U) return 0U;
     start = last_byte = TICK_MS();
-    while (drained < 4096U && (TICK_MS() - start) < EC800M_QIRD_DRAIN_LIMIT_MS) {
+    wait_tick_guard_t guard = {start, 0U};
+    while (drained < 4096U && (TICK_MS() - start) < EC800M_QIRD_DRAIN_LIMIT_MS &&
+           wait_tick_alive(&guard)) {
         uint16_t index;
         IWDG_ReloadKey();
         pending = qird_ring_pending();
@@ -852,8 +860,9 @@ static uint16_t qird_flush_after_failure(uint32_t quiet_ms, uint32_t limit_ms)
     uint32_t start = TICK_MS();
     uint32_t last = start;
     uint16_t discarded = 0U;
+    wait_tick_guard_t guard = {start, 0U};
 
-    while ((TICK_MS() - start) < limit_ms) {
+    while ((TICK_MS() - start) < limit_ms && wait_tick_alive(&guard)) {
         uint16_t pending = qird_ring_pending();
         IWDG_ReloadKey();
         if (pending != 0U) {
@@ -1005,7 +1014,8 @@ static bool qird_collect_payload(uint8_t channel, uint16_t requested,
 
     start = TICK_MS();
     last_sample = start;
-    while ((TICK_MS() - start) < timeout_ms) {
+    wait_tick_guard_t guard = {start, 0U};
+    while ((TICK_MS() - start) < timeout_ms && wait_tick_alive(&guard)) {
         uint16_t write_position;
         uint32_t gap = TICK_MS() - last_sample;
 
@@ -1236,10 +1246,11 @@ static bool ec800m_is_alive(uint32_t timeout_ms)
     if (!at_owner_acquire(AT_OWNER_BLOCKING)) return false;
     /* Flush receive buffer, but never let a stuck status bit spin forever. */
     uint32_t flush_deadline = TICK_MS() + timeout_ms;
+    wait_tick_guard_t guard = {TICK_MS(), 0U};
     while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_RXDNE) != RESET) {
         IWDG_ReloadKey();
         ec800m_wait_service_hook();
-        if ((int32_t)(TICK_MS() - flush_deadline) >= 0) {
+        if ((int32_t)(TICK_MS() - flush_deadline) >= 0 || !wait_tick_alive(&guard)) {
             at_owner_release(AT_OWNER_BLOCKING);
             return false;
         }
@@ -1252,8 +1263,9 @@ static bool ec800m_is_alive(uint32_t timeout_ms)
     }
 
     uint32_t t0 = TICK_MS();
+    guard = (wait_tick_guard_t){t0, 0U};
     char buf[16]; uint8_t pos = 0;
-    while (TICK_MS() - t0 < timeout_ms) {
+    while (TICK_MS() - t0 < timeout_ms && wait_tick_alive(&guard)) {
         IWDG_ReloadKey();
         ec800m_wait_service_hook();
         if (USART_GetFlagStatus(EC800M_UART, USART_FLAG_RXDNE) != RESET) {
@@ -1901,8 +1913,6 @@ int ec800m_tcp_open(uint8_t ch, const char *ip, uint16_t port)
              "AT+QIOPEN=1,%d,\"TCP\",\"%s\",%u,0,0", ch, ip, port);
     drain_rx();++s_tcp_generation[ch];
     s_tcp[ch].state = TCP_STATE_OPENING;
-    strncpy(s_tcp[ch].ip, ip, sizeof(s_tcp[ch].ip)-1);
-    s_tcp[ch].port = port;
 
     if (!at_send_wait(cmd, "OK", 5000)) {
         s_tcp[ch].state = TCP_STATE_ERROR;
@@ -1966,6 +1976,11 @@ int ec800m_tcp_send(uint8_t ch, const uint8_t *data, uint16_t len)
          * its failed AT response. Never dump channel 1 response bytes. */
         if (ch != EC800M_CH_OTA) at_dump_response();
         dbg_printf("\"\r\n");
+        /* A modem can acknowledge the QISEND prompt yet reject or lose the
+         * payload. Count this as a transport failure as well; otherwise the
+         * recovery threshold only handled missing prompts and a dead socket
+         * could remain OPEN indefinitely during soak tests. */
+        ++s_send_fail_streak;
         s_tcp_send_ambiguous = true;
         goto done;
     }
@@ -1980,78 +1995,127 @@ done:
 int ec800m_udp_send_once(const char *ip, uint16_t port,
                          const uint8_t *data, uint16_t len)
 {
-    const uint8_t ch = EC800M_CH_OTA;
-    char cmd[128];
-    if (!ip || !ip[0] || !data || len == 0U || len > 512U ||
-        !ec800m_is_ready() || s_tcp[ch].state != TCP_STATE_CLOSED)
-        return -1;
-    if (!at_owner_acquire(AT_OWNER_TCP)) return -2;
-    drain_rx();++s_tcp_generation[ch];
-    (void)snprintf(cmd, sizeof(cmd), "AT+QIOPEN=1,%u,\"UDP\",\"%s\",%u,0,0",
-                   (unsigned)ch, ip, (unsigned)port);
-    s_tcp[ch].state = TCP_STATE_OPENING;
-    if (!at_send_wait_owned(cmd, "OK", 5000U)) goto fail;
-    if (s_tcp[ch].state != TCP_STATE_OPEN) {
-        /* QIOPEN URC is consumed by the response pump; accept a successful
-         * command as open for UDP and let QISEND report any failure. */
-        s_tcp[ch].state = TCP_STATE_OPEN;
-    }
-    (void)snprintf(cmd, sizeof(cmd), "AT+QISEND=%u,%u", (unsigned)ch,
-                   (unsigned)len);
-    if (!at_wait_prompt_owned(cmd, 3000U) || !usart_send_buf(data, len) ||
-        !at_send_wait_owned("", "SEND OK", 5000U)) goto fail_close;
-    ++s_tcp_generation[ch];s_tcp[ch].state=TCP_STATE_CLOSED;
-    (void)snprintf(cmd, sizeof(cmd), "AT+QICLOSE=%u", (unsigned)ch);
-    (void)at_send_wait_owned(cmd, "OK", 2000U);
-    ++s_tcp_generation[ch];s_tcp[ch].state = TCP_STATE_CLOSED;
-    at_owner_release(AT_OWNER_TCP);
-    return 0;
-fail_close:
-    ++s_tcp_generation[ch];s_tcp[ch].state=TCP_STATE_CLOSED;
-    (void)snprintf(cmd, sizeof(cmd), "AT+QICLOSE=%u", (unsigned)ch);
-    (void)at_send_wait_owned(cmd, "OK", 1000U);
-fail:
-    ++s_tcp_generation[ch];s_tcp[ch].state = TCP_STATE_CLOSED;
-    at_owner_release(AT_OWNER_TCP);
-    return -1;
+    return ec800m_udp_txn(ip, port, data, len, NULL, 0U, 8000U);
 }
 
+/* Compatibility wrapper for short diagnostic sends. Receive users call the
+ * cooperative API, so the eight-second reply wait never blocks the main loop. */
 int ec800m_udp_txn(const char *ip, uint16_t port,
                    const uint8_t *tx, uint16_t tx_len,
                    uint8_t *rx, uint16_t rx_cap, uint32_t timeout_ms)
 {
-    (void)timeout_ms;
-    if (rx && rx_cap) rx[0] = 0U;
-    return ec800m_udp_send_once(ip, port, tx, tx_len);
+    int result = ec800m_udp_txn_start(ip, port, tx, tx_len, rx, rx_cap, timeout_ms);
+    if (result != 0) return result;
+    do {
+        IWDG_ReloadKey();
+        ec800m_wait_service_hook();
+        drain_rx();
+        ec800m_udp_txn_process();
+        result = ec800m_udp_txn_result();
+    } while (result == -2);
+    return result;
 }
 
 int ec800m_udp_txn_start(const char *ip, uint16_t port,
                          const uint8_t *tx, uint16_t tx_len,
                          uint8_t *rx, uint16_t rx_cap, uint32_t timeout_ms)
 {
-    if (s_udp_txn_state != UDP_TXN_IDLE && s_udp_txn_state != UDP_TXN_DONE) return -2;
-    if (!ip || !tx || !tx_len || tx_len > 512U || !rx || !rx_cap) return -1;
-    s_udp_ip = ip; s_udp_port = port; s_udp_data = tx; s_udp_len = tx_len;
-    s_udp_rx = rx; s_udp_rx_cap = rx_cap; s_udp_timeout = (uint16_t)(timeout_ms > 60000U ? 60000U : timeout_ms);
-    s_udp_result = -1; s_udp_txn_state = UDP_TXN_OPEN_CMD; return 0;
+    if (s_udp.state != UDP_TXN_IDLE) return -2;
+    if (!ip || !ip[0] || !port || !tx || !tx_len || tx_len > 512U ||
+        (rx == NULL) != (rx_cap == 0U) || (uint32_t)rx_cap + 32U >= AT_RESP_MAX ||
+        !timeout_ms || timeout_ms > 60000U || !ec800m_is_ready()) return -1;
+    if (s_tcp[EC800M_CH_OTA].state != TCP_STATE_CLOSED ||
+        !at_owner_acquire(AT_OWNER_TCP)) return -2;
+    s_udp.ip = ip; s_udp.port = port; s_udp.data = tx; s_udp.len = tx_len;
+    s_udp.rx = rx; s_udp.rx_cap = rx_cap; s_udp.timeout = (uint16_t)timeout_ms;
+    s_udp.cmd_ok = s_udp.cmd_error = s_udp.open_urc = false;
+    s_udp.prompt = s_udp.recv_urc = false;
+    s_udp.result = -1; s_udp.state = UDP_TXN_OPEN_CMD; return 0;
+}
+
+static void udp_command(const char *cmd, udp_txn_state_t next)
+{
+    s_udp.cmd_ok = s_udp.cmd_error = false;
+    s_udp.since = TICK_MS();
+    s_udp.state = next;
+    if (!usart_send_str(cmd) || !usart_send_str("\r\n")) s_udp.cmd_error = true;
 }
 
 void ec800m_udp_txn_process(void)
 {
-    if (s_udp_txn_state == UDP_TXN_OPEN_CMD) { s_udp_txn_state = UDP_TXN_SEND_CMD; return; }
-    if (s_udp_txn_state == UDP_TXN_SEND_CMD) {
-        s_udp_result = ec800m_udp_txn(s_udp_ip, s_udp_port, s_udp_data, s_udp_len,
-                                      s_udp_rx, s_udp_rx_cap, s_udp_timeout);
-        s_udp_txn_state = UDP_TXN_CLOSE_CMD;
-        return;
+    char cmd[128];
+    const uint8_t ch = EC800M_CH_OTA;
+    if (!udp_txn_active()) return;
+    if (s_udp.state != UDP_TXN_CLOSE_CMD && s_udp.state != UDP_TXN_WAIT_CLOSE &&
+        (s_udp.cmd_error || !ec800m_is_ready())) {
+        s_udp.result = -1; s_udp.state = UDP_TXN_CLOSE_CMD;
     }
-    if (s_udp_txn_state == UDP_TXN_CLOSE_CMD) s_udp_txn_state = UDP_TXN_DONE;
+    switch (s_udp.state) {
+    case UDP_TXN_OPEN_CMD:
+        ++s_tcp_generation[ch]; s_tcp[ch].state = TCP_STATE_OPENING;
+        snprintf(cmd, sizeof cmd, "AT+QIOPEN=1,%u,\"UDP\",\"%s\",%u,0,0",
+                 (unsigned)ch, s_udp.ip, (unsigned)s_udp.port);
+        udp_command(cmd, UDP_TXN_WAIT_OPEN); break;
+    case UDP_TXN_WAIT_OPEN:
+        if (s_udp.cmd_ok && s_udp.open_urc) {
+            s_tcp[ch].state = TCP_STATE_OPEN; s_udp.state = UDP_TXN_SEND_CMD;
+        } else if (TICK_MS() - s_udp.since >= 5000U) s_udp.state = UDP_TXN_CLOSE_CMD;
+        break;
+    case UDP_TXN_SEND_CMD:
+        snprintf(cmd, sizeof cmd, "AT+QISEND=%u,%u", (unsigned)ch, (unsigned)s_udp.len);
+        udp_command(cmd, UDP_TXN_WAIT_PROMPT); break;
+    case UDP_TXN_WAIT_PROMPT:
+        if (s_udp.prompt) {
+            s_udp.cmd_ok = false; s_udp.since = TICK_MS();
+            s_udp.state = UDP_TXN_WAIT_SEND_OK;
+            if (!usart_send_buf(s_udp.data, s_udp.len)) s_udp.cmd_error = true;
+        } else if (TICK_MS() - s_udp.since >= 3000U) s_udp.state = UDP_TXN_CLOSE_CMD;
+        break;
+    case UDP_TXN_WAIT_SEND_OK:
+        if (s_udp.cmd_ok) {
+            s_udp.since = TICK_MS();
+            if (s_udp.rx) s_udp.state = UDP_TXN_WAIT_RECV;
+            else { s_udp.result = 0; s_udp.state = UDP_TXN_CLOSE_CMD; }
+        } else if (TICK_MS() - s_udp.since >= 5000U) s_udp.state = UDP_TXN_CLOSE_CMD;
+        break;
+    case UDP_TXN_WAIT_RECV:
+        if (s_udp.recv_urc) {
+            const uint8_t *payload; uint16_t n;
+            ec800m_qird_diag_t diag;
+            /* No scheduler runs between release and collector acquisition.
+             * The UDP socket's URCs are consumed before the deferred queue. */
+            at_owner_release(AT_OWNER_TCP);
+            bool ok = qird_collect_payload(ch, s_udp.rx_cap, &payload, &n, &diag, 2000U);
+            if (ok && n > 0U && n <= s_udp.rx_cap) {
+                memcpy(s_udp.rx, payload, n); s_udp.result = n;
+            }
+            if (!at_owner_acquire(AT_OWNER_TCP)) {
+                s_udp.result = -1; s_udp.state = UDP_TXN_DONE; break;
+            }
+            s_udp.state = UDP_TXN_CLOSE_CMD;
+        } else if (TICK_MS() - s_udp.since >= s_udp.timeout) {
+            s_udp.result = 0; s_udp.state = UDP_TXN_CLOSE_CMD;
+        }
+        break;
+    case UDP_TXN_CLOSE_CMD:
+        snprintf(cmd, sizeof cmd, "AT+QICLOSE=%u", (unsigned)ch);
+        udp_command(cmd, UDP_TXN_WAIT_CLOSE); break;
+    case UDP_TXN_WAIT_CLOSE:
+        if (s_udp.cmd_ok || s_udp.cmd_error || TICK_MS() - s_udp.since >= 2000U) {
+            if (!s_udp.cmd_ok) s_udp.result = -1;
+            ++s_tcp_generation[ch]; s_tcp[ch].state = TCP_STATE_CLOSED;
+            s_tcp_qird_pending_mask &= (uint8_t)~(1U << ch);
+            at_owner_release(AT_OWNER_TCP); s_udp.state = UDP_TXN_DONE;
+        }
+        break;
+    default: break;
+    }
 }
 
 int ec800m_udp_txn_result(void)
 {
-    if (s_udp_txn_state != UDP_TXN_DONE) return -2;
-    s_udp_txn_state = UDP_TXN_IDLE; return s_udp_result;
+    if (s_udp.state != UDP_TXN_DONE) return -2;
+    s_udp.state = UDP_TXN_IDLE; return s_udp.result;
 }
 
 void ec800m_tcp_close(uint8_t ch)
@@ -2135,5 +2199,8 @@ void ec800m_register_recv(ec800m_recv_cb_t cb) { s_recv_cb = cb; }
 void ec800m_register_ota_recv(ec800m_recv_cb_t cb) { s_ota_recv_cb = cb; }
 void ec800m_register_agnss_recv(ec800m_recv_cb_t cb) { s_agnss_recv_cb = cb; }
 
-/* Legacy no-op kept for API compatibility (RX now uses USART3 interrupt). */
-void ec800m_dma_rx_complete(void) { }
+bool ec800m_sim_ready(void)
+{
+    return s_sim_identity_ready && s_state >= EC800M_STATE_NETWORK_REG &&
+           s_state <= EC800M_STATE_READY;
+}

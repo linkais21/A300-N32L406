@@ -1,0 +1,282 @@
+[
+  {
+    "test": "test_a300_ota_image.py",
+    "exit_code": 0,
+    "seconds": 0.22
+  },
+  {
+    "test": "test_bcr.py",
+    "exit_code": 0,
+    "seconds": 0.05
+  },
+  {
+    "test": "test_blind_zone_replay.py",
+    "exit_code": 0,
+    "seconds": 1.61
+  },
+  {
+    "test": "test_blind_zone_store.py",
+    "exit_code": 0,
+    "seconds": 8.99
+  },
+  {
+    "test": "test_boot_bcr_device_gate.py",
+    "exit_code": 0,
+    "seconds": 0.31
+  },
+  {
+    "test": "test_boot_cold_start_recovery.py",
+    "exit_code": 0,
+    "seconds": 0.95
+  },
+  {
+    "test": "test_boot_flash_probe_retry.py",
+    "exit_code": 0,
+    "seconds": 0.31
+  },
+  {
+    "test": "test_boot_install_progress.py",
+    "exit_code": 0,
+    "seconds": 0.46
+  },
+  {
+    "test": "test_boot_progress_uart.py",
+    "exit_code": 0,
+    "seconds": 0.43
+  },
+  {
+    "test": "test_boot_spi_timing.py",
+    "exit_code": 0,
+    "seconds": 0.34
+  },
+  {
+    "test": "test_bootloader_artifacts.py",
+    "exit_code": 0,
+    "seconds": 0.03
+  },
+  {
+    "test": "test_bootloader_bcr_failclosed.py",
+    "exit_code": 0,
+    "seconds": 1.02
+  },
+  {
+    "test": "test_bootloader_factory_init.py",
+    "exit_code": 0,
+    "seconds": 0.44
+  },
+  {
+    "test": "test_bootloader_invalid_vector_recovery.py",
+    "exit_code": 0,
+    "seconds": 0.45
+  },
+  {
+    "test": "test_bootloader_legacy_recovery.py",
+    "exit_code": 0,
+    "seconds": 0.49
+  },
+  {
+    "test": "test_bootloader_lkg_powercut_c.py",
+    "exit_code": 0,
+    "seconds": 0.65
+  },
+  {
+    "test": "test_bootloader_platform_contract.py",
+    "exit_code": 0,
+    "seconds": 0.5
+  },
+  {
+    "test": "test_bootloader_powercut.py",
+    "exit_code": 0,
+    "seconds": 36.49
+  },
+  {
+    "test": "test_build_dependencies.py",
+    "exit_code": 0,
+    "seconds": 9.26
+  },
+  {
+    "test": "test_build_version_refresh.py",
+    "exit_code": 0,
+    "seconds": 1.08
+  },
+  {
+    "test": "test_dev_release_manifest.py",
+    "exit_code": 0,
+    "seconds": 0.17
+  },
+  {
+    "test": "test_dev_signed_package.py",
+    "exit_code": 0,
+    "seconds": 1.05
+  },
+  {
+    "test": "test_ext_flash_layout.py",
+    "exit_code": 0,
+    "seconds": 0.75
+  },
+  {
+    "test": "test_ext_flash_store_host.py",
+    "exit_code": 0,
+    "seconds": 1.77
+  },
+  {
+    "test": "test_factory_init_artifact.py",
+    "exit_code": 0,
+    "seconds": 0.1
+  },
+  {
+    "test": "test_feature_guards.py",
+    "exit_code": 0,
+    "seconds": 0.21
+  },
+  {
+    "test": "test_firmware_signature.py",
+    "exit_code": 0,
+    "seconds": 3.11
+  },
+  {
+    "test": "test_flash_capacity_guard.py",
+    "exit_code": 0,
+    "seconds": 2.31
+  },
+  {
+    "test": "test_flash_combined_script.py",
+    "exit_code": 0,
+    "seconds": 1.17
+  },
+  {
+    "test": "test_flash_config_migration.py",
+    "exit_code": 0,
+    "seconds": 0.55
+  },
+  {
+    "test": "test_flash_config_v3.py",
+    "exit_code": 0,
+    "seconds": 0.52
+  },
+  {
+    "test": "test_flash_gate_build.py",
+    "exit_code": 0,
+    "seconds": 15.55
+  },
+  {
+    "test": "test_fota_active.py",
+    "exit_code": 0,
+    "seconds": 0.31
+  },
+  {
+    "test": "test_fota_check_parser.py",
+    "exit_code": 0,
+    "seconds": 0.42
+  },
+  {
+    "test": "test_fota_checkpoint_powercut.py",
+    "exit_code": 0,
+    "seconds": 1.46
+  },
+  {
+    "test": "test_fota_diagnostics.py",
+    "exit_code": 0,
+    "seconds": 0.04
+  },
+  {
+    "test": "test_fota_key_config.py",
+    "exit_code": 0,
+    "seconds": 0.52
+  },
+  {
+    "test": "test_fota_modem_handoff.py",
+    "exit_code": 0,
+    "seconds": 1.43
+  },
+  {
+    "test": "test_fota_no_api_key_contract.py",
+    "exit_code": 0,
+    "seconds": 0.04
+  },
+  {
+    "test": "test_fota_package.py",
+    "exit_code": 0,
+    "seconds": 0.05
+  },
+  {
+    "test": "test_fota_platform_flow.py",
+    "exit_code": 0,
+    "seconds": 5.36
+  },
+  {
+    "test": "test_fota_progress_display.py",
+    "exit_code": 0,
+    "seconds": 1.12
+  },
+  {
+    "test": "test_fota_resume.py",
+    "exit_code": 0,
+    "seconds": 1.14
+  },
+  {
+    "test": "test_fota_stack_guard.py",
+    "exit_code": 0,
+    "seconds": 0.03
+  },
+  {
+    "test": "test_fota_verify_scan.py",
+    "exit_code": 0,
+    "seconds": 0.65
+  },
+  {
+    "test": "test_heap_bounds.py",
+    "exit_code": 0,
+    "seconds": 0.44
+  },
+  {
+    "test": "test_image_manifest.py",
+    "exit_code": 0,
+    "seconds": 0.05
+  },
+  {
+    "test": "test_internal_flash_layout.py",
+    "exit_code": 0,
+    "seconds": 0.43
+  },
+  {
+    "test": "test_lto_stack_guard.py",
+    "exit_code": 0,
+    "seconds": 0.28
+  },
+  {
+    "test": "test_platform_trust_anchor.py",
+    "exit_code": 0,
+    "seconds": 3.17
+  },
+  {
+    "test": "test_ram01_frame_budget.py",
+    "exit_code": 1,
+    "seconds": 0.07
+  },
+  {
+    "test": "test_ram_guard.py",
+    "exit_code": 0,
+    "seconds": 0.34
+  },
+  {
+    "test": "test_ram_watermark.py",
+    "exit_code": 0,
+    "seconds": 0.4
+  },
+  {
+    "test": "test_release_identity_contract.py",
+    "exit_code": 1,
+    "seconds": 0.08
+  },
+  {
+    "test": "test_reset_diag.py",
+    "exit_code": 0,
+    "seconds": 0.44
+  },
+  {
+    "test": "test_trust_key_build_dependency.py",
+    "exit_code": 0,
+    "seconds": 0.23
+  }
+]

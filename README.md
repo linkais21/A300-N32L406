@@ -1,6 +1,24 @@
 # A300-T9 GPS Tracker Firmware
 
-Firmware for A300-T9 GPS vehicle tracker based on N32L406CDL7 MCU.
+## V3.049 optimization closure test build (2026-09-15)
+
+Current hardware validation delivery: `artifacts/HIL-STABILITY-20260915-V3049/`.
+Read the [flashing, serial capture and 17-item closure guide](docs/quality-closure-v3049-20260915.md)
+and fill in the [test record](docs/HIL-RESULTS-TEMPLATE.md).
+Includes the current TAU804M-only AGNSS optimization inputs. `release_approved=false`:
+the complete RAM/stack gate remains blocked; PERF-01 is only partially addressed.
+Combined SWD first boot clears configuration and OTA authorization state.
+
+## V3.048 stability test build (2026-09-15)
+
+Recent optimization review and query workspace lifetime repair are packaged in
+`artifacts/HIL-STABILITY-20260915-V3048/`. See
+[review and validation](docs/stability-review-v3048-20260915.md).
+This is a hardware test build, `release_approved=false`: whole-program RAM/stack
+evidence remains incomplete. Combined SWD images request one-time factory initialization.
+The version references below describe earlier releases.
+
+Firmware for A300-T9 GPS vehicle tracker based on N32L406CBL7 MCU.
 
 ## Hardware
 
@@ -195,10 +213,14 @@ Output files in `build/`:
 
 ### Flash Size
 
-The N32L406CBL7 App partition is 106,496 bytes at `0x08006000`.
+The N32L406CBL7 has 128 KiB internal Flash and 24 KiB SRAM. The linker
+script `ldscript/n32l406.ld` reserves 24 KiB for the Bootloader and assigns
+104 KiB (106,496 bytes) to the App at `0x08006000`.
 The 2026-09-13 full-build baseline uses **105,776 bytes (99.32%)**, leaving
 **720 bytes**. Static RAM is 17,820 / 24,576 bytes; stack/runtime safety remains
-a separate validation requirement.
+a separate validation requirement. These are historical measurements, not
+current-worktree optimization budgets; use freshly generated BIN/MAP and
+capacity/stack reports for the build being evaluated.
 
 `make all` and `make release-gate` run `flash-guard`, which compares the BIN
 length with the MAP load span and writes `build/flash-capacity.json`. Remaining
@@ -217,7 +239,7 @@ configuration drift, commands and validation limits.
 
 `make stack-report` generates ELF/MAP-bound final LTO stack diagnostics.
 `make ram-guard`, `make stack-guard`, `make release-gate` and the release builder
-reject incomplete runtime evidence. The current known direct-call frame sum
+reject incomplete runtime evidence. The historical RAM-01 baseline direct-call frame sum
 is 2,984 bytes, leaving 3,772 bytes before heap/IRQ and other unmeasured usage,
 below the required 4,096-byte gap. Release is blocked pending verified bounds;
 `make all` success is only a build result. Force the first rebuild with `-B`.

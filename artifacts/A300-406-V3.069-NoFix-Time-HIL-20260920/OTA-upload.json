@@ -1,0 +1,12 @@
+{
+  "file": "A300-406-OTA-V3069.bin",
+  "deviceModel": "A300-406",
+  "versionCode": 3069,
+  "versionName": "T360-A300_406_20260920150544,V3.069",
+  "size": 105184,
+  "sha256": "84ac3ffda5d1df21e0fb1ffd6045204ab07c4835322a14cb792f97cccba589e3",
+  "active": false,
+  "mandatory": false,
+  "signing": "platform-detached",
+  "releaseNotes": "HIL test: advance 0200 time while GNSS has no fix; preserve APN fix."
+}

@@ -1,0 +1,44 @@
+[
+  {
+    "command": [
+      "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/arm-none-eabi-objcopy.exe",
+      "-I",
+      "binary",
+      "-O",
+      "ihex",
+      "--change-addresses",
+      "0x08000000",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.060-FieldConfig-HIL-20260918\\SWD-Combined-V3060.bin",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.060-FieldConfig-HIL-20260918\\SWD-Combined-V3060.hex"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/arm-none-eabi-objcopy.exe",
+      "-I",
+      "binary",
+      "-O",
+      "ihex",
+      "--change-addresses",
+      "0x08006000",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.060-FieldConfig-HIL-20260918\\App-V3060.bin",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.060-FieldConfig-HIL-20260918\\App-V3060.hex"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin/arm-none-eabi-objcopy.exe",
+      "-I",
+      "binary",
+      "-O",
+      "ihex",
+      "--change-addresses",
+      "0x08000000",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.060-FieldConfig-HIL-20260918\\Bootloader-V3060.bin",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.060-FieldConfig-HIL-20260918\\Bootloader-V3060.hex"
+    ],
+    "exit_code": 0
+  }
+]

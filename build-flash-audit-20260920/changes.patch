@@ -1,0 +1,104 @@
+--- before/src/jt808.c
++++ after/src/jt808.c
+@@ -603,22 +603,16 @@
+     return hw_acc_is_on();
+ }
+ 
++static uint8_t jt808_days_in_month(uint16_t year, uint8_t month);
++
+ bool jt808_location_snapshot_valid(const gps_data_t *gps, uint32_t now)
+ {
+-    static const uint8_t days_in_month[13] =
+-        { 0U,31U,28U,31U,30U,31U,30U,31U,31U,30U,31U,30U,31U };
+-    uint8_t maximum_day;
+-    bool leap;
+-
+     if (gps == NULL || !gps->valid || gps->fix_quality == 0U ||
+         (uint32_t)(now - gps->last_update_ms) > 5000U ||
+         gps->year < 2000U || gps->month < 1U || gps->month > 12U ||
+         gps->hour > 23U || gps->minute > 59U || gps->second > 59U)
+         return false;
+-    leap = (gps->year % 4U == 0U && gps->year % 100U != 0U) ||
+-           (gps->year % 400U == 0U);
+-    maximum_day = gps->month == 2U && leap ? 29U : days_in_month[gps->month];
+-    return gps->day >= 1U && gps->day <= maximum_day;
++    return gps->day >= 1U && gps->day <= jt808_days_in_month(gps->year, gps->month);
+ }
+ 
+ void jt808_reset_endpoint_auth(uint8_t channel_mask)
+@@ -635,7 +629,8 @@
+     }
+ }
+ 
+-static uint8_t jt808_days_in_month(uint16_t year, uint8_t month)
++/* Share the date calculation across validation and timezone rollover. */
++static __attribute__((noinline)) uint8_t jt808_days_in_month(uint16_t year, uint8_t month)
+ {
+     static const uint8_t days[13] =
+         { 0U,31U,28U,31U,30U,31U,30U,31U,31U,30U,31U,30U,31U };
+@@ -762,7 +757,8 @@
+     return p;
+ }
+ 
+-static uint16_t clamp_voltage_units(float volts, float units_per_volt)
++/* Keep one conversion body for both voltage scales / coordinate axes. */
++static __attribute__((noinline)) uint16_t clamp_voltage_units(float volts, float units_per_volt)
+ {
+     float scaled;
+     if (!(volts > 0.0f)) return 0U;
+@@ -771,7 +767,7 @@
+     return (uint16_t)scaled;
+ }
+ 
+-static uint16_t coordinate_extension_tail(double coordinate)
++static __attribute__((noinline)) uint16_t coordinate_extension_tail(double coordinate)
+ {
+     double magnitude = fabs(coordinate);
+     uint32_t degrees;
+--- before/src/gps.c
++++ after/src/gps.c
+@@ -4,6 +4,7 @@
+ #include "debug_uart.h"
+ #include "n32l40x.h"
+ #include <string.h>
++#include <math.h>
+ 
+ #define NMEA_BUF_SIZE  128
+ #define NMEA_FIELD_MAX 24
+@@ -573,8 +574,8 @@
+     if (snapshot == NULL) return false;
+     if (!snapshot->valid || snapshot->fix_quality == 0U ||
+         (uint32_t)(now - snapshot->last_update_ms) > 5000U ||
+-        snapshot->lat < -90.0 || snapshot->lat > 90.0 ||
+-        snapshot->lon < -180.0 || snapshot->lon > 180.0 ||
++        fabs(snapshot->lat) > 90.0 ||
++        fabs(snapshot->lon) > 180.0 ||
+         (snapshot->lat == 0.0 && snapshot->lon == 0.0) ||
+         snapshot->year < 2000U || snapshot->month < 1U || snapshot->month > 12U ||
+         snapshot->day < 1U || snapshot->day > 31U || snapshot->hour > 23U ||
+--- before/src/mileage.c
++++ after/src/mileage.c
+@@ -92,8 +92,8 @@
+ {
+     const gps_data_t *g = gps_get_data();
+     if (!g->valid ||
+-        !(g->lat >= -90.0 && g->lat <= 90.0 &&
+-          g->lon >= -180.0 && g->lon <= 180.0)) return;
++        !(fabs(g->lat) <= 90.0 &&
++          fabs(g->lon) <= 180.0)) return;
+ 
+     device_config_t *c = cfg_get();
+ 
+--- before/src/gps_report_filter.c
++++ after/src/gps_report_filter.c
+@@ -53,9 +53,7 @@
+ static bool report_fix_fresh(const gps_data_t *gps, uint32_t now_ms)
+ {
+     return (gps != NULL && gps->valid && gps_is_valid()) &&
+-           isfinite(gps->lat) && isfinite(gps->lon) &&
+-           gps->lat >= -90.0 && gps->lat <= 90.0 &&
+-           gps->lon >= -180.0 && gps->lon <= 180.0 &&
++           fabs(gps->lat) <= 90.0 && fabs(gps->lon) <= 180.0 &&
+            isfinite(gps->speed_kmh) && gps->speed_kmh >= 0.0f &&
+            now_ms - gps->last_update_ms <= REPORT_FIX_MAX_AGE_MS &&
+            now_ms - gps->heading_update_ms <= REPORT_FIX_MAX_AGE_MS;

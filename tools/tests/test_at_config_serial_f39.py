@@ -35,9 +35,14 @@ HARNESS = r'''
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "at_config.h"
 #include "f39_reply.h"
+#include "fota.h"
+#include "log_platform.h"
+fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
+int log_platform_send_result(void) { return 0; }
 #include "gps.h"
 #include "sms_command.h"
 #include "peripherals.h"
@@ -78,9 +83,18 @@ void ec800m_restart_pdp(void) { }
 void gnss_vendor_set_type(gnss_type_t t) { (void)t; }
 void agnss_init(gnss_type_t t) { (void)t; }
 void relay_set(bool on) { (void)on; }
+uint16_t relay_test_remaining(void) { return 0U; }
+static unsigned production_calls;
+bool production_test_command(const char *line) {
+    ++production_calls;
+    return strcmp(line, "FACTORYCAP#") == 0;
+}
 bool relay_get(void) { return false; }
+static bool quality_fresh;
+bool gps_quality_fix_fresh(void) { return quality_fresh; }
+bool gps_get_quality(gps_quality_t *q) { memset(q, 0, sizeof(*q)); if (quality_fresh) { q->satellites=8; q->average=38; q->maximum=44; } return quality_fresh; }
 bool gps_is_valid(void) { return true; }
-const gps_data_t *gps_get_data(void) { static gps_data_t g; g.valid = true; return &g; }
+const gps_data_t *gps_get_data(void) { static gps_data_t g; g.valid = true; g.fix_quality=1; g.hdop=1.2f; g.satellites=8; return &g; }
 void gps_send_cmd(const char *c) { (void)c; }
 int GPIO_ReadInputDataBit(void *p, unsigned x) { (void)p; (void)x; return 1; }
 /* Q9 inverts PA12, so a high pin means ACC OFF. */
@@ -122,6 +136,12 @@ int main(void) {
     config.gmt_sign = 1; config.gmt_hour = 8;
     at_config_init();
 
+    line("FACTORYCAP#");
+    assert(production_calls == 1U);
+    assert(!at_config_execute_text_command((const uint8_t *)"FACTORYCAP#", 11U));
+    assert(!at_config_execute_sms("10000", (const uint8_t *)"RELAYTEST,LOW#", 14U));
+    assert(production_calls == 1U); /* no remote factory dispatch */
+
     /* A setter takes effect and is acknowledged on the console. Setters reply
        with the bare root ("VIBSENS=Success!"), matching every other setter in
        f39_reply.c's success() path rather than echoing the argument. */
@@ -158,6 +178,60 @@ int main(void) {
     line("PARAM#");
     assert(strstr(console, "PRO[JT808_2013]") != 0);
     assert(strstr(console, "ICCID[89860492192080502719]") != 0);
+    assert(strstr(console, "MODEL[A300_406]") != NULL);
+    assert(strstr(console, "FIX[0]HDOP[0.0]CNSAT[0]") != NULL);
+    quality_fresh = true;
+    line("PARAM#");
+    assert(strstr(console, "FIX[1]HDOP[1.2]CNSAT[8]CNAVG[38]CNMAX[44]") != NULL);
+    if (getenv("A300_V150_WIRE")) {
+        FILE *f = fopen(getenv("A300_V150_WIRE"), "w");
+        assert(f != NULL); fputs(console, f); fclose(f);
+    }
+
+    line("APN,CMIOT,,#");
+    assert(strstr(console, "APN=Success!") != NULL);
+    assert(!config.autoapn_en && strcmp(config.apn, "CMIOT") == 0);
+    line("APN#");
+    assert(strstr(console, "APN,CMIOT=Success!") != NULL);
+    if (getenv("A300_V150_WIRE")) {
+        FILE *f = fopen(getenv("A300_V150_WIRE"), "a");
+        assert(f != NULL); fputs(console, f); fclose(f);
+    }
+    line("APN,CMIOT,user,#");
+    assert(strstr(console, "APN=Success!") != NULL);
+    line("APN#");
+    assert(strstr(console, "APN,CMIOT=Success!") != NULL);
+    assert(strstr(console, "user") == NULL);
+    line("APN,CMIOT,,secret#");
+    assert(strstr(console, "APN=Success!") != NULL);
+    line("APN#");
+    assert(strstr(console, "APN,CMIOT=Success!") != NULL);
+    assert(strstr(console, "secret") == NULL);
+    saves = 0U;
+    line("APN,,,#");
+    assert(strstr(console, "Success!") == NULL && saves == 0U);
+    line("APN,CMIOT,,,extra#");
+    assert(strstr(console, "Success!") == NULL && saves == 0U);
+    persist_ok = false;
+    line("APN,OTHER,,#");
+    assert(strstr(console, "Success!") == NULL);
+    assert(strcmp(config.apn, "CMIOT") == 0);
+    persist_ok = true;
+
+    line("APN,AUTO,,#");
+    assert(strstr(console, "APN=Success!") != NULL && config.autoapn_en);
+    assert(!config.apn[0] && !config.apn_user[0] && !config.apn_pass[0]);
+    line("APN#");
+    assert(strstr(console, "APN,AUTO=Success!") != NULL);
+    saves = 0U;
+    line("APN,AUTO,user,#");
+    assert(strstr(console, "Success!") == NULL && saves == 0U);
+    line("APN,AUTO,,secret#");
+    assert(strstr(console, "Success!") == NULL && saves == 0U);
+    line("APN,0,,#");
+    assert(strstr(console, "APN=Success!") != NULL && config.autoapn_en);
+    line("APN,CMIOT,,#");
+    assert(strstr(console, "APN=Success!") != NULL && !config.autoapn_en);
 
     /* PID echoes the full 11-digit device id, as over SMS. */
     line("PID#");
@@ -217,6 +291,26 @@ int main(void) {
     at_config_process();
     assert(system_resets == 1U);
 
+    line("AGPS=ON");assert(config.agps_en==1 && strstr(console,"OK"));
+    persist_ok=false;line("AGPS=OFF");assert(config.agps_en==1 && strstr(console,"ERR"));
+    persist_ok=true;line("AGPS=OFF");assert(config.agps_en==0);
+    line("AGPS=INVALID");assert(config.agps_en==0 && strstr(console,"ERR"));
+    config.anglerep_en=0;
+    line("ANGLEREP=ON");assert(config.anglerep_en==1 && strstr(console,"OK"));
+    persist_ok=false;line("ANGLEREP=OFF");assert(config.anglerep_en==1 && strstr(console,"ERR:SAVE"));
+    persist_ok=true;line("ANGLEREP=OFF");assert(config.anglerep_en==0 && strstr(console,"OK"));
+    line("ANGLEREP=1");assert(config.anglerep_en==1);
+    line("ANGLEREP=0");assert(config.anglerep_en==0);
+    unsigned corner_saves=saves;
+    line("ANGLEREP=INVALID");assert(config.anglerep_en==0 && strstr(console,"ERR:ARG"));
+    line("ANGLEREP=ON,30,2");assert(config.anglerep_en==0 && strstr(console,"ERR:ARG"));
+    line("ANGLEREP");assert(config.anglerep_en==0 && strstr(console,"ERR:ARG"));
+    assert(saves==corner_saves);
+    line("ANGLEREP=ON");line("ANGLEREP=ON");assert(config.anglerep_en==1);
+    const char *legacy[]={"SOSALM","GMT","CELLAUTOGMT","GEOREP","MILEAGE","AUTOAPN","SENDS=1"};
+    for(unsigned i=0;i<sizeof legacy/sizeof legacy[0];i++){line(legacy[i]);assert(strstr(console,"OK"));}
+    line("SENDS");assert(strstr(console,"ERR"));
+
     return 0;
 }
 '''
@@ -243,7 +337,7 @@ def main() -> int:
         cmd = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror",
                "-I", str(tmp), "-I", str(ROOT / "include"), str(src),
                str(ROOT / "src/at_config.c"), str(ROOT / "src/f39_command.c"),
-               str(ROOT / "src/f39_config_adapter.c"), str(ROOT / "src/f39_reply.c"),
+               str(ROOT / "src/plate_encoding.c"), str(ROOT / "src/f39_config_adapter.c"), str(ROOT / "src/f39_reply.c"),
                str(ROOT / "src/sms_command.c"), str(ROOT / "src/terminal_identity.c"),
                "-lm", "-o", str(exe)]
         r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)

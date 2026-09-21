@@ -1,0 +1,398 @@
+[
+  {
+    "name": "sensor-wire",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_test.py",
+      "--wire-output",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build-production-fix6-package-20260917\\sensor-wire.txt"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_at_config_serial_f39",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_at_config_serial_f39.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_f39_parser",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_parser.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_f39_config",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_config.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_f39_dualset",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_dualset.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_f39_actions",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_actions.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_f39_end_to_end",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_end_to_end.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_gps_huada_output",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_huada_output.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_gps_huada_gsv",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_huada_gsv.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_production_test",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_test.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_production_gnss",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_gnss.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_nmea_replay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_nmea_replay.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_gps_drop_diagnostics",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_drop_diagnostics.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_gps_tx_bounded",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_tx_bounded.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_gps_ntp_apply",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_ntp_apply.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_production_adc",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_adc.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_production_relay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_relay.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_relay_sms",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_relay_sms.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_remote_relay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_remote_relay.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_at_config_handoff",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_at_config_handoff.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_feature_guards",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_feature_guards.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_log_platform_wire",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_log_platform_wire.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_log_platform_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_log_platform_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_build_version_refresh",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_build_version_refresh.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_release_identity_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_jt808_dual_session",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_dual_session.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_blind_zone_store",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_store.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_blind_zone_replay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_replay.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_blind_zone_ack_channel",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_ack_channel.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_corner_blind_zone_replay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_corner_blind_zone_replay.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_ext_flash_layout",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_layout.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "test_ext_flash_store_host",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_store_host.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "original-v150-exe",
+    "command": [
+      "powershell",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "tools/tests/test_v150_binary.ps1",
+      "-FirmwareReplies",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build-production-fix6-package-20260917\\v150-wire.txt"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "release-guard",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+      "-s",
+      "release-guard",
+      "BUILD=build-production-v150-fix-20260917"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "release-gate",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+      "-s",
+      "release-gate",
+      "BUILD=build-production-v150-fix-20260917"
+    ],
+    "exit_code": 2
+  },
+  {
+    "name": "platform-trust",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_platform_trust_anchor.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "terminal-identity-known-failure",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_terminal_identity.py"
+    ],
+    "exit_code": 1
+  },
+  {
+    "name": "diff-check",
+    "command": [
+      "git",
+      "diff",
+      "--check",
+      "--",
+      "src/relay.c",
+      "include/relay.h",
+      "tools/tests/test_production_relay.py",
+      "tools/tests/test_relay_sms.py",
+      "src/production_test.c",
+      "src/gps.c",
+      "include/gps.h",
+      "tools/tests/test_production_test.py",
+      "tools/tests/test_production_gnss.py",
+      "tools/tests/test_v150_binary.ps1",
+      "Makefile",
+      "gen_version.ps1",
+      "src/at_config.c",
+      "src/f39_command.c",
+      "src/f39_config_adapter.c",
+      "src/jt808.c",
+      "src/blind_zone.c",
+      "include/blind_zone.h",
+      "src/main.c",
+      "src/log_platform.c",
+      "tools/build_dev_release.py",
+      "tools/release_guard.py",
+      "tools/tests/test_at_config_serial_f39.py",
+      "tools/tests/test_f39_end_to_end.py",
+      "tools/tests/test_build_version_refresh.py",
+      "tools/tests/test_jt808_dual_session.py",
+      "tools/tests/test_blind_zone_store.py",
+      "tools/tests/test_blind_zone_replay.py",
+      "tools/tests/test_terminal_identity.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "boot-build",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+      "-s",
+      "-B",
+      "all",
+      "TOOLCHAIN_ROOT=D:/A300_406_tools/A300_406/A300-first/.toolchain/bin"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "boot-ram",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build-production-fix6-package-20260917\\source\\bootloader\\build\\bootloader.map"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "combined-hex",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin\\arm-none-eabi-objcopy.exe",
+      "-I",
+      "binary",
+      "-O",
+      "ihex",
+      "--change-addresses",
+      "0x08000000",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.054-V150-Fix6-20260917\\SWD-Combined-N32L406CBL7.bin",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.054-V150-Fix6-20260917\\SWD-Combined-N32L406CBL7.hex"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "hex-roundtrip",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin\\arm-none-eabi-objcopy.exe",
+      "-I",
+      "ihex",
+      "-O",
+      "binary",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.054-V150-Fix6-20260917\\SWD-Combined-N32L406CBL7.hex",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build-production-fix6-package-20260917\\roundtrip.bin"
+    ],
+    "exit_code": 0
+  }
+]

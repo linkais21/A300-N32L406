@@ -162,12 +162,12 @@ static void test_valid_mapping_and_effects(void)
     assert(strcmp(tx.candidate.apn_user, "user") == 0);
     assert(strcmp(tx.candidate.apn_pass, "password") == 0);
     tx = expect_prepared("APN,AUTO", &live, &spy,
-                         F39_EFFECT_MODEM_PDP_RESTART);
+                         F39_EFFECT_NONE); /* already automatic */
     assert(tx.candidate.autoapn_en == 1U);
     assert(tx.candidate.apn[0] == '\0' && tx.candidate.apn_user[0] == '\0' &&
            tx.candidate.apn_pass[0] == '\0');
     tx = expect_prepared("APN,0", &live, &spy,
-                         F39_EFFECT_MODEM_PDP_RESTART);
+                         F39_EFFECT_NONE);
     assert(tx.candidate.autoapn_en == 1U);
 
     tx = expect_prepared("GPSDUP,0", &live, &spy, F39_EFFECT_TIMER_REFRESH);
@@ -379,7 +379,7 @@ def main():
             compiler, "-std=c99", "-Wall", "-Wextra", "-Werror",
             "-I", str(ROOT / "include"), str(harness),
             str(ROOT / "src" / "f39_command.c"),
-            str(ROOT / "src" / "f39_config_adapter.c"), "-o", str(binary),
+            str(ROOT / "src/plate_encoding.c"), str(ROOT / "src" / "f39_config_adapter.c"), "-o", str(binary),
         ]
         build = subprocess.run(command, cwd=ROOT, text=True,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)

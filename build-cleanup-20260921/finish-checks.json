@@ -1,0 +1,8 @@
+{
+  "at_config_serial_before": 3221226505,
+  "at_config_serial_after": 3221226505,
+  "console_numeric_before": 3221226505,
+  "console_numeric_after": 3221226505,
+  "i2c_trace_failure_baseline": "PASS",
+  "power_routing_baseline": "PASS"
+}

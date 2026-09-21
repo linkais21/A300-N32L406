@@ -1,0 +1,141 @@
+[
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "identity.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "-j4",
+      "all",
+      "BUILD=build/stability-review-3048/app"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "app-build.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ram01_frame_budget.py",
+      "build/stability-review-3048/app"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "frame-budget.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/libc_parser_guard.py",
+      "build/stability-review-3048/app/a300_firmware.map"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "libc.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_platform_trust_anchor.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "final-trust.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "-f",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build\\stability-review-3048\\boot-hil.mk",
+      "-j4",
+      "all"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first\\bootloader",
+    "exit_code": 0,
+    "log": "boot-build.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build\\stability-review-3048\\boot\\bootloader.map"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "boot-map.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\gen_a300_ota_image.py",
+      "--input",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-STABILITY-20260915-V3048\\V3.048\\App-N32L406CBL7.bin",
+      "--output",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-STABILITY-20260915-V3048\\V3.048\\A300-406-OTA-V3048.bin",
+      "--version-code",
+      "3048"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3048-ota.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin\\arm-none-eabi-objcopy.exe",
+      "-I",
+      "binary",
+      "-O",
+      "ihex",
+      "--change-addresses",
+      "0x08000000",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-STABILITY-20260915-V3048\\V3.048\\Combined-N32L406CBL7.bin",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-STABILITY-20260915-V3048\\V3.048\\Combined-N32L406CBL7.hex"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3048-combined-hex.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_dev_release_manifest.py",
+      "--manifest",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-STABILITY-20260915-V3048\\V3.048\\SHA256SUMS-N32L406CBL7.json"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3048-manifest.log"
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin\\arm-none-eabi-objcopy.exe",
+      "-I",
+      "ihex",
+      "-O",
+      "binary",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-STABILITY-20260915-V3048\\V3.048\\Combined-N32L406CBL7.hex",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build\\stability-review-3048\\hex-roundtrip.bin"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "hex-roundtrip.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_dev_release_manifest.py",
+      "--manifest",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-STABILITY-20260915-V3048\\V3.048\\SHA256SUMS-N32L406CBL7.json"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "final-manifest.log"
+  }
+]

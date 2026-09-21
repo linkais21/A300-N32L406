@@ -1,0 +1,19 @@
+{
+  "build_retained": true,
+  "hardware_verified": false,
+  "default_enabled": true,
+  "ota_preserves_existing_switch": true,
+  "sources": {
+    "src/agnss_manager.c": "6f3bb106b0412e4a1d46574da03c8e2f8f070e398e84f32b57f494ab25455954",
+    "src/agnss_online.c": "b04c42dc6062de444b71442e83a6d067fca92c166c6e25d3241727a62e8b8dfc",
+    "src/agnss_huada.c": "3fedcc0dbe5d2fd784180ffc6288108617c1b7bd780412d9af51e1a23091ae90",
+    "src/agnss_storage.c": "02ec1e30b8f39937dc15e894d644473c6ee21f7d6a9ebbb7ecaa946468796c22",
+    "src/agnss_stream_workspace.c": "cf72f518e31d9da753d1b699f04075f88135ffb599512280ea02be954912ef21",
+    "src/huada_ack.c": "74c8e7e1261bf006ceb6c2a596c04183add7996ce7c6c6d777c727eb812236c7"
+  },
+  "evidence": [
+    "normal production flags",
+    "linked agnss_process",
+    "HTTP ephemeris request and result log retained in App"
+  ]
+}

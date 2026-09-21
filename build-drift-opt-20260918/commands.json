@@ -1,0 +1,116 @@
+[
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_report_filter.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_report_wire.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_sleep_wake_timestamp_vibration_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_gnss.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_a300_ota_image.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_platform_trust_anchor.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_package.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_checkpoint_powercut.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_resume.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_platform_flow.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_cold_start_recovery.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_bcr_device_gate.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin\\arm-none-eabi-gcc.exe",
+      "-std=c99",
+      "-mcpu=cortex-m4",
+      "-mthumb",
+      "-mfpu=fpv4-sp-d16",
+      "-mfloat-abi=hard",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-fsyntax-only",
+      "-Iinclude",
+      "-Isdk/Nations.N32L40x_Library.2.2.0/firmware/CMSIS/core",
+      "-Isdk/Nations.N32L40x_Library.2.2.0/firmware/CMSIS/device",
+      "-Isdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/inc",
+      "-DUSE_STDPERIPH_DRIVER",
+      "-DN32L40X",
+      "src/gps_report_filter.c"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_report_filter.py"
+    ],
+    "exit_code": 0,
+    "note": "final boundary additions"
+  }
+]

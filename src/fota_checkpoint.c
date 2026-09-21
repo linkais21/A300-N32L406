@@ -39,16 +39,33 @@ static bool newest(fota_checkpoint_t *out, uint32_t *selected)
     return true;
 }
 
+int fota_checkpoint_read(fota_checkpoint_t *out)
+{
+    uint32_t selected;
+    if (!out || !newest(out, &selected)) return -1;
+    return selected && out->expected_length ? 1 : 0;
+}
+
 bool fota_checkpoint_load(const char *url, uint32_t expected_length, fota_checkpoint_t *out)
 {
-    fota_checkpoint_t record;
-    uint32_t selected;
-    if (!url || !out || !expected_length ||
-        !newest(&record, &selected) || !selected ||
-        record.expected_length != expected_length || strcmp(record.url, url) != 0)
-        return false;
-    *out = record;
-    return true;
+    return url && expected_length && fota_checkpoint_read(out) == 1 &&
+           out->expected_length == expected_length && strcmp(out->url, url) == 0;
+}
+
+/* Both journals use CRC then commit marker as their final two words. Keep
+ * erase/body/marker/readback ordering identical for every power-cut point. */
+static bool commit_record(void *record, void *check, uint32_t size,
+                          uint32_t addr, uint32_t marker)
+{
+    uint8_t *bytes=record;
+    uint32_t crc=crc32_compute(record,size-8U);
+    memcpy(bytes+size-8U,&crc,4U);
+    if(!ext_flash_erase(EXT_FLASH_OWNER_OTA,addr,FLASH_SECTOR_SIZE) ||
+       !ext_flash_write_verified(EXT_FLASH_OWNER_OTA,addr,record,size-4U))return false;
+    memcpy(bytes+size-4U,&marker,4U);
+    return ext_flash_write_verified(EXT_FLASH_OWNER_OTA,addr+size-4U,&marker,4U) &&
+           ext_flash_read(EXT_FLASH_OWNER_OTA,addr,check,size) &&
+           memcmp(record,check,size)==0;
 }
 
 static bool write_record(const fota_checkpoint_t *record)
@@ -61,16 +78,7 @@ static bool write_record(const fota_checkpoint_t *record)
     r.magic = FOTA_CHECKPOINT_MAGIC;
     r.format_version = FOTA_CHECKPOINT_FORMAT;
     r.record_length = sizeof r;
-    r.commit_marker = 0xFFFFFFFFUL;
-    r.crc32 = crc32_compute(&r, offsetof(fota_checkpoint_t, crc32));
-    if (!ext_flash_erase(EXT_FLASH_OWNER_OTA, addr, FLASH_SECTOR_SIZE) ||
-        !ext_flash_write_verified(EXT_FLASH_OWNER_OTA, addr, &r,
-                                  offsetof(fota_checkpoint_t, commit_marker))) return false;
-    r.commit_marker = FOTA_CHECKPOINT_MARKER;
-    if (!ext_flash_write_verified(EXT_FLASH_OWNER_OTA,
-            addr + offsetof(fota_checkpoint_t, commit_marker), &r.commit_marker, sizeof r.commit_marker) ||
-        !ext_flash_read(EXT_FLASH_OWNER_OTA, addr, &check, sizeof check)) return false;
-    return valid(&check) && memcmp(&check, &r, sizeof r) == 0;
+    return commit_record(&r,&check,sizeof r,addr,FOTA_CHECKPOINT_MARKER) && valid(&check);
 }
 
 bool fota_checkpoint_commit(const fota_checkpoint_t *record)
@@ -136,29 +144,10 @@ static bool authorization_write(const fota_authorization_t *record)
     r.magic = FOTA_AUTH_MAGIC;
     r.format_version = FOTA_AUTH_FORMAT;
     r.record_length = sizeof r;
-    r.commit_marker = 0xFFFFFFFFUL;
-    r.crc32 = crc32_compute(&r, offsetof(fota_authorization_t, crc32));
-    if (!ext_flash_erase(EXT_FLASH_OWNER_OTA, addr, FLASH_SECTOR_SIZE) ||
-        !ext_flash_write_verified(EXT_FLASH_OWNER_OTA, addr, &r,
-                                  offsetof(fota_authorization_t, commit_marker)))
-        return false;
-    r.commit_marker = FOTA_AUTH_MARKER;
-    if (!ext_flash_write_verified(EXT_FLASH_OWNER_OTA,
-            addr + offsetof(fota_authorization_t, commit_marker),
-            &r.commit_marker, sizeof r.commit_marker) ||
-        !ext_flash_read(EXT_FLASH_OWNER_OTA, addr, &check, sizeof check))
-        return false;
-    return authorization_valid(&check) && memcmp(&check, &r, sizeof r) == 0;
+    return commit_record(&r,&check,sizeof r,addr,FOTA_AUTH_MARKER) && authorization_valid(&check);
 }
 
 bool fota_authorization_commit(const fota_authorization_t *record)
 {
     return record && authorization_payload_valid(record) && authorization_write(record);
-}
-
-bool fota_authorization_clear(void)
-{
-    fota_authorization_t tombstone;
-    memset(&tombstone, 0, sizeof tombstone);
-    return authorization_write(&tombstone);
 }

@@ -138,6 +138,17 @@ bool install_resume(uint32_t offset)
         }
         boot_watchdog_feed();
     }
+    /* A durable offset proves a previous readback, not the current contents
+     * after a brownout. Include the resumed prefix and the final-offset case
+     * before making any internal image executable. Reuse the copy buffers. */
+    for (uint32_t checked = 0U; checked < r.transaction_length; checked += sizeof page) {
+        uint32_t n = r.transaction_length - checked;
+        if (n > sizeof page) n = sizeof page;
+        if (!boot_ext_read(CANDIDATE_BASE + FOTA_PACKAGE_HEADER_SIZE + checked, page, n) ||
+            !boot_int_flash_read(r.target_address + checked, verify, n) ||
+            memcmp(page, verify, n) != 0) return false;
+        boot_watchdog_feed();
+    }
     r.state=BCR_TRIAL; r.boot_attempts=0U; ++r.sequence;
     if (!bcr_commit(&r)) return false;
     boot_install_progress(r.transaction_length, r.transaction_length, true);

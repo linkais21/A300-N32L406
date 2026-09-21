@@ -1,0 +1,9 @@
+{
+  "command": [
+    "C:\\Python314\\python.exe",
+    "tools/tests/test_f39_end_to_end.py"
+  ],
+  "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+  "exit_code": 0,
+  "elapsed_seconds": 2.62477445602417
+}

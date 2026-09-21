@@ -1,0 +1,1229 @@
+--- before/src/agnss_storage.c
++++ after/src/agnss_storage.c
+@@ -200,12 +200,6 @@
+     return true;
+ }
+ 
+-uint32_t agnss_storage_data_base(const agnss_meta_t *m)
+-{
+-    (void)m;
+-    return EXT_FLASH_AGNSS_SLOT_A_ADDR + (s_latest_slot ? EXT_FLASH_AGNSS_SLOT_SIZE : 0u);
+-}
+-
+ bool agnss_storage_read(uint32_t off, void *buf, uint16_t n)
+ {
+     agnss_meta_t m;
+--- before/src/ec800m.c
++++ after/src/ec800m.c
+@@ -231,9 +231,6 @@
+     UDP_TXN_WAIT_CLOSE,
+     UDP_TXN_DONE
+ } udp_txn_state_t;
+-#define UDP_TXN_OPEN UDP_TXN_OPEN_CMD
+-#define UDP_TXN_SEND UDP_TXN_SEND_CMD
+-#define UDP_TXN_CLOSE UDP_TXN_CLOSE_CMD
+ static struct {
+     const char *ip;
+     const uint8_t *data;
+@@ -2202,9 +2199,6 @@
+ void ec800m_register_ota_recv(ec800m_recv_cb_t cb) { s_ota_recv_cb = cb; }
+ void ec800m_register_agnss_recv(ec800m_recv_cb_t cb) { s_agnss_recv_cb = cb; }
+ 
+-/* Legacy no-op kept for API compatibility (RX now uses USART3 interrupt). */
+-void ec800m_dma_rx_complete(void) { }
+-
+ bool ec800m_sim_ready(void)
+ {
+     return s_sim_identity_ready && s_state >= EC800M_STATE_NETWORK_REG &&
+--- before/src/f39_config_adapter.c
++++ after/src/f39_config_adapter.c
+@@ -116,46 +116,29 @@
+     return true;
+ }
+ 
+-static bool prepare_ip(const f39_request_t *request, device_config_t *candidate,
+-                       uint32_t *effects)
+-{
+-    char host[sizeof(candidate->server_ip)];
++/* Main and backup endpoints have identical commit effects; only FIP may
++ * disable its endpoint with a single zero argument. */
++static bool prepare_server(const f39_request_t *request,
++                           device_config_t *candidate, uint32_t *effects)
++{
++    bool backup = request->operation == F39_OPERATION_FIP;
++    char host[CFG_IP_LEN];
+     uint16_t port;
+-
+-    if (!prepare_endpoint(request, host, sizeof(host), &port)) {
+-        return false;
+-    }
+-    if (strcmp(candidate->server_ip, host) != 0 ||
+-        candidate->server_port != port) {
+-        (void)strcpy(candidate->server_ip, host);
+-        candidate->server_port = port;
+-        candidate->auth_code[0] = '\0';
+-        *effects |= F39_EFFECT_MAIN_AUTH_RESET;
+-    }
+-    *effects |= F39_EFFECT_NETWORK_RECONNECT;
+-    return true;
+-}
+-
+-static bool prepare_fip(const f39_request_t *request,
+-                        device_config_t *candidate, uint32_t *effects)
+-{
+-    char host[sizeof(candidate->backup_ip)];
+-    uint16_t port;
+-
+-    if ((request->argc == 1U) && arg_equals(request, 0U, "0")) {
++    char *target = backup ? candidate->backup_ip : candidate->server_ip;
++    uint16_t *target_port = backup ? &candidate->backup_port : &candidate->server_port;
++    char *auth = backup ? candidate->backup_auth_code : candidate->auth_code;
++    if (backup && arg_equals(request, 0U, "0")) {
++        if (request->argc != 1U) return false;
+         host[0] = '\0';
+         port = 0U;
+-    } else if (arg_equals(request, 0U, "0")) {
+-        return false;
+     } else if (!prepare_endpoint(request, host, sizeof(host), &port)) {
+         return false;
+     }
+-    if (strcmp(candidate->backup_ip, host) != 0 ||
+-        candidate->backup_port != port) {
+-        (void)strcpy(candidate->backup_ip, host);
+-        candidate->backup_port = port;
+-        candidate->backup_auth_code[0] = '\0';
+-        *effects |= F39_EFFECT_BACKUP_AUTH_RESET;
++    if (strcmp(target, host) != 0 || *target_port != port) {
++        (void)strcpy(target, host);
++        *target_port = port;
++        auth[0] = '\0';
++        *effects |= backup ? F39_EFFECT_BACKUP_AUTH_RESET : F39_EFFECT_MAIN_AUTH_RESET;
+     }
+     *effects |= F39_EFFECT_NETWORK_RECONNECT;
+     return true;
+@@ -393,9 +376,8 @@
+         }
+         return true;
+     case F39_OPERATION_IP:
+-        return prepare_ip(request, candidate, effects);
+     case F39_OPERATION_FIP:
+-        return prepare_fip(request, candidate, effects);
++        return prepare_server(request, candidate, effects);
+     case F39_OPERATION_FREQ:
+         return prepare_freq(request, candidate, effects);
+     case F39_OPERATION_MODEL:
+--- before/src/f39_reply.c
++++ after/src/f39_reply.c
+@@ -236,36 +236,28 @@
+         {
+             /* Terminal command spec sheet1: PID# echoes the full 11-digit
+              * device ID, not the 7-byte JT808 terminal id derived from it. */
+-            char pid_text[CFG_PID_LEN];
++            const char *pid_text = c->pid;
+             if (!device_id(c, p, terminal_id)) return failure(out,name,"identity");
+-            if (c->pid[0] != '\0') {
+-                (void)memcpy(pid_text, c->pid, CFG_PID_LEN - 1U);
+-                pid_text[CFG_PID_LEN - 1U] = '\0';
+-            } else {
+-                char imei[F39_IMEI_MAX_LENGTH + 1U];
++            if (c->pid[0] == '\0') {
+                 if (p->imei_len != 15U) return failure(out,name,"identity");
+-                (void)memcpy(imei, p->imei, 15U);
+-                imei[15] = '\0';
+-                (void)memcpy(pid_text, imei + 4U, 11U);
+-                pid_text[11] = '\0';
++                pid_text = p->imei + 4U;
+             }
+-            return reply_append(out, "PID,%s=Success!\r\n", pid_text) ?
++            return reply_append(out, "PID,%.*s=Success!\r\n", (int)(CFG_PID_LEN - 1U), pid_text) ?
+             F39_RESULT_OK : failure(out, name, "reply-too-long");
+         }
+     case F39_OPERATION_IP:
+-        reply_clear(out);
+-        return reply_append(out, "IP,%.*s,%u=Success!\r\n", (int)CFG_IP_LEN, c->server_ip,
+-                            (unsigned)c->server_port) ? F39_RESULT_OK :
++    case F39_OPERATION_FIP: {
++        bool backup = r->operation == F39_OPERATION_FIP;
++        reply_clear(out);
++        if (backup && c->backup_ip[0] == '\0') {
++            return reply_append(out, "FIP,0=Success!\r\n") ? F39_RESULT_OK :
++                failure(out, name, "reply-too-long");
++        }
++        return reply_append(out, "%s,%.*s,%u=Success!\r\n", name, (int)CFG_IP_LEN,
++                            backup ? c->backup_ip : c->server_ip,
++                            (unsigned)(backup ? c->backup_port : c->server_port)) ? F39_RESULT_OK :
+             failure(out, name, "reply-too-long");
+-    case F39_OPERATION_FIP:
+-        reply_clear(out);
+-        if (c->backup_ip[0] != '\0') {
+-            return reply_append(out, "FIP,%.*s,%u=Success!\r\n", (int)CFG_IP_LEN, c->backup_ip,
+-                                (unsigned)c->backup_port) ? F39_RESULT_OK :
+-                failure(out, name, "reply-too-long");
+-        }
+-        return reply_append(out, "FIP,0=Success!\r\n") ? F39_RESULT_OK :
+-            failure(out, name, "reply-too-long");
++    }
+     case F39_OPERATION_FREQ:
+         reply_clear(out);
+         return reply_append(out, "FREQ,%u,%u=Success!\r\n", (unsigned)c->report_moving_s,
+--- before/src/flash_config.c
++++ after/src/flash_config.c
+@@ -22,7 +22,6 @@
+ 
+ #define SLOT_CURRENT_BODY_LEN \
+     (sizeof(slot_v3_hdr_t) + sizeof(device_config_t) + 4U)
+-#define SLOT_CURRENT_TOTAL (SLOT_CURRENT_BODY_LEN + 4U)
+ #define CFG_V1_DATA_LEN ((uint16_t)offsetof(device_config_t, pid))
+ #define CFG_V2_DATA_LEN ((uint16_t)offsetof(device_config_t, backup_auth_code))
+ #define CFG_V3_DATA_LEN ((uint16_t)offsetof(device_config_t, device_api_key))
+@@ -490,12 +489,6 @@
+     (void)cfg_store_candidate(&s_cfg);
+ }
+ 
+-void cfg_factory_reset(void)
+-{
+-    config_defaults(&s_cfg);
+-    cfg_save();
+-}
+-
+ device_config_t *cfg_get(void) { return &s_cfg; }
+ 
+ bool cfg_set_auth_code(uint8_t channel, const char *code)
+@@ -522,35 +515,9 @@
+     return stored;
+ }
+ 
+-void cfg_set_server(const char *ip, uint16_t port, bool backup)
+-{
+-    if (!backup) {
+-        strncpy(s_cfg.server_ip, ip, CFG_IP_LEN - 1);
+-        s_cfg.server_port = port;
+-    } else {
+-        strncpy(s_cfg.backup_ip, ip, CFG_IP_LEN - 1);
+-        s_cfg.backup_port = port;
+-    }
+-    cfg_save();
+-}
+-
+ void cfg_set_heartbeat(uint16_t s)
+ {
+     s_cfg.heartbeat_s = s;
+-    cfg_save();
+-}
+-
+-void cfg_set_report_interval(uint16_t moving_s, uint16_t stopped_s)
+-{
+-    s_cfg.report_moving_s  = moving_s;
+-    s_cfg.report_stopped_s = stopped_s;
+-    cfg_save();
+-}
+-
+-void cfg_set_mileage(uint32_t metres)
+-{
+-    s_cfg.mileage_m = metres;
+-    s_mileage_dirty = true;
+     cfg_save();
+ }
+ 
+--- before/src/fota.c
++++ after/src/fota.c
+@@ -690,7 +690,6 @@
+     }
+ }
+ 
+-void fota_on_data(const uint8_t *data, uint16_t len) { fota_on_chunk(data,len,s_received); }
+ 
+ void fota_init(void)
+ {
+--- before/src/fota_checkpoint.c
++++ after/src/fota_checkpoint.c
+@@ -151,10 +151,3 @@
+ {
+     return record && authorization_payload_valid(record) && authorization_write(record);
+ }
+-
+-bool fota_authorization_clear(void)
+-{
+-    fota_authorization_t tombstone;
+-    memset(&tombstone, 0, sizeof tombstone);
+-    return authorization_write(&tombstone);
+-}
+--- before/src/gps.c
++++ after/src/gps.c
+@@ -154,6 +154,18 @@
+     return true;
+ }
+ 
++/* GGA and RMC share the same four coordinate/hemisphere fields. Keep one
++ * implementation of conversion, validation and sign handling. */
++static __attribute__((noinline)) bool nmea_coordinates(char **f, double *lat, double *lon)
++{
++    if (!nmea_to_deg(f[0], lat) || !nmea_to_deg(f[2], lon) ||
++        (f[1][0] != 'N' && f[1][0] != 'S') || f[1][1] != '\0' ||
++        (f[3][0] != 'E' && f[3][0] != 'W') || f[3][1] != '\0') return false;
++    if (f[1][0] == 'S') *lat = -*lat;
++    if (f[3][0] == 'W') *lon = -*lon;
++    return true;
++}
++
+ /* ── NMEA checksum verify ─────────────────────────────────────────────────── */
+ static bool nmea_checksum_ok(const char *sentence)
+ {
+@@ -193,17 +205,15 @@
+         !parse_uint8(f[7], 99U, &satellites) ||
+         !parse_decimal(f[8], &hdop) || !parse_decimal(f[9], &altitude) ||
+         (n >= 12U && f[11][0] != '\0' && !parse_decimal(f[11], &geoid)) ||
+-        !nmea_to_deg(f[2], &lat) || !nmea_to_deg(f[4], &lon) ||
++        !nmea_coordinates(f + 2, &lat, &lon) ||
+         !parse_six_digits(f[1], &hour, &minute, &second) ||
+-        hour > 23U || minute > 59U || second > 59U ||
+-        (f[3][0] != 'N' && f[3][0] != 'S') || f[3][1] != '\0' ||
+-        (f[5][0] != 'E' && f[5][0] != 'W') || f[5][1] != '\0') return NMEA_PARSE_FORMAT;
++        hour > 23U || minute > 59U || second > 59U) return NMEA_PARSE_FORMAT;
+     s_gps.fix_quality = quality; s_gps.satellites = satellites;
+     s_gga_ms = TICK_MS();
+     s_gps.hdop = (float)hdop; s_gps.altitude_m = (float)altitude;
+     s_gps.geoid_sep_m = (float)geoid;
+-    s_gps.lat = f[3][0] == 'S' ? -lat : lat;
+-    s_gps.lon = f[5][0] == 'W' ? -lon : lon;
++    s_gps.lat = lat;
++    s_gps.lon = lon;
+     s_gps.hour = hour; s_gps.minute = minute; s_gps.second = second;
+ 
+     s_gps.valid          = true;
+@@ -227,18 +237,16 @@
+     uint8_t hour, minute, second, day, month, year;
+     double lat, lon, knots = 0.0, heading = 0.0;
+     if (!parse_six_digits(f[1], &hour, &minute, &second) ||
+-        !nmea_to_deg(f[3], &lat) || !nmea_to_deg(f[5], &lon) ||
++        !nmea_coordinates(f + 3, &lat, &lon) ||
+         (f[7][0] != '\0' && !parse_decimal(f[7], &knots)) ||
+         (f[8][0] != '\0' && !parse_decimal(f[8], &heading)) ||
+         !parse_six_digits(f[9], &day, &month, &year) ||
+         hour > 23U || minute > 59U || second > 59U ||
+         day == 0U || day > 31U || month == 0U || month > 12U ||
+-        knots < 0.0 || heading < 0.0 || heading >= 360.0 ||
+-        (f[4][0] != 'N' && f[4][0] != 'S') || f[4][1] != '\0' ||
+-        (f[6][0] != 'E' && f[6][0] != 'W') || f[6][1] != '\0') return NMEA_PARSE_FORMAT;
++        knots < 0.0 || heading < 0.0 || heading >= 360.0) return NMEA_PARSE_FORMAT;
+     s_gps.hour = hour; s_gps.minute = minute; s_gps.second = second;
+-    s_gps.lat = f[4][0] == 'S' ? -lat : lat;
+-    s_gps.lon = f[6][0] == 'W' ? -lon : lon;
++    s_gps.lat = lat;
++    s_gps.lon = lon;
+     s_gps.speed_kmh = (float)(knots * 1.852);
+     s_gps.heading = (float)heading;
+     s_gps.day = day; s_gps.month = month; s_gps.year = (uint16_t)(2000U + year);
+--- before/src/hw_init.c
++++ after/src/hw_init.c
+@@ -30,20 +30,6 @@
+     NVIC_SetVectorTable(NVIC_VectTab_FLASH,
+                         APP_FLASH_BASE - FW_FLASH_BASE);
+     SysTick_Config(SYS_CLOCK_HZ / 1000);   /* 1 ms tick at 64 MHz */
+-}
+-
+-bool hw_restore_after_stop2(void)
+-{
+-    SystemInit();
+-    hw_clock_init();
+-    hw_nvic_init();
+-    hw_gpio_init();
+-    hw_usart_init();
+-    hw_spi_init();
+-    hw_i2c_init();
+-    hw_adc_init();
+-    hw_tim_init();
+-    return SystemCoreClock == SYS_CLOCK_HZ;
+ }
+ 
+ /* ── GPIO helper: init struct defaults ───────────────────────────────────── */
+--- before/src/i2c_accel.c
++++ after/src/i2c_accel.c
+@@ -5,15 +5,11 @@
+ #include "debug_uart.h"
+ #include "n32l40x.h"
+ #include <stddef.h>
++#include <string.h>
+ 
+ /* DA218E register map (datasheet Table 14) */
+ #define DA218E_REG_CHIPID      0x01
+ #define DA218E_REG_ACC_X_LSB   0x02
+-#define DA218E_REG_ACC_X_MSB   0x03
+-#define DA218E_REG_ACC_Y_LSB   0x04
+-#define DA218E_REG_ACC_Y_MSB   0x05
+-#define DA218E_REG_ACC_Z_LSB   0x06
+-#define DA218E_REG_ACC_Z_MSB   0x07
+ #define DA218E_REG_RANGE       0x0F
+ #define DA218E_REG_ODR_AXIS    0x10
+ #define DA218E_REG_MODE_BW     0x11
+@@ -88,18 +84,11 @@
+                bus_scl(), bus_sda(), BSP_I2C->STS1, BSP_I2C->STS2);
+ }
+ 
+-/* G452-compatible adaptive baseline + threshold detector.
+- * Motion is the maximum per-axis deviation from the update-before baseline;
+- * the shared filter then adapts the baseline by 1/8 per sample.
+- * VIB_CONFIRM：连续命中次数达到才确认"在运动"（×200ms=持续时间）
+- * 中间一次未命中即清零——防单次尖峰误判 */
++/* Shared adaptive baseline threshold for the active work-mode detector. */
+ #define VIB_THRESH     150   /* LSB, maximum single-axis deviation threshold */
+-#define VIB_CONFIRM    15    /* 连续15次×200ms = 3s确认，太敏感改25，唤不醒改10 */
+ 
+ /* Work-mode product sensitivity levels are not DA218E register values. */
+ #define VIBRATION_SAMPLE_INTERVAL_MS 200U
+-#define VIBRATION_SENSITIVITY_LEVEL_10 10U
+-#define VIBRATION_SENSITIVITY_LEVEL_COUNT 10U
+ /* Product-facing VIBSENS scale from the terminal command spec: 1..50, where a
+  * smaller number is more sensitive.  The scale is anchored at level 30 =
+  * VIB_THRESH, the threshold the sleep/wake logic was commissioned against,
+@@ -113,9 +102,6 @@
+ #define VIBRATION_SENSITIVITY_DEFAULT 15U
+ #define VIBRATION_THRESHOLD_STEP 4U
+ 
+-static accel_vibration_filter_t s_motion_filter;
+-static uint8_t s_vib_count = 0;
+-static bool    s_is_moving = false;
+ static accel_vibration_filter_t s_window_filter;
+ static uint32_t s_last_vibration_sample_ms = 0U;
+ static bool s_vibration_sample_seen = false;
+@@ -293,24 +279,8 @@
+ /* ── Public ───────────────────────────────────────────────────────────────── */
+ void i2c_accel_init(void)
+ {
+-    accel_vibration_filter_reset(&s_motion_filter);
+     accel_vibration_filter_reset(&s_window_filter);
+-    s_vib_count = 0U;
+-    s_is_moving = false;
+-    s_diag.x = 0;
+-    s_diag.y = 0;
+-    s_diag.z = 0;
+-    s_diag.sample_count = 0U;
+-    s_diag.read_fail_count = 0U;
+-    s_diag.delta = 0U;
+-    s_diag.threshold = 0U;
+-    s_diag.vibration_hit_count = 0U;
+-    s_diag.address = 0U;
+-    s_diag.int1_level = 0U;
+-    s_diag.int1_rearm_ok = false;
+-    s_diag.int1_rearm_fail_count = 0U;
+-    s_diag.read_ok = false;
+-    s_diag.vibration_hit = false;
++    memset(&s_diag, 0, sizeof(s_diag));
+     s_last_vibration_log_ms = 0U;
+     delay_ms(50);
+     dbg_printf("[ACCEL] bus af SCL=%u SDA=%u STS1=%04x STS2=%04x\r\n",
+@@ -334,24 +304,28 @@
+                        id == 0x13 ? " OK" : " WRONG(exp 0x13)");
+             if (id != 0x13) continue;
+             s_diag.address = s_addr;
+-            bool int1_config_ok =
+-                i2c_write_reg(DA218E_REG_RANGE, DA218E_RANGE_2G) &&
+-                i2c_write_reg(DA218E_REG_ODR_AXIS, DA218E_ODR_125HZ) &&
+-                i2c_write_reg(DA218E_REG_MODE_BW, DA218E_MODE_NORMAL);
+-            /* Active-motion interrupt is the STOP wake source.  Software
+-             * still confirms six seconds of samples after the wake. */
+-            int1_config_ok = int1_config_ok &&
+-                i2c_write_reg(DA218E_REG_INT_CONFIG, 0x81U) &&
+-                i2c_write_reg(DA218E_REG_INT_CONFIG, 0x01U) &&
+-                i2c_write_reg(DA218E_REG_INT_SET1, 0x83U) &&
+-                i2c_write_reg(DA218E_REG_INT_MAP1, 0x04U);
+-            /* Latch one active-motion event until the six-second software
+-             * decision consumes it. This prevents a held/noisy INT1 signal
+-             * from opening the wake window repeatedly. */
+-            int1_config_ok = int1_config_ok &&
+-                i2c_write_reg(DA218E_REG_INT_LATCH, 0x07U) &&
+-                i2c_write_reg(DA218E_REG_ACTIVE_DUR, 0x00U) &&
+-                i2c_write_reg(DA218E_REG_ACTIVE_THS, 0x26U);
++            /* Preserve register order and stop on the first failed write.
++             * Active motion wakes STOP; software confirms six seconds.
++             * Latch one event until that decision consumes it. */
++            static const uint8_t setup[][2] = {
++                {DA218E_REG_RANGE, DA218E_RANGE_2G},
++                {DA218E_REG_ODR_AXIS, DA218E_ODR_125HZ},
++                {DA218E_REG_MODE_BW, DA218E_MODE_NORMAL},
++                {DA218E_REG_INT_CONFIG, 0x81U},
++                {DA218E_REG_INT_CONFIG, 0x01U},
++                {DA218E_REG_INT_SET1, 0x83U},
++                {DA218E_REG_INT_MAP1, 0x04U},
++                {DA218E_REG_INT_LATCH, 0x07U},
++                {DA218E_REG_ACTIVE_DUR, 0x00U},
++                {DA218E_REG_ACTIVE_THS, 0x26U},
++            };
++            bool int1_config_ok = true;
++            for (unsigned reg = 0U; reg < sizeof(setup)/sizeof(setup[0]); ++reg) {
++                if (!i2c_write_reg(setup[reg][0], setup[reg][1])) {
++                    int1_config_ok = false;
++                    break;
++                }
++            }
+             /* Reset any event latched while the motion registers were being
+              * programmed, then sample PB3 for diagnostics only. */
+             s_diag.int1_rearm_ok = int1_config_ok &&
+@@ -381,27 +355,6 @@
+     return true;
+ }
+ 
+-bool i2c_accel_detect_vibration(void)
+-{
+-    accel_data_t d;
+-    uint16_t motion;
+-    bool hit;
+-    if (!i2c_accel_read(&d)) return s_is_moving;  /* I2C失败保持上次状态 */
+-
+-    hit = accel_vibration_filter_step(&s_motion_filter, d.x, d.y, d.z,
+-                                      VIB_THRESH, &motion);
+-    if (hit) {
+-        if (s_vib_count < VIB_CONFIRM) s_vib_count++;
+-    } else {
+-        s_vib_count = 0;
+-    }
+-
+-    s_is_moving = (s_vib_count >= VIB_CONFIRM);
+-    return s_is_moving;
+-}
+-
+-bool i2c_accel_is_moving(void) { return s_is_moving; }
+-
+ void i2c_accel_reset_vibration_window(void)
+ {
+     accel_vibration_filter_reset(&s_window_filter);
+--- before/src/jt808.c
++++ after/src/jt808.c
+@@ -696,20 +696,24 @@
+     *minute = (uint8_t)(local_minutes % 60);
+ }
+ 
+-static uint16_t encode_location_compact(const gps_data_t *g,
+-                                        uint8_t body[BLIND_ZONE_LOCATION_MAX])
+-{
+-    uint32_t alm = s_alarm_flags;
++/* Encode the shared 28-byte body once. Online callers previously generated
++ * compact extensions and alarm/ACC flags only to overwrite them immediately. */
++static uint16_t encode_location_base(const gps_data_t *g, uint8_t *body,
++                                     uint32_t alm, bool acc_on,
++                                     bool historical_position)
++{
+     uint32_t status = 0;
+ 
+     /* PA12 M_ACC_IN is inverted by Q9: low collector means external ACC ON. */
+-    if (hw_acc_is_on())
++    if (acc_on)
+         status |= LOC_FLAG_ACC_ON;
+     /* 808-2013: bit2=1表示西经(默认东经不置位), bit3=1表示南纬(默认北纬不置位) */
+     if (g->lon < 0) status |= LOC_FLAG_WEST_LON;
+     if (g->lat < 0) status |= LOC_FLAG_SOUTH_LAT;
+-    if (g->fix_quality > 0)
+-        status |= LOC_FLAG_GPS_FIXED | LOC_FLAG_BEIDOU_FIXED;
++    if (g->fix_quality > 0) {
++        status |= LOC_FLAG_BEIDOU_FIXED;
++        if (!historical_position) status |= LOC_FLAG_GPS_FIXED;
++    }
+ 
+     uint32_t lat_deg = (uint32_t)(fabs(g->lat) * 1e6);
+     uint32_t lon_deg = (uint32_t)(fabs(g->lon) * 1e6);
+@@ -745,6 +749,13 @@
+         uint8_t value = body[i];
+         body[i] = (uint8_t)(((value / 10U) << 4) | (value % 10U));
+     }
++    return p;
++}
++
++static uint16_t encode_location_compact(const gps_data_t *g,
++                                        uint8_t body[BLIND_ZONE_LOCATION_MAX])
++{
++    uint16_t p = encode_location_base(g, body, s_alarm_flags, hw_acc_is_on(), false);
+     /* 附加信息项 0x31: GNSS定位卫星数(1字节) */
+     body[p++] = 0x31;
+     body[p++] = 0x01;
+@@ -791,11 +802,8 @@
+                                        uint32_t alarm_bits,
+                                        bool historical_position)
+ {
+-    uint16_t p = encode_location_compact(g, body);
+-    uint32_t status = ((uint32_t)body[4] << 24) |
+-                      ((uint32_t)body[5] << 16) |
+-                      ((uint32_t)body[6] << 8) |
+-                      (uint32_t)body[7];
++    uint16_t p = encode_location_base(g, body, alarm_bits, jt808_get_logical_acc(),
++                                      historical_position);
+     uint32_t odometer = cfg_get()->mileage_m / 100U;
+     uint16_t speed = g->speed_kmh <= 0.0f ? 0U :
+                      g->speed_kmh >= 6553.5f ? 65535U :
+@@ -812,17 +820,7 @@
+                         g->hdop >= 99.9f ? 999U :
+                         (uint16_t)(g->hdop * 10.0f + 0.5f);
+ 
+-    body[0]=(uint8_t)(alarm_bits>>24); body[1]=(uint8_t)(alarm_bits>>16);
+-    body[2]=(uint8_t)(alarm_bits>>8); body[3]=(uint8_t)alarm_bits;
+-    if (jt808_get_logical_acc()) status |= LOC_FLAG_ACC_ON;
+-    else status &= ~LOC_FLAG_ACC_ON;
+-    if (historical_position)
+-        status &= ~LOC_FLAG_GPS_FIXED;
+-    body[4]=(uint8_t)(status>>24); body[5]=(uint8_t)(status>>16);
+-    body[6]=(uint8_t)(status>>8); body[7]=(uint8_t)status;
+-
+-    /* Replace the compact 0x31/0x30 suffix with the complete online profile. */
+-    p = 28U;
++    /* Append the complete online profile directly after the shared body. */
+     body[p++]=0x01U; body[p++]=0x04U;
+     body[p++]=(uint8_t)(odometer>>24); body[p++]=(uint8_t)(odometer>>16);
+     body[p++]=(uint8_t)(odometer>>8); body[p++]=(uint8_t)odometer;
+@@ -873,8 +871,6 @@
+     int result = -1;
+     gps_data_t snapshot;
+     gps_report_filter_copy(gps_get_data(), &snapshot, TICK_MS());
+-    bool sent = false;
+-
+     if (s_append_pending) {
+         if (s_append_pending != 1U) return -2;
+         blind_zone_result_t stored = blind_zone_append(&s_append_pending_record);
+@@ -896,12 +892,7 @@
+         if (!build_header(&f, MSG_LOCATION_REPORT, online_length)) { frame_release(); return -1; }
+         frame_bytes(&f, online_body, online_length);
+     }
+-    if (jt808_channel_online(TCP_CH_MAIN) &&
+-        send_frame_channel_delivered(&f, TCP_CH_MAIN) == 0) sent = true;
+-    if (jt808_channel_online(TCP_CH_BACKUP) &&
+-        send_frame_channel_delivered(&f, TCP_CH_BACKUP) == 0) sent = true;
+-    frame_release();
+-    if (sent) {
++    if (send_frame_broadcast(&f, false) == 0) {
+         s_alarm_flags = 0;
+         return 0;
+     }
+@@ -1033,6 +1024,30 @@
+     return finish_frame_channel(&frame, s_response_channel);
+ }
+ 
++/* Both sleep-entry first fixes and normal live reports use the same per-channel
++ * success handling. Failed channels retain their pending first-fix flag. */
++static void send_pending_live_locations(const gps_data_t *snapshot,
++                                        uint32_t now, bool motion_due)
++{
++    bool sent = false;
++    for (uint8_t index = 0U; index < 2U; ++index) {
++        jt808_session_t *session = &s_sessions[index];
++        if ((motion_due || session->waiting_first_fix) &&
++            jt808_channel_online(session->channel) &&
++            jt808_send_location_to(session->channel, snapshot) == 0) {
++            session->waiting_first_fix = false;
++            sent = true;
++        }
++    }
++    if (sent) {
++        s_last_location_ms = now;
++        if (motion_due) {
++            gps_report_filter_motion_ack();
++            s_alarm_flags = 0U;
++        }
++    }
++}
++
+ static void process_location_timer(uint32_t now)
+ {
+     /* WORK_MODE_STATIONARY_SLEEP powers GNSS down.  In that state work_mode.c
+@@ -1043,30 +1058,14 @@
+     if (work_mode_state() == WORK_MODE_STATIONARY_SLEEP) {
+         gps_data_t first_snapshot;
+         gps_report_filter_copy(gps_get_data(), &first_snapshot, now);
+-        uint8_t first_index;
+-        bool first_sent = false;
+-
+-        if (jt808_location_snapshot_valid(&first_snapshot, now)) {
+-            for (first_index = 0U; first_index < 2U; ++first_index) {
+-                jt808_session_t *session = &s_sessions[first_index];
+-                if (session->waiting_first_fix &&
+-                    jt808_channel_online(session->channel) &&
+-                    jt808_send_location_to(session->channel,
+-                                           &first_snapshot) == 0) {
+-                    session->waiting_first_fix = false;
+-                    first_sent = true;
+-                }
+-            }
+-            if (first_sent) s_last_location_ms = now;
+-        }
++        if (jt808_location_snapshot_valid(&first_snapshot, now))
++            send_pending_live_locations(&first_snapshot, now, false);
+         return;
+     }
+ 
+     gps_data_t snapshot;
+     gps_report_filter_copy(gps_get_data(), &snapshot, TICK_MS());
+     bool valid = jt808_location_snapshot_valid(&snapshot, now);
+-    uint8_t index;
+-    bool first_fix_sent = false;
+     bool corner_append_blocked = false;
+ 
+     /* Share the live first-fix sender: departure retries must not create or
+@@ -1168,12 +1167,8 @@
+                 if (frame_init(&frame)) {
+                     if (build_header(&frame, MSG_LOCATION_REPORT, length)) {
+                         frame_bytes(&frame, body, length);
+-                        if (jt808_channel_online(TCP_CH_MAIN) &&
+-                            send_frame_channel_delivered(&frame, TCP_CH_MAIN) == 0) sent = true;
+-                        if (jt808_channel_online(TCP_CH_BACKUP) &&
+-                            send_frame_channel_delivered(&frame, TCP_CH_BACKUP) == 0) sent = true;
+-                    }
+-                    frame_release();
++                        sent = send_frame_broadcast(&frame, false) == 0;
++                    } else frame_release();
+                 }
+                 if (sent) {
+                     if (motion_corner_consume_candidate != NULL)
+@@ -1212,24 +1207,7 @@
+     }
+ 
+ live_reports:
+-    if (valid) {
+-        for (index = 0U; index < 2U; ++index) {
+-            jt808_session_t *session = &s_sessions[index];
+-            if ((motion_due || session->waiting_first_fix) &&
+-                jt808_channel_online(session->channel) &&
+-                jt808_send_location_to(session->channel, &snapshot) == 0) {
+-                session->waiting_first_fix = false;
+-                first_fix_sent = true;
+-            }
+-        }
+-        if (first_fix_sent) {
+-            s_last_location_ms = now;
+-            if (motion_due) {
+-                gps_report_filter_motion_ack();
+-                s_alarm_flags = 0U;
+-            }
+-        }
+-    }
++    if (valid) send_pending_live_locations(&snapshot, now, motion_due);
+ }
+ 
+ int jt808_send_general_resp_to(uint8_t channel, uint16_t resp_sn,
+@@ -1717,7 +1695,6 @@
+ 
+ void jt808_trigger_alarm(uint32_t alarm_bit) { s_alarm_flags |= alarm_bit; }
+ void jt808_set_heartbeat_s(uint16_t s)       { s_cfg.heartbeat_s = s; }
+-uint16_t jt808_get_heartbeat_s(void)         { return s_cfg.heartbeat_s; }
+ void jt808_set_report_interval(uint16_t moving_s, uint16_t stopped_s)
+ {
+     /* Compatibility hook: work_mode owns scheduling and interval clamping. */
+--- before/src/power_mgr.c
++++ after/src/power_mgr.c
+@@ -5,18 +5,14 @@
+ /* Compatibility routing only; work_mode_sleep owns the policy. */
+ #define WORK_MODE_SLEEP_LEGACY_POWER_MGR 1
+ 
+-static volatile wake_src_t s_wake;
+-
+ void pwr_init(void)
+ {
+     RCC_EnableAPB2PeriphClk(RCC_APB2_PERIPH_AFIO, ENABLE);
+-    s_wake = WAKE_SRC_NONE;
+     work_mode_sleep_init();
+ }
+ 
+ void pwr_wake(wake_src_t src)
+ {
+-    s_wake |= src;
+     if ((src & WAKE_SRC_ACC) != 0) work_mode_sleep_isr_wake(WORK_SLEEP_WAKE_ACC);
+     if ((src & WAKE_SRC_SOS) != 0) work_mode_sleep_isr_wake(WORK_SLEEP_WAKE_SOS);
+     if ((src & (WAKE_SRC_CHARGE | WAKE_SRC_LIGHT)) != 0)
+--- before/src/spi_flash.c
++++ after/src/spi_flash.c
+@@ -10,7 +10,6 @@
+ #define CMD_WRITE_ENABLE  0x06U
+ #define CMD_PAGE_PROGRAM  0x02U
+ #define CMD_SECTOR_ERASE  0x20U
+-#define CMD_CHIP_ERASE    0xC7U
+ #define CMD_READ_SR1      0x05U
+ #define CMD_READ_SR2      0x35U
+ #define CMD_READ_SR3      0x15U
+@@ -227,23 +226,6 @@
+     return spi_flash_write_result(addr, buf, len) == SPI_FLASH_PROGRAM_COMPLETED;
+ }
+ 
+-bool spi_flash_erase_chip(void)
+-{
+-    uint8_t d;
+-    bool ok;
+-    if (!ensure_id() || !write_enable()) return false;
+-    FLASH_CS_LOW();
+-    ok = xfer(CMD_CHIP_ERASE, &d);
+-    FLASH_CS_HIGH();
+-    if (!ok || !ready(SPI_FLASH_ERASE_TIMEOUT_MS)) {
+-        (void)refresh_status();
+-        set_failure(protected_status() ? SPI_FLASH_FAILURE_PROTECTED : SPI_FLASH_FAILURE_ERASE);
+-        return false;
+-    }
+-    set_failure(SPI_FLASH_FAILURE_NONE);
+-    return true;
+-}
+-
+ void spi_flash_get_diagnostics(spi_flash_diagnostics_t *out) { if (out != NULL) *out = s_diag; }
+ 
+ const char *spi_flash_failure_name(spi_flash_failure_t failure)
+--- before/include/agnss_storage.h
++++ after/include/agnss_storage.h
+@@ -30,7 +30,6 @@
+ bool agnss_storage_commit(const agnss_meta_t *meta);
+ bool agnss_storage_read(uint32_t offset, void *buf, uint16_t len);
+ bool agnss_storage_get_latest(agnss_meta_t *meta);
+-uint32_t agnss_storage_data_base(const agnss_meta_t *meta);
+ void agnss_storage_abort(void);
+ /* Single-main-loop injection session. Open verifies once and pins a slot;
+  * subsequent opens return that snapshot. All AGNSS mutations must use this
+--- before/include/ec800m.h
++++ after/include/ec800m.h
+@@ -140,9 +140,6 @@
+ void ec800m_register_ota_recv(ec800m_recv_cb_t cb);
+ void ec800m_register_agnss_recv(ec800m_recv_cb_t cb);
+ 
+-/* Called from DMA IRQ */
+-void ec800m_dma_rx_complete(void);
+-
+ /* Called from USART3 IDLE line IRQ (if used) */
+ void ec800m_usart_idle(void);
+ 
+--- before/include/flash_config.h
++++ after/include/flash_config.h
+@@ -150,16 +150,12 @@
+ cfg_store_result_t cfg_set_device_api_key_result(
+     const char key[CFG_DEVICE_API_KEY_LEN]);
+ bool     cfg_set_auth_code(uint8_t channel, const char *code);
+-void     cfg_factory_reset(void);       /* restore defaults and save */
+ 
+ device_config_t *cfg_get(void);         /* pointer to live RAM copy */
+ 
+ /* Convenience setters persist immediately except cfg_add_mileage(), which
+  * marks the live RAM total dirty for bounded periodic/forced flushing. */
+-void cfg_set_server(const char *ip, uint16_t port, bool backup);
+ void cfg_set_heartbeat(uint16_t s);
+-void cfg_set_report_interval(uint16_t moving_s, uint16_t stopped_s);
+-void cfg_set_mileage(uint32_t metres);
+ void cfg_add_mileage(uint32_t delta_m);
+ bool cfg_mileage_dirty(void);
+ bool cfg_flush_mileage(void);
+--- before/include/fota.h
++++ after/include/fota.h
+@@ -87,7 +87,6 @@
+ void fota_apply(void);
+ 
+ void fota_on_chunk(const uint8_t *data, uint16_t len, uint32_t offset);
+-void fota_on_data(const uint8_t *data, uint16_t len);
+ void fota_on_http_header(const char *header);
+ 
+ bool fota_verify_manifest(const void *manifest, uint32_t length);
+--- before/include/fota_checkpoint.h
++++ after/include/fota_checkpoint.h
+@@ -42,5 +42,4 @@
+ bool fota_checkpoint_clear(void);
+ bool fota_authorization_load(fota_authorization_t *out);
+ bool fota_authorization_commit(const fota_authorization_t *record);
+-bool fota_authorization_clear(void);
+ #endif
+--- before/include/hw_init.h
++++ after/include/hw_init.h
+@@ -13,7 +13,6 @@
+ void hw_tim_init(void);      /* TIM8 1ms base tick */
+ void hw_iwdg_init(void);
+ void hw_nvic_init(void);
+-bool hw_restore_after_stop2(void);
+ bool hw_acc_is_on(void); /* Q9-inverted PA12: physical low means ACC ON. */
+ bool hw_acc_pin_high(void);
+ 
+--- before/include/i2c_accel.h
++++ after/include/i2c_accel.h
+@@ -22,8 +22,6 @@
+ 
+ void  i2c_accel_init(void);
+ bool  i2c_accel_read(accel_data_t *out);
+-bool  i2c_accel_detect_vibration(void);  /* 采样+更新状态，每200ms由scan_alarms调用 */
+-bool  i2c_accel_is_moving(void);         /* 读缓存结果，任意时刻可调用 */
+ bool  i2c_accel_vibration_hit(uint8_t sensitivity_level);
+ bool  i2c_accel_vibration_sample_due(void);
+ void  i2c_accel_reset_vibration_window(void);
+--- before/include/jt808.h
++++ after/include/jt808.h
+@@ -114,7 +114,6 @@
+ 
+ /* Get/set heartbeat interval (seconds) */
+ void jt808_set_heartbeat_s(uint16_t s);
+-uint16_t jt808_get_heartbeat_s(void);
+ 
+ /* Get/set reporting interval */
+ void jt808_set_report_interval(uint16_t moving_s, uint16_t stopped_s);
+--- before/include/spi_flash.h
++++ after/include/spi_flash.h
+@@ -44,7 +44,6 @@
+ spi_flash_program_result_t spi_flash_write_result(
+     uint32_t addr, const uint8_t *buf, uint32_t len);
+ bool     spi_flash_erase_sector(uint32_t addr);
+-bool     spi_flash_erase_chip(void);
+ void     spi_flash_get_diagnostics(spi_flash_diagnostics_t *out);
+ const char *spi_flash_failure_name(spi_flash_failure_t failure);
+ void     spi_flash_note_verify_failure(void);
+--- before/tools/tests/test_at_config_serial_f39.py
++++ after/tools/tests/test_at_config_serial_f39.py
+@@ -39,6 +39,10 @@
+ #include <string.h>
+ #include "at_config.h"
+ #include "f39_reply.h"
++#include "fota.h"
++#include "log_platform.h"
++fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
++int log_platform_send_result(void) { return 0; }
+ #include "gps.h"
+ #include "sms_command.h"
+ #include "peripherals.h"
+--- before/tools/tests/test_f39_actions.py
++++ after/tools/tests/test_f39_actions.py
+@@ -8,6 +8,10 @@
+ #include <math.h>
+ #include <string.h>
+ #include "f39_reply.h"
++#include "fota.h"
++#include "log_platform.h"
++fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
++int log_platform_send_result(void) { return 0; }
+ #include "f39_command.h"
+ #include "flash_config.h"
+ static device_config_t s_live_config;
+--- before/tools/tests/test_f39_end_to_end.py
++++ after/tools/tests/test_f39_end_to_end.py
+@@ -32,6 +32,10 @@
+ #include <string.h>
+ #include "at_config.h"
+ #include "f39_reply.h"
++#include "fota.h"
++#include "log_platform.h"
++fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
++int log_platform_send_result(void) { return 0; }
+ #include "gps.h"
+ #include "sms_command.h"
+ #include "sms_ingress.h"
+@@ -196,6 +200,10 @@
+ #include "config.h"
+ #include "ec800m.h"
+ #include "f39_reply.h"
++#include "fota.h"
++#include "log_platform.h"
++fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
++int log_platform_send_result(void) { return 0; }
+ #include "gps.h"
+ #include "peripherals.h"
+ #include "sms_ingress.h"
+--- before/tools/tests/test_gps_report_wire.py
++++ after/tools/tests/test_gps_report_wire.py
+@@ -48,6 +48,18 @@
+    if(i%5==0) gps.heading_update_ms=g_tick_ms;
+    gps_report_filter_process(g_tick_ms);
+  }
++ /* Sleep sends a fresh first fix once per channel and retries only failures. */
++ work_state=WORK_MODE_STATIONARY_SLEEP; fail_send[3]=true;
++ unsigned sleep0=sends[0], sleep3=sends[3];
++ jt808_process();assert(sends[0]==sleep0+1 && sends[3]==sleep3+1);
++ assert(msg(0,&sn0,d,&n)==0x0200);
++ fail_send[3]=false;
++ jt808_process();assert(sends[0]==sleep0+1 && sends[3]==sleep3+2);
++ assert(msg(3,&sn0,d,&n)==0x0200);
++ jt808_process();assert(sends[0]==sleep0+1 && sends[3]==sleep3+2);
++ gps.valid=false;jt808_process();
++ assert(sends[0]==sleep0+1 && sends[3]==sleep3+2);
++ gps.valid=true;work_state=WORK_MODE_REALTIME;
+  gps.lat=50.002; /* stationary GNSS wanders >100m after anchor */
+  gps.last_update_ms=gps.heading_update_ms=g_tick_ms;
+  gps_report_filter_process(g_tick_ms);
+@@ -131,6 +143,36 @@
+  gps_report_filter_process(g_tick_ms);jt808_process();
+  assert(sends[0]==before+2 && !gps_report_filter_motion_pending(g_tick_ms));
+  assert(append_calls==appends_before);
++ /* Ordinary live broadcasts accept either channel; alarms require both.
++  * All-channel failure stores one record and releases the frame workspace. */
++ append_result=BLIND_ZONE_OK;
++ for(unsigned mask=0;mask<4;mask++) {
++   fail_send[0]=(mask&1)!=0;fail_send[3]=(mask&2)!=0;
++   before=sends[0];unsigned back_before=sends[3];appends_before=append_calls;
++   assert(jt808_send_location()==0);
++   assert(sends[0]==before+1 && sends[3]==back_before+1);
++   assert(append_calls==appends_before+(mask==3));
++ }
++ fail_send[0]=false;fail_send[3]=true;appends_before=append_calls;
++ assert(jt808_send_location_work_mode(1U,false,99U)==0);
++ assert(append_calls==appends_before+1);
++ fail_send[3]=false;before=sends[0];
++ assert(jt808_send_location()==0 && sends[0]==before+1);
++ /* Exercise the real corner state machine and its cached-point broadcast. */
++ gps_report_filter_reset();gps.speed_kmh=40.0f;
++ cfg.anglerep_angle=30;cfg.anglerep_speed=5;
++ for(unsigned mask=0;mask<4;mask++) {
++   cfg.anglerep_en=0;jt808_process();
++   cfg.anglerep_en=1;
++   fail_send[0]=(mask&1)!=0;fail_send[3]=(mask&2)!=0;
++   before=sends[0];unsigned back_before=sends[3];appends_before=append_calls;
++   for(unsigned i=0;i<4;i++) {
++     g_tick_ms+=1000;gps.last_update_ms=gps.heading_update_ms=g_tick_ms;
++     gps.heading=i*15.0f;jt808_process();
++   }
++   assert(sends[0]==before+2 && sends[3]==back_before+2);
++   assert(append_calls==appends_before+(mask==3?2:0));
++ }
+  return 0;
+ }
+ '''
+@@ -145,7 +187,7 @@
+     jt = ROOT / ('build-detail-optimization/baseline/src/jt808.c' if '--baseline' in sys.argv else 'src/jt808.c')
+     subprocess.run([dual.compiler(), '-std=c99', '-Wall', '-Wextra', '-Werror',
+                     '-I', str(d), '-I', str(ROOT/'include'), str(d/'h.c'), str(jt),
+-                    *[str(ROOT/'src'/f) for f in ('plate_encoding.c','gps_report_filter.c','jt808_session.c','terminal_identity.c')],
++                    *[str(ROOT/'src'/f) for f in ('plate_encoding.c','gps_report_filter.c','jt808_session.c','terminal_identity.c','motion_corner.c')],
+                     '-lm', '-o', str(d/'h.exe')], check=True)
+     subprocess.run([str(d/'h.exe')], check=True)
+ print('GPS filter -> JT808 main/backup/query/work-mode, history untouched: PASS')
+--- before/tools/tests/test_i2c_accel_int1_rearm.py
++++ after/tools/tests/test_i2c_accel_int1_rearm.py
+@@ -131,6 +131,10 @@
+     reset_bus(0U, 1U);
+     expect_init(true);
+     assert(write_count == 12U);
++    const uint8_t expected_regs[] = {0x0F,0x10,0x11,0x20,0x20,0x16,0x19,0x21,0x27,0x28,0x20,0x20};
++    const uint8_t expected_values[] = {0x00,0x07,0x00,0x81,0x01,0x83,0x04,0x07,0x00,0x26,0x81,0x01};
++    assert(!memcmp(write_regs,expected_regs,sizeof expected_regs));
++    assert(!memcmp(write_values,expected_values,sizeof expected_values));
+     assert(write_regs[10] == 0x20U && write_values[10] == 0x81U);
+     assert(write_regs[11] == 0x20U && write_values[11] == 0x01U);
+     assert(i2c_accel_get_diag()->int1_level == 1U);
+@@ -146,6 +150,13 @@
+ 
+     reset_bus(12U, 0U);  /* final restore write */
+     expect_init(false);
++
++    for(unsigned cut=1;cut<=12;cut++) {
++        reset_bus(cut,0U);expect_init(false);
++        assert(write_count==cut); /* no later register write after failure */
++        assert(!memcmp(write_regs,expected_regs,cut));
++        assert(!memcmp(write_values,expected_values,cut));
++    }
+ 
+     puts("test_i2c_accel_int1_rearm: PASS");
+     return 0;
+--- before/tools/tests/test_i2c_accel_vibration_adapter.py
++++ after/tools/tests/test_i2c_accel_vibration_adapter.py
+@@ -40,8 +40,8 @@
+             "vibration adapter must retain the 200 ms sample cadence")
+     require(r"vibration_threshold_by_level", SOURCE,
+             "product sensitivity must use a named level-to-threshold mapping")
+-    require(r"VIBRATION_SENSITIVITY_LEVEL_10", SOURCE,
+-            "level 10 must be represented as a named product-level mapping")
++    require(r"VIBRATION_SENSITIVITY_MIN.*VIBRATION_SENSITIVITY_MAX", SOURCE,
++            "product-level mapping must retain its supported bounds")
+     require(r"DA218E_REG_INT_SET1\s+0x16", SOURCE,
+             "active-motion interrupt setup must use INT_SET1")
+     require(r"DA218E_REG_INT_MAP1\s+0x19", SOURCE,
+@@ -49,19 +49,19 @@
+     require(r"i2c_write_reg\(DA218E_REG_INT_CONFIG,\s*0x81U\).*?"
+             r"i2c_write_reg\(DA218E_REG_INT_CONFIG,\s*0x01U\)", SOURCE,
+             "INT_CONFIG must reset then enable edge interrupt mode")
+-    require(r"i2c_write_reg\(DA218E_REG_INT_LATCH,\s*0x07U\)", SOURCE,
++    require(r"\{DA218E_REG_INT_LATCH,\s*0x07U\}", SOURCE,
+             "INT_LATCH must hold one event until software re-arms it")
+     require(r"bool\s+i2c_accel_rearm_wake_interrupt\s*\(\s*void\s*\).*?"
+             r"i2c_write_reg\(DA218E_REG_INT_CONFIG,\s*0x81U\).*?"
+             r"i2c_write_reg\(DA218E_REG_INT_CONFIG,\s*0x01U\)", SOURCE,
+             "consumed wake events must reset the latch with bounded writes")
+-    require(r"i2c_write_reg\(DA218E_REG_INT_SET1,\s*0x83U\)", SOURCE,
++    require(r"\{DA218E_REG_INT_SET1,\s*0x83U\}", SOURCE,
+             "active-motion interrupt must enable reference and all axes")
+-    require(r"i2c_write_reg\(DA218E_REG_INT_MAP1,\s*0x04U\)", SOURCE,
++    require(r"\{DA218E_REG_INT_MAP1,\s*0x04U\}", SOURCE,
+             "active-motion interrupt must map to INT1")
+-    require(r"i2c_write_reg\(DA218E_REG_ACTIVE_THS,\s*0x26U\)", SOURCE,
++    require(r"\{DA218E_REG_ACTIVE_THS,\s*0x26U\}", SOURCE,
+             "active-motion threshold must match sensitivity level 10")
+-    require(r"i2c_write_reg\(DA218E_REG_ACTIVE_THS,\s*0x26U\).*?"
++    require(r"\{DA218E_REG_ACTIVE_THS,\s*0x26U\}.*?"
+             r"s_diag\.int1_rearm_ok\s*=\s*int1_config_ok\s*&&\s*"
+             r"i2c_accel_rearm_wake_interrupt\(\).*?"
+             r"GPIO_ReadInputDataBit\(\s*DA218E_INT1_PORT,\s*DA218E_INT1_PIN\s*\)",
+--- before/tools/tests/test_stationary_location_owner.py
++++ after/tools/tests/test_stationary_location_owner.py
+@@ -37,7 +37,8 @@
+     guard = re.search(
+         r"if\s*\(\s*work_mode_state\s*\(\s*\)\s*==\s*"
+         r"WORK_MODE_STATIONARY_SLEEP\s*\)\s*\{[\s\S]*?"
+-        r"waiting_first_fix[\s\S]*?return\s*;\s*\}",
++        r"send_pending_live_locations\s*\(\s*&first_snapshot\s*,\s*now\s*,\s*false\s*\)"
++        r"[\s\S]*?return\s*;\s*\}",
+         timer,
+     )
+     assert guard, (
+--- before/tools/release_guard.py
++++ after/tools/release_guard.py
+@@ -156,8 +156,8 @@
+     "include/config.h": "65035af4d3c34932ded7df54c47c5cd558b7763eb80a60420f75ae97dd80c612",
+     "include/build_version.h": "fa5217260129bb93b55ded2090be088888d04e459171fe17aa489492a13eadf5",
+     "include/f39_reply.h": "4519c084bcc677d23c02aa4ac509f2390527f16111139f011052017f08c615ed",
+-    # Reviewed: work-mode send adds a RAM-only retry ID; identity/wire unchanged.
+-    "include/jt808.h": "b5e5bb725e1439b3d6c60c3d79cfb6484d6a2c3d5ecdb1df2c431d0aecafe02a",
++    # Reviewed: remove unused heartbeat getter declaration only; identity/wire unchanged.
++    "include/jt808.h": "d1f6f11e0fcfb1ee85062080501c1e8a3901f8d313ae96d0b206393ab694e71d",
+     "include/jt808_terminal_info.h": "ed27611b540da8fe8ed50a3d349d52ada04f2e66aa62db8f3d6b85497c35d8df",
+ }
+ 
+--- /dev/null
++++ after/tools/tests/test_location_encoding_equivalence.py
+@@ -0,0 +1,94 @@
++"""Compare production location encoders byte-for-byte with a supplied baseline."""
++from pathlib import Path
++import argparse
++import re
++import shutil
++import subprocess
++import tempfile
++from test_location_numeric_equivalence import function
++
++ROOT = Path(__file__).resolve().parents[2]
++
++
++def encoder(source, prefix):
++    functions = [('uint8_t', 'jt808_days_in_month'), ('void', 'jt808_apply_timezone'),
++                 ('uint16_t', 'encode_location_base'), ('uint16_t', 'encode_location_compact'),
++                 ('uint16_t', 'clamp_voltage_units'), ('uint16_t', 'coordinate_extension_tail'),
++                 ('uint16_t', 'altitude_extension_tail'), ('uint16_t', 'encode_location_online')]
++    code = '\n'.join('static ' + kind + ' ' + function(source, name)
++                     for kind, name in functions if name + '(' in source)
++    for _, name in functions:
++        code = re.sub(r'\b' + name + r'\b', prefix + name, code)
++    return code
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument('--baseline', type=Path, required=True)
++    args = parser.parse_args()
++    code = r'''
++#include "gps.h"
++#include "jt808.h"
++#include "flash_config.h"
++#include "blind_zone.h"
++#include <assert.h>
++#include <math.h>
++#include <string.h>
++#include <stdio.h>
++#define JT808_LOCATION_ONLINE_MAX 67U
++static device_config_t config;
++static uint32_t s_alarm_flags;
++static bool physical_acc, logical_acc;
++static float car, battery;
++static int csq;
++device_config_t *cfg_get(void) { return &config; }
++bool hw_acc_is_on(void) { return physical_acc; }
++bool jt808_get_logical_acc(void) { return logical_acc; }
++float adc_get_car_voltage(void) { return car; }
++float adc_get_bat_voltage(void) { return battery; }
++int ec800m_get_csq(void) { return csq; }
++'''
++    code += encoder(args.baseline.read_text(encoding='utf-8'), 'old_')
++    code += encoder((ROOT/'src/jt808.c').read_text(encoding='utf-8'), 'new_')
++    code += r'''
++int main(void) {
++    gps_data_t g={0}; uint8_t old[80], current[80];
++    uint32_t seed=0x73941652;
++    for(unsigned i=0;i<20000;i++) {
++        seed=seed*1664525U+1013904223U;
++        g.lat=(double)(int32_t)seed/24000000.0;
++        seed=seed*1664525U+1013904223U;
++        g.lon=(double)(int32_t)seed/12000000.0;
++        g.speed_kmh=(float)(i%65000)/10.0f;g.heading=(float)(i%360);
++        g.altitude_m=(float)(i%60000);g.hdop=(float)(i%1200)/10.0f;
++        g.fix_quality=i%9;g.satellites=i%100;
++        g.year=2000+i%200;g.month=1+i%12;g.day=1+i%28;
++        g.hour=i%24;g.minute=i%60;g.second=(i/3)%60;
++        config.gmt_sign=(i%3)-1;config.gmt_hour=i%15;config.gmt_min=i%65;
++        config.mileage_m=seed;s_alarm_flags=seed^0x173246;
++        physical_acc=(i&1)!=0;logical_acc=(i&2)!=0;
++        car=(float)(i%80000)/100.0f;battery=(float)(i%5000)/1000.0f;
++        csq=i%100;
++        memset(old,0xA5,sizeof old);memset(current,0xA5,sizeof current);
++        assert(old_encode_location_compact(&g,old)==new_encode_location_compact(&g,current));
++        assert(memcmp(old,current,34)==0);
++        for(unsigned history=0;history<2;history++) {
++            memset(old,0xA5,sizeof old);memset(current,0xA5,sizeof current);
++            assert(old_encode_location_online(&g,old,seed,history)==
++                   new_encode_location_online(&g,current,seed,history));
++            assert(memcmp(old,current,sizeof old)==0);
++        }
++    }
++    puts("PASS: 20000 compact + 40000 online/historical location bodies identical");
++}
++'''
++    with tempfile.TemporaryDirectory() as tmp:
++        d=Path(tmp)
++        (d/'h.c').write_text(code,encoding='utf-8')
++        subprocess.run([shutil.which('gcc'),'-std=c99','-O2','-Wall','-Wextra','-Werror',
++                        '-I',str(ROOT/'include'),str(d/'h.c'),'-lm','-o',str(d/'h.exe')],check=True)
++        subprocess.run([str(d/'h.exe')],check=True)
++
++
++if __name__=='__main__':
++    main()
+--- /dev/null
++++ after/tools/tests/test_power_wake_routing.py
+@@ -0,0 +1,61 @@
++"""Exercise production wake routing for every flag combination and repeated calls."""
++from pathlib import Path
++import os
++import shutil
++import subprocess
++import tempfile
++
++ROOT = Path(__file__).resolve().parents[2]
++
++
++def main():
++    cc = os.environ.get('CC') or shutil.which('gcc')
++    assert cc, 'host C compiler required'
++    with tempfile.TemporaryDirectory(prefix='power_routing_') as tmp:
++        d = Path(tmp)
++        (d/'config.h').write_text('', encoding='ascii')
++        (d/'n32l40x.h').write_text('''
++#define RCC_APB2_PERIPH_AFIO 1
++#define ENABLE 1
++#define EXTI_LINE0 1u
++#define EXTI_LINE2 4u
++#define EXTI_LINE12 4096u
++#define EXTI_LINE15 32768u
++void RCC_EnableAPB2PeriphClk(unsigned, int);
++int EXTI_GetITStatus(unsigned);
++void EXTI_ClrITPendBit(unsigned);
++''', encoding='ascii')
++        (d/'h.c').write_text('''
++#include <assert.h>
++#include <stdio.h>
++#include "power_mgr.h"
++static unsigned calls[8], count, init_count, clocks;
++void RCC_EnableAPB2PeriphClk(unsigned p, int e) { assert(p==1 && e==1); clocks++; }
++int EXTI_GetITStatus(unsigned p) { (void)p; return 0; }
++void EXTI_ClrITPendBit(unsigned p) { (void)p; }
++void work_mode_sleep_init(void) { init_count++; }
++void work_mode_sleep_isr_wake(work_sleep_wake_t s) { assert(count<8); calls[count++]=s; }
++int main(void) {
++    pwr_init(); assert(init_count==1 && clocks==1);
++    for (unsigned mask=0; mask<128; mask++) {
++        for (unsigned repeat=0; repeat<3; repeat++) {
++            count=0; unsigned i=0;
++            pwr_wake((wake_src_t)mask);
++            if (mask & WAKE_SRC_ACC) assert(calls[i++]==WORK_SLEEP_WAKE_ACC);
++            if (mask & WAKE_SRC_SOS) assert(calls[i++]==WORK_SLEEP_WAKE_SOS);
++            if (mask & (WAKE_SRC_LIGHT|WAKE_SRC_CHARGE)) assert(calls[i++]==WORK_SLEEP_WAKE_POWER);
++            assert(count==i);
++        }
++    }
++    puts("PASS: 128 wake masks, three repeated calls each");
++    return 0;
++}
++''', encoding='ascii')
++        subprocess.run([cc, '-std=c99', '-Wall', '-Wextra', '-Werror', '-I', str(d),
++                        '-I', str(ROOT/'include'), str(d/'h.c'),
++                        str(ROOT/'src/power_mgr.c'), '-o', str(d/'h.exe')], check=True)
++        subprocess.run([str(d/'h.exe')], check=True)
++
++
++if __name__ == '__main__':
++    main()

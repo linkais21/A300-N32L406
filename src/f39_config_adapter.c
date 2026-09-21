@@ -1,4 +1,5 @@
 #include "f39_config_adapter.h"
+#include "plate_encoding.h"
 
 #include <limits.h>
 #include <stddef.h>
@@ -115,46 +116,29 @@ static bool prepare_endpoint(const f39_request_t *request, char *host,
     return true;
 }
 
-static bool prepare_ip(const f39_request_t *request, device_config_t *candidate,
-                       uint32_t *effects)
+/* Main and backup endpoints have identical commit effects; only FIP may
+ * disable its endpoint with a single zero argument. */
+static bool prepare_server(const f39_request_t *request,
+                           device_config_t *candidate, uint32_t *effects)
 {
-    char host[sizeof(candidate->server_ip)];
+    bool backup = request->operation == F39_OPERATION_FIP;
+    char host[CFG_IP_LEN];
     uint16_t port;
-
-    if (!prepare_endpoint(request, host, sizeof(host), &port)) {
-        return false;
-    }
-    if (strcmp(candidate->server_ip, host) != 0 ||
-        candidate->server_port != port) {
-        (void)strcpy(candidate->server_ip, host);
-        candidate->server_port = port;
-        candidate->auth_code[0] = '\0';
-        *effects |= F39_EFFECT_MAIN_AUTH_RESET;
-    }
-    *effects |= F39_EFFECT_NETWORK_RECONNECT;
-    return true;
-}
-
-static bool prepare_fip(const f39_request_t *request,
-                        device_config_t *candidate, uint32_t *effects)
-{
-    char host[sizeof(candidate->backup_ip)];
-    uint16_t port;
-
-    if ((request->argc == 1U) && arg_equals(request, 0U, "0")) {
+    char *target = backup ? candidate->backup_ip : candidate->server_ip;
+    uint16_t *target_port = backup ? &candidate->backup_port : &candidate->server_port;
+    char *auth = backup ? candidate->backup_auth_code : candidate->auth_code;
+    if (backup && arg_equals(request, 0U, "0")) {
+        if (request->argc != 1U) return false;
         host[0] = '\0';
         port = 0U;
-    } else if (arg_equals(request, 0U, "0")) {
-        return false;
     } else if (!prepare_endpoint(request, host, sizeof(host), &port)) {
         return false;
     }
-    if (strcmp(candidate->backup_ip, host) != 0 ||
-        candidate->backup_port != port) {
-        (void)strcpy(candidate->backup_ip, host);
-        candidate->backup_port = port;
-        candidate->backup_auth_code[0] = '\0';
-        *effects |= F39_EFFECT_BACKUP_AUTH_RESET;
+    if (strcmp(target, host) != 0 || *target_port != port) {
+        (void)strcpy(target, host);
+        *target_port = port;
+        auth[0] = '\0';
+        *effects |= backup ? F39_EFFECT_BACKUP_AUTH_RESET : F39_EFFECT_MAIN_AUTH_RESET;
     }
     *effects |= F39_EFFECT_NETWORK_RECONNECT;
     return true;
@@ -174,20 +158,6 @@ static bool prepare_freq(const f39_request_t *request,
     candidate->report_moving_s = (uint16_t)moving;
     candidate->report_stopped_s = (uint16_t)stopped;
     candidate->sleep_report_mode = 0U;
-    *effects |= F39_EFFECT_TIMER_REFRESH;
-    return true;
-}
-
-static bool prepare_hbt(const f39_request_t *request,
-                        device_config_t *candidate, uint32_t *effects)
-{
-    uint32_t value;
-    if (request->argc != 1U || !parse_arg_u32(request, 0U, &value) ||
-        value < 30U || value > 3600U) {
-        return false;
-    }
-    candidate->heartbeat_s = (uint16_t)value;
-    /* Keep JT808 and STOP1 deadlines in sync with the persisted candidate. */
     *effects |= F39_EFFECT_TIMER_REFRESH;
     return true;
 }
@@ -218,23 +188,13 @@ static bool prepare_model(const f39_request_t *request,
     return true;
 }
 
-static bool prepare_speed(const f39_request_t *request,
-                          device_config_t *candidate)
-{
-    uint32_t value;
-    if (request->argc != 1U || !parse_arg_u32(request, 0U, &value) ||
-        value < 20U || value > 200U) {
-        return false;
-    }
-    candidate->speed_limit_kmh = (uint16_t)value;
-    return true;
-}
-
 static bool prepare_apn(const f39_request_t *request,
                         device_config_t *candidate, uint32_t *effects)
 {
     if ((arg_equals(request, 0U, "AUTO") || arg_equals(request, 0U, "0"))) {
-        if (request->argc != 1U) {
+        if (request->argc != 1U &&
+            !(request->argc == 3U && request->args[1].len == 0U &&
+              request->args[2].len == 0U)) {
             return false;
         }
         candidate->autoapn_en = 1U;
@@ -267,47 +227,6 @@ static bool prepare_apn(const f39_request_t *request,
     return true;
 }
 
-static bool prepare_gpsdup(const f39_request_t *request,
-                           device_config_t *candidate, uint32_t *effects)
-{
-    uint32_t value;
-    if (request->argc != 1U || !parse_arg_u32(request, 0U, &value) || value > 1U) {
-        return false;
-    }
-    candidate->sleep_report_mode = (uint8_t)(value == 0U ? 1U : 0U);
-    *effects |= F39_EFFECT_TIMER_REFRESH;
-    return true;
-}
-
-static bool prepare_mileage(const f39_request_t *request,
-                            device_config_t *candidate)
-{
-    uint32_t value;
-    if (request->argc != 1U || !parse_arg_u32(request, 0U, &value) ||
-        value > (UINT32_MAX / 100U)) {
-        return false;
-    }
-    candidate->mileage_m = value * 100U;
-    return true;
-}
-
-static const char *province(uint8_t code)
-{
-    static const char *const names[] = {
-        "", "\xe4\xba\xac", "\xe6\xb5\x99", "\xe6\xb4\xa5", "\xe7\x9a\x96",
-        "\xe6\xb2\xaa", "\xe9\x97\xbd", "\xe6\xb8\x9d", "\xe8\xb5\xa3",
-        "\xe6\xb8\xaf", "\xe9\xb2\x81", "\xe6\xbe\xb3", "\xe8\xb1\xab",
-        "\xe8\x92\x99", "\xe9\x84\x82", "\xe6\x96\xb0", "\xe6\xb9\x98",
-        "\xe5\xae\x81", "\xe7\xb2\xa4", "\xe8\x97\x8f", "\xe7\x90\xbc",
-        "\xe6\xa1\x82", "\xe5\xb7\x9d", "\xe8\x9c\x80", "\xe5\x86\x80",
-        "\xe8\xb4\xb5", "\xe9\xbb\x94", "\xe6\x99\x8b", "\xe4\xba\x91",
-        "\xe6\xbb\x87", "\xe8\xbe\xbd", "\xe9\x99\x95", "\xe7\xa7\xa6",
-        "\xe5\x90\x89", "\xe7\x94\x98", "\xe9\x99\x87", "\xe9\xbb\x91",
-        "\xe9\x9d\x92", "\xe8\x8b\x8f", "\xe5\x8f\xb0"
-    };
-    return (code <= 39U) ? names[code] : NULL;
-}
-
 static bool prepare_car(const f39_request_t *request,
                         device_config_t *candidate, uint32_t *effects)
 {
@@ -322,13 +241,13 @@ static bool prepare_car(const f39_request_t *request,
         data[1] >= (uint8_t)'0' && data[1] <= (uint8_t)'9') {
         uint8_t code = (uint8_t)((data[0] - (uint8_t)'0') * 10U +
                                  data[1] - (uint8_t)'0');
-        const char *prefix = province(code);
+        const char *prefix = (const char *)plate_province_utf8(code);
         size_t prefix_length;
         size_t suffix_length = (size_t)length - 2U;
         if (prefix == NULL || code == 0U) {
             return false;
         }
-        prefix_length = strlen(prefix);
+        prefix_length = 3U;
         if (prefix_length + suffix_length >= sizeof(candidate->plate_no)) {
             return false;
         }
@@ -341,34 +260,6 @@ static bool prepare_car(const f39_request_t *request,
     if (!copy_arg(request, 0U, candidate->plate_no,
                   sizeof(candidate->plate_no), false)) return false;
     *effects |= F39_EFFECT_JT808_REREGISTER;
-    return true;
-}
-
-static bool prepare_gpsbds(const f39_request_t *request,
-                           device_config_t *candidate, uint32_t *effects)
-{
-    uint32_t value;
-    if (request->argc != 1U || !parse_arg_u32(request, 0U, &value) ||
-        value < 1U || value > 3U) {
-        return false;
-    }
-    candidate->gpsbds_mode = (uint8_t)value;
-    *effects |= F39_EFFECT_GNSS_REFRESH;
-    return true;
-}
-
-static bool prepare_vibsens(const f39_request_t *request,
-                            device_config_t *candidate)
-{
-    uint32_t value;
-    /* Doc range is 1..50 (smaller = more sensitive).  Persisting only; the
-     * accelerometer picks the value up on its next sample, so no effect flag
-     * and no disturbance of the running sleep/wake state machine. */
-    if (request->argc != 1U || !parse_arg_u32(request, 0U, &value) ||
-        value < 1U || value > 50U) {
-        return false;
-    }
-    candidate->vib_sens = (uint8_t)value;
     return true;
 }
 
@@ -450,33 +341,53 @@ static bool prepare_fkey(const f39_request_t *request,
 static bool prepare_operation(const f39_request_t *request,
                               device_config_t *candidate, uint32_t *effects)
 {
+    uint32_t value;
     switch (request->operation) {
+    case F39_OPERATION_HBT:
+    case F39_OPERATION_SPEED:
+    case F39_OPERATION_GPSDUP:
+    case F39_OPERATION_MLG:
+    case F39_OPERATION_GPSBDS:
+    case F39_OPERATION_VIBSENS:
+        /* Share strict scalar parsing without changing ranges or effects. */
+        if (request->argc != 1U || !parse_arg_u32(request, 0U, &value)) return false;
+        switch (request->operation) {
+        case F39_OPERATION_HBT:
+            if (value < 30U || value > 3600U) return false;
+            candidate->heartbeat_s = (uint16_t)value;
+            *effects |= F39_EFFECT_TIMER_REFRESH; break;
+        case F39_OPERATION_SPEED:
+            if (value < 20U || value > 200U) return false;
+            candidate->speed_limit_kmh = (uint16_t)value; break;
+        case F39_OPERATION_GPSDUP:
+            if (value > 1U) return false;
+            candidate->sleep_report_mode = (uint8_t)(value == 0U);
+            *effects |= F39_EFFECT_TIMER_REFRESH; break;
+        case F39_OPERATION_MLG:
+            if (value > UINT32_MAX / 100U) return false;
+            candidate->mileage_m = value * 100U; break;
+        case F39_OPERATION_GPSBDS:
+            if (value < 1U || value > 3U) return false;
+            candidate->gpsbds_mode = (uint8_t)value;
+            *effects |= F39_EFFECT_GNSS_REFRESH; break;
+        default: /* VIBSENS: 1..50, smaller is more sensitive. */
+            if (value < 1U || value > 50U) return false;
+            candidate->vib_sens = (uint8_t)value; break;
+        }
+        return true;
     case F39_OPERATION_IP:
-        return prepare_ip(request, candidate, effects);
     case F39_OPERATION_FIP:
-        return prepare_fip(request, candidate, effects);
+        return prepare_server(request, candidate, effects);
     case F39_OPERATION_FREQ:
         return prepare_freq(request, candidate, effects);
-    case F39_OPERATION_HBT:
-        return prepare_hbt(request, candidate, effects);
     case F39_OPERATION_MODEL:
         return prepare_model(request, candidate, effects);
-    case F39_OPERATION_SPEED:
-        return prepare_speed(request, candidate);
     case F39_OPERATION_APN:
         return prepare_apn(request, candidate, effects);
-    case F39_OPERATION_GPSDUP:
-        return prepare_gpsdup(request, candidate, effects);
-    case F39_OPERATION_MLG:
-        return prepare_mileage(request, candidate);
     case F39_OPERATION_CAR:
         return prepare_car(request, candidate, effects);
-    case F39_OPERATION_GPSBDS:
-        return prepare_gpsbds(request, candidate, effects);
     case F39_OPERATION_GMTSET:
         return prepare_gmt(request, candidate);
-    case F39_OPERATION_VIBSENS:
-        return prepare_vibsens(request, candidate);
     case F39_OPERATION_FKEY:
         return prepare_fkey(request, candidate, effects);
     default:
@@ -512,7 +423,6 @@ static bool prepare_dualset(const f39_request_t *request,
     /* Sized by the highest dualset-capable operation; VIBSENS now exceeds
      * GMTSET in the enum, so indexing it must stay in bounds. */
     bool seen[F39_OPERATION_VIBSENS + 1U] = { false };
-    f39_operation_t operations[F39_MAX_DUALSET_ITEMS];
     uint8_t i;
 
     if (request->dualset_count == 0U ||
@@ -520,7 +430,8 @@ static bool prepare_dualset(const f39_request_t *request,
         return false;
     }
 
-    /* Parse and authorize the complete set before changing the candidate. */
+    /* Validate into the private candidate in one pass. Nothing is persisted
+     * or applied to hardware until every item passes and commit succeeds. */
     for (i = 0U; i < request->dualset_count; ++i) {
         f39_request_t item;
         const f39_argument_t *span = &request->dualset_items[i];
@@ -531,16 +442,8 @@ static bool prepare_dualset(const f39_request_t *request,
             seen[item.operation]) {
             return false;
         }
-        operations[i] = item.operation;
         seen[item.operation] = true;
-    }
-    for (i = 0U; i < request->dualset_count; ++i) {
-        f39_request_t item;
-        const f39_argument_t *span = &request->dualset_items[i];
-        if (f39_parse(&request->raw[span->offset], span->len, &item) !=
-                F39_RESULT_OK ||
-            item.operation != operations[i] ||
-            !prepare_operation(&item, candidate, effects)) {
+        if (!prepare_operation(&item, candidate, effects)) {
             return false;
         }
     }
@@ -589,6 +492,15 @@ bool f39_prepare_config(const f39_request_t *request,
         transaction->candidate = *current;
         transaction->effects = F39_EFFECT_NONE;
         return false;
+    }
+    /* A lost confirmation can redeliver APN indefinitely. Only a changed
+     * profile needs PDP restart; preserve all other DUALSET effects. */
+    if ((transaction->effects & F39_EFFECT_MODEM_PDP_RESTART) != 0U &&
+        transaction->candidate.autoapn_en == current->autoapn_en &&
+        strcmp(transaction->candidate.apn, current->apn) == 0 &&
+        strcmp(transaction->candidate.apn_user, current->apn_user) == 0 &&
+        strcmp(transaction->candidate.apn_pass, current->apn_pass) == 0) {
+        transaction->effects &= ~F39_EFFECT_MODEM_PDP_RESTART;
     }
     transaction->prepared = true;
     return true;

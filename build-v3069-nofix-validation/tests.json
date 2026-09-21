@@ -1,0 +1,154 @@
+[
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_retained_clock.py"
+    ],
+    "exit_code": 0,
+    "output": "test_gps_ntp_apply: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_nofix_clock.py"
+    ],
+    "exit_code": 0,
+    "output": "test_jt808_nofix_clock: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_ntp_apply.py"
+    ],
+    "exit_code": 0,
+    "output": "test_gps_ntp_apply: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_shallow_sleep_contract.py"
+    ],
+    "exit_code": 0,
+    "output": "test_shallow_sleep_contract: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_acc_bounce_hardening.py"
+    ],
+    "exit_code": 0,
+    "output": "test_acc_bounce_hardening: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_acc_stop1_contract.py"
+    ],
+    "exit_code": 0,
+    "output": "ACC STOP1 contract: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_work_mode_jt808_contract.py"
+    ],
+    "exit_code": 0,
+    "output": "test_work_mode_jt808_contract: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_report_wire.py"
+    ],
+    "exit_code": 0,
+    "output": "GPS filter -> JT808 main/backup/query/work-mode, history untouched: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_dual_session.py"
+    ],
+    "exit_code": 0,
+    "output": "test_jt808_dual_session: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_replay.py"
+    ],
+    "exit_code": 0,
+    "output": "test_blind_zone_replay: PASS\ntest_blind_zone_replay mutation: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_feature_guards.py"
+    ],
+    "exit_code": 0,
+    "output": "test_feature_guards: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "exit_code": 0,
+    "output": "test_release_identity_contract: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_platform_trust_anchor.py"
+    ],
+    "exit_code": 0,
+    "output": "test_platform_trust_anchor: PASS (real platform signature, tamper rejection, 32/64-bit)\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_a300_ota_image.py"
+    ],
+    "exit_code": 0,
+    "output": "test_a300_ota_image: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_dev_release_manifest.py"
+    ],
+    "exit_code": 0,
+    "output": "test_dev_release_manifest: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_package.py"
+    ],
+    "exit_code": 0,
+    "output": "test_fota_package: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_resume_integrity.py"
+    ],
+    "exit_code": 0,
+    "output": "prefix: PASS\nread: PASS\nfinal: PASS\ncomplete: PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_install_powercut_c.py"
+    ],
+    "exit_code": 0,
+    "output": "install C: 2048 bytes, 208 cuts including torn erase/program/BCR/full readback PASS\ninstall C: 2049 bytes, 245 cuts including torn erase/program/BCR/full readback PASS\ninstall C: 4097 bytes, 417 cuts including torn erase/program/BCR/full readback PASS\ninstall C: 106496 bytes, 353 cuts including torn erase/program/BCR/full readback PASS\n"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_cfg_query_f39.py"
+    ],
+    "exit_code": 0,
+    "output": "cfg query F39 integration: PASS\n"
+  }
+]

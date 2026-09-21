@@ -1,0 +1,460 @@
+--- before/release_identity.json
++++ after/release_identity.json
+@@ -1,8 +1,8 @@
+ {
+-  "firmware_version_prefix": "T360-A300_406_20260919120428,V3.",
+-  "firmware_revision": 63,
+-  "firmware_version": "T360-A300_406_20260919120428,V3.063",
+-  "firmware_version_counter": 3063,
++  "firmware_version_prefix": "T360-A300_406_20260919154313,V3.",
++  "firmware_revision": 64,
++  "firmware_version": "T360-A300_406_20260919154313,V3.064",
++  "firmware_version_counter": 3064,
+   "ota_device_model": "A300-406",
+   "jt808_terminal_model": "T360-A300",
+   "jt808_manufacturer_id": "70110"
+--- before/include/build_version.h
++++ after/include/build_version.h
+@@ -2,9 +2,9 @@
+ #ifndef BUILD_VERSION_H
+ #define BUILD_VERSION_H
+ 
+-#define FW_BUILD_NUMBER  "202609191204"
+-#define FW_BUILD_DATE    "Sep 19 2026 - 12:04:28"
+-#define FW_FULL_VERSION  "T360-A300_406_20260919120428,V3.063"
+-#define FW_VERSION_COUNTER  3063UL
++#define FW_BUILD_NUMBER  "202609191543"
++#define FW_BUILD_DATE    "Sep 19 2026 - 15:43:13"
++#define FW_FULL_VERSION  "T360-A300_406_20260919154313,V3.064"
++#define FW_VERSION_COUNTER  3064UL
+ 
+ #endif /* BUILD_VERSION_H */
+--- before/include/config.h
++++ after/include/config.h
+@@ -4,7 +4,7 @@
+ #include "n32l40x.h"
+ 
+ /* ── Firmware version ─────────────────────────────────────────────────────── */
+-#define FW_VERSION_STR          "T360-A300_406_20260919120428,V3.063"
++#define FW_VERSION_STR          "T360-A300_406_20260919154313,V3.064"
+ #define FW_OTA_MODEL_STR        "A300-406"
+ #define FW_JT808_MODEL_STR      "T360-A300"
+ #define FW_MANUFACTURER_ID_STR  "70110"
+--- before/include/flash_config.h
++++ after/include/flash_config.h
+@@ -109,7 +109,10 @@
+     uint8_t  city_be[2];
+     uint8_t  plate_color;
+     uint8_t  plate_color_valid; /* 1: explicit value, 0: legacy default */
+-    uint8_t  _reserved[25];
++    /* Former reserved[0]: 0 legacy, 1 sensitivity-default migration applied.
++     * Persist with the value in the same CRC/commit protected A/B record. */
++    uint8_t  vib_default_migrated;
++    uint8_t  _reserved[24];
+ 
+     /* v2 F39 settings; append-only after the complete v1 prefix */
+     char     pid[CFG_PID_LEN];
+--- before/include/gps_report_filter.h
++++ after/include/gps_report_filter.h
+@@ -33,7 +33,8 @@
+ /* All APIs: main-loop only, not ISR/thread safe; no heap, persistence or waits
+  * beyond one bounded existing i2c_accel_read transaction in process().
+  * Module owns state; pointers remain caller-owned and are never retained.
+- * Fixed reference defaults: 1/2 km/h, 30/60 mg, 30 seconds.
++ * L406 trial defaults: 1/2 km/h, 120/180 mg, 30 seconds.
++ * Independent of VIBSENS (wake/working-mode motion sensitivity).
+  * reset clears evidence/anchor.
+  * Call reset on external wake. Invalid/stale GNSS, disabled GNSS/filter,
+  * acceleration read failure or >1000ms sampling gap clears evidence.
+--- before/src/flash_config.c
++++ after/src/flash_config.c
+@@ -88,10 +88,9 @@
+     .sos_alm_en         = 1,
+     .lowbat_alm_en      = 1,
+     .lowexbat_alm_en    = 1,
+-    /* Smaller values are more sensitive; 20 is the shipped wake default.
+-     * Field configuration may select 15 for installations needing a more
+-     * sensitive trigger. */
+-    .vib_sens           = 20,
++    /* Smaller values are more sensitive; preserve later explicit settings. */
++    .vib_sens           = 15,
++    .vib_default_migrated = 1,
+     .pid                = "",
+     .terminal_model     = "T360-A300",
+     .speed_limit_kmh    = 120,
+@@ -405,6 +404,16 @@
+     /* Corner reporting is enabled on every boot, including OTA with an old
+      * disabled setting. Do not rewrite Flash or reset unrelated settings. */
+     s_cfg.anglerep_en = 1U;
++    if (s_cfg.vib_default_migrated == 0U) {
++        if (s_cfg.vib_sens == 10U || s_cfg.vib_sens == 20U)
++            s_cfg.vib_sens = 15U;
++        s_cfg.vib_default_migrated = 1U;
++        /* Existing A/B transaction commits marker and value together. A
++         * failed save leaves the old slot intact and retries on next boot. */
++        cfg_store_result_t result = cfg_store_candidate_result(&s_cfg);
++        if (result != CFG_STORE_OK)
++            dbg_printf("[CFG] VIB migrate failed=%u\r\n", (unsigned)result);
++    }
+ }
+ 
+ cfg_store_result_t cfg_store_candidate_result(const device_config_t *candidate)
+--- before/src/gps_report_filter.c
++++ after/src/gps_report_filter.c
+@@ -18,14 +18,15 @@
+     REPORT_LOCKED
+ } report_state_t;
+ 
+-/* L406 uses the reference defaults; no additional configuration storage. */
++/* L406 field trial: observed stationary windows reached 100 LSB (~98 mg).
++ * Keep hysteresis and speed release; these thresholds require moving HIL. */
+ static const gps_report_filter_config_t s_config = {
+-    1.0f, 2.0f, 30u, 60u, 30000u
++    1.0f, 2.0f, 120u, 180u, 30000u
+ };
+ static struct {
+     uint8_t state; /* report_state_t; compact to avoid alignment padding */
+     uint8_t blockers;
+-    accel_data_t acceleration[REPORT_WINDOW_COUNT];
++    int16_t acceleration[REPORT_WINDOW_COUNT][3];
+     /* Candidate samples and locked anchor have disjoint lifetimes.
+      * 1e-7 degree samples preserve centimetre precision without 80 B doubles. */
+     union {
+@@ -98,22 +99,17 @@
+ 
+ static uint32_t acceleration_span(void)
+ {
+-    accel_data_t low = s_report.acceleration[0];
+-    accel_data_t high = low;
+-    for (uint8_t i = 1u; i < s_report.accel_count; i++) {
+-        const accel_data_t *a = &s_report.acceleration[i];
+-        if (a->x < low.x) low.x = a->x;
+-        if (a->y < low.y) low.y = a->y;
+-        if (a->z < low.z) low.z = a->z;
+-        if (a->x > high.x) high.x = a->x;
+-        if (a->y > high.y) high.y = a->y;
+-        if (a->z > high.z) high.z = a->z;
+-    }
+-    uint32_t span = (uint32_t)((int32_t)high.x - (int32_t)low.x);
+-    uint32_t y = (uint32_t)((int32_t)high.y - (int32_t)low.y);
+-    uint32_t z = (uint32_t)((int32_t)high.z - (int32_t)low.z);
+-    if (y > span) span = y;
+-    if (z > span) span = z;
++    uint32_t span = 0u;
++    for (uint8_t axis = 0u; axis < 3u; ++axis) {
++        int16_t low = s_report.acceleration[0][axis], high = low;
++        for (uint8_t i = 1u; i < s_report.accel_count; ++i) {
++            int16_t value = s_report.acceleration[i][axis];
++            if (value < low) low = value;
++            if (value > high) high = value;
++        }
++        uint32_t delta = (uint32_t)((int32_t)high - (int32_t)low);
++        if (delta > span) span = delta;
++    }
+     return span;
+ }
+ 
+@@ -127,28 +123,30 @@
+                         now_ms - s_report.candidate_ms : 0u;
+ }
+ 
+-static double trimmed_mean(const int32_t *values, bool longitude)
+-{
+-    double origin = (double)values[0] / 10000000.0;
+-    double sum = origin, low = origin, high = origin;
++/* Shared by latitude/longitude; inlining duplicates the 64-bit arithmetic. */
++static __attribute__((noinline)) double trimmed_mean(const int32_t *values)
++{
++    const int64_t half_turn = 1800000000LL;
++    int64_t origin = values[0];
++    int64_t sum = origin, low = origin, high = origin;
+     for (uint8_t i = 1u; i < REPORT_WINDOW_COUNT; i++) {
+-        double value = (double)values[i] / 10000000.0;
++        int64_t value = values[i];
+         /* Longitude is circular: unwrap around the first fix so stationary
+-         * samples at +180/-180 cannot average into a different continent. */
+-        if (longitude) {
+-            if (value - origin > 180.0) value -= 360.0;
+-            else if (value - origin < -180.0) value += 360.0;
+-        }
++         * samples at +180/-180 cannot average into a different continent.
++         * Valid latitude differences never exceed 180 degrees, so the same
++         * operation is an identity for latitude and needs no separate flag. */
++        if (value - origin > half_turn) value -= 2 * half_turn;
++        else if (value - origin < -half_turn) value += 2 * half_turn;
+         sum += value;
+         if (value < low) low = value;
+         if (value > high) high = value;
+     }
+-    double mean = (sum - low - high) / 3.0;
+-    if (longitude) {
+-        if (mean > 180.0) mean -= 360.0;
+-        else if (mean < -180.0) mean += 360.0;
+-    }
+-    return mean;
++    /* At most five unwrapped e7 samples: int32 could overflow.
++     * Normalize the retained sum before a single double conversion. */
++    sum -= low + high;
++    if (sum > 3 * half_turn) sum -= 6 * half_turn;
++    else if (sum < -3 * half_turn) sum += 6 * half_turn;
++    return (double)sum / 30000000.0;
+ }
+ 
+ void gps_report_filter_process(uint32_t now_ms)
+@@ -179,7 +177,9 @@
+             invalidate_evidence();
+             return;
+         }
+-        s_report.acceleration[s_report.accel_next] = a;
++        s_report.acceleration[s_report.accel_next][0] = a.x;
++        s_report.acceleration[s_report.accel_next][1] = a.y;
++        s_report.acceleration[s_report.accel_next][2] = a.z;
+         s_report.accel_next = (uint8_t)((s_report.accel_next + 1u) % REPORT_WINDOW_COUNT);
+         if (s_report.accel_count < REPORT_WINDOW_COUNT) s_report.accel_count++;
+     }
+@@ -237,8 +237,8 @@
+     }
+     if (s_report.fix_count == REPORT_WINDOW_COUNT &&
+         now_ms - s_report.candidate_ms >= s_config.stationary_ms) {
+-        double lat = trimmed_mean(s_report.position.fixes.lat, false);
+-        double lon = trimmed_mean(s_report.position.fixes.lon, true);
++        double lat = trimmed_mean(s_report.position.fixes.lat);
++        double lon = trimmed_mean(s_report.position.fixes.lon);
+         s_report.position.anchor.lat = lat;
+         s_report.position.anchor.lon = lon;
+         s_report.state = REPORT_LOCKED;
+--- before/src/i2c_accel.c
++++ after/src/i2c_accel.c
+@@ -103,14 +103,14 @@
+ /* Product-facing VIBSENS scale from the terminal command spec: 1..50, where a
+  * smaller number is more sensitive.  The scale is anchored at level 30 =
+  * VIB_THRESH, the threshold the sleep/wake logic was commissioned against,
+- * and that is also the shipped default: a field capture at level 10 (70 LSB)
++ * while the shipped default is level 15: a field capture at level 10 (70 LSB)
+  * showed bench noise deltas of 71..106 repeatedly clearing the threshold on a
+  * genuinely stationary device, which reset the stationary timer and prevented
+  * STOP1 entry.  Out-of-range or unconfigured input falls back to the default. */
+ #define VIBRATION_SENSITIVITY_MIN 1U
+ #define VIBRATION_SENSITIVITY_MAX 50U
+ #define VIBRATION_SENSITIVITY_ANCHOR 30U
+-#define VIBRATION_SENSITIVITY_DEFAULT 20U
++#define VIBRATION_SENSITIVITY_DEFAULT 15U
+ #define VIBRATION_THRESHOLD_STEP 4U
+ 
+ static accel_vibration_filter_t s_motion_filter;
+@@ -122,7 +122,7 @@
+ 
+ /* VIBSENS product scale (1..50, smaller = more sensitive) mapped linearly onto
+  * the delta threshold in accelerometer LSB, anchored at level 30 = VIB_THRESH.
+- * Level 1 gives 34 LSB, level 20 (the shipped default) 110, level 50 230.
++ * Level 1 gives 34 LSB, level 15 (the shipped default) 90, level 50 230.
+  * Out-of-range or unconfigured input falls back to the shipped default. */
+ static uint16_t vibration_threshold_by_level(uint8_t sensitivity_level)
+ {
+--- before/tools/release_guard.py
++++ after/tools/release_guard.py
+@@ -152,9 +152,9 @@
+     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
+ }
+ CANONICAL_IDENTITY_FILE_SHA256 = {
+-    # Reviewed: V3.063 identity/counter only; generated timestamps stay normalized.
+-    "include/config.h": "a899b8a1fadaf389591957e43eb08c5e0bfe28bd22c07702c3eb6a046a81f390",
+-    "include/build_version.h": "554d4b10abd02236f346d9269c0fe499bcce59a4d5a36192318e7b8884d7acc0",
++    # Reviewed: V3.064 identity/counter only; generated timestamps stay normalized.
++    "include/config.h": "269e8aac040a07b286117f689722bd8660bd35910167991e501ad34f3119458a",
++    "include/build_version.h": "d4c0748ba330a6ef41dd7d93c7d42d3900eb41e21c79bb5b2a3d17d1bb32eef3",
+     "include/f39_reply.h": "4519c084bcc677d23c02aa4ac509f2390527f16111139f011052017f08c615ed",
+     # Reviewed: work-mode send adds a RAM-only retry ID; identity/wire unchanged.
+     "include/jt808.h": "b5e5bb725e1439b3d6c60c3d79cfb6484d6a2c3d5ecdb1df2c431d0aecafe02a",
+--- before/tools/tests/gps_report_filter_host.c
++++ after/tools/tests/gps_report_filter_host.c
+@@ -120,7 +120,7 @@
+     step(true); assert(locked());
+     step(true); assert(!locked());
+     raw.speed_kmh = 0.5f; anchor();
+-    acceleration.x = 62; step(true); assert(!locked());
++    acceleration.x = 185; step(true); assert(!locked());
+     /* Slow movement must not be zeroed solely because speed is low. */
+     assert(raw.speed_kmh == 0.5f);
+     gps_report_filter_reset();
+@@ -169,19 +169,20 @@
+ {
+     setup();
+     for (unsigned i = 0; i < 200; i++) {
+-        acceleration.x = (i % 2 == 0) ? 0 : 31; /* 30.27 mg >30mg */
++        acceleration.x = (i % 2 == 0) ? 0 : 123; /* 120.12 mg >120mg */
+         step(i % 5 == 0);
+     }
+     assert(!locked());
+     setup();
+     raw.speed_kmh = 1.0f;
+     for (unsigned i = 0; i < 200; i++) {
+-        acceleration.x = (i % 2 == 0) ? 0 : 30;
++        acceleration.x = (i % 2 == 0) ? 0 : 122;
+         step(i % 5 == 0);
+     }
+     assert(locked());
+     /* Window gray area preserves existing anchor but prevents new one. */
+-    acceleration.x = 40; step(true); assert(locked());
++    acceleration.x = 184; step(true); assert(locked());
++    acceleration.x = 185; step(true); assert(!locked());
+     gps_report_filter_reset(); raw.speed_kmh = 1.01f;
+     quiet(40); assert(!locked());
+     setup();
+@@ -248,14 +249,14 @@
+     /* Quiet speed alone cannot establish an anchor with a noisy sensor. */
+     setup(); raw.speed_kmh = 0.0f;
+     for (unsigned i = 0; i < 200; ++i) {
+-        acceleration.z = i % 2u ? 1000 : 1040;
++        acceleration.z = i % 2u ? 1000 : 1123;
+         step(i % 5u == 0u);
+     }
+     gps_report_filter_get_diag(&d, now);
+-    assert(!locked() && d.span_lsb == 40u);
++    assert(!locked() && d.span_lsb == 123u);
+     assert(d.blockers & GPS_REPORT_BLOCK_UNSTABLE);
+     setup(); quiet(35);
+-    acceleration.x = 62; step(true);
++    acceleration.x = 185; step(true);
+     gps_report_filter_get_diag(&d, now);
+     assert(!locked() && (d.blockers & GPS_REPORT_BLOCK_ACCEL));
+     setup(); quiet(35); now += 1200; step(true);
+@@ -281,6 +282,32 @@
+     puts("PASS: diagnostic causes, noisy zero-speed input, read-only observation and reset");
+ }
+ #endif
++
++/* Constructed 200 ms input covering the observed 100 LSB diagnostic span.
++ * The field log samples windows every 30 s, so this is not a raw log replay. */
++static void test_stationary_sensor_noise(void)
++{
++    setup(); raw.speed_kmh = 0.0f;
++    gps_data_t first, out;
++    for (unsigned i = 0; i < 3000; ++i) {
++        acceleration.z = (i % 2u) ? 974 : 1074;
++        raw.lat += 0.0000001;
++        raw.lon -= 0.0000001;
++        step(i % 5u == 0u);
++        if (i == 175u) {
++            assert(gps_report_filter_copy(&raw, &first, now));
++        } else if (i > 175u) {
++            assert(gps_report_filter_copy(&raw, &out, now));
++            assert(first.lat == out.lat && first.lon == out.lon);
++        }
++    }
++    /* With noise continuing, distinct speed evidence must still release. */
++    raw.speed_kmh = 2.0f;
++    step(true); assert(locked());
++    step(true); assert(locked());
++    step(true); assert(!locked());
++    puts("PASS: ten-minute 100 LSB stationary noise, fixed coordinates, speed release");
++}
+ 
+ int main(void)
+ {
+@@ -289,6 +316,7 @@
+     assert(!locked() && reads == 0);
+     puts("PASS: custom profile unchanged, no new polling");
+ #else
++    test_stationary_sensor_noise();
+     test_acc_on_drift_and_immutable_raw();
+     test_motion_and_duplicate_rmc();
+     test_failures_and_recovery();
+--- before/tools/tests/test_flash_config_v3.py
++++ after/tools/tests/test_flash_config_v3.py
+@@ -313,6 +313,67 @@
+     assert(cfg_get()->anglerep_en == 1U);
+ }
+ 
++static void test_vibration_default_and_one_time_migration(void)
++{
++    /* Marker occupies former reserved byte 0; avoid requiring the new name
++     * so the regression also compiles against the pre-migration header. */
++    const size_t marker = offsetof(device_config_t, plate_color_valid) + 1U;
++    assert(k_config_defaults.vib_sens == 15U);
++    for (unsigned level = 1; level <= 50; ++level) {
++        memset(flash_image, 0xFF, sizeof(flash_image));
++        restart_without_fault();
++        device_config_t old = candidate("old-server", "OLD-MAIN", "OLD-BACK");
++        old.vib_sens = (uint8_t)level;
++        ((uint8_t *)&old)[marker] = 0U;
++        assert(cfg_store_candidate(&old));
++        restart_without_fault();
++        device_config_t expected = old;
++        expected.vib_sens = (level == 10U || level == 20U) ? 15U : level;
++        ((uint8_t *)&expected)[marker] = 1U;
++        assert(memcmp(cfg_get(), &expected, sizeof(expected)) == 0);
++        restart_without_fault();
++        assert(operation_count == 0); /* migration is durable and idempotent */
++        for (unsigned changed = 10; changed <= 20; changed += 10) {
++            expected.vib_sens = (uint8_t)changed;
++            assert(cfg_store_candidate(&expected));
++            restart_without_fault();
++            assert(memcmp(cfg_get(), &expected, sizeof(expected)) == 0);
++            assert(operation_count == 0);
++        }
++    }
++}
++
++static void test_vibration_migration_power_cuts(void)
++{
++    const size_t marker = offsetof(device_config_t, plate_color_valid) + 1U;
++    uint8_t baseline[sizeof(flash_image)];
++    for (unsigned level = 10; level <= 20; level += 10) {
++        memset(flash_image, 0xFF, sizeof(flash_image));
++        restart_without_fault();
++        device_config_t old = candidate("keep-server", "KEEP-MAIN", "KEEP-BACK");
++        old.vib_sens = (uint8_t)level;
++        ((uint8_t *)&old)[marker] = 0U;
++        old.mileage_m = 123400U;
++        assert(cfg_store_candidate(&old));
++        memcpy(baseline, flash_image, sizeof baseline);
++        restart_without_fault();
++        int operations = operation_count;
++        assert(operations >= 3);
++        for (int cut = 1; cut <= operations; ++cut) {
++            memcpy(flash_image, baseline, sizeof baseline);
++            locked = 0; operation_count = 0; fail_operation = cut;
++            cfg_init();
++            restart_without_fault();
++            device_config_t expected = old;
++            expected.vib_sens = 15U;
++            ((uint8_t *)&expected)[marker] = 1U;
++            assert(memcmp(cfg_get(), &expected, sizeof expected) == 0);
++            restart_without_fault();
++            assert(operation_count == 0);
++        }
++    }
++}
++
+ int main(void)
+ {
+     assert(CFG_VERSION == 4U);
+@@ -320,6 +381,8 @@
+     assert(k_config_defaults.device_api_key[0] == '\0');
+     assert(sizeof(device_config_t) + 20U < FLASH_SECTOR_SIZE);
+     assert(cfg_store_candidate_result(NULL) == CFG_STORE_INVALID);
++    test_vibration_default_and_one_time_migration();
++    test_vibration_migration_power_cuts();
+     test_default_persistence_failure_is_logged();
+     test_independent_auth_codes();
+     test_power_cut_never_loads_mixed_candidate();
+--- before/tools/tests/test_release_identity_contract.py
++++ after/tools/tests/test_release_identity_contract.py
+@@ -10,12 +10,12 @@
+ 
+ contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+ 
+-stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.063", contract["firmware_version"]).group(1)
++stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.064", contract["firmware_version"]).group(1)
+ assert contract == {
+     "firmware_version_prefix": f"T360-A300_406_{stamp},V3.",
+-    "firmware_revision": 63,
+-    "firmware_version": f"T360-A300_406_{stamp},V3.063",
+-    "firmware_version_counter": 3063,
++    "firmware_revision": 64,
++    "firmware_version": f"T360-A300_406_{stamp},V3.064",
++    "firmware_version_counter": 3064,
+     "ota_device_model": "A300-406",
+     "jt808_terminal_model": "T360-A300",
+     "jt808_manufacturer_id": "70110",

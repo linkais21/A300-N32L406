@@ -1,0 +1,27 @@
+{
+  "purpose": "HIL",
+  "release_approved": false,
+  "identity": {
+    "firmware_version_prefix": "T360-A300_406_20260918144414,V3.",
+    "firmware_revision": 59,
+    "firmware_version": "T360-A300_406_20260918144414,V3.059",
+    "firmware_version_counter": 3059,
+    "ota_device_model": "A300-406",
+    "jt808_terminal_model": "T360-A300",
+    "jt808_manufacturer_id": "70110"
+  },
+  "toolchain": "ARM GNU 14.3.Rel1 (GCC 14.3.1)",
+  "app_build": "make -s -j4 size flash-guard BUILD=build-pass-v3059-hil-20260918 \"SIZE_FLAGS=-Os -finline-limit=128\"",
+  "combined_base": "0x08000000",
+  "app_base": "0x08006000",
+  "combined_bytes": 131052,
+  "app_bytes": 106476,
+  "flash_free_bytes": 20,
+  "host_test_scripts_passed": 48,
+  "release_identity_guard": "PASS",
+  "ram_gate": "FAIL: incomplete whole-program stack/heap/exception bound",
+  "hardware_tested": false,
+  "stationary_drift_algorithm_changed": false,
+  "factory_initialization": "First boot clears config, BCR, OTA checkpoints and authorization records; save settings before flashing.",
+  "source_snapshot": "Current project-owned sources and tools; vendor SDK/toolchain dependencies remain external."
+}

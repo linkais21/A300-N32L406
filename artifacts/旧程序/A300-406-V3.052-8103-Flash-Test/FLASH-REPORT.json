@@ -1,0 +1,23 @@
+{
+  "release_approved": false,
+  "version": "V3.052",
+  "purpose": "0x8103 HIL validation",
+  "app_bin": 98256,
+  "flash_capacity": 106496,
+  "remaining": 8240,
+  "sha256": "afe234423b1f3f977036d23a77202007cdb300f9eb0ac89ef2b93c3cb91ac083",
+  "features": [
+    "0x0001",
+    "0x0013",
+    "0x0018",
+    "0x0027",
+    "0x0029",
+    "0x0080",
+    "0x0081",
+    "0x0082",
+    "0x0083",
+    "0x0084"
+  ],
+  "bootloader_bytes": 22556,
+  "source_build": "build/params-size-trial-3052/combined"
+}

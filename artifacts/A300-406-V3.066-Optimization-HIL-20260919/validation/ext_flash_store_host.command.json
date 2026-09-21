@@ -1,0 +1,9 @@
+{
+  "command": [
+    "C:\\Python314\\python.exe",
+    "tools/tests/test_ext_flash_store_host.py"
+  ],
+  "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+  "exit_code": 0,
+  "elapsed_seconds": 1.8709940910339355
+}

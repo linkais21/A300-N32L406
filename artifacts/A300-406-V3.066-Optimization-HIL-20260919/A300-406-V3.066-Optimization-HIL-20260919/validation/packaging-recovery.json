@@ -1,0 +1,5 @@
+{
+  "initial_exit_code": 1,
+  "reason": "Path.with_suffix shortened the dotted version directory; exclusive creation rejected existing A300-406-V3.zip",
+  "recovery": "Append .zip to complete directory name; verify existing candidate hashes and archive without rebuilding or overwriting old artifacts."
+}

@@ -1,0 +1,578 @@
+[
+  {
+    "command": [
+      "python",
+      "tools/tests/test_agnss_scheduler.py"
+    ],
+    "exit_code": 0,
+    "log": "test_agnss_scheduler.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_agnss_snapshot.py"
+    ],
+    "exit_code": 0,
+    "log": "test_agnss_snapshot.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_agnss_storage.py"
+    ],
+    "exit_code": 0,
+    "log": "test_agnss_storage.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_agnss_vendor_stream.py"
+    ],
+    "exit_code": 0,
+    "log": "test_agnss_vendor_stream.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_agnss_workspace_ownership.py"
+    ],
+    "exit_code": 0,
+    "log": "test_agnss_workspace_ownership.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_at_config_handoff.py"
+    ],
+    "exit_code": 0,
+    "log": "test_at_config_handoff.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_blind_zone_replay.py"
+    ],
+    "exit_code": 0,
+    "log": "test_blind_zone_replay.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_blind_zone_store.py"
+    ],
+    "exit_code": 0,
+    "log": "test_blind_zone_store.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_boot_flash_probe_retry.py"
+    ],
+    "exit_code": 0,
+    "log": "test_boot_flash_probe_retry.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_boot_install_progress.py"
+    ],
+    "exit_code": 0,
+    "log": "test_boot_install_progress.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_boot_progress_uart.py"
+    ],
+    "exit_code": 0,
+    "log": "test_boot_progress_uart.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_bootloader_bcr_failclosed.py"
+    ],
+    "exit_code": 0,
+    "log": "test_bootloader_bcr_failclosed.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_bootloader_factory_init.py"
+    ],
+    "exit_code": 0,
+    "log": "test_bootloader_factory_init.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_bootloader_invalid_vector_recovery.py"
+    ],
+    "exit_code": 0,
+    "log": "test_bootloader_invalid_vector_recovery.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_bootloader_lkg_powercut_c.py"
+    ],
+    "exit_code": 0,
+    "log": "test_bootloader_lkg_powercut_c.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_bootloader_platform_contract.py"
+    ],
+    "exit_code": 0,
+    "log": "test_bootloader_platform_contract.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_build_dependencies.py"
+    ],
+    "exit_code": 0,
+    "log": "test_build_dependencies.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_build_version_refresh.py"
+    ],
+    "exit_code": 0,
+    "log": "test_build_version_refresh.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_cfg_query_contract.py"
+    ],
+    "exit_code": 0,
+    "log": "test_cfg_query_contract.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_cfg_query_lifetime.py"
+    ],
+    "exit_code": 0,
+    "log": "test_cfg_query_lifetime.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_debug_printf_format.py"
+    ],
+    "exit_code": 0,
+    "log": "test_debug_printf_format.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_debug_uart_stats.py"
+    ],
+    "exit_code": 0,
+    "log": "test_debug_uart_stats.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_dev_release_manifest.py"
+    ],
+    "exit_code": 0,
+    "log": "test_dev_release_manifest.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_ec800m_dma_wrap.py"
+    ],
+    "exit_code": 0,
+    "log": "test_ec800m_dma_wrap.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_ec800m_udp_async_contract.py"
+    ],
+    "exit_code": 0,
+    "log": "test_ec800m_udp_async_contract.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_ec800m_urc_demux.py"
+    ],
+    "exit_code": 0,
+    "log": "test_ec800m_urc_demux.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_ext_flash_layout.py"
+    ],
+    "exit_code": 0,
+    "log": "test_ext_flash_layout.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_ext_flash_store_host.py"
+    ],
+    "exit_code": 0,
+    "log": "test_ext_flash_store_host.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_f39_actions.py"
+    ],
+    "exit_code": 0,
+    "log": "test_f39_actions.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_feature_guards.py"
+    ],
+    "exit_code": 0,
+    "log": "test_feature_guards.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_firmware_signature.py"
+    ],
+    "exit_code": 0,
+    "log": "test_firmware_signature.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_flash_capacity_guard.py"
+    ],
+    "exit_code": 0,
+    "log": "test_flash_capacity_guard.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_flash_combined_script.py"
+    ],
+    "exit_code": 0,
+    "log": "test_flash_combined_script.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_flash_config_migration.py"
+    ],
+    "exit_code": 0,
+    "log": "test_flash_config_migration.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_flash_gate_build.py"
+    ],
+    "exit_code": 0,
+    "log": "test_flash_gate_build.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_fota_active.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_active.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_fota_check_parser.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_check_parser.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_fota_checkpoint_powercut.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_checkpoint_powercut.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_fota_diagnostics.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_diagnostics.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_fota_key_config.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_key_config.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_fota_modem_handoff.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_modem_handoff.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_fota_no_api_key_contract.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_no_api_key_contract.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_fota_package.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_package.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_fota_platform_flow.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_platform_flow.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_fota_progress_display.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_progress_display.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_fota_resume.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_resume.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_fota_stack_guard.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_stack_guard.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_fota_verify_scan.py"
+    ],
+    "exit_code": 0,
+    "log": "test_fota_verify_scan.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_hardware_bringup_profile.py"
+    ],
+    "exit_code": 0,
+    "log": "test_hardware_bringup_profile.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_heap_bounds.py"
+    ],
+    "exit_code": 0,
+    "log": "test_heap_bounds.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_internal_flash_layout.py"
+    ],
+    "exit_code": 0,
+    "log": "test_internal_flash_layout.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_jt808_dual_session.py"
+    ],
+    "exit_code": 0,
+    "log": "test_jt808_dual_session.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_jt808_session.py"
+    ],
+    "exit_code": 0,
+    "log": "test_jt808_session.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_jt808_session_send_failure.py"
+    ],
+    "exit_code": 0,
+    "log": "test_jt808_session_send_failure.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_lto_stack_guard.py"
+    ],
+    "exit_code": 0,
+    "log": "test_lto_stack_guard.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_mileage_persistence.py"
+    ],
+    "exit_code": 0,
+    "log": "test_mileage_persistence.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_platform_trust_anchor.py"
+    ],
+    "exit_code": 0,
+    "log": "test_platform_trust_anchor.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_ram_guard.py"
+    ],
+    "exit_code": 0,
+    "log": "test_ram_guard.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_ram_watermark.py"
+    ],
+    "exit_code": 0,
+    "log": "test_ram_watermark.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_service_workspace_contract.py"
+    ],
+    "exit_code": 0,
+    "log": "test_service_workspace_contract.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_sha256_shared.py"
+    ],
+    "exit_code": 0,
+    "log": "test_sha256_shared.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_stack_health_observability.py"
+    ],
+    "exit_code": 0,
+    "log": "test_stack_health_observability.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_tcp_identity_gate.py"
+    ],
+    "exit_code": 0,
+    "log": "test_tcp_identity_gate.log"
+  },
+  {
+    "command": [
+      "python",
+      "tools/tests/test_tcp_manager_fip.py"
+    ],
+    "exit_code": 0,
+    "log": "test_tcp_manager_fip.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_at_config_serial_f39.py"
+    ],
+    "exit_code": 0,
+    "log": "test_at_config_serial_f39.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_end_to_end.py"
+    ],
+    "exit_code": 0,
+    "log": "test_f39_end_to_end.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_drop_diagnostics.py"
+    ],
+    "exit_code": 0,
+    "log": "test_gps_drop_diagnostics.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_nmea_replay.py"
+    ],
+    "exit_code": 0,
+    "log": "test_nmea_replay.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_ntp_apply.py"
+    ],
+    "exit_code": 0,
+    "log": "test_gps_ntp_apply.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_tx_bounded.py"
+    ],
+    "exit_code": 0,
+    "log": "test_gps_tx_bounded.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_adc_power_loss_mileage.py"
+    ],
+    "exit_code": 0,
+    "log": "test_adc_power_loss_mileage.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_production_selftest.py"
+    ],
+    "exit_code": 0,
+    "log": "test_production_selftest.log"
+  }
+]

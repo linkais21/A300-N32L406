@@ -1,0 +1,297 @@
+--- before/src/gps_report_filter.c
++++ src/gps_report_filter.c
+@@ -10,6 +10,7 @@
+ #define REPORT_FIX_MAX_AGE_MS    3000u
+ #define REPORT_MOVE_FIXES        3u
+ #define REPORT_ACCEL_LSB_PER_G   1024u
++#define REPORT_UNSTABLE_MS        2000u
+ 
+ typedef enum {
+     REPORT_UNKNOWN = 0,
+@@ -26,6 +27,8 @@
+     uint8_t state; /* report_state_t; compact to avoid alignment padding */
+     uint8_t blockers;
+     accel_data_t acceleration[REPORT_WINDOW_COUNT];
++    accel_data_t previous_raw[2], previous_median;
++    uint16_t unstable_ms;
+     /* Candidate samples and locked anchor have disjoint lifetimes.
+      * 1e-7 degree samples preserve centimetre precision without 80 B doubles. */
+     union {
+@@ -64,6 +67,7 @@
+     s_report.fix_count = 0u;
+     s_report.fix_next = 0u;
+     s_report.candidate_ms = 0u;
++    s_report.unstable_ms = 0u;
+ }
+ 
+ /* Retain poll deadline after failed reads: recovery must not busy-poll I2C. */
+@@ -94,6 +98,35 @@
+            a->y > -2048 && a->y < 2047 &&
+            a->z > -2048 && a->z < 2047 &&
+            (a->x != 0 || a->y != 0 || a->z != 0);
++}
++
++/* Median rejects one isolated sample; pair averaging attenuates alternating
++ * sensor noise without floating point. A persistent step reaches the span
++ * detector within three new polls (600 ms at the normal cadence). */
++static int16_t median3(int16_t a, int16_t b, int16_t c)
++{
++    if (a > b) { int16_t t = a; a = b; b = t; }
++    if (b > c) b = c;
++    return a > b ? a : b;
++}
++
++static void smooth_acceleration(accel_data_t *a)
++{
++    if (s_report.accel_count == 0u) {
++        s_report.previous_raw[0] = *a;
++        s_report.previous_raw[1] = *a;
++        s_report.previous_median = *a;
++    }
++    accel_data_t median;
++    median.x = median3(a->x, s_report.previous_raw[0].x, s_report.previous_raw[1].x);
++    median.y = median3(a->y, s_report.previous_raw[0].y, s_report.previous_raw[1].y);
++    median.z = median3(a->z, s_report.previous_raw[0].z, s_report.previous_raw[1].z);
++    s_report.previous_raw[1] = s_report.previous_raw[0];
++    s_report.previous_raw[0] = *a;
++    a->x = (int16_t)(((int32_t)median.x + s_report.previous_median.x) / 2);
++    a->y = (int16_t)(((int32_t)median.y + s_report.previous_median.y) / 2);
++    a->z = (int16_t)(((int32_t)median.z + s_report.previous_median.z) / 2);
++    s_report.previous_median = median;
+ }
+ 
+ static uint32_t acceleration_span(void)
+@@ -169,9 +202,11 @@
+         s_report.blockers |= GPS_REPORT_BLOCK_GAP;
+         invalidate_evidence();
+     }
++    uint32_t poll_elapsed = 0u;
+     if (!s_report.have_poll ||
+         now_ms - s_report.last_poll_ms >= REPORT_ACCEL_PERIOD_MS) {
+         accel_data_t a;
++        poll_elapsed = s_report.have_poll ? now_ms - s_report.last_poll_ms : 0u;
+         s_report.last_poll_ms = now_ms;
+         s_report.have_poll = true;
+         if (!i2c_accel_read(&a) || !acceleration_legal(&a)) {
+@@ -179,6 +214,7 @@
+             invalidate_evidence();
+             return;
+         }
++        smooth_acceleration(&a);
+         s_report.acceleration[s_report.accel_next] = a;
+         s_report.accel_next = (uint8_t)((s_report.accel_next + 1u) % REPORT_WINDOW_COUNT);
+         if (s_report.accel_count < REPORT_WINDOW_COUNT) s_report.accel_count++;
+@@ -203,7 +239,7 @@
+     }
+ 
+     /* Exact integer mg comparison; 4094 LSB *1000 fits uint32.
+-     * Check partial window too so a new jolt releases within one poll. */
++     * Check partial windows too; sustained motion survives smoothing. */
+     uint32_t span_milli_lsb = acceleration_span() * 1000u;
+     if (span_milli_lsb >= (uint32_t)s_config.move_accel_mg * REPORT_ACCEL_LSB_PER_G ||
+         s_report.move_count >= REPORT_MOVE_FIXES) {
+@@ -216,15 +252,26 @@
+     }
+     if (s_report.state == REPORT_LOCKED) return;
+     if (s_report.accel_count < REPORT_WINDOW_COUNT ||
+-        span_milli_lsb > (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G ||
+         gps->speed_kmh > s_config.stop_speed_kmh) {
+-        if (span_milli_lsb > (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G)
+-            s_report.blockers |= GPS_REPORT_BLOCK_UNSTABLE;
+         if (gps->speed_kmh > s_config.stop_speed_kmh)
+             s_report.blockers |= GPS_REPORT_BLOCK_SPEED;
+         clear_candidate(REPORT_MOVING);
+         return;
+     }
++    if (span_milli_lsb > (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G) {
++        s_report.blockers |= GPS_REPORT_BLOCK_UNSTABLE;
++        /* Gray-zone noise cannot start a candidate or count as quiet time.
++         * Pause existing evidence; prolonged instability discards it. Count
++         * actual sensor polls, never repeated main-loop calls. */
++        if (s_report.state == REPORT_CANDIDATE && poll_elapsed != 0u) {
++            s_report.candidate_ms += poll_elapsed;
++            s_report.unstable_ms = (uint16_t)(s_report.unstable_ms + poll_elapsed);
++            if (s_report.unstable_ms >= REPORT_UNSTABLE_MS)
++                clear_candidate(REPORT_MOVING);
++        }
++        return;
++    }
++    s_report.unstable_ms = 0u;
+     if (s_report.state != REPORT_CANDIDATE) {
+         clear_candidate(REPORT_CANDIDATE);
+         s_report.candidate_ms = now_ms;
+--- before/include/gps_report_filter.h
++++ include/gps_report_filter.h
+@@ -6,7 +6,7 @@
+ typedef struct {
+     float stop_speed_kmh;       /* 0..10, inclusive stop threshold */
+     float move_speed_kmh;       /* >stop, <=30; three distinct RMC fixes */
+-    uint16_t stable_accel_mg;   /* 1..200, max per-axis window peak-to-peak */
++    uint16_t stable_accel_mg;   /* 1..200, max per-axis filtered window peak-to-peak */
+     uint16_t move_accel_mg;     /* >stable, <=1000, inclusive release threshold */
+     uint32_t stationary_ms;     /* 5000..300000; independent of power idle time */
+ } gps_report_filter_config_t;
+@@ -34,7 +34,11 @@
+  * beyond one bounded existing i2c_accel_read transaction in process().
+  * Module owns state; pointers remain caller-owned and are never retained.
+  * Fixed reference defaults: 1/2 km/h, 30/60 mg, 30 seconds.
+- * reset clears evidence/anchor.
++ * Median-of-three and pair averaging reject isolated sensor spikes. Sustained
++ * acceleration steps release within 3 new polls (600 ms at nominal cadence).
++ * Candidate gray-zone instability pauses quiet evidence for <2000 ms; a
++ * longer continuous interval discards it. Invalid raw samples never smooth
++ * into valid evidence. reset clears evidence/anchor and smoothing history.
+  * Call reset on external wake. Invalid/stale GNSS, disabled GNSS/filter,
+  * acceleration read failure or >1000ms sampling gap clears evidence.
+  * Adapted for L406 DA218E signed 12-bit output at 1024 LSB/g. */
+--- before/tools/tests/gps_report_filter_host.c
++++ tools/tests/gps_report_filter_host.c
+@@ -81,6 +81,96 @@
+     assert(locked());
+ }
+ 
++static void test_filtered_thresholds_and_irregular_time(void)
++{
++    /* Once the filter settles, a linear ramp retains its exact window span.
++     * This checks 30/31-LSB classification without alternating-noise aliasing. */
++    for (unsigned span = 30; span <= 31; span++) {
++        setup();
++        for (unsigned i = 0; i < 210; i++) {
++            acceleration.x = (int16_t)(i * span / 4u);
++            step(i % 5u == 0u);
++        }
++        assert(locked() == (span == 30u));
++    }
++    setup(); anchor();
++    for (unsigned i = 0; i < 10; i++) {
++        acceleration.x = (int16_t)(i * 15u);
++        step(true); assert(locked()); /* 60 LSB is below 60 mg */
++    }
++    for (unsigned i = 10; i < 20; i++) {
++        acceleration.x = (int16_t)(i * 16u);
++        step(true);
++    }
++    assert(!locked());
++    setup(); now = UINT32_MAX - 26000u; quiet(20);
++    /* Gray window stays unstable across slower (but legal) polling. Expiry
++     * uses elapsed milliseconds rather than assuming every call is 200 ms. */
++    acceleration.x = 40;
++    step(true); step(true); step(true);
++    gps_report_filter_diag_t d;
++    gps_report_filter_get_diag(&d, now); assert(d.state == 2u);
++    unsigned before = reads;
++    for (unsigned i = 0; i < 100; i++) gps_report_filter_process(now);
++    assert(reads == before);
++    now += 800u; step(true);
++    now += 800u; step(true);
++    gps_report_filter_get_diag(&d, now); assert(d.state == 1u);
++    acceleration.x = 0; quiet(35); assert(locked());
++    puts("PASS: filtered 30/60 mg boundaries, bounded duplicate calls, real-time grace and wrap");
++}
++
++static void test_gray_pause_and_sustained_instability(void)
++{
++    setup(); quiet(20);
++    acceleration.x = 40;
++    for (unsigned i = 0; i < 8; i++) step(i % 5u == 0u);
++    gps_report_filter_diag_t d;
++    gps_report_filter_get_diag(&d, now);
++    assert(d.state == 2u && (d.blockers & GPS_REPORT_BLOCK_UNSTABLE));
++    quiet(8); assert(!locked());
++    quiet(5); assert(locked());
++    /* Sustained gray-zone motion cannot accumulate the paused quiet time. */
++    setup(); quiet(20);
++    for (unsigned i = 0; i < 60; i++) {
++        acceleration.x = (i % 6u < 3u) ? 0 : 40;
++        step(i % 5u == 0u);
++    }
++    gps_report_filter_get_diag(&d, now);
++    assert(!locked() && d.state == 1u);
++    acceleration.x = 0; quiet(20); assert(!locked());
++    quiet(15); assert(locked());
++    /* A pole-to-pole shake must never be accepted merely because speed is 0. */
++    setup(); raw.speed_kmh = 0.0f;
++    for (unsigned i = 0; i < 300; i++) {
++        acceleration.z = (i % 10u < 5u) ? 850 : 1200;
++        step(i % 5u == 0u); assert(!locked());
++    }
++    puts("PASS: gray noise pauses quiet evidence, sustained instability resets, shake prevents lock");
++}
++
++static void test_static_noise_and_short_jolt(void)
++{
++    setup(); raw.speed_kmh = 0.0f;
++    for (unsigned i = 0; i < 300; ++i) {
++        acceleration.z = i % 2u ? 1000 : 1040;
++        if (i % 50u == 25u) acceleration.z = 1250;
++        step(i % 5u == 0u);
++    }
++    assert(locked());
++    gps_data_t first, out;
++    assert(gps_report_filter_copy(&raw, &first, now));
++    acceleration.z = 1350; step(true);
++    acceleration.z = 1024;
++    for (unsigned i = 0; i < 15; ++i) {
++        raw.lat += 0.0000001;
++        step(i % 5u == 0u);
++        assert(gps_report_filter_copy(&raw, &out, now));
++        assert(out.lat == first.lat && out.lon == first.lon);
++    }
++    puts("PASS: stationary sensor noise and isolated jolt preserve fixed report anchor");
++}
++
+ static void test_acc_on_drift_and_immutable_raw(void)
+ {
+     setup();
+@@ -120,7 +210,10 @@
+     step(true); assert(locked());
+     step(true); assert(!locked());
+     raw.speed_kmh = 0.5f; anchor();
+-    acceleration.x = 62; step(true); assert(!locked());
++    acceleration.x = 62;
++    step(true); assert(locked());
++    step(true); assert(locked());
++    step(true); assert(!locked());
+     /* Slow movement must not be zeroed solely because speed is low. */
+     assert(raw.speed_kmh == 0.5f);
+     gps_report_filter_reset();
+@@ -169,7 +262,7 @@
+ {
+     setup();
+     for (unsigned i = 0; i < 200; i++) {
+-        acceleration.x = (i % 2 == 0) ? 0 : 31; /* 30.27 mg >30mg */
++        acceleration.x = (i % 10 < 5) ? 0 : 80; /* sustained movement survives deglitching */
+         step(i % 5 == 0);
+     }
+     assert(!locked());
+@@ -245,17 +338,16 @@
+     gps_report_filter_get_diag(&d, now);
+     assert(d.state == 3u && d.blockers == 0u);
+     assert(reads == previous && locked());
+-    /* Quiet speed alone cannot establish an anchor with a noisy sensor. */
++    /* Alternating sensor noise is attenuated before stationary classification. */
+     setup(); raw.speed_kmh = 0.0f;
+     for (unsigned i = 0; i < 200; ++i) {
+         acceleration.z = i % 2u ? 1000 : 1040;
+         step(i % 5u == 0u);
+     }
+     gps_report_filter_get_diag(&d, now);
+-    assert(!locked() && d.span_lsb == 40u);
+-    assert(d.blockers & GPS_REPORT_BLOCK_UNSTABLE);
++    assert(locked() && d.span_lsb == 0u);
+     setup(); quiet(35);
+-    acceleration.x = 62; step(true);
++    acceleration.x = 62; step(true); step(true); step(true);
+     gps_report_filter_get_diag(&d, now);
+     assert(!locked() && (d.blockers & GPS_REPORT_BLOCK_ACCEL));
+     setup(); quiet(35); now += 1200; step(true);
+@@ -289,6 +381,9 @@
+     assert(!locked() && reads == 0);
+     puts("PASS: custom profile unchanged, no new polling");
+ #else
++    test_filtered_thresholds_and_irregular_time();
++    test_gray_pause_and_sustained_instability();
++    test_static_noise_and_short_jolt();
+     test_acc_on_drift_and_immutable_raw();
+     test_motion_and_duplicate_rmc();
+     test_failures_and_recovery();

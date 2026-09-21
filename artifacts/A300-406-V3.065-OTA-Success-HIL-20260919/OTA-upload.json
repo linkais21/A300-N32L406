@@ -1,0 +1,12 @@
+{
+  "file": "A300-406-OTA-V3065.bin",
+  "deviceModel": "A300-406",
+  "versionCode": 3065,
+  "versionName": "T360-A300_406_20260919165648,V3.065",
+  "size": 106488,
+  "sha256": "27227e1a520202a099a110ecc7a0cdd26da76df759e752ed87e7a6d576e3bc51",
+  "active": false,
+  "mandatory": false,
+  "signing": "platform-detached",
+  "releaseNotes": "HIL candidate: post-confirmation OTA success report; stationary lock retained. RAM release gate incomplete."
+}

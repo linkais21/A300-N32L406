@@ -1,0 +1,62 @@
+[
+  {
+    "label": "app",
+    "command": [
+      "C:\\Users\\86166\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\mingw32-make.exe",
+      "-s",
+      "flash-guard",
+      "stack-report",
+      "BUILD=build-v3056-stability-hil/app"
+    ],
+    "exit_code": 0
+  },
+  {
+    "label": "boot",
+    "command": [
+      "C:\\Users\\86166\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\mingw32-make.exe",
+      "-s",
+      "-f",
+      "../build-v3056-stability-hil/boot.mk",
+      "all"
+    ],
+    "exit_code": 0
+  },
+  {
+    "label": "release-gate",
+    "command": [
+      "C:\\Users\\86166\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\mingw32-make.exe",
+      "-s",
+      "release-gate",
+      "BUILD=build-v3056-stability-hil/app"
+    ],
+    "exit_code": 2
+  },
+  {
+    "label": "test_ram01_frame_budget",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_ram01_frame_budget.py",
+      "build-v3056-stability-hil/app"
+    ],
+    "exit_code": 0
+  },
+  {
+    "label": "test_platform_trust_anchor",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_platform_trust_anchor.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "label": "test_release_identity_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "exit_code": 1
+  }
+]

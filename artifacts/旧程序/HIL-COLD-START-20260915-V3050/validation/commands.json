@@ -1,0 +1,44 @@
+[
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\gen_a300_ota_image.py",
+      "--input",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-COLD-START-20260915-V3050\\V3.050\\App-N32L406CBL7.bin",
+      "--output",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-COLD-START-20260915-V3050\\V3.050\\A300-406-OTA-V3050.bin",
+      "--version-code",
+      "3050"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3050-ota.log"
+  },
+  {
+    "command": [
+      "D:\\A300_Tools\\toolchains\\arm-gnu-toolchain-14.3.rel1\\bin\\arm-none-eabi-objcopy.exe",
+      "-I",
+      "binary",
+      "-O",
+      "ihex",
+      "--change-addresses",
+      "0x08000000",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-COLD-START-20260915-V3050\\V3.050\\Combined-N32L406CBL7.bin",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-COLD-START-20260915-V3050\\V3.050\\Combined-N32L406CBL7.hex"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3050-combined-hex.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_dev_release_manifest.py",
+      "--manifest",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\HIL-COLD-START-20260915-V3050\\V3.050\\SHA256SUMS-N32L406CBL7.json"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "log": "V3050-manifest.log"
+  }
+]

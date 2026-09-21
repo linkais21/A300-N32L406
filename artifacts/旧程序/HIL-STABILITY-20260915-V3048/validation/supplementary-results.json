@@ -1,0 +1,12 @@
+{
+  "command": [
+    "C:\\Python314\\python.exe",
+    "tools/tests/test_debug_uart_stats.py"
+  ],
+  "exit_code": 0,
+  "original_script_count": 49,
+  "additional_scripts": [
+    "test_debug_uart_stats"
+  ],
+  "source_snapshot_matches_current": true
+}

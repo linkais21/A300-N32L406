@@ -1,0 +1,105 @@
+{
+  "version": "T360-A300_406_20260920090943,V3.068",
+  "versionCode": 3068,
+  "release_approved": false,
+  "hardware_verified": false,
+  "release_gate_exit": 2,
+  "release_gate_reason": "Incomplete whole-program stack/heap/IRQ evidence",
+  "ota_updates_bootloader": false,
+  "swd_factory_initializes": true,
+  "app_bytes": 105084,
+  "boot_bytes": 22556,
+  "app_sha256": "986e515ea6feef391dc5c5238f6f67f8bdb14151c0bfefa97ae24f21f5fdc518",
+  "boot_sha256": "974501ace4b2d85c74d58f8e196ee536f603de2a2550f3376b6689b78bc0da9e",
+  "package_validation": "passed",
+  "files": {
+    "A300-406-OTA-V3068.bin": {
+      "size": 105116,
+      "sha256": "74951ea422ecf6cff0bac7106589fd1361da6d6ee4b14fcac5e57a9028df5db5"
+    },
+    "diagnostics/App-V3068.bin": {
+      "size": 105084,
+      "sha256": "986e515ea6feef391dc5c5238f6f67f8bdb14151c0bfefa97ae24f21f5fdc518"
+    },
+    "diagnostics/App-V3068.elf": {
+      "size": 162972,
+      "sha256": "b22f005515afad42b585482aad616c6dff690e2e3c10545b174be1ebd56ff2a9"
+    },
+    "diagnostics/App-V3068.map": {
+      "size": 108363,
+      "sha256": "b3b299d68a212afbab2733cc3a26ac4d7449ab9d01963fa28ff06a993497f9c7"
+    },
+    "diagnostics/Bootloader-V3068.bin": {
+      "size": 22556,
+      "sha256": "974501ace4b2d85c74d58f8e196ee536f603de2a2550f3376b6689b78bc0da9e"
+    },
+    "diagnostics/Bootloader-V3068.elf": {
+      "size": 32720,
+      "sha256": "e7062b29ddc882a52021b3101f4aeed104a856494d257f43ca5ff6b4962669b2"
+    },
+    "diagnostics/Bootloader-V3068.map": {
+      "size": 63501,
+      "sha256": "0ee4ef6d88a54e2146d99efe3249015955a0ef34be7c5a99cbc85b9c17daa6e1"
+    },
+    "OTA-upload.json": {
+      "size": 440,
+      "sha256": "e1b509e9bd42a6d368bb4f316ab2b594ea59aabbb07581051527d684caa13684"
+    },
+    "README.md": {
+      "size": 2479,
+      "sha256": "01eee34e8e6dbf74a4260bdc59daff1433d0505b261a06903344f03e25e3ad27"
+    },
+    "release_identity.json": {
+      "size": 310,
+      "sha256": "507dbd92f3770c72af36eb726d739c3cbd17b30aa7d5eaabe6fc3223b1fc5556"
+    },
+    "SWD-Combined-V3068.bin": {
+      "size": 129660,
+      "sha256": "92789c815343378d1acb646fb02abdd390517433bd569ef5845ae5bf0dd52598"
+    },
+    "SWD-Combined-V3068.hex": {
+      "size": 364719,
+      "sha256": "4e5f392ded6d4ca1cd2875e304ec5ca663800ee29087b50d9968f9cbd6cd0720"
+    },
+    "validation/APN-fix.md": {
+      "size": 4043,
+      "sha256": "eb3d6c4a0348332ed5219e3e7822387405980a0348a4749268688073f7f9a87e"
+    },
+    "validation/build-v3068-apn.log": {
+      "size": 81724,
+      "sha256": "74d755cd9991efca029e9de4560a992b7b525ac4fca9d0003e0622cca6892092"
+    },
+    "validation/build-v3068-boot.log": {
+      "size": 15761,
+      "sha256": "1e617542a055f7ef20206affd5671bcf9a0c6b4881fab829a72cba4f02f4fb52"
+    },
+    "validation/build-v3068-gates.log": {
+      "size": 1119,
+      "sha256": "9881733f82ff4a7b4cc6528439947acbda9c2d48ac90f891e14bff407696c38e"
+    },
+    "validation/build-v3068-tests.json": {
+      "size": 4238,
+      "sha256": "55fe057bb77056974a6acc275609da4a33c5aad474d6e2f39ba30815d43bb6d4"
+    },
+    "validation/final-reruns.json": {
+      "size": 470,
+      "sha256": "ed62788a2c2405db10da7be0d7142b00ab3db1a96fe709b9f2eccc37c7f01da2"
+    },
+    "validation/flash-capacity.json": {
+      "size": 4710,
+      "sha256": "2a811abf1b34c73f5c5cd0cd0f24201cb515892958d0e8f843e29a08e776fc2e"
+    },
+    "validation/source-sha256.json": {
+      "size": 13260,
+      "sha256": "ff9b64753cddd5e9308fd43ae212ceb8752ca1c3628ea4c1c2004d771793ba80"
+    },
+    "validation/stack-analysis.json": {
+      "size": 325796,
+      "sha256": "8d3126506e42b13948b361a1555a5178e09eab38fb67c78590e9a5bec26f7aa5"
+    },
+    "validation/stack-evidence.json": {
+      "size": 663,
+      "sha256": "6aa1e13c15cbe8566ab7ec99de02062bc25a5daab6c546add4c066050c1532c3"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+[
+  {
+    "test": "at_config_serial_f39",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-c",
+      "import importlib.util; from pathlib import Path; s=importlib.util.spec_from_file_location(\"regression\",'D:\\\\A300_406_tools\\\\A300_406\\\\A300-first\\\\tools\\\\tests\\\\test_at_config_serial_f39.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); m.ROOT=Path('D:\\\\A300_406_tools\\\\A300_406\\\\A300-first\\\\build\\\\soak-v3061-20260919\\\\source'); m.compiler=m.find_compiler=lambda: 'D:\\\\A300_406_tools\\\\A300_406\\\\tools\\\\w64devkit\\\\w64devkit\\\\bin\\\\gcc.exe'; raise SystemExit(m.main())"
+    ],
+    "exit_code": 3,
+    "expected_assertion": "config.anglerep_en==1",
+    "baseline": "build/soak-v3061-20260919/source"
+  },
+  {
+    "test": "flash_config_v3",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-c",
+      "import importlib.util; from pathlib import Path; s=importlib.util.spec_from_file_location(\"regression\",'D:\\\\A300_406_tools\\\\A300_406\\\\A300-first\\\\tools\\\\tests\\\\test_flash_config_v3.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); m.ROOT=Path('D:\\\\A300_406_tools\\\\A300_406\\\\A300-first\\\\build\\\\soak-v3061-20260919\\\\source'); m.compiler=m.find_compiler=lambda: 'D:\\\\A300_406_tools\\\\A300_406\\\\tools\\\\w64devkit\\\\w64devkit\\\\bin\\\\gcc.exe'; raise SystemExit(m.main())"
+    ],
+    "exit_code": 3,
+    "expected_assertion": "cfg_get()->anglerep_en == 1U",
+    "baseline": "build/soak-v3061-20260919/source"
+  }
+]

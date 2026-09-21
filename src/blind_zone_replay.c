@@ -3,6 +3,7 @@
 #include "config.h"
 #include "jt808.h"
 #include "log_platform.h"
+#include "tcp_manager.h"
 #include <stdbool.h>
 
 #define REPLAY_BODY_LIMIT       500U
@@ -19,6 +20,8 @@ typedef struct {
     uint32_t first_sequence;
     uint32_t sent_ms;
     uint8_t count;
+    uint8_t channel;
+    uint32_t generation;
 } replay_inflight_t;
 
 static replay_inflight_t s_inflight;
@@ -35,6 +38,8 @@ void blind_zone_replay_reset(void)
     s_inflight.first_sequence = 0U;
     s_inflight.sent_ms = 0U;
     s_inflight.count = 0U;
+    s_inflight.channel = 0U;
+    s_inflight.generation = 0U;
 }
 
 static void body_u16(uint16_t *position, uint16_t value)
@@ -52,6 +57,12 @@ void blind_zone_replay_process(void)
     uint8_t i;
 
     if (!blind_zone_ready()) return;
+    /* A surviving backup connection must not keep an old main transaction
+     * alive. Retain the records and start a new batch on an online session. */
+    if (s_inflight.active &&
+        (!jt808_channel_online(s_inflight.channel) ||
+         tcp_manager_session_generation(s_inflight.channel) != s_inflight.generation))
+        blind_zone_replay_reset();
     if (!jt808_is_online()) {
         s_inflight.active = false;
         s_inflight.acknowledged = false;
@@ -97,8 +108,11 @@ void blind_zone_replay_process(void)
             s_body[position++] = s_records[i].location[j];
     }
 
-    if (jt808_send_raw_tracked(MSG_BLIND_ZONE_BATCH, s_body, position, &serial) != 0)
+    s_inflight.channel = jt808_online_channel();
+    s_inflight.generation = tcp_manager_session_generation(s_inflight.channel);
+    if (jt808_send_raw_tracked(MSG_BLIND_ZONE_BATCH, s_body, position, &serial) != 0) {
         return;
+    }
     s_inflight.active = true;
     s_inflight.acknowledged = false;
     s_inflight.serial = serial;
@@ -107,11 +121,13 @@ void blind_zone_replay_process(void)
     s_inflight.sent_ms = TICK_MS();
 }
 
-void blind_zone_replay_on_general_ack(uint16_t reply_serial,
+void blind_zone_replay_on_general_ack(uint8_t channel, uint32_t generation,
+                                      uint16_t reply_serial,
                                       uint16_t reply_msg_id,
                                       uint8_t result)
 {
     if (!s_inflight.active || s_inflight.acknowledged ||
+        channel != s_inflight.channel || generation != s_inflight.generation ||
         reply_serial != s_inflight.serial ||
         reply_msg_id != MSG_BLIND_ZONE_BATCH || result != 0U)
         return;

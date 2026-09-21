@@ -1,0 +1,7 @@
+{
+  "command": [
+    "C:\\Python314\\python.exe",
+    "tools/tests/test_fota_active.py"
+  ],
+  "exit_code": 0
+}

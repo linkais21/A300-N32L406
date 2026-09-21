@@ -1,0 +1,9 @@
+{
+  "firmware_version_prefix": "T360-A300_406_20260918144414,V3.",
+  "firmware_revision": 59,
+  "firmware_version": "T360-A300_406_20260918144414,V3.059",
+  "firmware_version_counter": 3059,
+  "ota_device_model": "A300-406",
+  "jt808_terminal_model": "T360-A300",
+  "jt808_manufacturer_id": "70110"
+}

@@ -17,6 +17,7 @@ HARNESS = r'''
 #include "jt808.h"
 #include "flash_config.h"
 #include "gps.h"
+bool gps_report_filter_copy(const gps_data_t *raw, gps_data_t *out, uint32_t now) { (void)now; *out=*raw; return false; }
 #include "blind_zone.h"
 #include "tcp_manager.h"
 #include "jt808_session.h"
@@ -100,11 +101,16 @@ jt808_terminal_info_result_t jt808_terminal_info_encode(
     return JT808_TERMINAL_INFO_OK;
 }
 void blind_zone_replay_reset(void) {}
-void blind_zone_replay_on_general_ack(uint16_t s, uint16_t m, uint8_t r) { (void)s;(void)m;(void)r; }
-blind_zone_result_t blind_zone_append(const blind_zone_record_t *r) { (void)r; return BLIND_ZONE_BUSY; }
+void blind_zone_replay_on_general_ack(uint8_t c, uint32_t g, uint16_t s, uint16_t m, uint8_t r) { (void)c;(void)g;(void)s;(void)m;(void)r; }
+static blind_zone_result_t append_result = BLIND_ZONE_BUSY;
+static unsigned append_calls;
+static blind_zone_record_t appended;
+uint32_t blind_zone_allocate_event_id(void) { static uint32_t id; return ++id; }
+blind_zone_result_t blind_zone_append(const blind_zone_record_t *r) { assert(r->event_id); assert(r->length<=BLIND_ZONE_LOCATION_MAX); appended=*r; ++append_calls; return append_result; }
 int dbg_printf(const char *fmt, ...) { (void)fmt; return 0; }
 bool hw_acc_is_on(void) { return false; }
-bool gps_get_last_trusted(gps_data_t *out) { (void)out; return false; }
+static bool trusted_available;
+bool gps_get_last_trusted(gps_data_t *out) { if(!trusted_available)return false; *out=gps; out->valid=true; return true; }
 void log_platform_on_first_online(void) {}
 work_mode_state_t work_mode_state(void) { return work_state; }
 
@@ -139,6 +145,56 @@ static void auth_resp(uint8_t ch,uint16_t serial,uint8_t result) {
     uint8_t body[5]={(uint8_t)(serial>>8),(uint8_t)serial,0x01U,0x02U,result};inject(ch,0x8001U,body,5U);
 }
 static void query(uint8_t ch,uint16_t id) { inject(ch,id,0,0U); }
+
+/* Transport boundary fixture: parameter-query handler is stubbed above.
+ * Fill all 512 encoded RX bytes without escaping; distinct bodies/serials
+ * make sharing either channel's assembly storage observable via checksum. */
+static void maximum_rx_frame(uint8_t frame[514], uint8_t fill, uint8_t serial) {
+    uint8_t cs;
+    memset(frame, fill, 514U);
+    frame[0]=frame[513]=0x7eU;
+    frame[1]=0x81U;frame[2]=0x04U;frame[3]=1U;frame[4]=0xf3U;
+    memcpy(frame+5,(uint8_t[]){0x05,0x67,0x89,0x01,0x23,0x45},6U);
+    frame[11]=0x12U;frame[12]=serial;
+    cs=0U;
+    for(unsigned i=1U;i<512U;++i) cs^=frame[i];
+    if(cs==0x7dU || cs==0x7eU) { frame[13]^=0x80U;cs^=0x80U; }
+    frame[512]=cs;
+}
+
+static void test_rx_overlap(void) {
+    uint8_t main_frame[514], backup_frame[514];
+    unsigned before0=sends[0], before3=sends[3];
+    maximum_rx_frame(main_frame,0x11U,0x21U);
+    maximum_rx_frame(backup_frame,0x22U,0x31U);
+    jt808_on_recv(0U,main_frame,300U);
+    jt808_on_recv(3U,backup_frame,400U);
+    assert(sends[0]==before0 && sends[3]==before3);
+    jt808_on_recv(0U,main_frame+300U,214U);
+    assert(sends[0]==before0+1U && sends[3]==before3);
+    jt808_on_recv(3U,backup_frame+400U,114U);
+    assert(sends[0]==before0+1U && sends[3]==before3+1U);
+
+    /* Reconnect discards only the old primary half-frame. */
+    before0=sends[0];before3=sends[3];
+    jt808_on_recv(0U,main_frame,300U);
+    jt808_on_recv(3U,backup_frame,400U);
+    ++generation[0];
+    jt808_on_recv(0U,main_frame+300U,214U);
+    assert(sends[0]==before0);
+    jt808_on_recv(3U,backup_frame+400U,114U);
+    assert(sends[3]==before3+1U);
+    /* A new generation must authenticate before a fresh query is accepted. */
+    jt808_process();
+    {
+        uint8_t decoded[1024]; uint16_t serial, length;
+        assert(msg(0U,&serial,decoded,&length)==0x0102U);
+        auth_resp(0U,serial,0U);
+    }
+    before0=sends[0];
+    jt808_on_recv(0U,main_frame,514U);
+    assert(sends[0]==before0+1U);
+}
 
 int main(void) {
     jt808_terminal_t terminal;uint8_t d0[1024],d3[1024];uint16_t sn0,sn3,l0,l3;
@@ -182,6 +238,67 @@ int main(void) {
     gps.hdop=1.3f;gps.year=2026U;gps.month=9U;gps.day=1U;
     gps.hour=8U;gps.minute=2U;gps.second=17U;gps.valid=true;gps.last_update_ms=g_tick_ms;
     cfg.mileage_m=21600U;
+    /* Real work-mode entry point must persist offline, retaining the exact
+       event across busy/pending/error and advancing only after commit. */
+    open_ch[0]=open_ch[3]=false;
+    append_calls=0U;
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false,1U)!=0);
+    assert(append_calls==1U);
+    blind_zone_record_t first=appended;
+    assert(first.location[3]==ALM_OVERSPEED);
+    gps.lat+=0.01; ++g_tick_ms; gps.last_update_ms=g_tick_ms;
+    append_result=BLIND_ZONE_PENDING;
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false,1U)!=0);
+    assert(memcmp(&first,&appended,sizeof(first))==0);
+    append_result=BLIND_ZONE_IO_ERROR;
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false,1U)!=0);
+    assert(memcmp(&first,&appended,sizeof(first))==0);
+    append_result=BLIND_ZONE_OK;
+    open_ch[0]=open_ch[3]=true; /* reconnect while append is pending */
+    unsigned wire_before=sends[0]+sends[3];
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false,1U)==0);
+    assert(memcmp(&first,&appended,sizeof(first))==0);
+    assert(sends[0]+sends[3]==wire_before);
+    open_ch[0]=open_ch[3]=false;
+    /* A different report must not inherit completion of a deferred report. */
+    append_result=BLIND_ZONE_BUSY;
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false,1U)!=0);
+    uint32_t deferred_id=appended.event_id;
+    append_result=BLIND_ZONE_OK;
+    assert(jt808_send_location_work_mode(ALM_EMERGENCY_SOS,false,2U)==0);
+    assert(appended.event_id!=deferred_id);
+    assert(appended.location[3]==ALM_EMERGENCY_SOS);
+    /* Same alarm bits can belong to a new event, including ACC transitions. */
+    append_result=BLIND_ZONE_PENDING;
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false,3U)!=0);
+    first=appended;
+    jt808_set_logical_acc(true);
+    append_result=BLIND_ZONE_OK;
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false,4U)==0);
+    assert(appended.event_id!=first.event_id && (appended.location[7]&1U));
+    append_result=BLIND_ZONE_BUSY;
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false,5U)!=0);
+    first=appended;
+    append_result=BLIND_ZONE_OK;
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED|ALM_EMERGENCY_SOS,false,6U)==0);
+    assert(appended.event_id!=first.event_id);
+    assert(appended.location[3]==(ALM_OVERSPEED|ALM_EMERGENCY_SOS));
+    jt808_set_logical_acc(false);
+    assert(jt808_send_location_work_mode(0U,false,1U)==0);
+    assert(appended.event_id!=first.event_id);
+    gps.valid=false;
+    unsigned saved_calls=append_calls;
+    assert(jt808_send_location_work_mode(0U,false,1U)==JT808_SEND_NO_POSITION);
+    assert(append_calls==saved_calls);
+    trusted_available=true;
+    assert(jt808_send_location_work_mode(0U,true,1U)==0);
+    assert(append_calls==saved_calls+1U);
+    assert((appended.location[7]&2U)==0U); /* retained fix is not live */
+    trusted_available=false;
+    gps.valid=true;gps.lat-=0.01;
+    assert(jt808_send_location()==0); /* ordinary report has nonzero ID */
+    append_result=BLIND_ZONE_BUSY;
+    open_ch[0]=open_ch[3]=true;
     before0=sends[0];before3=sends[3];jt808_process();
     assert(sends[0]==before0+1U && sends[3]==before3+1U);
     assert(msg(0U,&sn0,d0,&l0)==0x0200U);assert(msg(3U,&sn3,d3,&l3)==0x0200U);
@@ -189,22 +306,22 @@ int main(void) {
     assert(memcmp(d3+16U,(uint8_t[]){0x00U,0x08U,0x00U,0x02U},4U)==0);
     jt808_trigger_alarm(ALM_OVERSPEED);
     fail_send[3]=true;before0=sends[0];before3=sends[3];
-    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false)!=0);
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false,1U)!=0);
     assert(sends[0]==before0+1U && sends[3]==before3+1U);
     assert(msg(0U,&sn0,d0,&l0)==0x0200U);
     assert(memcmp(d0+12U,(uint8_t[]){0x00U,0x00U,0x00U,0x02U},4U)==0);
     fail_send[3]=false;
-    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false)==0);
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false,1U)==0);
     assert(jt808_send_location_to(0U,&gps)==0);
     assert(msg(0U,&sn0,d0,&l0)==0x0200U);
     assert(memcmp(d0+12U,(uint8_t[]){0x00U,0x00U,0x00U,0x00U},4U)==0);
     before0=sends[0];before3=sends[3];g_tick_ms+=30001U;gps.last_update_ms=g_tick_ms;
     jt808_process();
     assert(sends[0]==before0 && sends[3]==before3);
-    assert(jt808_send_location_work_mode(0U,false)==0);
+    assert(jt808_send_location_work_mode(0U,false,1U)==0);
     assert(sends[0]==before0+1U && sends[3]==before3+1U);
     fail_send[0]=fail_send[3]=true;ambiguous_send[0]=ambiguous_send[3]=true;
-    assert(jt808_send_location_work_mode(0U,false)==0);
+    assert(jt808_send_location_work_mode(0U,false,1U)==0);
     fail_send[0]=fail_send[3]=false;ambiguous_send[0]=ambiguous_send[3]=false;
     assert(jt808_send_location_to(0U,&gps)==0);
     assert(msg(0U,&sn0,d0,&l0)==0x0200U);
@@ -222,6 +339,23 @@ int main(void) {
     assert(jt808_send_location_to(0U,&gps)==0);
     assert(msg(0U,&sn0,d0,&l0)==0x0200U);
     assert(memcmp(d0+12U+22U,(uint8_t[]){0x25U,0x12U,0x31U,0x11U,0x31U,0x15U},6U)==0);
+    {
+    gps_data_t saved_gps=gps;
+    /* All two-digit years and decimal transitions in the six BCD fields.
+     * The rollover cases above separately exercise timezone conversion. */
+    cfg.gmt_sign=1;cfg.gmt_hour=0;cfg.gmt_min=0;
+    for (unsigned value=0;value<100U;++value) {
+        gps.year=(uint16_t)(2000U+value);gps.month=(uint8_t)(value%12U+1U);
+        gps.day=(uint8_t)(value%28U+1U);gps.hour=(uint8_t)(value%24U);
+        gps.minute=(uint8_t)(value%60U);gps.second=(uint8_t)((value*7U)%60U);
+        const unsigned fields[]={value,gps.month,gps.day,gps.hour,gps.minute,gps.second};
+        assert(jt808_send_location_to(0U,&gps)==0);
+        assert(msg(0U,&sn0,d0,&l0)==0x0200U);
+        for (unsigned i=0;i<6U;++i)
+            assert(d0[34U+i]==(uint8_t)((fields[i]/10U)*16U+fields[i]%10U));
+    }
+    gps=saved_gps;cfg.gmt_sign=-1;cfg.gmt_hour=12U;cfg.gmt_min=59U;
+    }
     {
         const uint8_t *body=d0+12U;
         uint16_t p=28U;
@@ -357,6 +491,14 @@ int main(void) {
     assert((uint16_t)(((d0[2]&0x03U)<<8)|d0[3])==51U);
 
     assert(sizeof(jt808_session_t)*2U<128U);
+    open_ch[0]=open_ch[3]=true;
+    strcpy(cfg.auth_code,"MAIN-RAM03");strcpy(cfg.backup_auth_code,"BACK-RAM03");
+    jt808_init(&terminal);jt808_process();
+    assert(msg(0U,&sn0,d0,&l0)==0x0102U);
+    assert(msg(3U,&sn3,d3,&l3)==0x0102U);
+    auth_resp(0U,sn0,0U);auth_resp(3U,sn3,0U);
+    assert(jt808_online_mask()==0x09U);
+    test_rx_overlap();
     return 0;
 }
 '''
@@ -374,7 +516,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="jt808_dual_") as directory:
         t=Path(directory);h=t/"h.c";b=t/"h.exe";h.write_text(HARNESS,encoding="ascii")
         (t/"n32l40x.h").write_text("#ifndef N32L40X_H\n#define N32L40X_H\n#define GPIOA ((void*)0)\n#define GPIO_PIN_12 12U\n#define Bit_RESET 0\nint GPIO_ReadInputDataBit(void*,unsigned);\n#endif\n",encoding="ascii")
-        cmd=[cc,"-std=c99","-Wall","-Wextra","-Werror","-I",str(t),"-I",str(ROOT/"include"),str(h),str(ROOT/"src/jt808.c"),str(ROOT/"src/jt808_session.c"),str(ROOT/"src/terminal_identity.c"),"-lm","-o",str(b)]
+        cmd=[cc,"-std=c99","-Wall","-Wextra","-Werror","-I",str(t),"-I",str(ROOT/"include"),str(h),str(ROOT / "src/plate_encoding.c"), str(ROOT/"src/jt808.c"),str(ROOT/"src/jt808_session.c"),str(ROOT/"src/terminal_identity.c"),"-lm","-o",str(b)]
         x=subprocess.run(cmd,cwd=ROOT,capture_output=True,text=True)
         if x.returncode:print(x.stdout+x.stderr,end="");return x.returncode
         x=subprocess.run([str(b)],cwd=ROOT,capture_output=True,text=True)

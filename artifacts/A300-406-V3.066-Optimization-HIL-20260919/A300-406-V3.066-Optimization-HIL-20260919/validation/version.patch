@@ -1,0 +1,76 @@
+--- before/release_identity.json
++++ after/release_identity.json
+@@ -1,8 +1,8 @@
+ {
+-  "firmware_version_prefix": "T360-A300_406_20260919165648,V3.",
+-  "firmware_revision": 65,
+-  "firmware_version": "T360-A300_406_20260919165648,V3.065",
+-  "firmware_version_counter": 3065,
++  "firmware_version_prefix": "T360-A300_406_20260919194933,V3.",
++  "firmware_revision": 66,
++  "firmware_version": "T360-A300_406_20260919194933,V3.066",
++  "firmware_version_counter": 3066,
+   "ota_device_model": "A300-406",
+   "jt808_terminal_model": "T360-A300",
+   "jt808_manufacturer_id": "70110"
+--- before/include/build_version.h
++++ after/include/build_version.h
+@@ -2,9 +2,9 @@
+ #ifndef BUILD_VERSION_H
+ #define BUILD_VERSION_H
+ 
+-#define FW_BUILD_NUMBER  "202609191656"
+-#define FW_BUILD_DATE    "Sep 19 2026 - 16:56:48"
+-#define FW_FULL_VERSION  "T360-A300_406_20260919165648,V3.065"
+-#define FW_VERSION_COUNTER  3065UL
++#define FW_BUILD_NUMBER  "202609191949"
++#define FW_BUILD_DATE    "Sep 19 2026 - 19:49:33"
++#define FW_FULL_VERSION  "T360-A300_406_20260919194933,V3.066"
++#define FW_VERSION_COUNTER  3066UL
+ 
+ #endif /* BUILD_VERSION_H */
+--- before/include/config.h
++++ after/include/config.h
+@@ -4,7 +4,7 @@
+ #include "n32l40x.h"
+ 
+ /* ── Firmware version ─────────────────────────────────────────────────────── */
+-#define FW_VERSION_STR          "T360-A300_406_20260919165648,V3.065"
++#define FW_VERSION_STR          "T360-A300_406_20260919194933,V3.066"
+ #define FW_OTA_MODEL_STR        "A300-406"
+ #define FW_JT808_MODEL_STR      "T360-A300"
+ #define FW_MANUFACTURER_ID_STR  "70110"
+--- before/tools/release_guard.py
++++ after/tools/release_guard.py
+@@ -152,9 +152,9 @@
+     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
+ }
+ CANONICAL_IDENTITY_FILE_SHA256 = {
+-    # Reviewed: V3.065 identity/counter only; generated timestamps stay normalized.
+-    "include/config.h": "c61468368ea2d1307eaedc9efd8547be00aad652e0a304706ce88a1e1ecfde7e",
+-    "include/build_version.h": "1b6bba4aec64407cfce1335de69c5f8df95e2f0d349c2b203a106e8d17b67d0b",
++    # Reviewed: V3.066 identity/counter only; generated timestamps stay normalized.
++    "include/config.h": "d27a26e589a2b03201620be6d9bc006b9227af7f88e818ee840808dc13b26d47",
++    "include/build_version.h": "6d4b875142c8af9c47d8bedc0ce16b02a17fe09847a5509f99e41dbc0609438c",
+     "include/f39_reply.h": "4519c084bcc677d23c02aa4ac509f2390527f16111139f011052017f08c615ed",
+     # Reviewed: work-mode send adds a RAM-only retry ID; identity/wire unchanged.
+     "include/jt808.h": "b5e5bb725e1439b3d6c60c3d79cfb6484d6a2c3d5ecdb1df2c431d0aecafe02a",
+--- before/tools/tests/test_release_identity_contract.py
++++ after/tools/tests/test_release_identity_contract.py
+@@ -10,12 +10,12 @@
+ 
+ contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+ 
+-stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.065", contract["firmware_version"]).group(1)
++stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.066", contract["firmware_version"]).group(1)
+ assert contract == {
+     "firmware_version_prefix": f"T360-A300_406_{stamp},V3.",
+-    "firmware_revision": 65,
+-    "firmware_version": f"T360-A300_406_{stamp},V3.065",
+-    "firmware_version_counter": 3065,
++    "firmware_revision": 66,
++    "firmware_version": f"T360-A300_406_{stamp},V3.066",
++    "firmware_version_counter": 3066,
+     "ota_device_model": "A300-406",
+     "jt808_terminal_model": "T360-A300",
+     "jt808_manufacturer_id": "70110",

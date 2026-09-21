@@ -1,0 +1,658 @@
+--- before/gen_version.ps1
++++ after/gen_version.ps1
+@@ -1,5 +1,5 @@
+ # Auto-generate a locale-independent ASCII build version before compiling.
+-$NOW = Get-Date
++$NOW = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId((Get-Date), "China Standard Time")
+ $INVARIANT_CULTURE = [System.Globalization.CultureInfo]::InvariantCulture
+ $BUILD_DATE = $NOW.ToString("yyyyMMdd", $INVARIANT_CULTURE)
+ $BUILD_TIME = $NOW.ToString("HHmm", $INVARIANT_CULTURE)
+@@ -7,11 +7,20 @@
+ $ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
+ $IDENTITY = Get-Content -Raw -LiteralPath (Join-Path $ROOT "release_identity.json") | ConvertFrom-Json
+ $FW_VERSION = $IDENTITY.firmware_version
++$FW_VERSION = $FW_VERSION -replace '_\d{14}(?=,V)', $NOW.ToString("_yyyyMMddHHmmss", $INVARIANT_CULTURE)
++if ($FW_VERSION -notmatch '_\d{14},V\d+\.\d{3}$') {
++    throw "firmware_version must contain a 14-digit creation timestamp and version"
++}
+ $FW_VERSION_COUNTER = $IDENTITY.firmware_version_counter
+ if ((($FW_VERSION_COUNTER -isnot [Int32]) -and ($FW_VERSION_COUNTER -isnot [Int64])) -or
+     $FW_VERSION_COUNTER -lt 1 -or $FW_VERSION_COUNTER -gt [UInt32]::MaxValue) {
+     throw "release_identity.json firmware_version_counter must be a nonzero unsigned 32-bit integer"
+ }
++
++$IDENTITY.firmware_version = $FW_VERSION
++$PREFIX = $FW_VERSION.Substring(0, $FW_VERSION.LastIndexOf('.') + 1)
++$IDENTITY | Add-Member -NotePropertyName firmware_version_prefix -NotePropertyValue $PREFIX -Force
++$IDENTITY | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $ROOT "release_identity.json") -Encoding ASCII
+ 
+ $versionHeader = @"
+ /* Auto-generated build version - DO NOT EDIT */
+@@ -26,5 +35,11 @@
+ #endif /* BUILD_VERSION_H */
+ "@
+ 
++$CONFIG_PATH = Join-Path $ROOT "include/config.h"
++if (Test-Path -LiteralPath $CONFIG_PATH) {
++    $CONFIG_TEXT = [IO.File]::ReadAllText($CONFIG_PATH)
++    $CONFIG_TEXT = [regex]::Replace($CONFIG_TEXT, '(?m)^(#define\s+FW_VERSION_STR\s+)"[^"\r\n]+"', '${1}"' + $FW_VERSION + '"')
++    [IO.File]::WriteAllText($CONFIG_PATH, $CONFIG_TEXT, [Text.UTF8Encoding]::new($false))
++}
+ Set-Content -LiteralPath (Join-Path $ROOT "include/build_version.h") -Value $versionHeader -Encoding ASCII
+ Write-Host "Generated version: $FW_VERSION" -ForegroundColor Cyan
+--- before/Makefile
++++ after/Makefile
+@@ -40,6 +40,7 @@
+      src/log_platform.c    \
+      src/cfg_query.c        \
+     src/gps.c            \
++    src/gps_report_filter.c \
+     src/jt808.c          \
+     src/motion_corner.c  \
+     src/overspeed_policy.c \
+@@ -121,7 +122,8 @@
+ DEBUG_FLAGS ?= -g0
+ # Measured with ARM GCC 14.3.1: limit inlining at compile and LTO link time
+ # to reduce the App load image. Recheck size/stack evidence after toolchain changes.
+-SIZE_FLAGS := -Os -finline-limit=64
++# Do not retain single-use service scratch in the permanent main stack.
++SIZE_FLAGS := -Os -finline-limit=64 -fno-inline-functions-called-once
+ CFLAGS := $(CPU) $(SIZE_FLAGS) $(DEBUG_FLAGS) -Wall -Wextra -flto=1 -flto-partition=one -fstack-usage \
+            -ffunction-sections -fdata-sections \
+            $(INCLUDES) \
+@@ -163,6 +165,7 @@
+ # Read-only release gates must not mutate an already built candidate.
+ ifneq ($(filter all,$(or $(MAKECMDGOALS),all)),)
+ .PHONY: refresh-build-stamp
++$(OBJS): include/build_version.h
+ include/build_version.h: refresh-build-stamp
+ 
+ refresh-build-stamp:
+--- before/release_identity.json
++++ after/release_identity.json
+@@ -1,7 +1,7 @@
+ {
+-  "firmware_version_prefix": "T360-A300_406_20260823000000,V3.",
++  "firmware_version_prefix": "T360-A300_406_20260917193337,V3.",
+   "firmware_revision": 55,
+-  "firmware_version": "T360-A300_406_20260823000000,V3.055",
++  "firmware_version": "T360-A300_406_20260917193337,V3.055",
+   "firmware_version_counter": 3055,
+   "ota_device_model": "A300-406",
+   "jt808_terminal_model": "T360-A300",
+--- before/include/build_version.h
++++ after/include/build_version.h
+@@ -2,9 +2,9 @@
+ #ifndef BUILD_VERSION_H
+ #define BUILD_VERSION_H
+ 
+-#define FW_BUILD_NUMBER  "202609171900"
+-#define FW_BUILD_DATE    "Sep 17 2026 - 19:00:11"
+-#define FW_FULL_VERSION  "T360-A300_406_20260823000000,V3.055"
++#define FW_BUILD_NUMBER  "202609171933"
++#define FW_BUILD_DATE    "Sep 17 2026 - 19:33:37"
++#define FW_FULL_VERSION  "T360-A300_406_20260917193337,V3.055"
+ #define FW_VERSION_COUNTER  3055UL
+ 
+ #endif /* BUILD_VERSION_H */
+--- before/include/config.h
++++ after/include/config.h
+@@ -4,7 +4,7 @@
+ #include "n32l40x.h"
+ 
+ /* ── Firmware version ─────────────────────────────────────────────────────── */
+-#define FW_VERSION_STR          "T360-A300_406_20260823000000,V3.055"
++#define FW_VERSION_STR          "T360-A300_406_20260917193337,V3.055"
+ #define FW_OTA_MODEL_STR        "A300-406"
+ #define FW_JT808_MODEL_STR      "T360-A300"
+ #define FW_MANUFACTURER_ID_STR  "70110"
+--- before/include/ec800m.h
++++ after/include/ec800m.h
+@@ -68,6 +68,8 @@
+ const char *ec800m_state_name(ec800m_state_t state);
+ const char *ec800m_failure_name(ec800m_failure_t failure);
+ bool ec800m_is_ready(void);
++/* Current modem session has passed SIM identity query. */
++bool ec800m_sim_ready(void);
+ /* True only after both modem identity fields have passed exact validation. */
+ bool ec800m_identity_ready(void);
+ 
+--- before/include/gps.h
++++ after/include/gps.h
+@@ -50,6 +50,7 @@
+ /* Complete, recent GSV cycles only. False clears the output. */
+ bool gps_get_quality(gps_quality_t *out);
+ bool gps_quality_fix_fresh(void);
++bool gps_is_enabled(void);
+ void gps_enable(bool en);           /* power gate via GPS_EN */
+ void gps_process(void);             /* call from main loop  */
+ /* Bounded local diagnostic trace; at most 32 sentences within five seconds. */
+@@ -58,6 +59,8 @@
+ const gps_data_t *gps_get_data(void);
+ /* Preserve a fresh, valid fix before GNSS is powered down for STOP1. */
+ bool gps_capture_last_trusted(void);
++/* Capture an already selected live report; caller owns the snapshot. */
++bool gps_capture_last_trusted_snapshot(const gps_data_t *snapshot);
+ bool gps_get_last_trusted(gps_data_t *out);
+ /* Advance the retained fix timestamp across a STOP1 sleep interval while
+  * preserving its coordinates for historical 0x0200 reports. */
+--- before/src/ec800m.c
++++ after/src/ec800m.c
+@@ -2142,3 +2142,9 @@
+ 
+ /* Legacy no-op kept for API compatibility (RX now uses USART3 interrupt). */
+ void ec800m_dma_rx_complete(void) { }
++
++bool ec800m_sim_ready(void)
++{
++    return s_sim_identity_ready && s_state >= EC800M_STATE_NETWORK_REG &&
++           s_state <= EC800M_STATE_READY;
++}
+--- before/src/gps.c
++++ after/src/gps.c
+@@ -16,6 +16,8 @@
+ enum { NMEA_DROP_NONE, NMEA_DROP_QUEUE, NMEA_DROP_LENGTH };
+ static volatile uint8_t s_nmea_drop;
+ static gps_data_t s_gps = {0};
++static bool s_enabled = true;
++bool gps_is_enabled(void) { return s_enabled; }
+ /* Compact STOP1 snapshot.  Keep the retained copy below 32 bytes; the full
+  * gps_data_t contains doubles/floats and would exhaust the SRAM guard. */
+ typedef struct __attribute__((packed)) {
+@@ -444,6 +446,7 @@
+ 
+ void gps_enable(bool en)
+ {
++    s_enabled = en;
+     GPIO_InitType g;
+     GPIO_InitStruct(&g);
+     g.Pin            = GPS_EN_PIN;
+@@ -500,16 +503,22 @@
+ 
+ bool gps_capture_last_trusted(void)
+ {
++    return gps_capture_last_trusted_snapshot(&s_gps);
++}
++
++bool gps_capture_last_trusted_snapshot(const gps_data_t *snapshot)
++{
+     uint32_t now = TICK_MS();
+ 
+-    if (!s_gps.valid || s_gps.fix_quality == 0U ||
+-        (uint32_t)(now - s_gps.last_update_ms) > 5000U ||
+-        s_gps.lat < -90.0 || s_gps.lat > 90.0 ||
+-        s_gps.lon < -180.0 || s_gps.lon > 180.0 ||
+-        (s_gps.lat == 0.0 && s_gps.lon == 0.0) ||
+-        s_gps.year < 2000U || s_gps.month < 1U || s_gps.month > 12U ||
+-        s_gps.day < 1U || s_gps.day > 31U || s_gps.hour > 23U ||
+-        s_gps.minute > 59U || s_gps.second > 59U) {
++    if (snapshot == NULL) return false;
++    if (!snapshot->valid || snapshot->fix_quality == 0U ||
++        (uint32_t)(now - snapshot->last_update_ms) > 5000U ||
++        snapshot->lat < -90.0 || snapshot->lat > 90.0 ||
++        snapshot->lon < -180.0 || snapshot->lon > 180.0 ||
++        (snapshot->lat == 0.0 && snapshot->lon == 0.0) ||
++        snapshot->year < 2000U || snapshot->month < 1U || snapshot->month > 12U ||
++        snapshot->day < 1U || snapshot->day > 31U || snapshot->hour > 23U ||
++        snapshot->minute > 59U || snapshot->second > 59U) {
+         return false;
+     }
+     /* Never let the retained clock run backwards.  While asleep this snapshot's
+@@ -519,26 +528,26 @@
+      * stamp going 06:41:17 -> 06:41:06 when ACC bounce drove repeated sleep
+      * entries.  Position is still refreshed; only an older clock is refused. */
+     if (s_last_trusted_valid &&
+-        !retained_clock_is_newer(s_gps.year, s_gps.month, s_gps.day,
+-                                 s_gps.hour, s_gps.minute, s_gps.second)) {
++        !retained_clock_is_newer(snapshot->year, snapshot->month, snapshot->day,
++                                 snapshot->hour, snapshot->minute, snapshot->second)) {
+         return false;
+     }
+-    s_last_trusted.lat_e7 = (int32_t)(s_gps.lat * 10000000.0);
+-    s_last_trusted.lon_e7 = (int32_t)(s_gps.lon * 10000000.0);
+-    s_last_trusted.speed_x10 = s_gps.speed_kmh <= 0.0f ? 0U :
+-        s_gps.speed_kmh >= 6553.5f ? 65535U : (uint16_t)(s_gps.speed_kmh * 10.0f);
+-    s_last_trusted.heading_deg = s_gps.heading >= 359.0f ? 359U :
+-        s_gps.heading < 0.0f ? 0U : (uint16_t)s_gps.heading;
+-    s_last_trusted.altitude_m = s_gps.altitude_m <= -32768.0f ? -32768 :
+-        s_gps.altitude_m >= 32767.0f ? 32767 : (int16_t)s_gps.altitude_m;
+-    s_last_trusted.year = s_gps.year;
+-    s_last_trusted.month = s_gps.month;
+-    s_last_trusted.day = s_gps.day;
+-    s_last_trusted.hour = s_gps.hour;
+-    s_last_trusted.minute = s_gps.minute;
+-    s_last_trusted.second = s_gps.second;
+-    s_last_trusted.fix_quality = s_gps.fix_quality;
+-    s_last_trusted.satellites = s_gps.satellites;
++    s_last_trusted.lat_e7 = (int32_t)(snapshot->lat * 10000000.0);
++    s_last_trusted.lon_e7 = (int32_t)(snapshot->lon * 10000000.0);
++    s_last_trusted.speed_x10 = snapshot->speed_kmh <= 0.0f ? 0U :
++        snapshot->speed_kmh >= 6553.5f ? 65535U : (uint16_t)(snapshot->speed_kmh * 10.0f);
++    s_last_trusted.heading_deg = snapshot->heading >= 359.0f ? 359U :
++        snapshot->heading < 0.0f ? 0U : (uint16_t)snapshot->heading;
++    s_last_trusted.altitude_m = snapshot->altitude_m <= -32768.0f ? -32768 :
++        snapshot->altitude_m >= 32767.0f ? 32767 : (int16_t)snapshot->altitude_m;
++    s_last_trusted.year = snapshot->year;
++    s_last_trusted.month = snapshot->month;
++    s_last_trusted.day = snapshot->day;
++    s_last_trusted.hour = snapshot->hour;
++    s_last_trusted.minute = snapshot->minute;
++    s_last_trusted.second = snapshot->second;
++    s_last_trusted.fix_quality = snapshot->fix_quality;
++    s_last_trusted.satellites = snapshot->satellites;
+     s_last_trusted_valid = true;
+     return true;
+ }
+--- before/src/jt808.c
++++ after/src/jt808.c
+@@ -5,6 +5,7 @@
+ #include "geofence.h"
+ #include "ec800m.h"
+ #include "gps.h"
++#include "gps_report_filter.h"
+ #include "adc_monitor.h"
+ #include "config.h"
+ #include "hw_init.h"
+@@ -932,7 +933,9 @@
+     if (!jt808_channel_online(channel) ||
+         !jt808_location_snapshot_valid(snapshot, TICK_MS()))
+         return -1;
+-    length = encode_location_online(snapshot, body, s_alarm_flags, false);
++    gps_data_t report;
++    gps_report_filter_copy(snapshot, &report, TICK_MS());
++    length = encode_location_online(&report, body, s_alarm_flags, false);
+     if (!frame_init(&frame)) return -1;
+     if (!build_header(&frame, MSG_LOCATION_REPORT, length)) { frame_release(); return -1; }
+     frame_bytes(&frame, body, length);
+@@ -947,7 +950,8 @@
+     uint8_t online_body[JT808_LOCATION_ONLINE_MAX];
+     frame_t f;
+     int result = -1;
+-    gps_data_t snapshot = *gps_get_data();
++    gps_data_t snapshot;
++    gps_report_filter_copy(gps_get_data(), &snapshot, TICK_MS());
+     bool sent = false;
+ 
+     if (s_append_pending) {
+@@ -1054,7 +1058,7 @@
+             return JT808_SEND_NO_POSITION;
+         }
+     } else {
+-        snapshot = *gps_get_data();
++        gps_report_filter_copy(gps_get_data(), &snapshot, TICK_MS());
+         if (!jt808_location_snapshot_valid(&snapshot, TICK_MS())) {
+             /* A live fix is not available yet -- GNSS was powered down in
+              * STOP1 and has not re-acquired.  Dropping the frame here used to
+@@ -1121,7 +1125,8 @@
+ {
+     uint8_t body[JT808_LOCATION_ONLINE_MAX];
+     frame_t frame;
+-    gps_data_t snapshot = *gps_get_data();
++    gps_data_t snapshot;
++    gps_report_filter_copy(gps_get_data(), &snapshot, TICK_MS());
+     uint16_t length;
+     if (!jt808_is_online()) return -1;
+     if (!jt808_location_snapshot_valid(&snapshot, TICK_MS())) return -1;
+@@ -1140,7 +1145,8 @@
+      * live-GNSS timer continue turns its stale-fix fallback into a continuous
+      * stream of duplicate historical locations. */
+     if (work_mode_state() == WORK_MODE_STATIONARY_SLEEP) {
+-        gps_data_t first_snapshot = *gps_get_data();
++        gps_data_t first_snapshot;
++        gps_report_filter_copy(gps_get_data(), &first_snapshot, now);
+         uint8_t first_index;
+         bool first_sent = false;
+ 
+@@ -1160,7 +1166,8 @@
+         return;
+     }
+ 
+-    gps_data_t snapshot = *gps_get_data();
++    gps_data_t snapshot;
++    gps_report_filter_copy(gps_get_data(), &snapshot, TICK_MS());
+     bool valid = jt808_location_snapshot_valid(&snapshot, now);
+     uint8_t index;
+     bool first_fix_sent = false;
+--- before/src/log_platform.c
++++ after/src/log_platform.c
+@@ -9,6 +9,9 @@
+ #include "config.h"
+ #include "debug_uart.h"
+ #include "build_version.h"
++#include "adc_monitor.h"
++#include "n32l40x_rtc.h"
++#include <math.h>
+ #include <stdio.h>
+ #include <string.h>
+ 
+@@ -20,25 +23,36 @@
+     char imei[16];
+     char iccid[24];
+     int length;
++    RTC_TimeType rtc;
++    RTC_GetTime(RTC_FORMAT_BIN, &rtc);
++    if (rtc.Hours > 23U || rtc.Minutes > 59U || rtc.Seconds > 59U)
++        rtc.Hours = rtc.Minutes = rtc.Seconds = 0U;
++    float volts = adc_monitor_valid() ? adc_get_car_voltage() : 0.0f;
++    unsigned voltage_x10 = !isfinite(volts) || volts <= 0.0f ? 0U :
++        volts >= 6553.5f ? 65535U : (unsigned)(volts * 10.0f + 0.5f);
+     if (!buf || cap < 64U) return 0U;
+     ec800m_get_imei(imei, sizeof imei);
+     if (!imei[0]) return 0U;
+     ec800m_get_iccid(iccid, sizeof iccid);
+-    bool sim_ok = strlen(iccid) == 20U && strspn(iccid, "0123456789") == 20U;
++    size_t iccid_len = strlen(iccid);
++    bool sim_ok = (iccid_len == 19U || iccid_len == 20U) &&
++                  strspn(iccid, "0123456789ABCDEFabcdef") == iccid_len;
+     if (!sim_ok) iccid[0] = '\0';
+     /* 6F: SIM status, ICCID, IMSI, OTA ID. Unknown fields stay empty. */
+     length = snprintf((char *)buf, cap,
+-        "<LOG*%s*U:%s,%u*R:000000*C:%d*3G:%s*3I:%u*3L:00*3T:1*3W:%s:%u*3X:%s:%u*4C:0*4F:1*62:%u,%u,%u,%u*6F:%u,%s,,*74:%u>",
++        "<LOG*%s*U:%s,%u*R:%02u%02u%02u*C:%d*3G:%s*3I:%u*3L:00*3T:1*3W:%s:%u*3X:%s:%u*4C:%u*4F:1*62:%u,%u,%u,%u*6F:%u,%s,,*74:%u>",
+         imei, cfg_get()->server_ip, (unsigned)cfg_get()->server_port,
++        (unsigned)rtc.Hours, (unsigned)rtc.Minutes, (unsigned)rtc.Seconds,
+         ec800m_get_csq(), FW_FULL_VERSION,
+         gps_is_valid() ? 1U : 0U,
+         cfg_get()->server_ip, (unsigned)cfg_get()->server_port,
+         cfg_get()->backup_ip, (unsigned)cfg_get()->backup_port,
++        voltage_x10,
+         (unsigned)cfg_get()->report_moving_s,
+         (unsigned)cfg_get()->report_stopped_s,
+         (unsigned)cfg_get()->heartbeat_s,
+         (unsigned)cfg_get()->heartbeat_s,
+-        sim_ok ? 0U : 1U, iccid,
++        sim_ok && ec800m_sim_ready() ? 0U : 1U, iccid,
+         (unsigned)jt808_is_online());
+     return length > 0 && length < cap ? (uint16_t)length : 0U;
+ }
+--- before/src/main.c
++++ after/src/main.c
+@@ -4,6 +4,7 @@
+ #include "debug_uart.h"
+ #include "ec800m.h"
+ #include "gps.h"
++#include "gps_report_filter.h"
+ #include "jt808.h"
+ #include "at_config.h"
+ #include "adc_monitor.h"
+@@ -601,15 +602,20 @@
+ #endif
+             gps_enable(true);
+             gps_resume_after_wake();
++            gps_report_filter_reset();
+             break;
+-        case WORK_ACTION_GPS_OFF:
+-            (void)gps_capture_last_trusted();
++        case WORK_ACTION_GPS_OFF: {
++            gps_data_t retained;
++            gps_report_filter_copy(gps_get_data(), &retained, TICK_MS());
++            (void)gps_capture_last_trusted_snapshot(&retained);
+ #if !A300_STOP1_SLEEP
+             s_shallow_retained_clock_s = now_s;
+             s_shallow_retained_clock_active = true;
+ #endif
+             gps_enable(false);
++            gps_report_filter_reset();
+             break;
++        }
+         case WORK_ACTION_REPORT_ENTRY:
+         case WORK_ACTION_REPORT_LOCATION:
+         case WORK_ACTION_REPORT_ALARM: {
+@@ -819,6 +825,7 @@
+     i2c_accel_init();
+     s_vibration_rearm_fault = !i2c_accel_get_diag()->int1_rearm_ok;
+     gps_init();
++    gps_report_filter_init();
+ 
+     /* ── 7. 4G modem ─────────────────────────────────────────────────────── */
+     ec800m_init();
+@@ -860,6 +867,7 @@
+         ec800m_process();
+         reset_diag_mark_phase(RESET_DIAG_PHASE_GPS);
+         gps_process();
++        gps_report_filter_process(TICK_MS());
+         reset_diag_mark_phase(RESET_DIAG_PHASE_MILEAGE);
+         mileage_update();
+         mileage_persist_process(TICK_MS());
+--- before/tools/build_dev_release.py
++++ after/tools/build_dev_release.py
+@@ -92,12 +92,24 @@
+     version=identity["firmware_version"]
+     counter=identity["firmware_version_counter"]
+     now=datetime.now(ZoneInfo("Asia/Shanghai"))
++    version = re.sub(r"_\d{14}(?=,V)", now.strftime("_%Y%m%d%H%M%S"), version)
++    if not re.search(r"_\d{14},V", version):
++        raise ValueError("firmware_version must contain a 14-digit creation timestamp")
++    identity["firmware_version"] = version
++    identity["firmware_version_prefix"] = version.rsplit(".", 1)[0] + "."
++    (ROOT/"release_identity.json").write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
+     content=("/* Auto-generated build version - DO NOT EDIT */\n"
+              "#ifndef BUILD_VERSION_H\n#define BUILD_VERSION_H\n\n"
+              f'#define FW_BUILD_NUMBER  "{now:%Y%m%d%H%M}"\n'
+              f'#define FW_BUILD_DATE    "{now:%b %d %Y - %H:%M:%S}"\n'
+              f'#define FW_FULL_VERSION  "{version}"\n'
+              f'#define FW_VERSION_COUNTER  {counter}UL\n\n#endif /* BUILD_VERSION_H */\n')
++    config = ROOT/"include"/"config.h"
++    if config.exists():
++        text = config.read_text(encoding="utf-8")
++        text = re.sub(r'(?m)^(#define\s+FW_VERSION_STR\s+)"[^"\n]+"',
++                      lambda m: m[1] + '"' + version + '"', text)
++        config.write_text(text, encoding="utf-8")
+     path.write_text(content,encoding="ascii")
+ 
+ def main()->int:
+@@ -122,6 +134,7 @@
+     run([sys.executable,"tools/tests/test_platform_trust_anchor.py"])
+     refresh_build_version()
+     run([str(MAKE),"-B","all","TOOLCHAIN_DIR=" + str(TOOLCHAIN)])
++    identity=release_identity()  # Make refreshed the creation stamp used by this image.
+     # The same final-LTO/RAM gate as interactive builds, before packaging.
+     run([str(MAKE),"release-gate","TOOLCHAIN_DIR=" + str(TOOLCHAIN)])
+     run([str(MAKE),"-C","bootloader","-B","all","TOOLCHAIN_ROOT=" + str(TOOLCHAIN)])
+--- before/tools/release_guard.py
++++ after/tools/release_guard.py
+@@ -144,7 +144,7 @@
+ }
+ CANONICAL_CONSUMER_SHA256 = {
+     # Reviewed: startup display uses compile timestamp, semantic version stays canonical.
+-    "src/main.c": "a5ad3e8d0eaba8cc46bcd2e9587c6b22f601f800faf748ef503f1bc5aa96738a",
++    "src/main.c": "0354af17e7b059c6d44926211684aa70b2e3e8a88434530dfd87a467cc4a13e5",
+     "src/jt808.c": "d38583fc4d2e47eab4fe184b90a21205dc6e2606266a20e824bff69321871586",
+     "src/jt808_params.c": "2f4c5cefaa334a336896ec36cc7feaaa56ae1b56dcaef44e4b33a33008dc7a11",
+     "src/jt808_terminal_info.c": "0ce1a9cf82880062c0d84b88bc50ae047c59ec7f6e5e17ea59266b50a0499d49",
+@@ -152,8 +152,8 @@
+     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
+ }
+ CANONICAL_IDENTITY_FILE_SHA256 = {
+-    "include/config.h": "964cdf439d1000bb156029ec7bcc5589f894d408a41faa1b0cc5329ab4cf0f04",
+-    "include/build_version.h": "5353c216ec56d3acd3b440bfceef4c16cedb432c98f4f29b52846a412675acd1",
++    "include/config.h": "80c40773c7ade339c7a54486a8d28dcd089b2d6eb35049dad816131fd55e2e3f",
++    "include/build_version.h": "dc0305297578a8ac77acda164034bde3a769fa151d85c6e4ec3269185aa6a5b6",
+     "include/f39_reply.h": "2ed804411ce7eaac804a739764824fd0c4e73342744ea63240a728a2e46f8715",
+     # Reviewed addition: 0x8106 ID and existing plate encoder declaration only.
+     "include/jt808.h": "eca870809ad6a9749b364754e2a5aa2c73c919cb3df3b3a0fe3394ea9e76f786",
+@@ -359,6 +359,10 @@
+ def canonical_file_digest(text: str, relative: str) -> str:
+     """Hash reviewed dependency text, ignoring generator-only volatile fields."""
+     normalized = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
++    if relative in ("include/build_version.h", "include/config.h"):
++        normalized = re.sub(
++            r'(?m)^(\s*#define\s+FW_(?:FULL_VERSION|VERSION_STR)\s+"[^"\r\n]*_)\d{14}(,V)',
++            r'\g<1><creation-time>\2', normalized)
+     if relative == "include/build_version.h":
+         normalized = re.sub(
+             r"\A/\* Auto-generated build version - DO NOT EDIT \*/\n",
+--- before/tools/tests/test_acc_stop1_contract.py
++++ after/tools/tests/test_acc_stop1_contract.py
+@@ -132,7 +132,7 @@
+     gps_on_case = switch_case(work_process, "WORK_ACTION_GPS_ON")
+     if not re.search(r"gps_enable\s*\(\s*false\s*\)", gps_off_case):
+         raise AssertionError("STOP1 path lacks GNSS disable hook")
+-    capture = gps_off_case.find("gps_capture_last_trusted()")
++    capture = gps_off_case.find("gps_capture_last_trusted_snapshot(&retained)")
+     disable = gps_off_case.find("gps_enable(false)")
+     if capture < 0 or disable < 0 or capture > disable:
+         raise AssertionError("STOP1 must retain a trusted snapshot before GNSS disable")
+--- before/tools/tests/test_blind_zone_replay.py
++++ after/tools/tests/test_blind_zone_replay.py
+@@ -31,6 +31,7 @@
+ #include "ec800m.h"
+ #include "flash_config.h"
+ #include "gps.h"
++bool gps_report_filter_copy(const gps_data_t *raw, gps_data_t *out, uint32_t now) { (void)now; *out=*raw; return false; }
+ #include "jt808.h"
+ #include "jt808_terminal_info.h"
+ #include "work_mode.h"
+--- before/tools/tests/test_build_version_refresh.py
++++ after/tools/tests/test_build_version_refresh.py
+@@ -47,11 +47,18 @@
+         '#endif /* BUILD_VERSION_H */\n',
+         encoding="ascii",
+     )
++    config = include / "config.h"
++    config.write_text('#define FW_VERSION_STR "T360-A300_406_20260823000000,V3.000"\n', encoding="utf-8")
+     module.ROOT = temporary_root
+     module.refresh_build_version()
+     generated = header.read_text(encoding="ascii")
+     assert re.search(r'FW_BUILD_NUMBER\s+"\d{12}"', generated), 'compile stamp must be YYYYMMDDHHMM'
+-    assert 'FW_FULL_VERSION  "T360-A300_406_20260823000000,V3.001"' in generated
++    stamp = re.search(r'FW_FULL_VERSION\s+"T360-A300_406_(\d{14}),V3.001"', generated).group(1)
++    assert stamp != '20260823000000', 'full version must use creation time'
++    assert stamp[:12] in generated
++    assert f'T360-A300_406_{stamp},V3.001' in config.read_text()
++    saved = json.loads((temporary_root / 'release_identity.json').read_text())
++    assert saved['firmware_version'] == f'T360-A300_406_{stamp},V3.001'
+     assert '#define FW_VERSION_COUNTER  3001UL' in generated
+     assert generated.endswith("#endif /* BUILD_VERSION_H */\n")
+ 
+@@ -89,6 +96,11 @@
+     assert result.returncode == 0, result.stdout + result.stderr
+     generated = header.read_text(encoding="ascii")
+     assert '#define FW_VERSION_COUNTER  3001UL' in generated
++    stamp = re.search(r'FW_FULL_VERSION\s+"T360-A300_406_(\d{14}),V3.001"', generated).group(1)
++    assert stamp != '20260823000000'
++    assert f'T360-A300_406_{stamp},V3.001' in config.read_text()
++    saved = json.loads((temporary_root / 'release_identity.json').read_text())
++    assert saved['firmware_version'] == f'T360-A300_406_{stamp},V3.001'
+ 
+     for invalid_counter in (True, False):
+         (temporary_root / "release_identity.json").write_text(
+--- before/tools/tests/test_gps_ntp_apply.py
++++ after/tools/tests/test_gps_ntp_apply.py
+@@ -122,6 +122,15 @@
+     assert(gps_get_last_trusted(&out));
+     assert(out.year==2026U);
+ 
++    gps_data_t selected = *gps_get_data();
++    selected.year=2099; selected.month=1; selected.day=1;
++    selected.lat=10.0; selected.lon=20.0; selected.speed_kmh=0; selected.heading=0;
++    selected.valid=true; selected.fix_quality=1; selected.last_update_ms=g_tick_ms;
++    assert(!gps_capture_last_trusted_snapshot(NULL));
++    assert(gps_capture_last_trusted_snapshot(&selected));
++    assert(gps_get_last_trusted(&out));
++    assert(out.lat==10.0 && out.lon==20.0 && out.speed_kmh==0);
++    assert(gps_get_data()->lat != 10.0);
+     puts("test_gps_ntp_apply: C harness PASS");
+     return 0;
+ }
+--- before/tools/tests/test_jt808_dual_session.py
++++ after/tools/tests/test_jt808_dual_session.py
+@@ -17,6 +17,7 @@
+ #include "jt808.h"
+ #include "flash_config.h"
+ #include "gps.h"
++bool gps_report_filter_copy(const gps_data_t *raw, gps_data_t *out, uint32_t now) { (void)now; *out=*raw; return false; }
+ #include "blind_zone.h"
+ #include "tcp_manager.h"
+ #include "jt808_session.h"
+--- before/tools/tests/test_jt808_first_location.py
++++ after/tools/tests/test_jt808_first_location.py
+@@ -10,6 +10,7 @@
+ 
+ LOCATION_MAIN = r'''
+ int main(void) {
++    (void)test_rx_overlap; /* shared harness also supplies an independent RX test */
+     jt808_terminal_t terminal;
+     uint8_t decoded[1024];
+     uint16_t sn0, sn3, length, ignored;
+@@ -52,6 +53,7 @@
+     assert(sends[0]==before0+2U && sends[3]==before3+1U);
+ 
+     before0=sends[0];before3=sends[3];
++    trusted_available=true;
+     assert(jt808_send_location_work_mode(0U,true)==0);
+     assert(sends[0]==before0+1U && sends[3]==before3+1U);
+     assert(msg(3U,&ignored,decoded,&length)==0x0200U);
+--- before/tools/tests/test_log_platform_wire.py
++++ after/tools/tests/test_log_platform_wire.py
+@@ -5,6 +5,7 @@
+ HARNESS=r'''
+ #include <assert.h>
+ #include <string.h>
++#include "n32l40x_rtc.h"
+ #include "log_platform.c"
+ volatile uint32_t g_tick_ms;
+ static device_config_t cfg;
+@@ -13,6 +14,12 @@
+ static size_t capacity=sizeof workspace;
+ static unsigned sends, releases;
+ static bool online=true, locked;
++static bool sim_ready=true, adc_valid=true;
++static float voltage=12.36f;
++bool ec800m_sim_ready(void){return sim_ready;}
++bool adc_monitor_valid(void){return adc_valid;}
++float adc_get_car_voltage(void){return voltage;}
++void RTC_GetTime(uint32_t format, RTC_TimeType *t){(void)format;t->Hours=9;t->Minutes=8;t->Seconds=7;}
+ device_config_t *cfg_get(void){return &cfg;}
+ void ec800m_get_imei(char *b,uint8_t n){snprintf(b,n,"123456789012345");}
+ void ec800m_get_iccid(char *b,uint8_t n){snprintf(b,n,"%s",iccid);}
+@@ -30,7 +37,15 @@
+ int main(void){
+  uint8_t b[1024]; unsigned n=build_log(b,sizeof b);
+  assert(n>0 && n<sizeof b);
++ assert(strstr((char*)b,"*R:090807*")!=NULL);
++ assert(strstr((char*)b,"*4C:124*")!=NULL);
++ sim_ready=false;build_log(b,sizeof b);assert(strstr((char*)b,"*6F:1,89860000000000000001,,*")!=NULL);
++ sim_ready=true;adc_valid=false;build_log(b,sizeof b);assert(strstr((char*)b,"*4C:0*")!=NULL);
++ adc_valid=true;voltage=-1;build_log(b,sizeof b);assert(strstr((char*)b,"*4C:0*")!=NULL);
++ voltage=12.36f;build_log(b,sizeof b);
+  assert(strstr((char*)b,"*6F:0,89860000000000000001,,*")!=NULL);
++ iccid="898600A0000000000001";n=build_log(b,sizeof b);assert(n>0);
++ assert(strstr((char*)b,"*6F:0,898600A0000000000001,,*")!=NULL);
+  iccid="";n=build_log(b,sizeof b);assert(n>0);
+  assert(strstr((char*)b,"*6F:1,,,*")!=NULL);
+  iccid="bad*ID";n=build_log(b,sizeof b);assert(n>0);
+@@ -47,6 +62,7 @@
+ '''
+ with tempfile.TemporaryDirectory() as d:
+     d=Path(d);(d/'n32l40x.h').write_text('#include <stdint.h>\n',encoding='ascii')
++    (d/'n32l40x_rtc.h').write_text('#pragma once\n#include <stdint.h>\ntypedef struct {uint8_t Hours,Minutes,Seconds;} RTC_TimeType;\n#define RTC_FORMAT_BIN 0\nvoid RTC_GetTime(uint32_t,RTC_TimeType *);\n',encoding='ascii')
+     (d/'h.c').write_text(HARNESS,encoding='ascii')
+     cc=shutil.which('gcc');assert cc
+     subprocess.run([cc,'-std=c99','-Wall','-Wextra','-Werror','-I',str(d),'-I',str(ROOT/'include'),'-I',str(ROOT/'src'),str(d/'h.c'),'-o',str(d/'h.exe')],check=True)
+--- before/tools/tests/test_release_identity_contract.py
++++ after/tools/tests/test_release_identity_contract.py
+@@ -10,10 +10,11 @@
+ 
+ contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+ 
++stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.055", contract["firmware_version"]).group(1)
+ assert contract == {
+-    "firmware_version_prefix": "T360-A300_406_20260823000000,V3.",
++    "firmware_version_prefix": f"T360-A300_406_{stamp},V3.",
+     "firmware_revision": 55,
+-    "firmware_version": "T360-A300_406_20260823000000,V3.055",
++    "firmware_version": f"T360-A300_406_{stamp},V3.055",
+     "firmware_version_counter": 3055,
+     "ota_device_model": "A300-406",
+     "jt808_terminal_model": "T360-A300",
+--- before/tools/tests/test_terminal_identity.py
++++ after/tools/tests/test_terminal_identity.py
+@@ -313,6 +313,7 @@
+ #include "blind_zone.h"
+ #include "flash_config.h"
+ #include "gps.h"
++bool gps_report_filter_copy(const gps_data_t *raw, gps_data_t *out, uint32_t now) { (void)now; *out=*raw; return false; }
+ #include "tcp_manager.h"
+ #include "work_mode.h"
+ #include <assert.h>

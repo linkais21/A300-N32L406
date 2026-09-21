@@ -1,0 +1,43 @@
+[
+  {
+    "name": "boot-ram",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build-v3055-20260917\\source\\bootloader\\build\\bootloader.map"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "libc-parser",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/libc_parser_guard.py",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build-v3055-20260917\\a300_firmware.map"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "release-identity",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/release_guard.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "tester-firmware-contract",
+    "command": [
+      "powershell",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "D:\\A300_406_tools\\A300_406\\\u751f\u4ea7\u6d4b\u8bd5\u5de5\u5177\\A300ProductionTester\\tools\\test_protocol.ps1",
+      "-FirmwareReplies",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build-v3055-20260917\\production-wire.txt"
+    ],
+    "exit_code": 0
+  }
+]

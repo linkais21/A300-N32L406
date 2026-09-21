@@ -1,0 +1,565 @@
+{
+  "modules": [
+    {
+      "file": "accel_vibration_filter.c",
+      "definitions_scanned": 3
+    },
+    {
+      "file": "adc_monitor.c",
+      "definitions_scanned": 8
+    },
+    {
+      "file": "agnss_huada.c",
+      "definitions_scanned": 14
+    },
+    {
+      "file": "agnss_manager.c",
+      "definitions_scanned": 10
+    },
+    {
+      "file": "agnss_online.c",
+      "definitions_scanned": 11
+    },
+    {
+      "file": "agnss_storage.c",
+      "definitions_scanned": 15
+    },
+    {
+      "file": "agnss_stream_workspace.c",
+      "definitions_scanned": 3
+    },
+    {
+      "file": "at_config.c",
+      "definitions_scanned": 33
+    },
+    {
+      "file": "blind_zone.c",
+      "definitions_scanned": 79
+    },
+    {
+      "file": "blind_zone_replay.c",
+      "definitions_scanned": 5
+    },
+    {
+      "file": "cfg_query.c",
+      "definitions_scanned": 10
+    },
+    {
+      "file": "crc32.c",
+      "definitions_scanned": 2
+    },
+    {
+      "file": "debug_uart.c",
+      "definitions_scanned": 10
+    },
+    {
+      "file": "ec800m.c",
+      "definitions_scanned": 106
+    },
+    {
+      "file": "ec800m_at_response.c",
+      "definitions_scanned": 7
+    },
+    {
+      "file": "ext_flash_store.c",
+      "definitions_scanned": 9
+    },
+    {
+      "file": "f39_command.c",
+      "definitions_scanned": 8
+    },
+    {
+      "file": "f39_config_adapter.c",
+      "definitions_scanned": 21
+    },
+    {
+      "file": "f39_reply.c",
+      "definitions_scanned": 17
+    },
+    {
+      "file": "firmware_signature.c",
+      "definitions_scanned": 1
+    },
+    {
+      "file": "flash_config.c",
+      "definitions_scanned": 25
+    },
+    {
+      "file": "fota.c",
+      "definitions_scanned": 50
+    },
+    {
+      "file": "fota_check_parser.c",
+      "definitions_scanned": 11
+    },
+    {
+      "file": "fota_checkpoint.c",
+      "definitions_scanned": 15
+    },
+    {
+      "file": "geofence.c",
+      "definitions_scanned": 1
+    },
+    {
+      "file": "gps.c",
+      "definitions_scanned": 40
+    },
+    {
+      "file": "gps_report_filter.c",
+      "definitions_scanned": 19
+    },
+    {
+      "file": "huada_ack.c",
+      "definitions_scanned": 6
+    },
+    {
+      "file": "hw_init.c",
+      "definitions_scanned": 18
+    },
+    {
+      "file": "i2c_accel.c",
+      "definitions_scanned": 18
+    },
+    {
+      "file": "jt808.c",
+      "definitions_scanned": 72
+    },
+    {
+      "file": "jt808_params.c",
+      "definitions_scanned": 8
+    },
+    {
+      "file": "jt808_session.c",
+      "definitions_scanned": 12
+    },
+    {
+      "file": "jt808_terminal_info.c",
+      "definitions_scanned": 4
+    },
+    {
+      "file": "log_platform.c",
+      "definitions_scanned": 6
+    },
+    {
+      "file": "main.c",
+      "definitions_scanned": 21
+    },
+    {
+      "file": "mileage.c",
+      "definitions_scanned": 7
+    },
+    {
+      "file": "motion_corner.c",
+      "definitions_scanned": 12
+    },
+    {
+      "file": "overspeed_policy.c",
+      "definitions_scanned": 2
+    },
+    {
+      "file": "peripherals.c",
+      "definitions_scanned": 7
+    },
+    {
+      "file": "plate_encoding.c",
+      "definitions_scanned": 2
+    },
+    {
+      "file": "power_mgr.c",
+      "definitions_scanned": 9
+    },
+    {
+      "file": "production_test.c",
+      "definitions_scanned": 2
+    },
+    {
+      "file": "ram_watermark.c",
+      "definitions_scanned": 1
+    },
+    {
+      "file": "relay.c",
+      "definitions_scanned": 10
+    },
+    {
+      "file": "reset_diag.c",
+      "definitions_scanned": 18
+    },
+    {
+      "file": "service_workspace.c",
+      "definitions_scanned": 3
+    },
+    {
+      "file": "sha256.c",
+      "definitions_scanned": 5
+    },
+    {
+      "file": "sms_command.c",
+      "definitions_scanned": 9
+    },
+    {
+      "file": "sms_ingress.c",
+      "definitions_scanned": 3
+    },
+    {
+      "file": "spi_flash.c",
+      "definitions_scanned": 19
+    },
+    {
+      "file": "status_led.c",
+      "definitions_scanned": 1
+    },
+    {
+      "file": "syscalls.c",
+      "definitions_scanned": 9
+    },
+    {
+      "file": "tcp_manager.c",
+      "definitions_scanned": 17
+    },
+    {
+      "file": "terminal_identity.c",
+      "definitions_scanned": 8
+    },
+    {
+      "file": "work_mode.c",
+      "definitions_scanned": 37
+    },
+    {
+      "file": "work_mode_sleep.c",
+      "definitions_scanned": 27
+    }
+  ],
+  "single_reference_definitions": [
+    {
+      "file": "agnss_storage.c",
+      "symbol": "agnss_storage_begin",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "agnss_storage.c",
+      "symbol": "agnss_storage_write",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "agnss_storage.c",
+      "symbol": "agnss_storage_commit",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "agnss_storage.c",
+      "symbol": "agnss_storage_read",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "at_config.c",
+      "symbol": "at_config_bind_f39",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "at_config.c",
+      "symbol": "at_config_receive_sms",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "blind_zone.c",
+      "symbol": "blind_zone_get_diagnostics",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "blind_zone.c",
+      "symbol": "blind_zone_test_set_diagnostics",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "blind_zone.c",
+      "symbol": "blind_zone_test_recovery_state",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "blind_zone.c",
+      "symbol": "blind_zone_test_set_state",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "blind_zone.c",
+      "symbol": "blind_zone_test_begin_reconcile",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "blind_zone.c",
+      "symbol": "blind_zone_test_start_repair",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "cfg_query.c",
+      "symbol": "cfg_query_take_result",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "debug_uart.c",
+      "symbol": "dbg_uart_bytes_sent",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "debug_uart.c",
+      "symbol": "dbg_uart_wait_cycles",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "debug_uart.c",
+      "symbol": "dbg_uart_stats_reset",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "DMA_Channel5_IRQHandler",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_set_state",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_set_imei",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_set_iccid",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_set_tcp_open",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_parse_iccid",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_iccid_retry_should_advance",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_identity_retry",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_identity_ready",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_init_step",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_iccid_refresh_required",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_parse_qntp",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_shift_minutes",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_qntp_time_to_utc",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m.c",
+      "symbol": "ec800m_test_wait_for_ok",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "ec800m_at_response.c",
+      "symbol": "ec800m_parse_qird_response",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "flash_config.c",
+      "symbol": "cfg_set_device_api_key_result",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "flash_config.c",
+      "symbol": "cfg_set_heartbeat",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "fota.c",
+      "symbol": "fota_start",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "fota.c",
+      "symbol": "fota_cancel",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "fota.c",
+      "symbol": "fota_get_progress",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "fota.c",
+      "symbol": "fota_get_status",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "fota_checkpoint.c",
+      "symbol": "fota_authorization_load",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "gps.c",
+      "symbol": "UART4_IRQHandler",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "gps.c",
+      "symbol": "gps_capture_last_trusted",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "hw_init.c",
+      "symbol": "SysTick_Handler",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "jt808.c",
+      "symbol": "jt808_send_register_to",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "main.c",
+      "symbol": "TIM8_UP_IRQHandler",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "main.c",
+      "symbol": "USART1_IRQHandler",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "main.c",
+      "symbol": "main",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "motion_corner.c",
+      "symbol": "motion_corner_reset",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "motion_corner.c",
+      "symbol": "motion_corner_state",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "power_mgr.c",
+      "symbol": "EXTI0_IRQHandler",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "power_mgr.c",
+      "symbol": "EXTI2_IRQHandler",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "power_mgr.c",
+      "symbol": "EXTI15_10_IRQHandler",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "sms_command.c",
+      "symbol": "sms_queue_reset",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "spi_flash.c",
+      "symbol": "spi_flash_read_id",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "syscalls.c",
+      "symbol": "_write",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "syscalls.c",
+      "symbol": "_read",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "syscalls.c",
+      "symbol": "_close",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "syscalls.c",
+      "symbol": "_fstat",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "syscalls.c",
+      "symbol": "_isatty",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "syscalls.c",
+      "symbol": "_lseek",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "syscalls.c",
+      "symbol": "_getpid",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "syscalls.c",
+      "symbol": "_kill",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "tcp_manager.c",
+      "symbol": "tcp_manager_is_online",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "tcp_manager.c",
+      "symbol": "tcp_manager_active_ch",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "work_mode_sleep.c",
+      "symbol": "work_mode_sleep_ready",
+      "reason": "host test or diagnostic contract"
+    },
+    {
+      "file": "work_mode_sleep.c",
+      "symbol": "RTCAlarm_IRQHandler",
+      "reason": "startup/IRQ/libc ABI"
+    },
+    {
+      "file": "work_mode_sleep.c",
+      "symbol": "EXTI3_IRQHandler",
+      "reason": "startup/IRQ/libc ABI"
+    }
+  ],
+  "note": "Identifier scan is a review aid, not proof of dead code; compiler/link and call sites reviewed separately."
+}

@@ -1,0 +1,1 @@
+{"command": ["python", "tools/tests/test_flash_gate_build.py"], "exit_code": 0}

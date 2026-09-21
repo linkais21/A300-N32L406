@@ -1,12 +1,17 @@
 #include "jt808.h"
+#include "plate_encoding.h"
 #include "jt808_params.h"
 #include "geofence.h"
 #include "ec800m.h"
 #include "gps.h"
+#include "gps_report_filter.h"
 #include "adc_monitor.h"
 #include "config.h"
 #include "hw_init.h"
 #include "debug_uart.h"
+#ifndef DBG_PRINTF_VERBOSE
+#define DBG_PRINTF_VERBOSE(...) dbg_printf(__VA_ARGS__)
+#endif
 #include "relay.h"
 #include "flash_config.h"
 #include "tcp_manager.h"
@@ -21,6 +26,7 @@
 #include "work_mode.h"
 #include "work_mode_sleep.h"
 #include "at_config.h"
+#include "fota.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -48,27 +54,16 @@ static motion_corner_event_t __attribute__((unused)) corner_step_safe(motion_cor
 #define ESC_FLAG   0x7D
 #define JT808_LOCATION_ONLINE_MAX 67U
 
-/* ── Persistent config (simple RAM copy; real device would use flash) ──────── */
+/* Session-local values. Endpoints and report timing are owned by cfg/tcp_manager
+ * and work_mode; retaining write-only copies here wastes static RAM. */
 typedef struct {
-    char     server_ip[64];
-    uint16_t server_port;
-    char     backup_ip[64];
-    uint16_t backup_port;
     uint16_t heartbeat_s;
-    uint16_t report_moving_s;
-    uint16_t report_stopped_s;
     char     auth_code[32];
     char     backup_auth_code[32];
 } jt808_config_t;
 
 static jt808_config_t s_cfg = {
-    .server_ip        = "0.0.0.0",
-    .server_port      = JT808_DEFAULT_PORT,
-    .backup_ip        = "0.0.0.0",
-    .backup_port      = JT808_DEFAULT_PORT,
     .heartbeat_s      = HEARTBEAT_DEFAULT_S,
-    .report_moving_s  = 30,
-    .report_stopped_s = 180,
 };
 
 static jt808_terminal_t s_term;
@@ -133,7 +128,10 @@ static uint32_t s_last_location_ms  = 0;
 static uint32_t s_alarm_flags       = 0;
 static bool s_logical_acc_override_set;
 static bool s_logical_acc_on;
-static bool s_append_pending;
+/* One retained append slot shared by ordinary (1) and work-mode (2) reports.
+ * Only its owner may acknowledge completion to its scheduler. */
+static uint8_t s_append_pending;
+static uint32_t s_append_report_id;
 static blind_zone_record_t s_append_pending_record;
 static motion_corner_ctx_t s_motion_corner;
 static bool s_corner_append_pending;
@@ -161,8 +159,9 @@ static uint32_t jt808_monotonic_s(void)
 typedef struct {
     uint8_t raw[JT808_RX_MAX];
     uint16_t pos;
-    uint32_t generation;
+    /* Use the gap before generation for this flag (RAM-only state). */
     bool in_frame;
+    uint32_t generation;
 } rx_assembly_t;
 static rx_assembly_t s_rx[2];
 
@@ -212,11 +211,6 @@ static bool frame_init(frame_t *f)
 static void frame_release(void) { s_tx_workspace.busy = false; }
 static void frame_u8(frame_t *f, uint8_t v)   { s_tx_workspace.data[f->pos++] = v; }
 static void frame_u16(frame_t *f, uint16_t v) { frame_u8(f, v>>8); frame_u8(f, v&0xFF); }
-static void __attribute__((unused)) frame_u32(frame_t *f, uint32_t v)
-{
-    frame_u8(f, (v>>24)&0xFF); frame_u8(f, (v>>16)&0xFF);
-    frame_u8(f, (v>>8)&0xFF);  frame_u8(f, v&0xFF);
-}
 static void frame_bytes(frame_t *f, const uint8_t *d, uint16_t n)
 {
     memcpy(&s_tx_workspace.data[f->pos], d, n); f->pos += n;
@@ -305,6 +299,7 @@ static int send_frame_broadcast(frame_t *body, bool require_all)
     if (jt808_channel_online(TCP_CH_MAIN)) {
         attempted = true;
         if (send_frame_channel_delivered(body, TCP_CH_MAIN) == 0)
+        if (rc == 0)
             delivered = true;
         else
             failed = true;
@@ -312,18 +307,16 @@ static int send_frame_broadcast(frame_t *body, bool require_all)
     if (jt808_channel_online(TCP_CH_BACKUP)) {
         attempted = true;
         if (send_frame_channel_delivered(body, TCP_CH_BACKUP) == 0)
+        if (rc == 0)
             delivered = true;
         else
             failed = true;
     }
     frame_release();
-    if (!attempted || !delivered || (require_all && failed)) return -1;
+    if (!attempted || !delivered || (require_all && failed)) {
+        return -1;
+    }
     return 0;
-}
-
-static int send_frame(frame_t *body)
-{
-    return send_frame_broadcast(body, false);
 }
 
 static int finish_frame_channel(frame_t *body, uint8_t channel)
@@ -379,9 +372,9 @@ static int send_frame_channel(frame_t *body, uint8_t channel)
 
 static int send_frame_channel_delivered(frame_t *body, uint8_t channel)
 {
-    int result = send_frame_channel(body, channel);
-    if (result == 0 || ec800m_tcp_send_was_ambiguous()) return 0;
-    return result;
+    /* Missing SEND OK is not delivery evidence. Retain uncertain locations
+     * for replay; occasional duplicates are preferable to losing a point. */
+    return send_frame_channel(body, channel);
 }
 
 /* Build standard JT808 header */
@@ -453,71 +446,44 @@ static void identity_valid(void)
 }
 
 /* ── Message builders ─────────────────────────────────────────────────────── */
-static uint8_t encode_plate_gbk(const char *plate, uint8_t *out,
-                                uint8_t capacity)
-{
-    typedef struct {
-        uint8_t utf8[3];
-        uint8_t gbk[2];
-    } province_encoding_t;
-    static const province_encoding_t provinces[] = {
-        {{0xe4U, 0xbaU, 0xacU}, {0xbeU, 0xa9U}},
-        {{0xe6U, 0xb5U, 0x99U}, {0xd5U, 0xe3U}},
-        {{0xe6U, 0xb4U, 0xa5U}, {0xbdU, 0xf2U}},
-        {{0xe7U, 0x9aU, 0x96U}, {0xcdU, 0xeeU}},
-        {{0xe6U, 0xb2U, 0xaaU}, {0xbbU, 0xa6U}},
-        {{0xe9U, 0x97U, 0xbdU}, {0xc3U, 0xf6U}},
-        {{0xe6U, 0xb8U, 0x9dU}, {0xd3U, 0xe5U}},
-        {{0xe8U, 0xb5U, 0xa3U}, {0xb8U, 0xd3U}},
-        {{0xe6U, 0xb8U, 0xafU}, {0xb8U, 0xdbU}},
-        {{0xe9U, 0xb2U, 0x81U}, {0xc2U, 0xb3U}},
-        {{0xe6U, 0xbeU, 0xb3U}, {0xb0U, 0xc4U}},
-        {{0xe8U, 0xb1U, 0xabU}, {0xd4U, 0xa5U}},
-        {{0xe8U, 0x92U, 0x99U}, {0xc3U, 0xc9U}},
-        {{0xe9U, 0x84U, 0x82U}, {0xb6U, 0xf5U}},
-        {{0xe6U, 0x96U, 0xb0U}, {0xd0U, 0xc2U}},
-        {{0xe6U, 0xb9U, 0x98U}, {0xcfU, 0xe6U}},
-        {{0xe5U, 0xaeU, 0x81U}, {0xc4U, 0xfeU}},
-        {{0xe7U, 0xb2U, 0xa4U}, {0xd4U, 0xc1U}},
-        {{0xe8U, 0x97U, 0x8fU}, {0xb2U, 0xd8U}},
-        {{0xe7U, 0x90U, 0xbcU}, {0xc7U, 0xedU}},
-        {{0xe6U, 0xa1U, 0x82U}, {0xb9U, 0xf0U}},
-        {{0xe5U, 0xb7U, 0x9dU}, {0xb4U, 0xa8U}},
-        {{0xe8U, 0x9cU, 0x80U}, {0xcaU, 0xf1U}},
-        {{0xe5U, 0x86U, 0x80U}, {0xbcU, 0xbdU}},
-        {{0xe8U, 0xb4U, 0xb5U}, {0xb9U, 0xf3U}},
-        {{0xe9U, 0xbbU, 0x94U}, {0xc7U, 0xadU}},
-        {{0xe6U, 0x99U, 0x8bU}, {0xbdU, 0xfaU}},
-        {{0xe4U, 0xbaU, 0x91U}, {0xd4U, 0xc6U}},
-        {{0xe6U, 0xbbU, 0x87U}, {0xb5U, 0xe1U}},
-        {{0xe8U, 0xbeU, 0xbdU}, {0xc1U, 0xc9U}},
-        {{0xe9U, 0x99U, 0x95U}, {0xc9U, 0xc2U}},
-        {{0xe7U, 0xa7U, 0xa6U}, {0xc7U, 0xd8U}},
-        {{0xe5U, 0x90U, 0x89U}, {0xbcU, 0xaaU}},
-        {{0xe7U, 0x94U, 0x98U}, {0xb8U, 0xcaU}},
-        {{0xe9U, 0x99U, 0x87U}, {0xc2U, 0xa4U}},
-        {{0xe9U, 0xbbU, 0x91U}, {0xbaU, 0xdaU}},
-        {{0xe9U, 0x9dU, 0x92U}, {0xc7U, 0xe0U}},
-        {{0xe8U, 0x8bU, 0x8fU}, {0xcbU, 0xd5U}},
-        {{0xe5U, 0x8fU, 0xb0U}, {0xccU, 0xa8U}},
-    };
-    size_t length = strlen(plate);
-    size_t i;
+uint8_t jt808_encode_plate_gbk(const char *plate, uint8_t *out, uint8_t capacity)
+{ return plate_encode_gbk(plate, out, capacity); }
 
-    if (length >= 3U) {
-        for (i = 0U; i < sizeof(provinces) / sizeof(provinces[0]); ++i) {
-            if (memcmp(plate, provinces[i].utf8, 3U) == 0) {
-                size_t suffix_length = length - 3U;
-                if (suffix_length + 2U > capacity) return 0U;
-                memcpy(out, provinces[i].gbk, 2U);
-                memcpy(out + 2U, plate + 3U, suffix_length);
-                return (uint8_t)(suffix_length + 2U);
-            }
+/* Share registration/authentication delivery bookkeeping, including late ACKs. */
+static void note_session_send(uint8_t channel, jt808_session_t *session,
+                              jt808_session_action_t action, int result)
+{
+    if (result == 0) {
+        if (session != NULL) {
+            jt808_session_mark_sent(session, action,
+                                    s_msg_sn, TICK_MS());
+            dbg_printf("[808] ch%u %s sent attempt=%u\r\n",
+                       channel, jt808_action_name(action),
+                       (unsigned)session->attempts);
+        }
+    } else if (session != NULL) {
+        if (ec800m_tcp_send_was_ambiguous()) {
+            /* "SEND OK" wasn't observed, but the frame was already on
+             * the wire, so book it as sent (not failed): pending_serial
+             * tracks the serial that actually went out, so a late
+             * genuine ACK is still accepted, and the normal retry/
+             * backoff timers still apply if it truly was lost (see the
+             * ambiguous-timeout precedent in the main dispatch loop). */
+            jt808_session_mark_sent(session, action,
+                                    s_msg_sn, TICK_MS());
+            dbg_printf("[808] ch%u %s ambiguous attempt=%u\r\n",
+                       channel, jt808_action_name(action),
+                       (unsigned)session->attempts);
+        } else {
+            jt808_session_mark_send_failed(session,
+                                           action,
+                                           TICK_MS());
+            dbg_printf("[808] ch%u %s fail attempt=%u backoff=%lu\r\n",
+                       channel, jt808_action_name(action),
+                       (unsigned)session->attempts,
+                       (unsigned long)session->backoff_until_ms);
         }
     }
-    if (length > capacity) return 0U;
-    memcpy(out, plate, length);
-    return (uint8_t)length;
 }
 
 static int send_register_current_identity(uint8_t channel)
@@ -525,7 +491,7 @@ static int send_register_current_identity(uint8_t channel)
     /* body: province(2)+city(2)+manuf(5)+model(20)+term_id(7)+color(1)+plate
      * 808-2013 Table 7: 终端型号 BYTE[20], 终端ID BYTE[7] */
     uint8_t model[20] = {0}, tid[7] = {0}, plate[CFG_PLATE_LEN] = {0};
-    uint8_t plate_length = encode_plate_gbk(s_term.plate_no, plate,
+    uint8_t plate_length = jt808_encode_plate_gbk(s_term.plate_no, plate,
                                              sizeof(plate));
     memcpy(model, s_term.terminal_model,
            strlen(s_term.terminal_model) < 20 ? strlen(s_term.terminal_model) : 20);
@@ -534,12 +500,13 @@ static int send_register_current_identity(uint8_t channel)
 
     uint8_t body[128];
     uint16_t pos = 0;
-    body[pos++] = 0x00; body[pos++] = 0x00;   /* province: platform default */
-    body[pos++] = 0x00; body[pos++] = 0x00;   /* city: platform default */
+    const device_config_t *config = cfg_get();
+    memcpy(&body[pos], config->province_be, 2U); pos += 2U;
+    memcpy(&body[pos], config->city_be, 2U); pos += 2U;
     memcpy(&body[pos], s_term.manufacturer_id, 5); pos += 5;
     memcpy(&body[pos], model, 20);             pos += 20;
     memcpy(&body[pos], tid,   7);              pos += 7;
-    body[pos++] = s_term.color;
+    body[pos++] = config->plate_color_valid == 1U ? config->plate_color : s_term.color;
     memcpy(&body[pos], plate, plate_length); pos += plate_length;
 
     frame_t f;
@@ -562,37 +529,7 @@ static int send_register_current_identity(uint8_t channel)
     {
         jt808_session_t *session = session_for_channel(channel);
         int result = finish_frame_channel(&f, channel);
-        if (result == 0) {
-            if (session != NULL) {
-                jt808_session_mark_sent(session, JT808_ACTION_REGISTER,
-                                        s_msg_sn, TICK_MS());
-                dbg_printf("[808] ch%u %s sent attempt=%u\r\n",
-                           channel, jt808_action_name(JT808_ACTION_REGISTER),
-                           (unsigned)session->attempts);
-            }
-        } else if (session != NULL) {
-            if (ec800m_tcp_send_was_ambiguous()) {
-                /* "SEND OK" wasn't observed, but the frame was already on
-                 * the wire, so book it as sent (not failed): pending_serial
-                 * tracks the serial that actually went out, so a late
-                 * genuine ACK is still accepted, and the normal retry/
-                 * backoff timers still apply if it truly was lost (see the
-                 * ambiguous-timeout precedent in the main dispatch loop). */
-                jt808_session_mark_sent(session, JT808_ACTION_REGISTER,
-                                        s_msg_sn, TICK_MS());
-                dbg_printf("[808] ch%u %s ambiguous attempt=%u\r\n",
-                           channel, jt808_action_name(JT808_ACTION_REGISTER),
-                           (unsigned)session->attempts);
-            } else {
-                jt808_session_mark_send_failed(session,
-                                               JT808_ACTION_REGISTER,
-                                               TICK_MS());
-                dbg_printf("[808] ch%u %s fail attempt=%u backoff=%lu\r\n",
-                           channel, jt808_action_name(JT808_ACTION_REGISTER),
-                           (unsigned)session->attempts,
-                           (unsigned long)session->backoff_until_ms);
-            }
-        }
+        note_session_send(channel, session, JT808_ACTION_REGISTER, result);
         return result;
     }
 }
@@ -635,33 +572,27 @@ int jt808_send_auth_to(uint8_t channel, const char *code)
     }
     frame_bytes(&f, (const uint8_t *)code, len);
     result = finish_frame_channel(&f, channel);
-    if (result == 0) {
-        jt808_session_mark_sent(session, JT808_ACTION_AUTH, s_msg_sn, TICK_MS());
-        dbg_printf("[808] ch%u %s sent attempt=%u\r\n",
-                   channel, jt808_action_name(JT808_ACTION_AUTH),
-                   (unsigned)session->attempts);
-    } else if (ec800m_tcp_send_was_ambiguous()) {
-        /* Bytes were already on the wire; book it as sent so pending_serial
-         * tracks this attempt and a late genuine ACK is still accepted. */
-        jt808_session_mark_sent(session, JT808_ACTION_AUTH, s_msg_sn, TICK_MS());
-        dbg_printf("[808] ch%u %s ambiguous attempt=%u\r\n",
-                   channel, jt808_action_name(JT808_ACTION_AUTH),
-                   (unsigned)session->attempts);
-    } else {
-        jt808_session_mark_send_failed(session, JT808_ACTION_AUTH, TICK_MS());
-        dbg_printf("[808] ch%u %s fail attempt=%u backoff=%lu\r\n",
-                   channel, jt808_action_name(JT808_ACTION_AUTH),
-                   (unsigned)session->attempts,
-                   (unsigned long)session->backoff_until_ms);
-    }
+    note_session_send(channel, session, JT808_ACTION_AUTH, result);
     return result;
 }
 
 int jt808_send_heartbeat(void)
 {
-    frame_t f; if (!frame_init(&f)) return -1;
-    if (!build_header(&f, MSG_HEARTBEAT, 0)) { frame_release(); return -1; }
-    return send_frame(&f);
+    bool sent = false;
+    for (unsigned i = 0U; i < 2U; ++i) {
+        jt808_session_t *session = &s_sessions[i];
+        frame_t f;
+        if (session->state != JT808_SESSION_ONLINE || session->pending_valid) continue;
+        if (!frame_init(&f)) continue;
+        if (!build_header(&f, MSG_HEARTBEAT, 0)) { frame_release(); continue; }
+        /* Online sessions reuse the completed authentication transaction.
+         * Arm before sending, since modem waits may service incoming data. */
+        session->pending_serial = s_msg_sn;
+        session->sent_ms = jt808_monotonic_s();
+        session->pending_valid = true;
+        if (finish_frame_channel(&f, session->channel) == 0) sent = true;
+    }
+    return sent ? 0 : -1;
 }
 
 void jt808_set_logical_acc(bool on)
@@ -676,22 +607,16 @@ bool jt808_get_logical_acc(void)
     return hw_acc_is_on();
 }
 
+static uint8_t jt808_days_in_month(uint16_t year, uint8_t month);
+
 bool jt808_location_snapshot_valid(const gps_data_t *gps, uint32_t now)
 {
-    static const uint8_t days_in_month[13] =
-        { 0U,31U,28U,31U,30U,31U,30U,31U,31U,30U,31U,30U,31U };
-    uint8_t maximum_day;
-    bool leap;
-
     if (gps == NULL || !gps->valid || gps->fix_quality == 0U ||
         (uint32_t)(now - gps->last_update_ms) > 5000U ||
         gps->year < 2000U || gps->month < 1U || gps->month > 12U ||
         gps->hour > 23U || gps->minute > 59U || gps->second > 59U)
         return false;
-    leap = (gps->year % 4U == 0U && gps->year % 100U != 0U) ||
-           (gps->year % 400U == 0U);
-    maximum_day = gps->month == 2U && leap ? 29U : days_in_month[gps->month];
-    return gps->day >= 1U && gps->day <= maximum_day;
+    return gps->day >= 1U && gps->day <= jt808_days_in_month(gps->year, gps->month);
 }
 
 void jt808_reset_endpoint_auth(uint8_t channel_mask)
@@ -708,7 +633,8 @@ void jt808_reset_endpoint_auth(uint8_t channel_mask)
     }
 }
 
-static uint8_t jt808_days_in_month(uint16_t year, uint8_t month)
+/* Share the date calculation across validation and timezone rollover. */
+static __attribute__((noinline)) uint8_t jt808_days_in_month(uint16_t year, uint8_t month)
 {
     static const uint8_t days[13] =
         { 0U,31U,28U,31U,30U,31U,30U,31U,31U,30U,31U,30U,31U };
@@ -774,20 +700,24 @@ static void jt808_apply_timezone(const gps_data_t *gps,
     *minute = (uint8_t)(local_minutes % 60);
 }
 
-static uint16_t encode_location_compact(const gps_data_t *g,
-                                        uint8_t body[BLIND_ZONE_LOCATION_MAX])
+/* Encode the shared 28-byte body once. Online callers previously generated
+ * compact extensions and alarm/ACC flags only to overwrite them immediately. */
+static uint16_t encode_location_base(const gps_data_t *g, uint8_t *body,
+                                     uint32_t alm, bool acc_on,
+                                     bool historical_position)
 {
-    uint32_t alm = s_alarm_flags;
     uint32_t status = 0;
 
     /* PA12 M_ACC_IN is inverted by Q9: low collector means external ACC ON. */
-    if (hw_acc_is_on())
+    if (acc_on)
         status |= LOC_FLAG_ACC_ON;
     /* 808-2013: bit2=1表示西经(默认东经不置位), bit3=1表示南纬(默认北纬不置位) */
     if (g->lon < 0) status |= LOC_FLAG_WEST_LON;
     if (g->lat < 0) status |= LOC_FLAG_SOUTH_LAT;
-    if (g->fix_quality > 0)
-        status |= LOC_FLAG_GPS_FIXED | LOC_FLAG_BEIDOU_FIXED;
+    if (g->fix_quality > 0) {
+        status |= LOC_FLAG_BEIDOU_FIXED;
+        if (!historical_position) status |= LOC_FLAG_GPS_FIXED;
+    }
 
     uint32_t lat_deg = (uint32_t)(fabs(g->lat) * 1e6);
     uint32_t lon_deg = (uint32_t)(fabs(g->lon) * 1e6);
@@ -809,14 +739,27 @@ static uint16_t encode_location_compact(const gps_data_t *g,
     uint8_t t_day   = g->day;
     uint8_t t_month = g->month;
     uint16_t t_year = g->year;
-    jt808_apply_timezone(g, &t_year, &t_month, &t_day, &t_hour, &t_minute);
+    t_hour = t_minute = 0U;
+    if (g->year >= 2000U && g->month >= 1U && g->month <= 12U && g->day >= 1U)
+        jt808_apply_timezone(g, &t_year, &t_month, &t_day, &t_hour, &t_minute);
     /* BCD time: YY MM DD HH mm SS in the configured local timezone. */
-    body[p++] = (uint8_t)(((t_year%100)/10)<<4 | (t_year%10));
-    body[p++] = (uint8_t)((t_month/10)<<4  | (t_month%10));
-    body[p++] = (uint8_t)((t_day/10)<<4    | (t_day%10));
-    body[p++] = (uint8_t)((t_hour/10)<<4   | (t_hour%10));
-    body[p++] = (uint8_t)((t_minute/10)<<4 | (t_minute%10));
-    body[p++] = (uint8_t)((g->second/10)<<4 | (g->second%10));
+    body[p++] = (uint8_t)(t_year % 100U);
+    body[p++] = t_month;
+    body[p++] = t_day;
+    body[p++] = t_hour;
+    body[p++] = t_minute;
+    body[p++] = g->second;
+    for (unsigned i = p - 6U; i < p; ++i) {
+        uint8_t value = body[i];
+        body[i] = (uint8_t)(((value / 10U) << 4) | (value % 10U));
+    }
+    return p;
+}
+
+static uint16_t encode_location_compact(const gps_data_t *g,
+                                        uint8_t body[BLIND_ZONE_LOCATION_MAX])
+{
+    uint16_t p = encode_location_base(g, body, s_alarm_flags, hw_acc_is_on(), false);
     /* 附加信息项 0x31: GNSS定位卫星数(1字节) */
     body[p++] = 0x31;
     body[p++] = 0x01;
@@ -829,7 +772,8 @@ static uint16_t encode_location_compact(const gps_data_t *g,
     return p;
 }
 
-static uint16_t clamp_voltage_units(float volts, float units_per_volt)
+/* Keep one conversion body for both voltage scales / coordinate axes. */
+static __attribute__((noinline)) uint16_t clamp_voltage_units(float volts, float units_per_volt)
 {
     float scaled;
     if (!(volts > 0.0f)) return 0U;
@@ -838,7 +782,7 @@ static uint16_t clamp_voltage_units(float volts, float units_per_volt)
     return (uint16_t)scaled;
 }
 
-static uint16_t coordinate_extension_tail(double coordinate)
+static __attribute__((noinline)) uint16_t coordinate_extension_tail(double coordinate)
 {
     double magnitude = fabs(coordinate);
     uint32_t degrees;
@@ -862,11 +806,8 @@ static uint16_t encode_location_online(const gps_data_t *g,
                                        uint32_t alarm_bits,
                                        bool historical_position)
 {
-    uint16_t p = encode_location_compact(g, body);
-    uint32_t status = ((uint32_t)body[4] << 24) |
-                      ((uint32_t)body[5] << 16) |
-                      ((uint32_t)body[6] << 8) |
-                      (uint32_t)body[7];
+    uint16_t p = encode_location_base(g, body, alarm_bits, jt808_get_logical_acc(),
+                                      historical_position);
     uint32_t odometer = cfg_get()->mileage_m / 100U;
     uint16_t speed = g->speed_kmh <= 0.0f ? 0U :
                      g->speed_kmh >= 6553.5f ? 65535U :
@@ -883,17 +824,7 @@ static uint16_t encode_location_online(const gps_data_t *g,
                         g->hdop >= 99.9f ? 999U :
                         (uint16_t)(g->hdop * 10.0f + 0.5f);
 
-    body[0]=(uint8_t)(alarm_bits>>24); body[1]=(uint8_t)(alarm_bits>>16);
-    body[2]=(uint8_t)(alarm_bits>>8); body[3]=(uint8_t)alarm_bits;
-    if (jt808_get_logical_acc()) status |= LOC_FLAG_ACC_ON;
-    else status &= ~LOC_FLAG_ACC_ON;
-    if (historical_position)
-        status &= ~LOC_FLAG_GPS_FIXED;
-    body[4]=(uint8_t)(status>>24); body[5]=(uint8_t)(status>>16);
-    body[6]=(uint8_t)(status>>8); body[7]=(uint8_t)status;
-
-    /* Replace the compact 0x31/0x30 suffix with the complete online profile. */
-    p = 28U;
+    /* Append the complete online profile directly after the shared body. */
     body[p++]=0x01U; body[p++]=0x04U;
     body[p++]=(uint8_t)(odometer>>24); body[p++]=(uint8_t)(odometer>>16);
     body[p++]=(uint8_t)(odometer>>8); body[p++]=(uint8_t)odometer;
@@ -925,7 +856,9 @@ int jt808_send_location_to(uint8_t channel, const gps_data_t *snapshot)
     if (!jt808_channel_online(channel) ||
         !jt808_location_snapshot_valid(snapshot, TICK_MS()))
         return -1;
-    length = encode_location_online(snapshot, body, s_alarm_flags, false);
+    gps_data_t report;
+    gps_report_filter_copy(snapshot, &report, TICK_MS());
+    length = encode_location_online(&report, body, s_alarm_flags, false);
     if (!frame_init(&frame)) return -1;
     if (!build_header(&frame, MSG_LOCATION_REPORT, length)) { frame_release(); return -1; }
     frame_bytes(&frame, body, length);
@@ -940,10 +873,10 @@ int jt808_send_location(void)
     uint8_t online_body[JT808_LOCATION_ONLINE_MAX];
     frame_t f;
     int result = -1;
-    gps_data_t snapshot = *gps_get_data();
-    bool sent = false;
-
+    gps_data_t snapshot;
+    gps_report_filter_copy(gps_get_data(), &snapshot, TICK_MS());
     if (s_append_pending) {
+        if (s_append_pending != 1U) return -2;
         blind_zone_result_t stored = blind_zone_append(&s_append_pending_record);
         if (stored == BLIND_ZONE_OK) {
             s_append_pending = false;
@@ -954,6 +887,7 @@ int jt808_send_location(void)
     }
 
     if (!jt808_location_snapshot_valid(&snapshot, TICK_MS())) return -1;
+    record.event_id = blind_zone_allocate_event_id();
     record.length = (uint8_t)encode_location_compact(&snapshot, record.location);
     if (!frame_init(&f)) return -1;
     {
@@ -962,17 +896,13 @@ int jt808_send_location(void)
         if (!build_header(&f, MSG_LOCATION_REPORT, online_length)) { frame_release(); return -1; }
         frame_bytes(&f, online_body, online_length);
     }
-    if (jt808_channel_online(TCP_CH_MAIN) &&
-        send_frame_channel_delivered(&f, TCP_CH_MAIN) == 0) sent = true;
-    if (jt808_channel_online(TCP_CH_BACKUP) &&
-        send_frame_channel_delivered(&f, TCP_CH_BACKUP) == 0) sent = true;
-    frame_release();
-    if (sent) {
+    if (send_frame_broadcast(&f, false) == 0) {
         s_alarm_flags = 0;
         return 0;
     }
 
     {
+        if (record.event_id == 0U) return -2;
         blind_zone_result_t stored = blind_zone_append(&record);
         if (stored == BLIND_ZONE_OK) {
             s_alarm_flags = 0;
@@ -988,35 +918,8 @@ int jt808_send_location(void)
     return result;
 }
 
-/* Rate-limit the "cannot build a location yet" notice.  Before boot GNSS has
- * no fix and nothing has ever been captured, so this condition can hold for
- * minutes; logging every attempt drowned the rest of the log and, because the
- * debug UART blocks, slowed the main loop that would eventually clear it. */
-static void log_location_unavailable(const char *reason)
-{
-    static const char *last_reason;
-    static uint32_t last_log_ms;
-    static uint32_t suppressed;
-    uint32_t now = TICK_MS();
-
-    if (reason != last_reason ||
-        (uint32_t)(now - last_log_ms) >= JT808_LOCATION_DROP_LOG_MS) {
-        if (suppressed != 0U) {
-            dbg_printf("[808] 0200 unavailable reason=%s (+%lu suppressed)\r\n",
-                       reason, (unsigned long)suppressed);
-        } else {
-            dbg_printf("[808] 0200 unavailable reason=%s\r\n", reason);
-        }
-        last_reason = reason;
-        last_log_ms = now;
-        suppressed = 0U;
-        return;
-    }
-    ++suppressed;
-}
-
 int jt808_send_location_work_mode(uint32_t alarm_bits,
-                                  bool historical_position)
+                                  bool historical_position, uint32_t report_id)
 {
     uint8_t body[JT808_LOCATION_ONLINE_MAX];
     frame_t frame;
@@ -1024,16 +927,28 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
     uint16_t length;
     int result;
 
-    if (!jt808_is_online()) return -1;
+    if (s_append_pending) {
+        /* Draining another action does not acknowledge this call. Its alarm,
+         * ACC and position still need their own report below. */
+        bool own = s_append_pending == 2U && s_append_report_id == report_id;
+        if (blind_zone_append(&s_append_pending_record) != BLIND_ZONE_OK)
+            return -2;
+        s_append_pending = 0U;
+        if (own) {
+            s_last_location_ms = TICK_MS();
+            s_alarm_flags &= ~alarm_bits;
+            dbg_printf("[BZ] work report stored\r\n");
+            return 0;
+        }
+    }
     if (historical_position) {
         /* GNSS is off in STOP1.  Use only a snapshot captured while a live
          * fix was fresh; never encode the now-invalid live GPS object. */
         if (!gps_get_last_trusted(&snapshot)) {
-            log_location_unavailable("no-trusted-fix");
-            return JT808_SEND_NO_POSITION;
+            gps_get_unfixed_report(&snapshot);
         }
     } else {
-        snapshot = *gps_get_data();
+        gps_report_filter_copy(gps_get_data(), &snapshot, TICK_MS());
         if (!jt808_location_snapshot_valid(&snapshot, TICK_MS())) {
             /* A live fix is not available yet -- GNSS was powered down in
              * STOP1 and has not re-acquired.  Dropping the frame here used to
@@ -1041,24 +956,42 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
              * cadence until the receiver came back, so fall back to the
              * retained fix and mark the report historical instead. */
             if (!gps_get_last_trusted(&snapshot)) {
-                log_location_unavailable("no-fix-no-trusted");
-                return JT808_SEND_NO_POSITION;
+                gps_get_unfixed_report(&snapshot);
             }
             historical_position = true;
-            dbg_printf("[808] 0200 fallback=last-trusted\r\n");
+            dbg_printf("[808] 0200 fallback=unfixed\r\n");
         }
     }
-    dbg_printf("[808] 0200 acc=%u alarm=0x%08lx hist=%u\r\n",
+    DBG_PRINTF_VERBOSE("[808] 0200 acc=%u alarm=0x%08lx hist=%u\r\n",
                (unsigned)jt808_get_logical_acc(),
                (unsigned long)alarm_bits, (unsigned)historical_position);
     length = encode_location_online(&snapshot, body, alarm_bits, historical_position);
-    if (!frame_init(&frame)) return -1;
-    if (!build_header(&frame, MSG_LOCATION_REPORT, length)) {
-        frame_release();
-        return -1;
+    result = -1;
+    if (jt808_is_online() && frame_init(&frame)) {
+        if (build_header(&frame, MSG_LOCATION_REPORT, length)) {
+            frame_bytes(&frame, body, length);
+            result = send_frame_broadcast(&frame, alarm_bits != 0U);
+        } else frame_release();
     }
-    frame_bytes(&frame, body, length);
-    result = send_frame_broadcast(&frame, alarm_bits != 0U);
+    if (result != 0) {
+        /* Store the compact prefix of the exact work-mode snapshot, including
+         * logical ACC, alarm and retained-position flags. Keep one immutable
+         * event until the NOR transaction acknowledges durable completion. */
+        memset(&s_append_pending_record, 0, sizeof s_append_pending_record);
+        s_append_pending_record.event_id = blind_zone_allocate_event_id();
+        if (s_append_pending_record.event_id == 0U) return -2;
+        s_append_pending_record.length = 34U;
+        memcpy(s_append_pending_record.location, body, 34U);
+        s_append_pending = 2U;
+        s_append_report_id = report_id;
+        if (blind_zone_append(&s_append_pending_record) != BLIND_ZONE_OK)
+            return -2;
+        s_append_pending = 0U;
+        s_last_location_ms = TICK_MS();
+        s_alarm_flags &= ~alarm_bits;
+        dbg_printf("[BZ] work report stored\r\n");
+        return 0;
+    }
     if (result == 0) {
         s_last_location_ms = TICK_MS();
         s_alarm_flags &= ~alarm_bits;
@@ -1082,15 +1015,41 @@ static int send_location_only(uint16_t message_id)
 {
     uint8_t body[JT808_LOCATION_ONLINE_MAX];
     frame_t frame;
-    gps_data_t snapshot = *gps_get_data();
+    gps_data_t snapshot;
+    gps_report_filter_copy(gps_get_data(), &snapshot, TICK_MS());
     uint16_t length;
     if (!jt808_is_online()) return -1;
-    if (!jt808_location_snapshot_valid(&snapshot, TICK_MS())) return -1;
-    length = encode_location_online(&snapshot, body, s_alarm_flags, false);
+    bool historical = !jt808_location_snapshot_valid(&snapshot, TICK_MS());
+    if (historical && !gps_get_last_trusted(&snapshot)) gps_get_unfixed_report(&snapshot);
+    length = encode_location_online(&snapshot, body, s_alarm_flags, historical);
     if (!frame_init(&frame)) return -1;
     if (!build_header(&frame, message_id, length)) { frame_release(); return -1; }
     frame_bytes(&frame, body, length);
     return finish_frame_channel(&frame, s_response_channel);
+}
+
+/* Both sleep-entry first fixes and normal live reports use the same per-channel
+ * success handling. Failed channels retain their pending first-fix flag. */
+static void send_pending_live_locations(const gps_data_t *snapshot,
+                                        uint32_t now, bool motion_due)
+{
+    bool sent = false;
+    for (uint8_t index = 0U; index < 2U; ++index) {
+        jt808_session_t *session = &s_sessions[index];
+        if ((motion_due || session->waiting_first_fix) &&
+            jt808_channel_online(session->channel) &&
+            jt808_send_location_to(session->channel, snapshot) == 0) {
+            session->waiting_first_fix = false;
+            sent = true;
+        }
+    }
+    if (sent) {
+        s_last_location_ms = now;
+        if (motion_due) {
+            gps_report_filter_motion_ack();
+            s_alarm_flags = 0U;
+        }
+    }
 }
 
 static void process_location_timer(uint32_t now)
@@ -1101,31 +1060,31 @@ static void process_location_timer(uint32_t now)
      * live-GNSS timer continue turns its stale-fix fallback into a continuous
      * stream of duplicate historical locations. */
     if (work_mode_state() == WORK_MODE_STATIONARY_SLEEP) {
-        gps_data_t first_snapshot = *gps_get_data();
-        uint8_t first_index;
-        bool first_sent = false;
-
-        if (jt808_location_snapshot_valid(&first_snapshot, now)) {
-            for (first_index = 0U; first_index < 2U; ++first_index) {
-                jt808_session_t *session = &s_sessions[first_index];
-                if (session->waiting_first_fix &&
-                    jt808_channel_online(session->channel) &&
-                    jt808_send_location_to(session->channel,
-                                           &first_snapshot) == 0) {
-                    session->waiting_first_fix = false;
-                    first_sent = true;
-                }
-            }
-            if (first_sent) s_last_location_ms = now;
-        }
+        gps_data_t first_snapshot;
+        gps_report_filter_copy(gps_get_data(), &first_snapshot, now);
+        if (jt808_location_snapshot_valid(&first_snapshot, now))
+            send_pending_live_locations(&first_snapshot, now, false);
         return;
     }
 
-    gps_data_t snapshot = *gps_get_data();
+    gps_data_t snapshot;
+    gps_report_filter_copy(gps_get_data(), &snapshot, TICK_MS());
     bool valid = jt808_location_snapshot_valid(&snapshot, now);
-    uint8_t index;
-    bool first_fix_sent = false;
     bool corner_append_blocked = false;
+
+    /* Share the live first-fix sender: departure retries must not create or
+     * drain blind-zone transactions. The event itself expires after 15s. */
+    static uint32_t motion_retry_ms;
+    static bool motion_retry;
+    bool motion_due = false;
+    if (!gps_report_filter_motion_pending(now)) motion_retry = false;
+    else if (valid && jt808_is_online() && !fota_is_active() &&
+             (!motion_retry || now-motion_retry_ms >= 1000u)) {
+        motion_retry = true;
+        motion_retry_ms = now;
+        motion_due = true;
+        goto live_reports;
+    }
 
     /* Retry a deferred corner blind-zone append regardless of whether a new
      * heading sample/event arrived this tick. */
@@ -1150,8 +1109,9 @@ static void process_location_timer(uint32_t now)
     {
         motion_corner_sample_t sample;
         motion_corner_event_t event;
-        bool snapshot_slot_available = true;
         const gps_data_t *g = &snapshot;
+        uint8_t angle = cfg_get()->anglerep_angle;
+        s_motion_corner.config.enter_accum_deg = angle >= 1U && angle <= 180U ? angle : 30U;
         sample.heading_deg = g->heading;
         sample.speed_kmh = g->speed_kmh;
         sample.sample_ms = g->heading_update_ms;
@@ -1181,14 +1141,13 @@ static void process_location_timer(uint32_t now)
             if (found) {
                 s_corner_snapshots[slot] = snapshot;
                 s_corner_snapshot_ms[slot] = sample.sample_ms;
-                s_corner_last_heading_ms = sample.sample_ms;
-            } else {
-                snapshot_slot_available = false;
-                s_corner_last_heading_ms = sample.sample_ms;
-                sample.heading_fresh = false;
             }
+            /* A full candidate queue rejects new candidates itself, but still
+             * needs fresh headings to confirm or cancel the turn. Freezing
+             * heading input here can strand three pre-confirmation points
+             * forever. Keep their snapshots and advance the detector only. */
+            s_corner_last_heading_ms = sample.sample_ms;
         }
-        (void)snapshot_slot_available;
         event = corner_step_safe(&s_motion_corner, &sample);
         if (event.report_due) {
             motion_corner_candidate_t candidate;
@@ -1212,12 +1171,8 @@ static void process_location_timer(uint32_t now)
                 if (frame_init(&frame)) {
                     if (build_header(&frame, MSG_LOCATION_REPORT, length)) {
                         frame_bytes(&frame, body, length);
-                        if (jt808_channel_online(TCP_CH_MAIN) &&
-                            send_frame_channel_delivered(&frame, TCP_CH_MAIN) == 0) sent = true;
-                        if (jt808_channel_online(TCP_CH_BACKUP) &&
-                            send_frame_channel_delivered(&frame, TCP_CH_BACKUP) == 0) sent = true;
-                    }
-                    frame_release();
+                        sent = send_frame_broadcast(&frame, false) == 0;
+                    } else frame_release();
                 }
                 if (sent) {
                     if (motion_corner_consume_candidate != NULL)
@@ -1226,7 +1181,8 @@ static void process_location_timer(uint32_t now)
                     s_alarm_flags = 0U;
                 } else {
                     blind_zone_record_t record;
-                    record.event_id = candidate.sample.sample_ms;
+                    record.event_id = blind_zone_allocate_event_id();
+                    if (record.event_id == 0U) return;
                     record.length = (uint8_t)encode_location_compact(&cached, record.location);
                     {
                         blind_zone_result_t stored = blind_zone_append(&record);
@@ -1254,18 +1210,8 @@ static void process_location_timer(uint32_t now)
         }
     }
 
-    if (valid) {
-        for (index = 0U; index < 2U; ++index) {
-            jt808_session_t *session = &s_sessions[index];
-            if (session->waiting_first_fix &&
-                jt808_channel_online(session->channel) &&
-                jt808_send_location_to(session->channel, &snapshot) == 0) {
-                session->waiting_first_fix = false;
-                first_fix_sent = true;
-            }
-        }
-        if (first_fix_sent) s_last_location_ms = now;
-    }
+live_reports:
+    if (valid) send_pending_live_locations(&snapshot, now, motion_due);
 }
 
 int jt808_send_general_resp_to(uint8_t channel, uint16_t resp_sn,
@@ -1320,22 +1266,75 @@ __attribute__((weak)) bool at_config_execute_text_command(const uint8_t *text,
     (void)len;
     return false;
 }
+__attribute__((weak)) bool at_config_execute_text_command_ack(
+    const uint8_t *text, uint16_t len, at_config_text_ack_fn ack, void *context)
+{
+    bool result = at_config_execute_text_command(text, len);
+    if (ack != NULL) ack(result, context);
+    return result;
+}
 #endif
 
-/* 0x8300 body: flag byte, then GBK text (spec table 37).  The terminal command
+typedef struct { uint8_t channel, phone[6]; uint16_t serial, message_id; } text_ack_t;
+
+static void text_command_ack(bool success, void *context)
+{
+    const text_ack_t *ack = context;
+    frame_t f;
+    if (!frame_init(&f)) return;
+    /* PID may already be committed. Correlate the response with the identity
+     * of the received request, before the command changes either session. */
+    frame_u16(&f, MSG_TERMINAL_GENERAL_RESP);
+    frame_u16(&f, 5U);
+    frame_bytes(&f, ack->phone, sizeof ack->phone);
+    frame_u16(&f, ++s_msg_sn);
+    frame_u16(&f, ack->serial);
+    frame_u16(&f, ack->message_id);
+    frame_u8(&f, success ? 0U : 1U);
+    (void)finish_frame_channel(&f, ack->channel);
+}
+
+static void text_command_reply(const uint8_t *text, uint16_t len, void *context)
+{
+    const text_ack_t *ack = context;
+    frame_t f;
+    if (len > F39_REPLY_MAX_LENGTH || !frame_init(&f)) return;
+    /* User-selected test-platform extension: event/type byte then text.
+     * Preserve the request identity even when PID was just changed. */
+    frame_u16(&f, 0x0301U);
+    frame_u16(&f, len + 1U);
+    frame_bytes(&f, ack->phone, sizeof ack->phone);
+    frame_u16(&f, ++s_msg_sn);
+    frame_u8(&f, 0U);
+    frame_bytes(&f, text, len);
+    (void)finish_frame_channel(&f, ack->channel);
+}
+
+/* 0x8105/04 reuses RESET, with the same ACK-before-deferred-reset ordering.
+ * 0x8300 body: flag byte, then GBK text (spec table 37).  The terminal command
  * set is plain ASCII framed by a trailing '#', matching the SMS channel, so
  * the text is handed to the same executor.  Kept out of process_frame() so its
  * locals do not widen that function's audited stack frame. */
-static bool __attribute__((noinline)) handle_text_message(const uint8_t *body,
-                                                          uint16_t body_len)
+static void __attribute__((noinline)) handle_command_message(const uint8_t *body,
+    uint16_t body_len, uint8_t channel, uint16_t serial, const uint8_t *phone,
+    uint16_t message_id)
 {
     uint16_t text_len;
+    text_ack_t ack;
+    ack.channel = channel; ack.serial = serial; ack.message_id = message_id;
+    memcpy(ack.phone, phone, sizeof ack.phone);
 
-    if (body_len < 2U) return false;
+    if (message_id == MSG_TERMINAL_CTRL) {
+        (void)at_config_execute_text_command_ack((const uint8_t *)"RESET", 5U,
+                                                text_command_ack, &ack);
+        return;
+    }
+    if (body_len < 2U) { text_command_ack(false, &ack); return; }
     text_len = (uint16_t)(body_len - 1U);
     if (body[body_len - 1U] == (uint8_t)'#') --text_len;
-    if (text_len == 0U) return false;
-    return at_config_execute_text_command(&body[1], text_len);
+    if (text_len == 0U) { text_command_ack(false, &ack); return; }
+    (void)at_config_execute_text_response(&body[1], text_len, text_command_ack,
+                                         text_command_reply, &ack);
 }
 
 /* ── RX frame parser ──────────────────────────────────────────────────────── */
@@ -1385,7 +1384,7 @@ static void __attribute__((noinline)) process_frame(
                    channel, body_len, (unsigned int)(flen - 13U));
         return;
     }
-    dbg_printf("[808-RX] ch=%u msg=0x%04x sn=%u body=%u\r\n",
+        DBG_PRINTF_VERBOSE("[808-RX] ch=%u msg=0x%04x sn=%u body=%u\r\n",
                channel, msg_id, serial_no, body_len);
     if (msg_id != MSG_TERMINAL_REGISTER_RESP &&
         msg_id != MSG_PLATFORM_GENERAL_RESP &&
@@ -1400,8 +1399,13 @@ static void __attribute__((noinline)) process_frame(
         if (body_len == 5U) {
             uint16_t reply_serial = ((uint16_t)body[0] << 8) | body[1];
             uint16_t reply_msg_id = ((uint16_t)body[2] << 8) | body[3];
+            if (session->state == JT808_SESSION_ONLINE && session->pending_valid &&
+                session->generation == generation && reply_msg_id == MSG_HEARTBEAT &&
+                reply_serial == session->pending_serial && body[4] == 0U)
+                session->pending_valid = false;
             if (jt808_channel_online(channel))
-                blind_zone_replay_on_general_ack(reply_serial, reply_msg_id, body[4]);
+                blind_zone_replay_on_general_ack(channel, generation,
+                                                  reply_serial, reply_msg_id, body[4]);
             if (reply_msg_id == MSG_TERMINAL_AUTH &&
                 jt808_session_accept_auth(session, generation, reply_serial)) {
                 if (body[4] == 0U) {
@@ -1456,7 +1460,13 @@ static void __attribute__((noinline)) process_frame(
         break;
 
     case MSG_QUERY_TERMINAL_PARAM:  /* 0x8104 query parameters */
+    case MSG_QUERY_SPECIFIC_PARAM:  /* 0x8106 query selected parameters */
         s_response_channel = channel;
+        if ((msg_id == MSG_QUERY_TERMINAL_PARAM && body_len != 0U) ||
+            (msg_id == MSG_QUERY_SPECIFIC_PARAM && body_len == 0U)) {
+            jt808_send_general_resp(serial_no, msg_id, 2U);
+            break;
+        }
         jt808_params_handle_query(body, body_len, serial_no);
         break;
 
@@ -1466,8 +1476,7 @@ static void __attribute__((noinline)) process_frame(
         break;
 
     case MSG_TEXT_MESSAGE:          /* 0x8300 text delivery */
-        jt808_send_general_resp_to(channel, serial_no, msg_id,
-                                   handle_text_message(body, body_len) ? 0U : 1U);
+        handle_command_message(body, body_len, channel, serial_no, frame + 4U, msg_id);
         break;
 
     case MSG_SET_POLYGON_AREA:      /* 0x8604 set polygon geofence */
@@ -1480,18 +1489,26 @@ static void __attribute__((noinline)) process_frame(
         break;
 
     case MSG_TERMINAL_CTRL:
-        /* Relay/reboot control */
-        if (body_len >= 1) {
-            uint8_t cmd_word = body[0];
-            if (cmd_word == 1) {   /* remote relay off */
-                relay_set(false);
-            }
+        /* Standard 0x04 reset and vendor 0x64/0x65 relay extension.
+         * Use the SMS executor so cut-off keeps
+         * the same GNSS/speed safety policy and restore remains unconditional. */
+        if (body_len != 1U) {
+            jt808_send_general_resp_to(channel, serial_no, msg_id, 2U);
+        } else if (body[0] == 0x04U) {
+            handle_command_message(body, body_len, channel, serial_no, frame + 4U, msg_id);
+        } else if (body[0] == 0x64U || body[0] == 0x65U) {
+            const uint8_t *command = (const uint8_t *)(body[0] == 0x64U ?
+                                                      "RELAY,1" : "RELAY,0");
+            bool accepted = at_config_execute_text_command(command, 7U);
+            jt808_send_general_resp_to(channel, serial_no, msg_id,
+                                       accepted ? 0U : 1U);
+        } else {
+            jt808_send_general_resp_to(channel, serial_no, msg_id, 3U);
         }
-        jt808_send_general_resp_to(channel, serial_no, msg_id, 0);
         break;
 
     default:
-        jt808_send_general_resp_to(channel, serial_no, msg_id, 0);
+        jt808_send_general_resp_to(channel, serial_no, msg_id, 3);
         break;
     }
 
@@ -1529,7 +1546,7 @@ void jt808_on_recv(uint8_t ch, const uint8_t *data, uint16_t len)
     if (data == NULL || len == 0U) return;
     rx = rx_for_channel(ch);
     if (rx == NULL) return;
-    dbg_printf("[808-RX] ch=%u bytes=%u\r\n", ch, len);
+    DBG_PRINTF_VERBOSE("[808-RX] ch=%u bytes=%u\r\n", ch, len);
     generation = tcp_manager_session_generation(ch);
     if (rx->generation != generation) {
         rx->generation = generation;
@@ -1611,6 +1628,15 @@ void jt808_process(void)
 
         jt808_session_sync_link(session, tcp_manager_ch_online(channel),
                                 tcp_manager_session_generation(channel));
+        if (session->state == JT808_SESSION_ONLINE && session->pending_valid) {
+            if (fota_is_active()) session->sent_ms = now_s;
+            else if ((uint32_t)(now_s - session->sent_ms) >= 90U) {
+                dbg_printf("[808] ch%u heartbeat timeout\r\n", channel);
+                ec800m_tcp_close(channel);
+                jt808_session_sync_link(session, false, session->generation);
+                continue;
+            }
+        }
         if (pending->valid) {
             if (!session->link_open || pending->generation != session->generation) {
                 pending->valid = false;
@@ -1630,7 +1656,7 @@ void jt808_process(void)
         }
         action = jt808_session_next_action(session, auth[0] != '\0', now);
         if (action == JT808_ACTION_NONE) {
-            if (session->pending_valid && session->attempts >= 3U &&
+            if (session->state != JT808_SESSION_ONLINE && session->pending_valid && session->attempts >= 3U &&
                 (int32_t)(now - (session->sent_ms + 5000U)) >= 0) {
                 /* A missing response is a transport timeout, not proof that
                  * the stored credential is invalid.  Preserve auth so a
@@ -1665,24 +1691,17 @@ void jt808_process(void)
 /* ── Config accessors ─────────────────────────────────────────────────────── */
 void jt808_set_server(const char *ip, uint16_t port, bool is_backup)
 {
-    if (!is_backup) {
-        strncpy(s_cfg.server_ip,   ip, sizeof(s_cfg.server_ip)-1);
-        s_cfg.server_port = port;
-    } else {
-        strncpy(s_cfg.backup_ip,   ip, sizeof(s_cfg.backup_ip)-1);
-        s_cfg.backup_port = port;
-    }
+    /* Compatibility hook: tcp_manager reads the persisted cfg directly. */
+    (void)ip;
+    (void)port;
+    (void)is_backup;
 }
 
 void jt808_trigger_alarm(uint32_t alarm_bit) { s_alarm_flags |= alarm_bit; }
 void jt808_set_heartbeat_s(uint16_t s)       { s_cfg.heartbeat_s = s; }
-uint16_t jt808_get_heartbeat_s(void)         { return s_cfg.heartbeat_s; }
 void jt808_set_report_interval(uint16_t moving_s, uint16_t stopped_s)
 {
-    s_cfg.report_moving_s =
-        (moving_s != 0U && moving_s < JT808_REPORT_INTERVAL_MIN_S)
-            ? JT808_REPORT_INTERVAL_MIN_S : moving_s;
-    s_cfg.report_stopped_s =
-        (stopped_s != 0U && stopped_s < JT808_REPORT_INTERVAL_MIN_S)
-            ? JT808_REPORT_INTERVAL_MIN_S : stopped_s;
+    /* Compatibility hook: work_mode owns scheduling and interval clamping. */
+    (void)moving_s;
+    (void)stopped_s;
 }

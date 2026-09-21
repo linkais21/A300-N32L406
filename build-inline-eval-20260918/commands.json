@@ -1,0 +1,42 @@
+[
+  {
+    "command": [
+      "mingw32-make",
+      "-j4",
+      "BUILD=build-inline-eval-20260918/64",
+      "SIZE_FLAGS=-Os -finline-limit=64 -fno-inline-functions-called-once",
+      "size",
+      "flash-guard"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "mingw32-make",
+      "-j4",
+      "BUILD=build-inline-eval-20260918/32",
+      "SIZE_FLAGS=-Os -finline-limit=32 -fno-inline-functions-called-once",
+      "size",
+      "flash-guard"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "mingw32-make",
+      "BUILD=build-inline-eval-20260918/64",
+      "SIZE_FLAGS=-Os -finline-limit=64 -fno-inline-functions-called-once",
+      "ram-guard"
+    ],
+    "exit_code": 2
+  },
+  {
+    "command": [
+      "mingw32-make",
+      "BUILD=build-inline-eval-20260918/32",
+      "SIZE_FLAGS=-Os -finline-limit=32 -fno-inline-functions-called-once",
+      "ram-guard"
+    ],
+    "exit_code": 2
+  }
+]

@@ -37,7 +37,8 @@ def test_stationary_work_mode_disables_legacy_location_timer():
     guard = re.search(
         r"if\s*\(\s*work_mode_state\s*\(\s*\)\s*==\s*"
         r"WORK_MODE_STATIONARY_SLEEP\s*\)\s*\{[\s\S]*?"
-        r"waiting_first_fix[\s\S]*?return\s*;\s*\}",
+        r"send_pending_live_locations\s*\(\s*&first_snapshot\s*,\s*now\s*,\s*false\s*\)"
+        r"[\s\S]*?return\s*;\s*\}",
         timer,
     )
     assert guard, (

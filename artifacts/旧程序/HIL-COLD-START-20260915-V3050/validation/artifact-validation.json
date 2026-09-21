@@ -1,0 +1,11 @@
+{
+  "hex_bin_match": true,
+  "combined_boot_app_match": true,
+  "version": 3050,
+  "ota_crc_length_model_match": true,
+  "factory_marker": "PENDING",
+  "source_hashes_match": true,
+  "app_bytes": 104656,
+  "boot_bin_bytes": 22556,
+  "hardware_validated": false
+}

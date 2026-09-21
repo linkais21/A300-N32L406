@@ -1,0 +1,12 @@
+{
+  "file": "A300-406-OTA-V3063.bin",
+  "deviceModel": "A300-406",
+  "versionCode": 3063,
+  "versionName": "T360-A300_406_20260919120428,V3.063",
+  "active": false,
+  "mandatory": false,
+  "releaseNotes": "V3.063 corner reporting automatically enabled on every boot, including OTA with a previously disabled setting; no command needed; other settings preserved. HIL only; RAM gate incomplete.",
+  "signing": "platform-detached",
+  "sha256": "8f0267959a2d246bca96b15f893e657547ccf893463999d1dfc9007df49f6ee0",
+  "size": 106408
+}

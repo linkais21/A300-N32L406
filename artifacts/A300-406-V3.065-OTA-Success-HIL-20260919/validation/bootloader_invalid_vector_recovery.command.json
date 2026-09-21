@@ -1,0 +1,7 @@
+{
+  "command": [
+    "C:\\Python314\\python.exe",
+    "tools/tests/test_bootloader_invalid_vector_recovery.py"
+  ],
+  "exit_code": 0
+}

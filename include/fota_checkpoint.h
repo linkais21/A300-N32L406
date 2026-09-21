@@ -35,9 +35,11 @@ _Static_assert(FOTA_AUTH_SLOT_A % FLASH_SECTOR_SIZE == 0U &&
  * sequence/format/CRC/marker are assigned by commit; zero length is reserved
  * internally for clear's atomic tombstone, which suppresses older records. */
 bool fota_checkpoint_load(const char *url, uint32_t expected_length, fota_checkpoint_t *out);
+/* OTA lock required. -1: I/O failure; 0: absent/tombstone; 1: valid record.
+ * Used to recover a post-install report without a new download offer. */
+int fota_checkpoint_read(fota_checkpoint_t *out);
 bool fota_checkpoint_commit(const fota_checkpoint_t *record);
 bool fota_checkpoint_clear(void);
 bool fota_authorization_load(fota_authorization_t *out);
 bool fota_authorization_commit(const fota_authorization_t *record);
-bool fota_authorization_clear(void);
 #endif

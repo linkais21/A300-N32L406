@@ -1,0 +1,16 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--check",
+    "--",
+    "release_identity.json",
+    "include/build_version.h",
+    "include/config.h",
+    "tools/release_guard.py",
+    "tools/tests/test_release_identity_contract.py"
+  ],
+  "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+  "exit_code": 0,
+  "elapsed_seconds": 0.06924748420715332
+}

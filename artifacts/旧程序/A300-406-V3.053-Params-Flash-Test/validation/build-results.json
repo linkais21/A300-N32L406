@@ -1,0 +1,75 @@
+{
+  "combined": {
+    "files": {
+      "elf": 151112,
+      "hex": 276706,
+      "bin": 98352
+    },
+    "math_candidate": "bounded",
+    "quantize_mm": true,
+    "remaining": 8144,
+    "known_call_frames": 2536,
+    "commands": [
+      {
+        "command": [
+          "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+          "BUILD=build/params-v3053/combined",
+          "C_SRCS=src/main.c src/hw_init.c src/debug_uart.c src/syscalls.c src/ram_watermark.c src/ec800m.c src/ec800m_at_response.c src/agnss_stream_workspace.c src/service_workspace.c src/log_platform.c src/cfg_query.c src/gps.c build/params-v3053/combined/sources/jt808.c src/motion_corner.c src/overspeed_policy.c src/jt808_session.c src/jt808_params.c src/jt808_terminal_info.c src/terminal_identity.c src/at_config.c src/adc_monitor.c src/spi_flash.c src/crc32.c src/sha256.c src/ext_flash_store.c src/blind_zone.c src/blind_zone_replay.c src/accel_vibration_filter.c src/i2c_accel.c src/relay.c src/flash_config.c src/fota_check_parser.c src/fota.c src/fota_checkpoint.c src/firmware_signature.c src/agnss_manager.c src/agnss_huada.c src/geofence.c build/params-v3053/combined/sources/mileage.c src/peripherals.c src/sms_command.c src/f39_command.c src/f39_config_adapter.c src/f39_reply.c src/sms_ingress.c src/power_mgr.c src/work_mode.c src/work_mode_sleep.c src/reset_diag.c src/tcp_manager.c third_party/micro-ecc/uECC.c sdk/Nations.N32L40x_Library.2.2.0/firmware/CMSIS/device/system_n32l40x.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_gpio.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_rcc.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_usart.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_spi.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_i2c.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_adc.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_dma.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_tim.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_pwr.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_flash.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_rtc.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_exti.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_iwdg.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/misc.c src/agnss_storage.c",
+          "-j4",
+          "all"
+        ],
+        "exit_code": 0,
+        "log": "build.log"
+      },
+      {
+        "command": [
+          "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+          "BUILD=build/params-v3053/combined",
+          "C_SRCS=src/main.c src/hw_init.c src/debug_uart.c src/syscalls.c src/ram_watermark.c src/ec800m.c src/ec800m_at_response.c src/agnss_stream_workspace.c src/service_workspace.c src/log_platform.c src/cfg_query.c src/gps.c build/params-v3053/combined/sources/jt808.c src/motion_corner.c src/overspeed_policy.c src/jt808_session.c src/jt808_params.c src/jt808_terminal_info.c src/terminal_identity.c src/at_config.c src/adc_monitor.c src/spi_flash.c src/crc32.c src/sha256.c src/ext_flash_store.c src/blind_zone.c src/blind_zone_replay.c src/accel_vibration_filter.c src/i2c_accel.c src/relay.c src/flash_config.c src/fota_check_parser.c src/fota.c src/fota_checkpoint.c src/firmware_signature.c src/agnss_manager.c src/agnss_huada.c src/geofence.c build/params-v3053/combined/sources/mileage.c src/peripherals.c src/sms_command.c src/f39_command.c src/f39_config_adapter.c src/f39_reply.c src/sms_ingress.c src/power_mgr.c src/work_mode.c src/work_mode_sleep.c src/reset_diag.c src/tcp_manager.c third_party/micro-ecc/uECC.c sdk/Nations.N32L40x_Library.2.2.0/firmware/CMSIS/device/system_n32l40x.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_gpio.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_rcc.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_usart.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_spi.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_i2c.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_adc.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_dma.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_tim.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_pwr.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_flash.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_rtc.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_exti.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_iwdg.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/misc.c src/agnss_storage.c",
+          "-k",
+          "release-gate"
+        ],
+        "exit_code": 2,
+        "log": "release-gate.log"
+      },
+      {
+        "command": [
+          "C:\\Python314\\python.exe",
+          "tools/libc_parser_guard.py",
+          "D:\\A300_406_tools\\A300_406\\A300-first\\build\\params-v3053\\combined\\a300_firmware.map"
+        ],
+        "exit_code": 0,
+        "log": "libc.log"
+      },
+      {
+        "command": [
+          "C:\\Python314\\python.exe",
+          "tools/tests/test_ram01_frame_budget.py",
+          "D:\\A300_406_tools\\A300_406\\A300-first\\build\\params-v3053\\combined"
+        ],
+        "exit_code": 0,
+        "log": "frame-budget.log"
+      },
+      {
+        "command": [
+          "D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin\\arm-none-eabi-size.exe",
+          "-A",
+          "D:\\A300_406_tools\\A300_406\\A300-first\\build\\params-v3053\\combined\\a300_firmware.elf"
+        ],
+        "exit_code": 0,
+        "log": "sections.log"
+      },
+      {
+        "command": [
+          "D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin\\arm-none-eabi-nm.exe",
+          "-S",
+          "--size-sort",
+          "D:\\A300_406_tools\\A300_406\\A300-first\\build\\params-v3053\\combined\\a300_firmware.elf"
+        ],
+        "exit_code": 0,
+        "log": "symbols.log"
+      }
+    ],
+    "release_approved": false
+  }
+}

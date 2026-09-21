@@ -1,0 +1,18 @@
+{
+  "app_vectors": [
+    536895488,
+    134331145
+  ],
+  "boot_vectors": [
+    536895488,
+    134230737
+  ],
+  "combined_size": 129580,
+  "hex_checksum_address_payload": true,
+  "factory_init_marker_crc": true,
+  "combined_offsets_padding": true,
+  "ota_header_length_crc_version_product": true,
+  "ota_payload_matches_app": true,
+  "source_hashes_match": true,
+  "agnss_retained": true
+}

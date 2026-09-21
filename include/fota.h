@@ -67,12 +67,26 @@ int  fota_start_request(const fota_request_t *req);
 int  fota_start(const char *url);
 void fota_get_status(fota_status_t *out);
 fota_state_t fota_get_state(void);
+/* OTA owns modem/AGNSS scheduling through READY's bounded status exchange.
+ * Downloaded images then reset; post-boot success reports return to IDLE.
+ * IDLE and ERROR
+ * release that ownership. This is not a Flash owner-lock query. */
+static inline bool fota_is_active(void)
+{
+    fota_state_t state = fota_get_state();
+    return state == FOTA_STATE_CHECK_CONNECTING || state == FOTA_STATE_CHECKING ||
+           state == FOTA_STATE_PREPARING || state == FOTA_STATE_CONNECTING ||
+           state == FOTA_STATE_DOWNLOADING || state == FOTA_STATE_VERIFYING ||
+           state == FOTA_STATE_READY;
+}
+
 uint32_t fota_get_progress(void);
 void fota_cancel(void);
+/* READY download: install/reset. READY success report: release resources,
+ * keep unacknowledged journal for retry; never reboot the confirmed app. */
 void fota_apply(void);
 
 void fota_on_chunk(const uint8_t *data, uint16_t len, uint32_t offset);
-void fota_on_data(const uint8_t *data, uint16_t len);
 void fota_on_http_header(const char *header);
 
 bool fota_verify_manifest(const void *manifest, uint32_t length);

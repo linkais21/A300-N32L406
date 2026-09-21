@@ -1,0 +1,18 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--check",
+    "--",
+    "src/fota.c",
+    "src/fota_checkpoint.c",
+    "include/fota_checkpoint.h",
+    "include/config.h",
+    "include/build_version.h",
+    "release_identity.json",
+    "tools/release_guard.py",
+    "tools/tests/test_release_identity_contract.py",
+    "tools/tests/test_fota_platform_flow.py"
+  ],
+  "exit_code": 0
+}

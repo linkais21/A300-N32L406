@@ -1,0 +1,12 @@
+{
+  "file": "A300-406-OTA-V3061.bin",
+  "deviceModel": "A300-406",
+  "versionCode": 3061,
+  "versionName": "T360-A300_406_20260919001442,V3.061",
+  "active": false,
+  "mandatory": false,
+  "releaseNotes": "V3.061 round-seven baseline; dedicated soak/HIL test only; RAM gate incomplete.",
+  "signing": "platform-detached",
+  "sha256": "4aaa818bfbb8e044d87e6948ba4b4d7b89d8352d2c5c46fb8ec34f9a48aba45d",
+  "size": 106324
+}

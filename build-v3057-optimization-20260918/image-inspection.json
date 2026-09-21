@@ -1,0 +1,6 @@
+{
+  "identity_embedded": true,
+  "stdio_cleanup_symbols_absent": true,
+  "four_verbose_formats_absent": true,
+  "command_result_log_preserved": true
+}

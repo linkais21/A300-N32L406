@@ -1,0 +1,10 @@
+{
+  "command": [
+    "C:\\Python314\\python.exe",
+    "-c",
+    "import importlib.util; from pathlib import Path; s=importlib.util.spec_from_file_location(\"regression\",'D:\\\\A300_406_tools\\\\A300_406\\\\A300-first\\\\tools\\\\tests\\\\test_flash_config_v3.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); m.ROOT=Path('D:\\\\A300_406_tools\\\\A300_406\\\\A300-first\\\\build\\\\corner-v3062-20260919\\\\source'); m.find_compiler=lambda: 'D:\\\\A300_406_tools\\\\A300_406\\\\tools\\\\w64devkit\\\\w64devkit\\\\bin\\\\gcc.exe'; raise SystemExit(m.main())"
+  ],
+  "exit_code": 3,
+  "baseline": "D:\\A300_406_tools\\A300_406\\A300-first\\build\\corner-v3062-20260919\\source",
+  "expected_assertion": "cfg_get()->anglerep_en == 1U"
+}

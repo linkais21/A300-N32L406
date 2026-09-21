@@ -1,0 +1,170 @@
+[
+  {
+    "test": "test_jt808_params",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_params.py"
+    ]
+  },
+  {
+    "test": "test_jt808_params_wire",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_params_wire.py"
+    ]
+  },
+  {
+    "test": "test_jt808_dual_session",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_dual_session.py"
+    ]
+  },
+  {
+    "test": "test_flash_config_v3",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_flash_config_v3.py"
+    ]
+  },
+  {
+    "test": "test_flash_config_migration",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_flash_config_migration.py"
+    ]
+  },
+  {
+    "test": "test_f39_config",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_config.py"
+    ]
+  },
+  {
+    "test": "test_f39_dualset",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_dualset.py"
+    ]
+  },
+  {
+    "test": "test_f39_end_to_end",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_end_to_end.py"
+    ]
+  },
+  {
+    "test": "test_at_config_handoff",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_at_config_handoff.py"
+    ]
+  },
+  {
+    "test": "test_mileage_persistence",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_mileage_persistence.py"
+    ]
+  },
+  {
+    "test": "test_mileage_quantization",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_mileage_quantization.py"
+    ]
+  },
+  {
+    "test": "test_size_trial",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_size_trial.py"
+    ]
+  },
+  {
+    "test": "test_release_identity_contract",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ]
+  },
+  {
+    "test": "test_boot_cold_start_recovery",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_cold_start_recovery.py"
+    ]
+  },
+  {
+    "test": "test_bootloader_bcr_failclosed",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_bcr_failclosed.py"
+    ]
+  },
+  {
+    "test": "test_platform_trust_anchor",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_platform_trust_anchor.py"
+    ]
+  },
+  {
+    "test": "test_feature_guards",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_feature_guards.py"
+    ]
+  },
+  {
+    "test": "test_ext_flash_layout",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_layout.py"
+    ]
+  },
+  {
+    "test": "test_agnss_workspace_ownership",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_agnss_workspace_ownership.py"
+    ]
+  },
+  {
+    "test": "test_fota_package",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_package.py"
+    ]
+  },
+  {
+    "test": "test_dev_release_manifest",
+    "exit_code": 0,
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_dev_release_manifest.py"
+    ]
+  }
+]

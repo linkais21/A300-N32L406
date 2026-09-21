@@ -5,35 +5,14 @@
 /* Compatibility routing only; work_mode_sleep owns the policy. */
 #define WORK_MODE_SLEEP_LEGACY_POWER_MGR 1
 
-static volatile wake_src_t s_wake;
-
 void pwr_init(void)
 {
     RCC_EnableAPB2PeriphClk(RCC_APB2_PERIPH_AFIO, ENABLE);
-    s_wake = WAKE_SRC_NONE;
     work_mode_sleep_init();
-}
-
-void pwr_process(void)
-{
-    work_sleep_wake_t wake = work_mode_sleep_take_wake();
-    if (wake != WORK_SLEEP_WAKE_NONE)
-        work_mode_sleep_process(1000U, wake);
-}
-
-pwr_state_t pwr_get_state(void)
-{
-    return work_mode_sleep_is_in_stop1() ? PWR_STATE_DEEP_SLEEP : PWR_STATE_ACTIVE;
-}
-
-void pwr_request_sleep(void)
-{
-    work_mode_sleep_process(15000U, WORK_SLEEP_WAKE_NONE);
 }
 
 void pwr_wake(wake_src_t src)
 {
-    s_wake |= src;
     if ((src & WAKE_SRC_ACC) != 0) work_mode_sleep_isr_wake(WORK_SLEEP_WAKE_ACC);
     if ((src & WAKE_SRC_SOS) != 0) work_mode_sleep_isr_wake(WORK_SLEEP_WAKE_SOS);
     if ((src & (WAKE_SRC_CHARGE | WAKE_SRC_LIGHT)) != 0)

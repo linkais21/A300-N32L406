@@ -1,0 +1,79 @@
+--- before/src\f39_command.c
++++ after/src\f39_command.c
+@@ -3,7 +3,8 @@
+ #include <stdbool.h>
+ #include <string.h>
+ 
+-static const char *const s_roots[] = {
++/* Longest root is seven ASCII bytes; avoid a Flash pointer per entry. */
++static const char s_roots[][8] = {
+     [F39_OPERATION_PARAM] = "PARAM",
+     [F39_OPERATION_DUALSET] = "DUALSET",
+     [F39_OPERATION_RESET] = "RESET",
+--- before/src\f39_reply.c
++++ after/src\f39_reply.c
+@@ -72,6 +72,23 @@
+         return F39_RESULT_INVALID;
+     }
+     return F39_RESULT_OK;
++}
++
++/* Share scalar query formatting, including truncation/error handling. */
++static f39_result_t query_unsigned(f39_reply_t *reply, const char *name,
++                                   unsigned long value)
++{
++    reply_clear(reply);
++    return reply_append(reply, "%s,%lu=Success!\r\n", name, value) ?
++        F39_RESULT_OK : failure(reply, name, "reply-too-long");
++}
++
++static f39_result_t query_text(f39_reply_t *reply, const char *name,
++                               const char *value, int capacity)
++{
++    reply_clear(reply);
++    return reply_append(reply, "%s,%.*s=Success!\r\n", name, capacity, value) ?
++        F39_RESULT_OK : failure(reply, name, "reply-too-long");
+ }
+ 
+ static void apply_effects(uint32_t effects, f39_platform_t *p)
+@@ -251,7 +268,7 @@
+         return reply_append(out, "FREQ,%u,%u=Success!\r\n", (unsigned)c->report_moving_s,
+                             (unsigned)c->report_stopped_s) ? F39_RESULT_OK : failure(out,name,"reply-too-long");
+     case F39_OPERATION_HBT:
+-        reply_clear(out); return reply_append(out,"HBT,%u=Success!\r\n",(unsigned)c->heartbeat_s)?F39_RESULT_OK:failure(out,name,"reply-too-long");
++        return query_unsigned(out, name, c->heartbeat_s);
+     case F39_OPERATION_FKEY:
+         reply_clear(out);
+         return reply_append(out, "FKEY,CONFIGURED=%u\r\n",
+@@ -262,23 +279,23 @@
+     case F39_OPERATION_LOG:
+         reply_clear(out); return reply_append(out, "LOG,STATUS=READY\r\n") ? F39_RESULT_OK : failure(out, name, "reply-too-long");
+     case F39_OPERATION_MODEL:
+-        reply_clear(out); return reply_append(out,"MODEL,%.*s=Success!\r\n",(int)CFG_MODEL_LEN,c->terminal_model)?F39_RESULT_OK:failure(out,name,"reply-too-long");
++        return query_text(out, name, c->terminal_model, CFG_MODEL_LEN);
+     case F39_OPERATION_SPEED:
+-        reply_clear(out); return reply_append(out,"SPEED,%u=Success!\r\n",(unsigned)c->speed_limit_kmh)?F39_RESULT_OK:failure(out,name,"reply-too-long");
++        return query_unsigned(out, name, c->speed_limit_kmh);
+     case F39_OPERATION_APN:
+-        reply_clear(out); return c->autoapn_en ? (reply_append(out,"APN,AUTO=Success!\r\n")?F39_RESULT_OK:failure(out,name,"reply-too-long")) : (reply_append(out,"APN,%.*s=Success!\r\n",(int)CFG_APN_LEN,c->apn)?F39_RESULT_OK:failure(out,name,"reply-too-long"));
++        return query_text(out, name, c->autoapn_en ? "AUTO" : c->apn, CFG_APN_LEN);
+     case F39_OPERATION_GPSDUP:
+-        reply_clear(out); return reply_append(out,"GPSDUP,%u=Success!\r\n",c->sleep_report_mode?0U:1U)?F39_RESULT_OK:failure(out,name,"reply-too-long");
++        return query_unsigned(out, name, c->sleep_report_mode ? 0UL : 1UL);
+     case F39_OPERATION_MLG:
+-        reply_clear(out); return reply_append(out,"MLG,%lu=Success!\r\n",(unsigned long)(c->mileage_m/100U))?F39_RESULT_OK:failure(out,name,"reply-too-long");
++        return query_unsigned(out, name, c->mileage_m / 100U);
+     case F39_OPERATION_CAR:
+-        reply_clear(out); return reply_append(out,"CAR,%.*s=Success!\r\n",(int)CFG_PLATE_LEN,c->plate_no)?F39_RESULT_OK:failure(out,name,"reply-too-long");
++        return query_text(out, name, c->plate_no, CFG_PLATE_LEN);
+     case F39_OPERATION_GPSBDS:
+-        reply_clear(out); return reply_append(out,"GPSBDS,%u=Success!\r\n",(unsigned)c->gpsbds_mode)?F39_RESULT_OK:failure(out,name,"reply-too-long");
++        return query_unsigned(out, name, c->gpsbds_mode);
+     case F39_OPERATION_GMTSET:
+         reply_clear(out); return reply_append(out,"GMTSET,%c%02u%02u=Success!\r\n",c->gmt_sign<0?'W':'E',(unsigned)c->gmt_hour,(unsigned)c->gmt_min)?F39_RESULT_OK:failure(out,name,"reply-too-long");
+     case F39_OPERATION_VIBSENS:
+-        reply_clear(out); return reply_append(out,"VIBSENS,%u=Success!\r\n",(unsigned)c->vib_sens)?F39_RESULT_OK:failure(out,name,"reply-too-long");
++        return query_unsigned(out, name, c->vib_sens);
+     default: return F39_RESULT_INVALID;
+     }
+ }

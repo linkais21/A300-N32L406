@@ -1,0 +1,12 @@
+{
+  "file": "A300-406-OTA-V3067.bin",
+  "deviceModel": "A300-406",
+  "versionCode": 3067,
+  "versionName": "T360-A300_406_20260920002905,V3.067",
+  "size": 105036,
+  "sha256": "5cb17088ffef70738c9a4794fd65a60c906fa63baef2346115b0707f4bb5d0f8",
+  "active": false,
+  "mandatory": false,
+  "signing": "platform-detached",
+  "releaseNotes": "实机验证版：修复连续缓弯补点停滞，集成升级恢复与通信等待加固，保留华大AGNSS。"
+}

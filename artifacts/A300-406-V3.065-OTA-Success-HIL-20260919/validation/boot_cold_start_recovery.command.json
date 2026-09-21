@@ -1,0 +1,7 @@
+{
+  "command": [
+    "C:\\Python314\\python.exe",
+    "tools/tests/test_boot_cold_start_recovery.py"
+  ],
+  "exit_code": 0
+}

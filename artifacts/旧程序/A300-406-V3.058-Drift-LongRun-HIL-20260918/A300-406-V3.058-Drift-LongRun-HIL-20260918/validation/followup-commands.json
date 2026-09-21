@@ -1,0 +1,25 @@
+[
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_guard.py"
+    ],
+    "exit_code": 2
+  },
+  {
+    "command": [
+      "C:\\Users\\86166\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\mingw32-make.exe",
+      "-s",
+      "release-gate",
+      "BUILD=build-drift-hil-v3058-20260918"
+    ],
+    "exit_code": 2
+  }
+]

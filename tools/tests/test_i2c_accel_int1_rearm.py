@@ -131,6 +131,10 @@ int main(void)
     reset_bus(0U, 1U);
     expect_init(true);
     assert(write_count == 12U);
+    const uint8_t expected_regs[] = {0x0F,0x10,0x11,0x20,0x20,0x16,0x19,0x21,0x27,0x28,0x20,0x20};
+    const uint8_t expected_values[] = {0x00,0x07,0x00,0x81,0x01,0x83,0x04,0x07,0x00,0x26,0x81,0x01};
+    assert(!memcmp(write_regs,expected_regs,sizeof expected_regs));
+    assert(!memcmp(write_values,expected_values,sizeof expected_values));
     assert(write_regs[10] == 0x20U && write_values[10] == 0x81U);
     assert(write_regs[11] == 0x20U && write_values[11] == 0x01U);
     assert(i2c_accel_get_diag()->int1_level == 1U);
@@ -146,6 +150,13 @@ int main(void)
 
     reset_bus(12U, 0U);  /* final restore write */
     expect_init(false);
+
+    for(unsigned cut=1;cut<=12;cut++) {
+        reset_bus(cut,0U);expect_init(false);
+        assert(write_count==cut); /* no later register write after failure */
+        assert(!memcmp(write_regs,expected_regs,cut));
+        assert(!memcmp(write_values,expected_values,cut));
+    }
 
     puts("test_i2c_accel_int1_rearm: PASS");
     return 0;

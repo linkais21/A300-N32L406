@@ -1,0 +1,566 @@
+--- before/src/gps_report_filter.c
++++ after/src/gps_report_filter.c
+@@ -17,7 +17,8 @@
+     REPORT_UNKNOWN = 0,
+     REPORT_MOVING,
+     REPORT_CANDIDATE,
+-    REPORT_LOCKED
++    REPORT_LOCKED,
++    REPORT_SUSPECT
+ } report_state_t;
+ 
+ /* L406 field trial: observed stationary windows reached 100 LSB (~98 mg).
+@@ -33,10 +34,18 @@
+      * 1e-7 degree samples preserve centimetre precision without 80 B doubles. */
+     union {
+         struct { int32_t lat[REPORT_WINDOW_COUNT], lon[REPORT_WINDOW_COUNT]; } fixes;
+-        struct { double lat, lon; } anchor;
++        struct {
++            double lat, lon;
++            int32_t ref_lat, ref_lon;
++            float distance, heading;
++            uint32_t started;
++        } anchor;
+     } position;
+     uint32_t last_poll_ms, last_rmc_ms, candidate_ms;
+     uint8_t fix_count, fix_next, move_count;
++    float travel_m;
++    uint32_t motion_ms;
++    bool motion_pending;
+     /* Five-entry ring and evidence flags fit in one byte; no persisted ABI. */
+     uint8_t accel_count : 3;
+     uint8_t accel_next : 3;
+@@ -44,6 +53,87 @@
+     uint8_t have_rmc : 1;
+ } s_report;
+ 
++static bool holding(void) { return s_report.state >= REPORT_LOCKED; }
++
++static bool quality_good(const gps_data_t *g)
++{
++    return gps_quality_fix_fresh() && g->satellites >= 6u &&
++           g->hdop > 0.0f && g->hdop <= 2.5f;
++}
++
++/* Local classification only; never project output coordinates.
++ * cos(lat) = sin(pi/2-|lat|), degree-7 Taylor on [0,pi/2].
++ * Absolute truncation error <= (pi/2)^9/9! < 0.000161. */
++static float offset_m(const gps_data_t *g, int32_t lat, int32_t lon,
++                      float *north, float *east)
++{
++    float x = (90.0f - fabsf((float)lat / 10000000.0f)) * 0.01745329252f;
++    float z = x*x;
++    float scale = x + x*z*(-1.0f/6.0f + z*(1.0f/120.0f - z/5040.0f));
++    double delta = g->lon - (double)lon / 10000000.0;
++    if (delta > 180.0) delta -= 360.0;
++    if (delta < -180.0) delta += 360.0;
++    *north = (float)(g->lat - (double)lat / 10000000.0) * 111319.5f;
++    *east = (float)delta * (111319.5f * scale);
++    return *north * *north + *east * *east;
++}
++
++/* Evidence is provisional, bounded, and discarded rather than replayed. */
++static bool suspect_motion(const gps_data_t *g, uint32_t now, uint32_t dt)
++{
++    float north, east, distance, turn;
++    static const int8_t direction[8][2] = {{1,0},{1,1},{0,1},{-1,1},
++                                         {-1,0},{-1,-1},{0,-1},{1,-1}};
++    if (g->speed_kmh < 0.5f || !(g->heading >= 0.0f && g->heading < 360.0f)) {
++        s_report.state = REPORT_LOCKED;
++        return false;
++    }
++    if (s_report.state == REPORT_LOCKED) {
++        s_report.position.anchor.ref_lat = (int32_t)(g->lat * 10000000.0);
++        s_report.position.anchor.ref_lon = (int32_t)(g->lon * 10000000.0);
++        s_report.position.anchor.distance = 0.0f;
++        s_report.position.anchor.heading = g->heading;
++        s_report.position.anchor.started = now;
++        s_report.travel_m = 0.0f;
++        s_report.state = REPORT_SUSPECT;
++        return false;
++    }
++    distance = offset_m(g, s_report.position.anchor.ref_lat,
++                        s_report.position.anchor.ref_lon, &north, &east);
++    turn = fabsf(g->heading - s_report.position.anchor.heading);
++    if (turn > 180.0f) turn = 360.0f-turn;
++    s_report.travel_m += g->speed_kmh * ((float)dt / 3600.0f);
++    if (now-s_report.position.anchor.started > 60000u || turn > 30.0f ||
++        distance + 1.0f < s_report.position.anchor.distance ||
++        distance > 4.0f*s_report.travel_m*s_report.travel_m + 1.0f) {
++        s_report.state = REPORT_LOCKED;
++        return false;
++    }
++    s_report.position.anchor.distance = distance;
++    unsigned sector = ((unsigned)((g->heading+22.5f)/45.0f)) % 8u;
++    float dot = north*direction[sector][0] + east*direction[sector][1];
++    unsigned norm = 1u + (sector & 1u);
++    return now-s_report.position.anchor.started >= 10000u && distance >= 16.0f &&
++           distance >= 0.25f*s_report.travel_m*s_report.travel_m && dot > 0.0f &&
++           2.0f*dot*dot >= distance*norm;
++}
++
++bool gps_report_filter_motion_pending(uint32_t now_ms)
++{
++    if (now_ms-s_report.motion_ms > 15000u) s_report.motion_pending = false;
++    return s_report.motion_pending;
++}
++
++void gps_report_filter_motion_ack(void) { s_report.motion_pending = false; }
++
++static void confirm_motion(uint32_t now)
++{
++    if (holding()) {
++        s_report.motion_ms = now;
++        s_report.motion_pending = true;
++    }
++}
++
+ static bool report_enabled(void)
+ {
+     const device_config_t *config = cfg_get();
+@@ -70,6 +160,7 @@
+ /* Retain poll deadline after failed reads: recovery must not busy-poll I2C. */
+ static void invalidate_evidence(void)
+ {
++    s_report.motion_pending = false;
+     clear_candidate(REPORT_UNKNOWN);
+     s_report.accel_count = 0u;
+     s_report.accel_next = 0u;
+@@ -185,40 +276,45 @@
+     uint32_t span_milli_lsb = acceleration_span() * 1000u;
+     if (span_milli_lsb >= (uint32_t)s_config.move_accel_mg * REPORT_ACCEL_LSB_PER_G) {
+         s_report.blockers |= GPS_REPORT_BLOCK_ACCEL;
++        if (report_fix_fresh(gps, now_ms) && gps->speed_kmh >= 0.5f)
++            confirm_motion(now_ms);
+         clear_candidate(REPORT_MOVING);
+         s_report.move_count = 0u;
+         return;
+     }
+-    if (s_report.state == REPORT_LOCKED &&
++    if (holding() &&
+         now_ms - s_report.candidate_ms > REPORT_FIX_HOLD_MS)
+         clear_candidate(REPORT_UNKNOWN);
+     if (!report_fix_fresh(gps, now_ms)) {
++        s_report.motion_pending = false;
+         s_report.blockers |= GPS_REPORT_BLOCK_FIX;
+         s_report.move_count = 0u;
+         s_report.have_rmc = false;
+-        if (s_report.state != REPORT_LOCKED ||
++        if (!holding() ||
+             span_milli_lsb > (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G)
+             clear_candidate(REPORT_UNKNOWN);
++        else s_report.state = REPORT_LOCKED;
+         return;
+     }
+ 
+     /* Only an established stationary anchor may reject weak low-speed
+      * evidence. Never use this exception to lock a vehicle already creeping.
+      * Missing/invalid DOP is not evidence of a high-quality speed solution. */
+-    bool weak_speed = s_report.state == REPORT_LOCKED &&
++    bool weak_speed = holding() &&
+         span_milli_lsb <= (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G &&
+         gps->speed_kmh <= REPORT_WEAK_SPEED_KMH &&
+-        (gps->satellites < 6u || !isfinite(gps->hdop) ||
+-         gps->hdop <= 0.0f || gps->hdop > 2.5f);
++        !quality_good(gps);
+ 
+     bool new_rmc = !s_report.have_rmc || gps->heading_update_ms != s_report.last_rmc_ms;
++    uint32_t dt = gps->heading_update_ms - s_report.last_rmc_ms;
+     if (new_rmc) {
+         if (s_report.have_rmc &&
+             gps->heading_update_ms - s_report.last_rmc_ms > REPORT_FIX_MAX_AGE_MS) {
+             s_report.blockers |= GPS_REPORT_BLOCK_RMC_GAP;
+             s_report.move_count = 0u;
+-            if (s_report.state != REPORT_LOCKED)
++            if (!holding())
+                 clear_candidate(REPORT_UNKNOWN);
++            else s_report.state = REPORT_LOCKED;
+         }
+         s_report.have_rmc = true;
+         s_report.last_rmc_ms = gps->heading_update_ms;
+@@ -232,14 +328,23 @@
+     /* Distinct RMC confirmation, independent of main-loop call frequency. */
+     if (s_report.move_count >= REPORT_MOVE_FIXES) {
+         s_report.blockers |= GPS_REPORT_BLOCK_SPEED;
++        confirm_motion(now_ms);
+         clear_candidate(REPORT_MOVING);
+         return;
+     }
+-    if (s_report.state == REPORT_LOCKED) {
++    if (holding()) {
++        if (span_milli_lsb > (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G)
++            s_report.state = REPORT_LOCKED;
++        else if (new_rmc && suspect_motion(gps, now_ms, dt)) {
++            confirm_motion(now_ms);
++            clear_candidate(REPORT_MOVING);
++            return;
++        }
+         s_report.candidate_ms = now_ms; /* locked: last fresh fix observation */
+         return;
+     }
+     if (s_report.accel_count < REPORT_WINDOW_COUNT ||
++        !quality_good(gps) ||
+         span_milli_lsb > (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G ||
+         gps->speed_kmh > s_config.stop_speed_kmh) {
+         if (span_milli_lsb > (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G)
+@@ -254,9 +359,17 @@
+         s_report.candidate_ms = now_ms;
+     }
+     if (new_rmc) {
++        float north, east;
++        if (s_report.fix_count &&
++            offset_m(gps, s_report.position.fixes.lat[0],
++                     s_report.position.fixes.lon[0], &north, &east) > 64.0f) {
++            clear_candidate(REPORT_CANDIDATE);
++            s_report.candidate_ms = now_ms;
++        }
+         s_report.position.fixes.lat[s_report.fix_next] = (int32_t)(gps->lat * 10000000.0);
+         s_report.position.fixes.lon[s_report.fix_next] = (int32_t)(gps->lon * 10000000.0);
+-        s_report.fix_next = (uint8_t)((s_report.fix_next + 1u) % REPORT_WINDOW_COUNT);
++        s_report.fix_next++;
++        if (s_report.fix_next == REPORT_WINDOW_COUNT) s_report.fix_next = 1u;
+         if (s_report.fix_count < REPORT_WINDOW_COUNT) s_report.fix_count++;
+     }
+     if (s_report.fix_count == REPORT_WINDOW_COUNT &&
+@@ -274,7 +387,7 @@
+ {
+     if (raw == NULL || out == NULL || raw == out) return false;
+     *out = *raw;
+-    if (!report_enabled() || s_report.state != REPORT_LOCKED ||
++    if (!report_enabled() || !holding() ||
+         !report_fix_fresh(raw, now_ms) || !s_report.have_poll ||
+         now_ms - s_report.last_poll_ms > REPORT_ACCEL_GAP_MS) return false;
+     out->lat = s_report.position.anchor.lat;
+--- before/include/gps_report_filter.h
++++ after/include/gps_report_filter.h
+@@ -23,7 +23,7 @@
+ typedef struct {
+     uint32_t candidate_ms;
+     uint16_t span_lsb;
+-    uint8_t state; /* 0 unknown, 1 moving, 2 candidate, 3 locked */
++    uint8_t state; /* 0 unknown, 1 moving, 2 candidate, 3 locked, 4 suspect */
+     uint8_t blockers;
+ } gps_report_filter_diag_t;
+ 
+@@ -36,9 +36,14 @@
+  * L406 trial defaults: 1/2 km/h, 120/180 mg, 30 seconds.
+  * Independent of VIBSENS (wake/working-mode motion sensitivity).
+  * An existing lock ignores <=3 km/h speed when acceleration is stable and
+- * satellites <6 or HDOP is missing/invalid/>2.5. Good-quality speed and
++ * quality fix is stale, satellites <6 or HDOP is missing/invalid/>2.5. Good-quality speed and
+  * >3 km/h weak speed still release after three distinct RMC samples.
+- * New locks still require <=1 km/h for 30 seconds.
++ * New locks require fresh quality (satellites>=6, 0<HDOP<=2.5), <=1 km/h
++ * and stable acceleration for 30 seconds; all samples within 8m of the first.
++ * A suspect state keeps the anchor while observing >=0.5 km/h creep:
++ * 10..60 seconds, >=4m, consistent course/displacement and speed integral.
++ * Confirmation releases the anchor and raises a bounded live-report event;
++ * candidates are never replayed. Consistent GNSS drift can still mimic motion.
+  * reset clears evidence/anchor. Call reset on external wake.
+  * Invalid/stale GNSS retains a locked anchor for at most 10 seconds with
+  * continuous stable acceleration; copy never substitutes an invalid fix.
+@@ -49,6 +54,9 @@
+ /* Call regularly after GNSS integrity update; at most one read / 200ms.
+  * now_ms is the monotonic uint32 tick, including natural wraparound. */
+ void gps_report_filter_process(uint32_t now_ms);
++/* Main-loop event expires after 15 s; acknowledge only after live send success. */
++bool gps_report_filter_motion_pending(uint32_t now_ms);
++void gps_report_filter_motion_ack(void);
+ /* LIVE data selection only: copies raw to out, substitutes lat/lon/speed/course
+  * only when locked and evidence is fresh. Returns whether substitution occurred.
+  * NULL -> false; raw == out -> false without mutation. Other input stays intact.
+--- before/src/jt808.c
++++ after/src/jt808.c
+@@ -1068,6 +1068,20 @@
+     uint8_t index;
+     bool first_fix_sent = false;
+     bool corner_append_blocked = false;
++
++    /* Share the live first-fix sender: departure retries must not create or
++     * drain blind-zone transactions. The event itself expires after 15s. */
++    static uint32_t motion_retry_ms;
++    static bool motion_retry;
++    bool motion_due = false;
++    if (!gps_report_filter_motion_pending(now)) motion_retry = false;
++    else if (valid && jt808_is_online() && !fota_is_active() &&
++             (!motion_retry || now-motion_retry_ms >= 1000u)) {
++        motion_retry = true;
++        motion_retry_ms = now;
++        motion_due = true;
++        goto live_reports;
++    }
+ 
+     /* Retry a deferred corner blind-zone append regardless of whether a new
+      * heading sample/event arrived this tick. */
+@@ -1197,17 +1211,24 @@
+         }
+     }
+ 
++live_reports:
+     if (valid) {
+         for (index = 0U; index < 2U; ++index) {
+             jt808_session_t *session = &s_sessions[index];
+-            if (session->waiting_first_fix &&
++            if ((motion_due || session->waiting_first_fix) &&
+                 jt808_channel_online(session->channel) &&
+                 jt808_send_location_to(session->channel, &snapshot) == 0) {
+                 session->waiting_first_fix = false;
+                 first_fix_sent = true;
+             }
+         }
+-        if (first_fix_sent) s_last_location_ms = now;
++        if (first_fix_sent) {
++            s_last_location_ms = now;
++            if (motion_due) {
++                gps_report_filter_motion_ack();
++                s_alarm_flags = 0U;
++            }
++        }
+     }
+ }
+ 
+--- before/tools/tests/gps_report_filter_host.c
++++ after/tools/tests/gps_report_filter_host.c
+@@ -9,7 +9,7 @@
+ static gps_data_t raw;
+ static accel_data_t acceleration;
+ static device_config_t device;
+-static bool sensor_ok, trusted, enabled;
++static bool sensor_ok, trusted, enabled, gga_fresh;
+ static unsigned reads;
+ static uint32_t now;
+ 
+@@ -17,6 +17,7 @@
+ bool gps_is_enabled(void) { return enabled; }
+ device_config_t *cfg_get(void) { return &device; }
+ bool gps_is_valid(void) { return trusted && raw.valid; }
++bool gps_quality_fix_fresh(void) { return gga_fresh && gps_is_valid() && raw.fix_quality != 0u; }
+ bool i2c_accel_read(accel_data_t *out)
+ {
+     reads++;
+@@ -52,6 +53,7 @@
+     raw.hdop = 0.9f; raw.altitude_m = 25.0f;
+     acceleration.x = 0; acceleration.y = 0; acceleration.z = 1024;
+     sensor_ok = trusted = enabled = true;
++    gga_fresh = true;
+     device.stopdrift_en = 1; device.stopdrift_thr = 50;
+     reads = 0; now = 10000;
+     gps_report_filter_init();
+@@ -318,6 +320,115 @@
+     puts("PASS: weak 1-3 km/h drift held; quality, speed and acceleration release");
+ }
+ 
++static void test_anchor_quality_and_cluster(void)
++{
++    setup(); raw.hdop = 4.0f; quiet(40); assert(!locked());
++    setup(); raw.satellites = 5; quiet(40); assert(!locked());
++    setup(); raw.hdop = NAN; quiet(40); assert(!locked());
++    setup(); raw.fix_quality = 0; quiet(40); assert(!locked());
++    setup(); gga_fresh = false; quiet(40); assert(!locked());
++    setup();
++    for (unsigned i=0;i<200;++i) {
++        raw.lat = 10.0 + (i%10 < 5 ? 0.0 : 0.001);
++        step(i%5==0);
++        assert(!locked());
++    }
++    raw.lat=10.0; quiet(35); assert(locked());
++    puts("PASS: new anchor requires quality and concentrated observations");
++}
++
++static void test_smooth_creep(void)
++{
++    setup(); anchor(); raw.hdop=4.0f; raw.speed_kmh=1.0f; raw.heading=0.0f;
++    unsigned released=0;
++    for(unsigned i=0;i<200;++i) {
++        raw.lat += (1.0/3.6)*0.2/111319.5;
++        step(i%5==0);
++        if(!locked()) { released=i+1;break; }
++    }
++    assert(released>=50 && released<200);
++    puts("PASS: smooth weak-signal creep releases without vibration");
++}
++
++static void travel(float speed, float heading)
++{
++    double angle = heading * 0.0174532925199433;
++    double metres = speed / 3.6 * 0.2;
++    raw.lat += metres*cos(angle)/111319.5;
++    raw.lon += metres*sin(angle)/(111319.5*cos(raw.lat*0.0174532925199433));
++    if(raw.lon > 180.0) raw.lon -= 360.0;
++    if(raw.lon < -180.0) raw.lon += 360.0;
++}
++
++static void test_creep_geography_and_events(void)
++{
++    const float speeds[] = {0.5f,1.0f,2.5f};
++    const double latitudes[] = {0.0,50.0,-80.0,89.0};
++    for(unsigned v=0;v<3;v++) for(unsigned l=0;l<4;l++)
++    for(unsigned dir=0;dir<8;dir++) {
++        setup(); raw.lat=latitudes[l]; raw.lon=179.99999;
++        /* Let both candidate and confirmed motion cross uint32 wrap. */
++        now=UINT32_MAX-55000u;
++        for(unsigned i=0;i<180;i++) step(i%5==0);
++        assert(locked());
++        raw.hdop=4.0f; raw.speed_kmh=speeds[v]; raw.heading=dir*45.0f;
++        unsigned i;
++        for(i=0;i<250;i++) {
++            travel(raw.speed_kmh,raw.heading);step(i%5==0);
++            if(!locked()) break;
++        }
++        assert(i>=50 && i<250);
++        assert(gps_report_filter_motion_pending(now));
++        assert(gps_report_filter_motion_pending(now+15000));
++        assert(!gps_report_filter_motion_pending(now+15001));
++    }
++    setup();anchor();raw.speed_kmh=2.0f;
++    step(true);step(true);step(true);
++    assert(gps_report_filter_motion_pending(now));
++    gps_report_filter_motion_ack();assert(!gps_report_filter_motion_pending(now));
++    puts("PASS: 96 creep scenarios, 8 headings, equator/high latitude/dateline/tick wrap, event expiry/ack");
++}
++
++static void test_suspect_rejection(void)
++{
++    for(unsigned mode=0;mode<8;mode++) {
++        setup();anchor();raw.hdop=4.0f;raw.speed_kmh=1.0f;raw.heading=0;
++        double lat=raw.lat;
++        for(unsigned i=0;i<350;i++) {
++            switch(mode) {
++            case 0: raw.lat=lat+0.001;break; /* one jump, then still */
++            case 1: raw.lat=lat+(i%10<5?0.00005:0);break; /* alternating */
++            case 2: travel(1,90);break; /* displacement disagrees with heading */
++            case 3: travel(1,0);raw.speed_kmh=0;break;
++            case 4: travel(1,0);raw.heading=NAN;break;
++            case 5: travel(1,0);raw.heading=i%10<5?0:90;break;
++            case 6: travel(0.05f,0);break; /* displacement too small for speed */
++            default: break; /* speed but no displacement, suspect times out */
++            }
++            step(i%5==0);assert(locked());
++            assert(!gps_report_filter_motion_pending(now));
++        }
++    }
++    /* Loss/reset/gray acceleration cannot retain half-built movement evidence. */
++    for(unsigned failure=0;failure<5;failure++) {
++        setup();anchor();raw.hdop=4;raw.speed_kmh=1;raw.heading=0;
++        for(unsigned i=0;i<45;i++) {travel(1,0);step(i%5==0);}
++        switch(failure) {
++        case 0: raw.valid=false;break;
++        case 1: sensor_ok=false;break;
++        case 2: acceleration.x=123;break;
++        case 3: gps_report_filter_reset();break;
++        default: for(unsigned i=0;i<20;i++) step(false);break;
++        }
++        step(true);
++        assert(!gps_report_filter_motion_pending(now));
++        raw.valid=sensor_ok=true;acceleration.x=0;
++        for(unsigned i=0;i<35;i++) {travel(1,0);step(i%5==0);}
++        assert(!gps_report_filter_motion_pending(now));
++    }
++    puts("PASS: jump/zigzag/heading/speed/timeout rejection; incomplete evidence canceled");
++}
++
+ static void test_short_fix_loss(void)
+ {
+     for (unsigned failure = 0; failure < 5; ++failure) {
+@@ -395,6 +506,10 @@
+     assert(!locked() && reads == 0);
+     puts("PASS: custom profile unchanged, no new polling");
+ #else
++    test_anchor_quality_and_cluster();
++    test_smooth_creep();
++    test_creep_geography_and_events();
++    test_suspect_rejection();
+     test_weak_signal_stationary();
+     test_short_fix_loss();
+     test_stationary_sensor_noise();
+--- before/tools/tests/test_gps_report_wire.py
++++ after/tools/tests/test_gps_report_wire.py
+@@ -12,7 +12,8 @@
+ #include "fota.h"
+ #include "at_config.h"
+ /* Dependencies added since the shared transport fixture was written. */
+-fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
++static fota_state_t fota_state = FOTA_STATE_IDLE;
++fota_state_t fota_get_state(void) { return fota_state; }
+ void ec800m_tcp_close(uint8_t ch) { open_ch[ch]=false; }
+ void gps_get_unfixed_report(gps_data_t *out) { memset(out,0,sizeof(*out)); }
+ bool at_config_execute_text_response(const uint8_t *text, uint16_t len,
+@@ -22,6 +23,7 @@
+ }
+ bool gps_is_enabled(void) { return true; }
+ bool gps_is_valid(void) { return gps.valid; }
++bool gps_quality_fix_fresh(void) { return gps.valid; }
+ bool i2c_accel_read(accel_data_t *a) { a->x=0; a->y=0; a->z=1024; return true; }
+ static uint32_t u32(const uint8_t *p) {
+  return ((uint32_t)p[0]<<24)|((uint32_t)p[1]<<16)|((uint32_t)p[2]<<8)|p[3];
+@@ -39,6 +41,7 @@
+  auth_resp(0,sn0,0); auth_resp(3,sn3,0);
+  gps.valid=true; gps.fix_quality=1; gps.lat=50; gps.lon=10;
+  gps.year=2026; gps.month=9; gps.day=17; gps.speed_kmh=0.3f;
++ gps.hdop=0.9f; gps.satellites=9;
+  gps_report_filter_init();
+  for(unsigned i=0;i<180;i++) {
+    g_tick_ms+=200; gps.last_update_ms=g_tick_ms;
+@@ -72,6 +75,20 @@
+  msg(0,&sn0,d,&n); assert(u32(d+20)==50000000);
+  query(0,0x8201); assert(msg(0,&sn0,d,&n)==0x0201);
+  assert(u32(d+20)==50000000);
++ /* Confirmed smooth movement reports now, even with a long periodic interval. */
++ gps.lat=50; gps.lon=10; gps.heading=0; gps.speed_kmh=1.0f;
++ jt808_process(); /* finish any pending first-fix scheduling */
++ unsigned before=sends[0];
++ for(unsigned i=0;i<150;i++) {
++   g_tick_ms+=200; gps.lat+=(1.0/3.6)*0.2/111319.5;
++   gps.last_update_ms=g_tick_ms;
++   if(i%5==0) gps.heading_update_ms=g_tick_ms;
++   gps_report_filter_process(g_tick_ms); jt808_process();
++ }
++ assert(sends[0]==before+1);
++ assert(msg(0,&sn0,d,&n)==0x0200);
++ assert(u32(d+20)>50000000 && d[31]==10);
++ before=sends[0];jt808_process();assert(sends[0]==before);
+  /* Historical retained positions are never filtered a second time. */
+  trusted_available=true;
+  assert(jt808_send_location_work_mode(0,true,1U)==0);
+@@ -79,6 +96,41 @@
+  gps_report_filter_reset();
+  assert(jt808_send_location_to(0,&gps)==0);
+  msg(0,&sn0,d,&n); assert(u32(d+20)==(uint32_t)(gps.lat*1000000.0));
++ /* A new event retries live delivery without creating blind-zone records. */
++ gps.speed_kmh=0.3f; gps.hdop=0.9f;
++ for(unsigned i=0;i<180;i++) {
++   g_tick_ms+=200; gps.last_update_ms=g_tick_ms;
++   if(i%5==0) gps.heading_update_ms=g_tick_ms;
++   gps_report_filter_process(g_tick_ms); jt808_process();
++ }
++ gps.speed_kmh=2.0f;
++ for(unsigned i=0;i<3;i++) {
++   g_tick_ms+=200; gps.last_update_ms=gps.heading_update_ms=g_tick_ms;
++   gps_report_filter_process(g_tick_ms);
++ }
++ assert(gps_report_filter_motion_pending(g_tick_ms));
++ before=sends[0];
++ fota_state=FOTA_STATE_DOWNLOADING;jt808_process();assert(sends[0]==before);
++ fota_state=FOTA_STATE_IDLE;
++ work_state=WORK_MODE_STATIONARY_SLEEP;jt808_process();assert(sends[0]==before);
++ work_state=WORK_MODE_REALTIME;
++ gps.valid=false;jt808_process();assert(sends[0]==before);
++ gps.valid=true;
++ fail_send[0]=fail_send[3]=true;
++ unsigned appends_before=append_calls;
++ before=sends[0]; jt808_process();
++ assert(sends[0]==before+1 && append_calls==appends_before);
++ assert(gps_report_filter_motion_pending(g_tick_ms));
++ for(unsigned i=0;i<4;i++) {
++   g_tick_ms+=200;gps.last_update_ms=gps.heading_update_ms=g_tick_ms;
++   gps_report_filter_process(g_tick_ms);jt808_process();
++ }
++ assert(sends[0]==before+1);
++ fail_send[0]=false;
++ g_tick_ms+=200;gps.last_update_ms=gps.heading_update_ms=g_tick_ms;
++ gps_report_filter_process(g_tick_ms);jt808_process();
++ assert(sends[0]==before+2 && !gps_report_filter_motion_pending(g_tick_ms));
++ assert(append_calls==appends_before);
+  return 0;
+ }
+ '''

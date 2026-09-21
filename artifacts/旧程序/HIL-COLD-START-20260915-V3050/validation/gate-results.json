@@ -1,0 +1,48 @@
+[
+  {
+    "name": "identity",
+    "command": [
+      "python",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "release-gate",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "release-gate",
+      "BUILD=build/cold-start-3050/app",
+      "TOOLCHAIN_DIR=D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin"
+    ],
+    "exit_code": 2
+  },
+  {
+    "name": "frame-budget",
+    "command": [
+      "python",
+      "tools/tests/test_ram01_frame_budget.py",
+      "build/cold-start-3050/app"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "boot-map",
+    "command": [
+      "python",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "bootloader/build/bootloader.map"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "libc",
+    "command": [
+      "python",
+      "tools/libc_parser_guard.py",
+      "build/cold-start-3050/app/a300_firmware.map"
+    ],
+    "exit_code": 0
+  }
+]

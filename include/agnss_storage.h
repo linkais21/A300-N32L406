@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include "ext_flash_layout.h"
 
+/* Value 2 is retired; retain its identifier/value for persisted config compatibility. */
 typedef enum { GNSS_TYPE_UNKNOWN=0, GNSS_TYPE_TAU804M=1, GNSS_TYPE_ATGM332D_F7N=2 } gnss_type_t;
 
 #define AGNSS_COMMIT_MARKER 0xA66A55AAUL
@@ -29,7 +30,6 @@ bool agnss_storage_write(const void *data, uint16_t len);
 bool agnss_storage_commit(const agnss_meta_t *meta);
 bool agnss_storage_read(uint32_t offset, void *buf, uint16_t len);
 bool agnss_storage_get_latest(agnss_meta_t *meta);
-uint32_t agnss_storage_data_base(const agnss_meta_t *meta);
 void agnss_storage_abort(void);
 /* Single-main-loop injection session. Open verifies once and pins a slot;
  * subsequent opens return that snapshot. All AGNSS mutations must use this

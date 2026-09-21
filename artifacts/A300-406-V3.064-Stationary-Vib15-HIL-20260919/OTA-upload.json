@@ -1,0 +1,12 @@
+{
+  "file": "A300-406-OTA-V3064.bin",
+  "deviceModel": "A300-406",
+  "versionCode": 3064,
+  "versionName": "T360-A300_406_20260919154313,V3.064",
+  "active": false,
+  "mandatory": false,
+  "signing": "platform-detached",
+  "sha256": "d638e47072340b5b0a4c89240794d36593ecbc3471f8be8450e0e9357aebb2b6",
+  "size": 106440,
+  "releaseNotes": "HIL candidate: stationary filter 120/180 mg; default VIBSENS 15; one-time migration of legacy 10/20. RAM release gate incomplete."
+}

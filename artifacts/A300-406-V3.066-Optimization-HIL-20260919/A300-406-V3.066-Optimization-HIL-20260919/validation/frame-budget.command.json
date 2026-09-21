@@ -1,0 +1,10 @@
+{
+  "command": [
+    "C:\\Python314\\python.exe",
+    "tools/tests/test_ram01_frame_budget.py",
+    "D:\\A300_406_tools\\A300_406\\A300-first\\build\\optimization-v3066-20260919\\app"
+  ],
+  "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+  "exit_code": 0,
+  "elapsed_seconds": 0.0699312686920166
+}

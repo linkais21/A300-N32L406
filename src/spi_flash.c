@@ -10,7 +10,6 @@
 #define CMD_WRITE_ENABLE  0x06U
 #define CMD_PAGE_PROGRAM  0x02U
 #define CMD_SECTOR_ERASE  0x20U
-#define CMD_CHIP_ERASE    0xC7U
 #define CMD_READ_SR1      0x05U
 #define CMD_READ_SR2      0x35U
 #define CMD_READ_SR3      0x15U
@@ -225,23 +224,6 @@ spi_flash_program_result_t spi_flash_write_result(uint32_t addr, const uint8_t *
 bool spi_flash_write(uint32_t addr, const uint8_t *buf, uint32_t len)
 {
     return spi_flash_write_result(addr, buf, len) == SPI_FLASH_PROGRAM_COMPLETED;
-}
-
-bool spi_flash_erase_chip(void)
-{
-    uint8_t d;
-    bool ok;
-    if (!ensure_id() || !write_enable()) return false;
-    FLASH_CS_LOW();
-    ok = xfer(CMD_CHIP_ERASE, &d);
-    FLASH_CS_HIGH();
-    if (!ok || !ready(SPI_FLASH_ERASE_TIMEOUT_MS)) {
-        (void)refresh_status();
-        set_failure(protected_status() ? SPI_FLASH_FAILURE_PROTECTED : SPI_FLASH_FAILURE_ERASE);
-        return false;
-    }
-    set_failure(SPI_FLASH_FAILURE_NONE);
-    return true;
 }
 
 void spi_flash_get_diagnostics(spi_flash_diagnostics_t *out) { if (out != NULL) *out = s_diag; }

@@ -1,0 +1,54 @@
+{
+  "version": "V3.055-HIL-Flash320",
+  "version_counter": 3055,
+  "mcu": "N32L406CBL7",
+  "app_flash_used": 106176,
+  "app_flash_limit": 106496,
+  "app_flash_remaining": 320,
+  "release_gate": "FAILED_INCOMPLETE_STACK_EVIDENCE",
+  "purpose": "experimental HIL stability test",
+  "ota_protocol": "unchanged except optional X-Modem-IMEI check header",
+  "factory_init_warning": "Bootloader contains existing factory-init request at offset 0x5800; reflash may reset persistent initialization state. Back up configuration first.",
+  "artifacts": {
+    "App-N32L406CBL7.bin": {
+      "size": 106176,
+      "sha256": "4e2a160b151b89c6d9e9c140d04c0c90736d7560e7486486213b6096ce8fd242"
+    },
+    "App-N32L406CBL7.elf": {
+      "size": 164380,
+      "sha256": "fdb8ae2c24054466d1acb62829036e55b549659dbd3d8100b842c804bf1e70e4"
+    },
+    "App-N32L406CBL7.hex": {
+      "size": 298698,
+      "sha256": "504b453b9723fd76d36c1dd92e100825db3b5b91c69e58268a4340c24f93aa7f"
+    },
+    "App-N32L406CBL7.map": {
+      "size": 136430,
+      "sha256": "9deab5a3465cc4f5d90d44fa8a45f3ba458cf594498801310e6d977463ffe6ca"
+    },
+    "Bootloader-N32L406CBL7.bin": {
+      "size": 22556,
+      "sha256": "9ae0b35872943445e34e8ede414a7afd7243b3baa605bbfae4eb7f83fafefd8e"
+    },
+    "Bootloader-N32L406CBL7.elf": {
+      "size": 32720,
+      "sha256": "aeb194a43591012252ebcd8b3b768596446e2e59cc6710c26cd2c37f59ff1afa"
+    },
+    "Bootloader-N32L406CBL7.hex": {
+      "size": 40667,
+      "sha256": "9faf51b4e9a0b7267d66011038196a1f3ab8a9d670be5f152c53ec04de0bf9f4"
+    },
+    "Bootloader-N32L406CBL7.map": {
+      "size": 71614,
+      "sha256": "fd1c3670b6b4f1bc067e6631846fb28ff390961821cddd05027a1f1d5413c970"
+    },
+    "Combined-N32L406CBL7.bin": {
+      "size": 130752,
+      "sha256": "27a0471918156c5ef7d3fbe41433263818c04fffb45431ee030c1bc5bab9c034"
+    },
+    "flash-capacity.json": {
+      "size": 4685,
+      "sha256": "034bebcca360dcb737648a69e68387dd2b3302861201970d5bd2330119855225"
+    }
+  }
+}

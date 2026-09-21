@@ -1,0 +1,203 @@
+[
+  {
+    "test": "test_boot_cold_start_recovery",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_boot_cold_start_recovery.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_boot_spi_timing",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_boot_spi_timing.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_boot_bcr_device_gate",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_boot_bcr_device_gate.py"
+    ],
+    "exit_code": 5
+  },
+  {
+    "test": "test_bootloader_bcr_failclosed",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_bootloader_bcr_failclosed.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_bootloader_platform_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_bootloader_platform_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_boot_progress_uart",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_boot_progress_uart.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_bootloader_factory_init",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_bootloader_factory_init.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_factory_init_artifact",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_factory_init_artifact.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_bootloader_invalid_vector_recovery",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_bootloader_invalid_vector_recovery.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_bootloader_legacy_recovery",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_bootloader_legacy_recovery.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_bootloader_lkg_powercut_c",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_bootloader_lkg_powercut_c.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_bootloader_powercut",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_bootloader_powercut.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_firmware_signature",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_firmware_signature.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_fota_package",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_fota_package.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_fota_resume",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_fota_resume.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_fota_checkpoint_powercut",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_fota_checkpoint_powercut.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_internal_flash_layout",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_internal_flash_layout.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_ext_flash_layout",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_ext_flash_layout.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_a300_ota_image",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_a300_ota_image.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_release_identity_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_release_identity_contract.py"
+    ],
+    "exit_code": 5
+  },
+  {
+    "test": "test_dev_release_manifest",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_dev_release_manifest.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_build_version_refresh",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_build_version_refresh.py"
+    ],
+    "exit_code": 5
+  },
+  {
+    "test": "test_feature_guards",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_feature_guards.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "test": "test_fota_stack_guard",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_fota_stack_guard.py"
+    ],
+    "exit_code": 0
+  }
+]

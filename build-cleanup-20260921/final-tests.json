@@ -1,0 +1,204 @@
+[
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_report_wire.py"
+    ],
+    "exit": 0,
+    "log": "test_gps_report_wire.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_report_filter.py"
+    ],
+    "exit": 0,
+    "log": "test_gps_report_filter.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_nmea_replay.py"
+    ],
+    "exit": 0,
+    "log": "test_nmea_replay.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_huada_gsv.py"
+    ],
+    "exit": 0,
+    "log": "test_gps_huada_gsv.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_retained_clock.py"
+    ],
+    "exit": 0,
+    "log": "test_gps_retained_clock.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_config.py"
+    ],
+    "exit": 0,
+    "log": "test_f39_config.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_actions.py"
+    ],
+    "exit": 0,
+    "log": "test_f39_actions.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_end_to_end.py"
+    ],
+    "exit": 0,
+    "log": "test_f39_end_to_end.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_car_reply_encoding.py"
+    ],
+    "exit": 0,
+    "log": "test_car_reply_encoding.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_at_config_serial_f39.py"
+    ],
+    "exit": 3221226505,
+    "log": "test_at_config_serial_f39.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_i2c_accel_int1_rearm.py"
+    ],
+    "exit": 0,
+    "log": "test_i2c_accel_int1_rearm.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_i2c_accel_vibration_adapter.py"
+    ],
+    "exit": 0,
+    "log": "test_i2c_accel_vibration_adapter.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_i2c_accel_vibration_filter.py"
+    ],
+    "exit": 0,
+    "log": "test_i2c_accel_vibration_filter.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_vibration_sensitivity.py"
+    ],
+    "exit": 0,
+    "log": "test_vibration_sensitivity.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_power_wake_routing.py"
+    ],
+    "exit": 0,
+    "log": "test_power_wake_routing.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_checkpoint_powercut.py"
+    ],
+    "exit": 0,
+    "log": "test_fota_checkpoint_powercut.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_agnss_storage.py"
+    ],
+    "exit": 0,
+    "log": "test_agnss_storage.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_store_host.py"
+    ],
+    "exit": 0,
+    "log": "test_ext_flash_store_host.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_feature_guards.py"
+    ],
+    "exit": 0,
+    "log": "test_feature_guards.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_stationary_location_owner.py"
+    ],
+    "exit": 0,
+    "log": "test_stationary_location_owner.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_corner_blind_zone_replay.py"
+    ],
+    "exit": 0,
+    "log": "test_corner_blind_zone_replay.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "exit": 0,
+    "log": "test_release_identity_contract.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_shallow_sleep_contract.py"
+    ],
+    "exit": 0,
+    "log": "test_shallow_sleep_contract.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_sleep_wake_timestamp_vibration_contract.py"
+    ],
+    "exit": 0,
+    "log": "test_sleep_wake_timestamp_vibration_contract.log"
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_location_encoding_equivalence.py",
+      "--baseline",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build-cleanup-20260921\\before\\src\\jt808.c"
+    ],
+    "exit": 0,
+    "log": "test_location_encoding_equivalence.log"
+  }
+]

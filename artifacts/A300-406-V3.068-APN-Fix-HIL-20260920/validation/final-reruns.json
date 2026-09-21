@@ -1,0 +1,18 @@
+[
+  {
+    "command": [
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "exit_code": 0,
+    "output": "test_release_identity_contract: PASS\n"
+  },
+  {
+    "command": [
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "bootloader/build/bootloader.map"
+    ],
+    "exit_code": 0,
+    "output": "map guard PASS (static capacity only): mode=bootloader flash=24576/24576 static_ram=7/18040; Boot runtime stack not audited\n"
+  }
+]

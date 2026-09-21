@@ -1,0 +1,8 @@
+{
+  "manifest_hashes": "passed",
+  "source_hashes": "passed",
+  "host_scripts_passed": 72,
+  "git_diff_check_exit": 0,
+  "hardware_tested": false,
+  "release_approved": false
+}

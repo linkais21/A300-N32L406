@@ -5,15 +5,11 @@
 #include "debug_uart.h"
 #include "n32l40x.h"
 #include <stddef.h>
+#include <string.h>
 
 /* DA218E register map (datasheet Table 14) */
 #define DA218E_REG_CHIPID      0x01
 #define DA218E_REG_ACC_X_LSB   0x02
-#define DA218E_REG_ACC_X_MSB   0x03
-#define DA218E_REG_ACC_Y_LSB   0x04
-#define DA218E_REG_ACC_Y_MSB   0x05
-#define DA218E_REG_ACC_Z_LSB   0x06
-#define DA218E_REG_ACC_Z_MSB   0x07
 #define DA218E_REG_RANGE       0x0F
 #define DA218E_REG_ODR_AXIS    0x10
 #define DA218E_REG_MODE_BW     0x11
@@ -88,41 +84,31 @@ static void da218e_bus_recover(void)
                bus_scl(), bus_sda(), BSP_I2C->STS1, BSP_I2C->STS2);
 }
 
-/* G452-compatible adaptive baseline + threshold detector.
- * Motion is the maximum per-axis deviation from the update-before baseline;
- * the shared filter then adapts the baseline by 1/8 per sample.
- * VIB_CONFIRM：连续命中次数达到才确认"在运动"（×200ms=持续时间）
- * 中间一次未命中即清零——防单次尖峰误判 */
+/* Shared adaptive baseline threshold for the active work-mode detector. */
 #define VIB_THRESH     150   /* LSB, maximum single-axis deviation threshold */
-#define VIB_CONFIRM    15    /* 连续15次×200ms = 3s确认，太敏感改25，唤不醒改10 */
 
 /* Work-mode product sensitivity levels are not DA218E register values. */
 #define VIBRATION_SAMPLE_INTERVAL_MS 200U
-#define VIBRATION_SENSITIVITY_LEVEL_10 10U
-#define VIBRATION_SENSITIVITY_LEVEL_COUNT 10U
 /* Product-facing VIBSENS scale from the terminal command spec: 1..50, where a
  * smaller number is more sensitive.  The scale is anchored at level 30 =
  * VIB_THRESH, the threshold the sleep/wake logic was commissioned against,
- * and that is also the shipped default: a field capture at level 10 (70 LSB)
+ * while the shipped default is level 15: a field capture at level 10 (70 LSB)
  * showed bench noise deltas of 71..106 repeatedly clearing the threshold on a
  * genuinely stationary device, which reset the stationary timer and prevented
  * STOP1 entry.  Out-of-range or unconfigured input falls back to the default. */
 #define VIBRATION_SENSITIVITY_MIN 1U
 #define VIBRATION_SENSITIVITY_MAX 50U
 #define VIBRATION_SENSITIVITY_ANCHOR 30U
-#define VIBRATION_SENSITIVITY_DEFAULT 20U
+#define VIBRATION_SENSITIVITY_DEFAULT 15U
 #define VIBRATION_THRESHOLD_STEP 4U
 
-static accel_vibration_filter_t s_motion_filter;
-static uint8_t s_vib_count = 0;
-static bool    s_is_moving = false;
 static accel_vibration_filter_t s_window_filter;
 static uint32_t s_last_vibration_sample_ms = 0U;
 static bool s_vibration_sample_seen = false;
 
 /* VIBSENS product scale (1..50, smaller = more sensitive) mapped linearly onto
  * the delta threshold in accelerometer LSB, anchored at level 30 = VIB_THRESH.
- * Level 1 gives 34 LSB, level 20 (the shipped default) 110, level 50 230.
+ * Level 1 gives 34 LSB, level 15 (the shipped default) 90, level 50 230.
  * Out-of-range or unconfigured input falls back to the shipped default. */
 static uint16_t vibration_threshold_by_level(uint8_t sensitivity_level)
 {
@@ -293,24 +279,8 @@ static da218e_fail_stage_t da218e_read_id(uint8_t addr, uint8_t *id)
 /* ── Public ───────────────────────────────────────────────────────────────── */
 void i2c_accel_init(void)
 {
-    accel_vibration_filter_reset(&s_motion_filter);
     accel_vibration_filter_reset(&s_window_filter);
-    s_vib_count = 0U;
-    s_is_moving = false;
-    s_diag.x = 0;
-    s_diag.y = 0;
-    s_diag.z = 0;
-    s_diag.sample_count = 0U;
-    s_diag.read_fail_count = 0U;
-    s_diag.delta = 0U;
-    s_diag.threshold = 0U;
-    s_diag.vibration_hit_count = 0U;
-    s_diag.address = 0U;
-    s_diag.int1_level = 0U;
-    s_diag.int1_rearm_ok = false;
-    s_diag.int1_rearm_fail_count = 0U;
-    s_diag.read_ok = false;
-    s_diag.vibration_hit = false;
+    memset(&s_diag, 0, sizeof(s_diag));
     s_last_vibration_log_ms = 0U;
     delay_ms(50);
     dbg_printf("[ACCEL] bus af SCL=%u SDA=%u STS1=%04x STS2=%04x\r\n",
@@ -334,24 +304,28 @@ void i2c_accel_init(void)
                        id == 0x13 ? " OK" : " WRONG(exp 0x13)");
             if (id != 0x13) continue;
             s_diag.address = s_addr;
-            bool int1_config_ok =
-                i2c_write_reg(DA218E_REG_RANGE, DA218E_RANGE_2G) &&
-                i2c_write_reg(DA218E_REG_ODR_AXIS, DA218E_ODR_125HZ) &&
-                i2c_write_reg(DA218E_REG_MODE_BW, DA218E_MODE_NORMAL);
-            /* Active-motion interrupt is the STOP wake source.  Software
-             * still confirms six seconds of samples after the wake. */
-            int1_config_ok = int1_config_ok &&
-                i2c_write_reg(DA218E_REG_INT_CONFIG, 0x81U) &&
-                i2c_write_reg(DA218E_REG_INT_CONFIG, 0x01U) &&
-                i2c_write_reg(DA218E_REG_INT_SET1, 0x83U) &&
-                i2c_write_reg(DA218E_REG_INT_MAP1, 0x04U);
-            /* Latch one active-motion event until the six-second software
-             * decision consumes it. This prevents a held/noisy INT1 signal
-             * from opening the wake window repeatedly. */
-            int1_config_ok = int1_config_ok &&
-                i2c_write_reg(DA218E_REG_INT_LATCH, 0x07U) &&
-                i2c_write_reg(DA218E_REG_ACTIVE_DUR, 0x00U) &&
-                i2c_write_reg(DA218E_REG_ACTIVE_THS, 0x26U);
+            /* Preserve register order and stop on the first failed write.
+             * Active motion wakes STOP; software confirms six seconds.
+             * Latch one event until that decision consumes it. */
+            static const uint8_t setup[][2] = {
+                {DA218E_REG_RANGE, DA218E_RANGE_2G},
+                {DA218E_REG_ODR_AXIS, DA218E_ODR_125HZ},
+                {DA218E_REG_MODE_BW, DA218E_MODE_NORMAL},
+                {DA218E_REG_INT_CONFIG, 0x81U},
+                {DA218E_REG_INT_CONFIG, 0x01U},
+                {DA218E_REG_INT_SET1, 0x83U},
+                {DA218E_REG_INT_MAP1, 0x04U},
+                {DA218E_REG_INT_LATCH, 0x07U},
+                {DA218E_REG_ACTIVE_DUR, 0x00U},
+                {DA218E_REG_ACTIVE_THS, 0x26U},
+            };
+            bool int1_config_ok = true;
+            for (unsigned reg = 0U; reg < sizeof(setup)/sizeof(setup[0]); ++reg) {
+                if (!i2c_write_reg(setup[reg][0], setup[reg][1])) {
+                    int1_config_ok = false;
+                    break;
+                }
+            }
             /* Reset any event latched while the motion registers were being
              * programmed, then sample PB3 for diagnostics only. */
             s_diag.int1_rearm_ok = int1_config_ok &&
@@ -380,27 +354,6 @@ bool i2c_accel_read(accel_data_t *out)
     out->z = (int16_t)((buf[5] << 8) | buf[4]) >> 4;
     return true;
 }
-
-bool i2c_accel_detect_vibration(void)
-{
-    accel_data_t d;
-    uint16_t motion;
-    bool hit;
-    if (!i2c_accel_read(&d)) return s_is_moving;  /* I2C失败保持上次状态 */
-
-    hit = accel_vibration_filter_step(&s_motion_filter, d.x, d.y, d.z,
-                                      VIB_THRESH, &motion);
-    if (hit) {
-        if (s_vib_count < VIB_CONFIRM) s_vib_count++;
-    } else {
-        s_vib_count = 0;
-    }
-
-    s_is_moving = (s_vib_count >= VIB_CONFIRM);
-    return s_is_moving;
-}
-
-bool i2c_accel_is_moving(void) { return s_is_moving; }
 
 void i2c_accel_reset_vibration_window(void)
 {

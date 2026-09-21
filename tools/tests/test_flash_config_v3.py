@@ -208,6 +208,11 @@ static void test_power_cut_never_loads_mixed_candidate(void)
     uint8_t baseline[sizeof(flash_image)];
     device_config_t old_cfg = candidate("old-server", "OLD-MAIN", "OLD-BACK");
     device_config_t new_cfg = candidate("new-server", "NEW-MAIN", "NEW-BACK");
+    new_cfg.province_be[1] = 44U;
+    new_cfg.city_be[0] = 1U; new_cfg.city_be[1] = 44U;
+    new_cfg.plate_color = 2U; new_cfg.plate_color_valid = 1U;
+    new_cfg.mileage_m = 1234500U;
+    set_text(new_cfg.plate_no, sizeof new_cfg.plate_no, "A12345");
     int successful_operations;
     int cut;
 
@@ -241,6 +246,8 @@ static void test_power_cut_never_loads_mixed_candidate(void)
                  strcmp(cfg_get()->auth_code, "NEW-MAIN") == 0 &&
                  strcmp(cfg_get()->backup_auth_code, "NEW-BACK") == 0;
         assert(is_old || is_new);
+        assert(memcmp(cfg_get(), is_old ? &old_cfg : &new_cfg,
+                      sizeof(device_config_t)) == 0);
     }
 }
 
@@ -282,6 +289,91 @@ static void test_mileage_updates_are_deferred(void)
     assert(!cfg_mileage_dirty());
 }
 
+static void test_corner_switch_survives_restart(void)
+{
+    memset(flash_image, 0xFF, sizeof(flash_image));
+    restart_without_fault();
+    assert(cfg_get()->anglerep_en == 1U);
+    device_config_t next = *cfg_get();
+    next.anglerep_en = 0U;
+    assert(cfg_store_candidate(&next));
+    restart_without_fault();
+    next.anglerep_en = 1U;
+    assert(cfg_get()->anglerep_en == 1U); /* OTA starts enabled without commands. */
+    assert(memcmp(cfg_get(), &next, sizeof(next)) == 0);
+    /* No migration erase/program is required, including repeated boots. */
+    assert(operation_count == 0);
+    restart_without_fault();
+    assert(cfg_get()->anglerep_en == 1U);
+    assert(operation_count == 0);
+    next = *cfg_get();
+    next.anglerep_en = 1U;
+    assert(cfg_store_candidate(&next));
+    restart_without_fault();
+    assert(cfg_get()->anglerep_en == 1U);
+}
+
+static void test_vibration_default_and_one_time_migration(void)
+{
+    /* Marker occupies former reserved byte 0; avoid requiring the new name
+     * so the regression also compiles against the pre-migration header. */
+    const size_t marker = offsetof(device_config_t, plate_color_valid) + 1U;
+    assert(k_config_defaults.vib_sens == 15U);
+    for (unsigned level = 1; level <= 50; ++level) {
+        memset(flash_image, 0xFF, sizeof(flash_image));
+        restart_without_fault();
+        device_config_t old = candidate("old-server", "OLD-MAIN", "OLD-BACK");
+        old.vib_sens = (uint8_t)level;
+        ((uint8_t *)&old)[marker] = 0U;
+        assert(cfg_store_candidate(&old));
+        restart_without_fault();
+        device_config_t expected = old;
+        expected.vib_sens = (level == 10U || level == 20U) ? 15U : level;
+        ((uint8_t *)&expected)[marker] = 1U;
+        assert(memcmp(cfg_get(), &expected, sizeof(expected)) == 0);
+        restart_without_fault();
+        assert(operation_count == 0); /* migration is durable and idempotent */
+        for (unsigned changed = 10; changed <= 20; changed += 10) {
+            expected.vib_sens = (uint8_t)changed;
+            assert(cfg_store_candidate(&expected));
+            restart_without_fault();
+            assert(memcmp(cfg_get(), &expected, sizeof(expected)) == 0);
+            assert(operation_count == 0);
+        }
+    }
+}
+
+static void test_vibration_migration_power_cuts(void)
+{
+    const size_t marker = offsetof(device_config_t, plate_color_valid) + 1U;
+    uint8_t baseline[sizeof(flash_image)];
+    for (unsigned level = 10; level <= 20; level += 10) {
+        memset(flash_image, 0xFF, sizeof(flash_image));
+        restart_without_fault();
+        device_config_t old = candidate("keep-server", "KEEP-MAIN", "KEEP-BACK");
+        old.vib_sens = (uint8_t)level;
+        ((uint8_t *)&old)[marker] = 0U;
+        old.mileage_m = 123400U;
+        assert(cfg_store_candidate(&old));
+        memcpy(baseline, flash_image, sizeof baseline);
+        restart_without_fault();
+        int operations = operation_count;
+        assert(operations >= 3);
+        for (int cut = 1; cut <= operations; ++cut) {
+            memcpy(flash_image, baseline, sizeof baseline);
+            locked = 0; operation_count = 0; fail_operation = cut;
+            cfg_init();
+            restart_without_fault();
+            device_config_t expected = old;
+            expected.vib_sens = 15U;
+            ((uint8_t *)&expected)[marker] = 1U;
+            assert(memcmp(cfg_get(), &expected, sizeof expected) == 0);
+            restart_without_fault();
+            assert(operation_count == 0);
+        }
+    }
+}
+
 int main(void)
 {
     assert(CFG_VERSION == 4U);
@@ -289,10 +381,13 @@ int main(void)
     assert(k_config_defaults.device_api_key[0] == '\0');
     assert(sizeof(device_config_t) + 20U < FLASH_SECTOR_SIZE);
     assert(cfg_store_candidate_result(NULL) == CFG_STORE_INVALID);
+    test_vibration_default_and_one_time_migration();
+    test_vibration_migration_power_cuts();
     test_default_persistence_failure_is_logged();
     test_independent_auth_codes();
     test_power_cut_never_loads_mixed_candidate();
     test_mileage_updates_are_deferred();
+    test_corner_switch_survives_restart();
     return 0;
 }
 '''

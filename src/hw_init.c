@@ -1,4 +1,6 @@
 #include "hw_init.h"
+#include "production_test.h"
+#include "relay.h"
 #include "config.h"
 #include "firmware_layout.h"
 #include "n32l40x.h"
@@ -9,6 +11,8 @@ volatile uint32_t g_tick_ms = 0;
 void SysTick_Handler(void)
 {
     g_tick_ms++;
+    relay_test_tick();
+    production_test_tick();
 }
 
 /* ── Clock: configured by system_n32l40x.c SetSysClock() at startup ──────── */
@@ -26,20 +30,6 @@ void hw_clock_init(void)
     NVIC_SetVectorTable(NVIC_VectTab_FLASH,
                         APP_FLASH_BASE - FW_FLASH_BASE);
     SysTick_Config(SYS_CLOCK_HZ / 1000);   /* 1 ms tick at 64 MHz */
-}
-
-bool hw_restore_after_stop2(void)
-{
-    SystemInit();
-    hw_clock_init();
-    hw_nvic_init();
-    hw_gpio_init();
-    hw_usart_init();
-    hw_spi_init();
-    hw_i2c_init();
-    hw_adc_init();
-    hw_tim_init();
-    return SystemCoreClock == SYS_CLOCK_HZ;
 }
 
 /* ── GPIO helper: init struct defaults ───────────────────────────────────── */

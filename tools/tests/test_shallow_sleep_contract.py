@@ -197,25 +197,16 @@ def check_tail_placement_and_gate() -> None:
 
 def check_retained_timestamp_tracks_shallow_sleep() -> None:
     """Historical 0x0200 time must advance while GNSS is powered down."""
-    helper = function_body(MAIN, "static void shallow_retained_clock_advance")
-    require("gps_advance_last_trusted_seconds" in helper,
-            "shallow sleep must advance the retained GNSS timestamp")
-    require("now_s - s_shallow_retained_clock_s" in helper,
-            "retained time must use the running shallow-sleep seconds clock")
-
-    process = function_body(MAIN, "void work_mode_process")
-    gps_off = process.find("case WORK_ACTION_GPS_OFF:")
-    gps_on = process.find("case WORK_ACTION_GPS_ON:")
-    report = process.find("case WORK_ACTION_REPORT_ENTRY:")
-    require(gps_off >= 0 and
-            process.find("s_shallow_retained_clock_active = true", gps_off, report) >= 0,
-            "capturing the sleep position must start shallow timestamp tracking")
-    require(gps_on >= 0 and
-            process.find("shallow_retained_clock_advance(now_s)", gps_on, gps_off) >= 0,
-            "ACC wake must advance retained time before the entry report")
-    require(report >= 0 and
-            process.find("shallow_retained_clock_advance(now_s)", report) >= 0,
-            "periodic historical reports must advance retained time before send")
+    # The production GPS clock now covers awake and shallow WFI equally.
+    # Runtime rollover/no-fix coverage lives in test_gps_retained_clock.py.
+    gps = (ROOT / "src/gps.c").read_text(encoding="utf-8")
+    for signature in ("void gps_process", "bool gps_get_last_trusted"):
+        require("retained_clock_advance_awake()" in function_body(gps, signature),
+                "GPS processing and retained reads must account running SysTick")
+    require("gps_advance_last_trusted_seconds" not in MAIN,
+            "main must not add shallow time again after GPS clock accounting")
+    require("gps_advance_last_trusted_seconds(elapsed_seconds)" in SLEEP_C,
+            "STOP1 must still account time while SysTick is stopped")
 
 
 def main() -> None:

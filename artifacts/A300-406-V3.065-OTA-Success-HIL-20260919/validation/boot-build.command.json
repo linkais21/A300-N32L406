@@ -1,0 +1,10 @@
+{
+  "command": [
+    "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+    "SHELL=cmd.exe",
+    "TOOLCHAIN_ROOT=D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin",
+    "-j4",
+    "all"
+  ],
+  "exit_code": 0
+}

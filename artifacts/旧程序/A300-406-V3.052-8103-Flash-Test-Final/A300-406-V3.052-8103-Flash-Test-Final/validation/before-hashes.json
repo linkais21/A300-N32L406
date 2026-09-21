@@ -1,0 +1,14 @@
+{
+  "src/jt808_params.c": "1ba69509361b66806a958fa7b385cffca40adf62060f5f1368a853d8e3dbb851",
+  "include/jt808_params.h": "e2890b94edf58df796b2c6c9049c427da41a5eb243311d52aedc57955b931aa9",
+  "src/jt808.c": "04d48f08a38c575debd5a54f4c73cee02f95ea00306a99c83618e58beecc3caf",
+  "include/jt808.h": "d2a4ab3df57972f13d64d8842d26f516f3257a31d12e992b1cfcd00ae62d3195",
+  "include/flash_config.h": "565ea25f970856886ee530d87d53364ec2bc4e46a2c0bd4550925307bb42b562",
+  "src/service_workspace.c": "1a38a4214710762bde35e6ad8cb203d9557e8f7179a7c1128b38f620597a9fe0",
+  "include/service_workspace.h": "701fd4bbc7067a920b57ee8a13e2f45cf09c62844f3f8b15a2ae3b33841bfe15",
+  "src/tcp_manager.c": "45ed6c471985ddd753ed67d59d8e05e4db67954f8b46f4e4b31ac176b531379b",
+  "include/tcp_manager.h": "7eb6af6f3477c0cb6b5f02ea5f1c88c7740c75ebb785592af0366c20bd55e5f8",
+  "src/mileage.c": "f0b5208a433a35fa8e4e41bb16ecb638448a1ab13c9d9ffa708e1504496cc1eb",
+  "release_identity.json": "947bd85b91cc0b20ad010a4b356709fd0a91b6dc1e6cf9380790318826b4ba0d",
+  "include/build_version.h": "04bb7a9ece71047ff4c5d672e5f060fc624945970c1bbfe0b82445e48bf39470"
+}

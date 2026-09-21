@@ -32,6 +32,10 @@ HARNESS = r'''
 #include <string.h>
 #include "at_config.h"
 #include "f39_reply.h"
+#include "fota.h"
+#include "log_platform.h"
+fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
+int log_platform_send_result(void) { return 0; }
 #include "gps.h"
 #include "sms_command.h"
 #include "sms_ingress.h"
@@ -66,7 +70,11 @@ void jt808_set_terminal_profile(const char *model, const char *plate) { (void)mo
 void jt808_reset_endpoint_auth(uint8_t mask) { (void)mask; }
 uint32_t work_mode_sleep_monotonic_s(void) { return g_tick_ms / 1000U; }
 void relay_set(bool on) { (void)on; }
+uint16_t relay_test_remaining(void) { return 0U; }
+bool production_test_command(const char *line) { (void)line; return false; }
 bool relay_get(void) { return false; }
+bool gps_quality_fix_fresh(void) { return false; }
+bool gps_get_quality(gps_quality_t *q) { memset(q, 0, sizeof(*q)); return false; }
 bool gps_is_valid(void) { return true; }
 const gps_data_t *gps_get_data(void) { static gps_data_t g; g.valid=true; return &g; }
 void gps_send_cmd(const char *c) { (void)c; }
@@ -174,7 +182,7 @@ def test_f39_end_to_end():
             "-fdata-sections", "-I", str(tmp), "-I", str(ROOT / "include"), str(harness),
             str(ROOT / "src" / "at_config.c"), str(ROOT / "src" / "sms_command.c"),
             str(ROOT / "src" / "sms_ingress.c"), str(ROOT / "src" / "f39_command.c"),
-            str(ROOT / "src" / "f39_config_adapter.c"), str(ROOT / "src" / "f39_reply.c"),
+            str(ROOT / "src/plate_encoding.c"), str(ROOT / "src" / "f39_config_adapter.c"), str(ROOT / "src" / "f39_reply.c"),
             str(ROOT / "src" / "terminal_identity.c"),
             "-Wl,--gc-sections", "-lm", "-o", str(exe),
         ]
@@ -192,6 +200,10 @@ PRODUCTION_HARNESS = r'''
 #include "config.h"
 #include "ec800m.h"
 #include "f39_reply.h"
+#include "fota.h"
+#include "log_platform.h"
+fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
+int log_platform_send_result(void) { return 0; }
 #include "gps.h"
 #include "peripherals.h"
 #include "sms_ingress.h"
@@ -247,7 +259,11 @@ void jt808_set_terminal_profile(const char *model, const char *plate) {
     strncpy(runtime_plate, plate, sizeof runtime_plate - 1U);
 }
 void relay_set(bool on) { relay_state = on ? 1U : 0U; ++relay_calls; }
+uint16_t relay_test_remaining(void) { return 0U; }
+bool production_test_command(const char *line) { (void)line; return false; }
 bool relay_get(void) { return relay_state != 0U; }
+bool gps_quality_fix_fresh(void) { return false; }
+bool gps_get_quality(gps_quality_t *q) { memset(q, 0, sizeof(*q)); return false; }
 bool gps_is_valid(void) { return true; }
 const gps_data_t *gps_get_data(void) { static gps_data_t g = { .valid = true, .fix_quality = 4, .satellites = 12, .hdop = 0.8f, .speed_kmh = 0.0f }; return &g; }
 void gps_send_cmd(const char *c) { (void)c; ++gps_cmd_calls; }
@@ -324,6 +340,13 @@ int main(void) {
     ec800m_restart_pdp(); modem_step();
     assert(ec800m_get_state() == EC800M_STATE_READY);
     assert(strstr(tx_log, "AT+QICSGP=1,1,\"\",\"\",\"\",0") != NULL);
+    /* Exact field command, through the real F39/default/PDP/UART chain. */
+    tx_len = 0U; tx_log[0] = '\0';
+    assert(at_config_execute_text_command((const uint8_t *)"APN,cmiot,,", 11U));
+    modem_step();
+    assert(ec800m_get_state() == EC800M_STATE_READY && config.autoapn_en == 0U);
+    assert(!strcmp(config.apn, "cmiot"));
+    assert(strstr(tx_log, "AT+QICSGP=1,1,\"cmiot\",\"\",\"\",0") != NULL);
     pdp_auto_reply = 0U;
 
     /* Exercise the real A300_406 default callback chain. */
@@ -591,6 +614,7 @@ void IWDG_ReloadKey(void) { ++g_tick_ms; }
             str(ROOT / "src" / "peripherals.c"),
             str(ROOT / "src" / "at_config.c"), str(ROOT / "src" / "sms_command.c"),
             str(ROOT / "src" / "sms_ingress.c"), str(ROOT / "src" / "f39_command.c"),
+            str(ROOT / "src" / "plate_encoding.c"),
             str(ROOT / "src" / "f39_config_adapter.c"), str(ROOT / "src" / "f39_reply.c"),
             str(ROOT / "src" / "terminal_identity.c"),
             "-Wl,--gc-sections", "-lm", "-o", str(tmp / "production.exe"),

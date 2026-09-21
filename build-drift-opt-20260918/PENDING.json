@@ -1,0 +1,16 @@
+{
+  "status": "awaiting_version_lineage_confirmation",
+  "requested_product": "A300-406 N32L406",
+  "local_max_counter": 3058,
+  "candidate_counter_not_reserved": 3059,
+  "platform_audit": "local endpoint HTTP502; actual log endpoint HTTP401 with existing config; no firmware/task writes",
+  "version_conflict": "session user section16 mandates G452 app/tools/ota_version_registry.json, L406 contract requires V3.xxx decimal 3xxx. Async user decision pending; no dependent identity change or target build.",
+  "next": [
+    "Resolve user version-lineage decision; audit all local actual App strings/OTA headers including prior 3055/3054 conflicts without mutating old packages.",
+    "Reserve fresh identity before firmware build; record platform unchecked if credentials unavailable.",
+    "Update release identity/test/hash gate only matching version changes; build size/capacity and test gate.",
+    "Flash headroom baseline 76 B; if overflow optimize scoped code, no deletion of protections.",
+    "Package authorized HIL artifacts only if permitted by acceptance; do not label failed stack gate as production accepted.",
+    "Verify App HEX/OTA/Combined byte identity, signed-platform compatibility, manifest and SHA; document install reset consequences and OTA target needs older counter."
+  ]
+}

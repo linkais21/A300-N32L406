@@ -1,0 +1,56 @@
+{
+  "version": "V3.052",
+  "version_counter": 3052,
+  "release_approved": false,
+  "formal_gate": "failed: incomplete whole-program stack/heap/IRQ evidence",
+  "app_bytes": 98256,
+  "remaining_bytes": 8240,
+  "combined_bytes": 122832,
+  "build_command": "python tools/experiments/firmware_size_trial.py --math bounded --quantize-mm --cases combined --output <new-build-directory>",
+  "artifacts": {
+    "OTA-A300-406-V3052.bin": {
+      "bytes": 98288,
+      "sha256": "444220d7d7c2546de0987d6f8bcb39fc29af0b8f8cbd7a9c286644ade4fe6898"
+    },
+    "SWD-Combined-V3052.bin": {
+      "bytes": 122832,
+      "sha256": "9e8a22fc05cf98c8277d875f18b8b59645551ac44c18f729b1a4a582fb0f97d3"
+    },
+    "SWD-Combined-V3052.hex": {
+      "bytes": 345533,
+      "sha256": "2a68544c0a6a6fc9a37914d6ef90c341f860b51c850247324532074b4d48684f"
+    },
+    "V3.052/App-N32L406CBL7.bin": {
+      "bytes": 98256,
+      "sha256": "20bd357bdbb4a6934346c5625505ee8d53e702ee953c06d75a5740e93e5e4fdc"
+    },
+    "V3.052/App-N32L406CBL7.elf": {
+      "bytes": 151112,
+      "sha256": "88a1410599c7969c43d00f77332e1924a4fdffa945960acbbee8475cfee8fcbd"
+    },
+    "V3.052/App-N32L406CBL7.hex": {
+      "bytes": 276436,
+      "sha256": "f81b81de659b8e401e7ececaa325944aaddcbfa327658dc44614a300ade73197"
+    },
+    "V3.052/App-N32L406CBL7.map": {
+      "bytes": 139625,
+      "sha256": "f962f53ec17b771dbe3e4968d72ba74d6b304127937d6e432ba52ede6fa4adbc"
+    },
+    "V3.052/Bootloader-N32L406CBL7.bin": {
+      "bytes": 22556,
+      "sha256": "bae73fd5f675059dc20c78b61d534562d82c8fd26f1c21bf51ad8c6cc81cf370"
+    },
+    "V3.052/Bootloader-N32L406CBL7.elf": {
+      "bytes": 32720,
+      "sha256": "a71b36a3bcf89cd46b75b37915c4e2c161c9fa1c9608a4018d270c9b6bc198e8"
+    },
+    "V3.052/Bootloader-N32L406CBL7.hex": {
+      "bytes": 40667,
+      "sha256": "303ebb3ab6e888a6362ddfa76f423f44a4e3c84e31e5dab84e121be1e2299cf6"
+    },
+    "V3.052/Bootloader-N32L406CBL7.map": {
+      "bytes": 63501,
+      "sha256": "539c1601c01784f69fba3f6b29b680c7e006920697d51a6e0dae61272e0d0ff0"
+    }
+  }
+}

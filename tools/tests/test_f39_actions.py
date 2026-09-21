@@ -8,6 +8,10 @@ HARNESS = r'''
 #include <math.h>
 #include <string.h>
 #include "f39_reply.h"
+#include "fota.h"
+#include "log_platform.h"
+fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
+int log_platform_send_result(void) { return 0; }
 #include "f39_command.h"
 #include "flash_config.h"
 static device_config_t s_live_config;
@@ -26,7 +30,7 @@ static void register808(void*p){mark((spy_t*)p,'J');}
 static void remaining(void*p){mark((spy_t*)p,'R');}
 static unsigned ota_rechecks;
 static void recheck_ota(void*p){(void)p;++ota_rechecks;}
-static void gnss(gnss_type_t r,uint8_t m,void*p){spy_t*s=p;assert(r==GNSS_TYPE_TAU804M||r==GNSS_TYPE_ATGM332D_F7N);assert(m>=1&&m<=3);s->gnss++;s->receiver=r;s->mode=m;mark(s,'G');}
+static void gnss(gnss_type_t r,uint8_t m,void*p){spy_t*s=p;assert(r==GNSS_TYPE_TAU804M);assert(m>=1&&m<=3);s->gnss++;s->receiver=r;s->mode=m;mark(s,'G');}
 static bool relay(bool on,void*p){spy_t*s=p;s->relays++;s->relay=on;return true;}
 static bool relay_get(void*p){return ((spy_t*)p)->relay;}
 static bool gps(void*p){return ((spy_t*)p)->gps_ok;}
@@ -50,7 +54,7 @@ int main(void){static const char*queries[]={"PID","IP","FIP","FREQ","HBT","MODEL
  {unsigned resets=s.auth_resets;strcpy(c.auth_code,"MAIN-AUTH");assert(run("IP,new-main,7001",&c,&s,&r)==F39_RESULT_OK);assert(strcmp(c.auth_code,"MAIN-AUTH")==0);assert(s.auth_resets==resets);}
  {unsigned resets=s.auth_resets;strcpy(c.backup_auth_code,"BACK-AUTH");assert(run("FIP,new-backup,7018",&c,&s,&r)==F39_RESULT_OK);assert(c.backup_auth_code[0]=='\0');assert(s.auth_resets==resets+1U&&s.auth_reset_mask==(F39_AUTH_CHANNEL_MAIN|F39_AUTH_CHANNEL_BACKUP));}
  assert(run("GPSBDS,1",&c,&s,&r)==F39_RESULT_OK);assert(s.gnss==1&&s.receiver==GNSS_TYPE_TAU804M&&s.mode==1);
- c.gnss_type=GNSS_TYPE_ATGM332D_F7N;assert(run("GPSBDS,3",&c,&s,&r)==F39_RESULT_OK);assert(s.receiver==GNSS_TYPE_ATGM332D_F7N&&s.mode==3);
+ c.gnss_type=GNSS_TYPE_ATGM332D_F7N;before=c;{unsigned saves=s.saves,calls=s.gnss;assert(run("GPSBDS,3",&c,&s,&r)!=F39_RESULT_OK);assert(strstr((char*)r.data,"unsupported-receiver"));assert(s.saves==saves&&s.gnss==calls&&memcmp(&c,&before,sizeof(c))==0);}
  c.gnss_type=GNSS_TYPE_UNKNOWN;before=c;{unsigned saves=s.saves;assert(run("GPSBDS,2",&c,&s,&r)!=F39_RESULT_OK);assert(s.saves==saves&&memcmp(&c,&before,sizeof(c))==0);}
  c.gnss_type=GNSS_TYPE_TAU804M;s.gps_ok=false;s.speed=0;assert(run("RELAY,1",&c,&s,&r)!=F39_RESULT_OK);assert(s.relays==0);
  s.gps_ok=true;s.speed=20.0f;assert(run("RELAY,1",&c,&s,&r)!=F39_RESULT_OK);assert(s.relays==0);
@@ -81,7 +85,7 @@ def main():
  if not cc: print('test_f39_actions: SKIP'); return 0
  with tempfile.TemporaryDirectory() as d:
   h=pathlib.Path(d)/'h.c'; b=pathlib.Path(d)/'h'; h.write_text(HARNESS)
-  cmd=[cc,'-std=c99','-Wall','-Wextra','-Werror','-ffunction-sections','-I',str(ROOT/'include'),str(h),str(ROOT/'src/f39_command.c'),str(ROOT/'src/f39_config_adapter.c'),str(ROOT/'src/f39_reply.c'),str(ROOT/'src/terminal_identity.c'),'-Wl,--gc-sections','-o',str(b)]
+  cmd=[cc,'-std=c99','-Wall','-Wextra','-Werror','-ffunction-sections','-I',str(ROOT/'include'),str(h),str(ROOT/'src/plate_encoding.c'),str(ROOT/'src/f39_command.c'),str(ROOT/'src/f39_config_adapter.c'),str(ROOT/'src/f39_reply.c'),str(ROOT/'src/terminal_identity.c'),'-Wl,--gc-sections','-o',str(b)]
   x=subprocess.run(cmd,cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT); print(x.stdout,end='');
   if x.returncode:return x.returncode
   x=subprocess.run([str(b)],text=True)

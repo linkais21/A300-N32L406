@@ -1,0 +1,9 @@
+{
+  "test_flash_config_v3": {
+    "exit": 3221226505
+  },
+  "test_motion_corner_policy": {
+    "exit": 1,
+    "failure": "motion corner policy failed:\nAssertion failed: motion_corner_state(&c) == MOTION_CORNER_TURN_ACTIVE, file C:\\Users\\86166\\AppData\\Local\\Temp\\motion_corner_m496ltoc\\harness.c, line 44\n"
+  }
+}

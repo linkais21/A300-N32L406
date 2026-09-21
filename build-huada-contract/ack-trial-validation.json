@@ -1,0 +1,20 @@
+{
+  "results": [
+    {
+      "command": [
+        "python",
+        "-B",
+        "tools/tests/test_huada_ack_trial.py"
+      ],
+      "exit_code": 0,
+      "stdout": "Huada ACK trial: PASS (matching, checksum, deadline, wrap, cancel, TX failure, bounds)\n",
+      "stderr": ""
+    }
+  ],
+  "sha256": {
+    "tools\\experiments\\huada_ack\\huada_ack.c": "5b7693f090c4da0c341687fd0d91e96b1ba15fe66137adc7e14d4ff1972a38c1",
+    "tools\\experiments\\huada_ack\\huada_ack.h": "e322ac5b97b5190c1566c039e0913667d4055bf494668154ea8be6232cf35c7d",
+    "tools\\experiments\\huada_ack\\README.md": "645dc69b861f472f1b482fe37bacfae242aca84d48e46bc502ab2ae0894b3226",
+    "tools\\tests\\test_huada_ack_trial.py": "dc582ba16737378b4f791cb109a43592c06b91cd73c4eca1e9ef07f70dab6875"
+  }
+}

@@ -40,8 +40,8 @@ def main() -> None:
             "vibration adapter must retain the 200 ms sample cadence")
     require(r"vibration_threshold_by_level", SOURCE,
             "product sensitivity must use a named level-to-threshold mapping")
-    require(r"VIBRATION_SENSITIVITY_LEVEL_10", SOURCE,
-            "level 10 must be represented as a named product-level mapping")
+    require(r"VIBRATION_SENSITIVITY_MIN.*VIBRATION_SENSITIVITY_MAX", SOURCE,
+            "product-level mapping must retain its supported bounds")
     require(r"DA218E_REG_INT_SET1\s+0x16", SOURCE,
             "active-motion interrupt setup must use INT_SET1")
     require(r"DA218E_REG_INT_MAP1\s+0x19", SOURCE,
@@ -49,19 +49,19 @@ def main() -> None:
     require(r"i2c_write_reg\(DA218E_REG_INT_CONFIG,\s*0x81U\).*?"
             r"i2c_write_reg\(DA218E_REG_INT_CONFIG,\s*0x01U\)", SOURCE,
             "INT_CONFIG must reset then enable edge interrupt mode")
-    require(r"i2c_write_reg\(DA218E_REG_INT_LATCH,\s*0x07U\)", SOURCE,
+    require(r"\{DA218E_REG_INT_LATCH,\s*0x07U\}", SOURCE,
             "INT_LATCH must hold one event until software re-arms it")
     require(r"bool\s+i2c_accel_rearm_wake_interrupt\s*\(\s*void\s*\).*?"
             r"i2c_write_reg\(DA218E_REG_INT_CONFIG,\s*0x81U\).*?"
             r"i2c_write_reg\(DA218E_REG_INT_CONFIG,\s*0x01U\)", SOURCE,
             "consumed wake events must reset the latch with bounded writes")
-    require(r"i2c_write_reg\(DA218E_REG_INT_SET1,\s*0x83U\)", SOURCE,
+    require(r"\{DA218E_REG_INT_SET1,\s*0x83U\}", SOURCE,
             "active-motion interrupt must enable reference and all axes")
-    require(r"i2c_write_reg\(DA218E_REG_INT_MAP1,\s*0x04U\)", SOURCE,
+    require(r"\{DA218E_REG_INT_MAP1,\s*0x04U\}", SOURCE,
             "active-motion interrupt must map to INT1")
-    require(r"i2c_write_reg\(DA218E_REG_ACTIVE_THS,\s*0x26U\)", SOURCE,
+    require(r"\{DA218E_REG_ACTIVE_THS,\s*0x26U\}", SOURCE,
             "active-motion threshold must match sensitivity level 10")
-    require(r"i2c_write_reg\(DA218E_REG_ACTIVE_THS,\s*0x26U\).*?"
+    require(r"\{DA218E_REG_ACTIVE_THS,\s*0x26U\}.*?"
             r"s_diag\.int1_rearm_ok\s*=\s*int1_config_ok\s*&&\s*"
             r"i2c_accel_rearm_wake_interrupt\(\).*?"
             r"GPIO_ReadInputDataBit\(\s*DA218E_INT1_PORT,\s*DA218E_INT1_PIN\s*\)",

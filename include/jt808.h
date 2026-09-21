@@ -13,6 +13,7 @@
 #define MSG_TERMINAL_AUTH           0x0102
 #define MSG_SET_TERMINAL_PARAM      0x8103
 #define MSG_QUERY_TERMINAL_PARAM    0x8104
+#define MSG_QUERY_SPECIFIC_PARAM    0x8106
 #define MSG_QUERY_TERMINAL_INFO     0x8107
 #define MSG_TERMINAL_CTRL           0x8105
 #define MSG_LOCATION_REPORT         0x0200
@@ -71,6 +72,7 @@ void jt808_request_reregister(void);
 #define JT808_ENDPOINT_BACKUP_MASK (1U << 1)
 void jt808_reset_endpoint_auth(uint8_t channel_mask);
 void jt808_set_terminal_profile(const char *model, const char *plate);
+uint8_t jt808_encode_plate_gbk(const char *plate, uint8_t *out, uint8_t capacity);
 int jt808_send_auth_to(uint8_t channel, const char *code);
 int jt808_send_heartbeat(void);
 void jt808_set_logical_acc(bool on);
@@ -85,8 +87,10 @@ int jt808_send_location_to(uint8_t channel, const gps_data_t *snapshot);
 #define JT808_LOCATION_DROP_LOG_MS 30000U
 /* Returns 0 on success, JT808_SEND_NO_POSITION when no position is available,
  * or another negative value on a transport failure worth retrying. */
+/* report_id is nonzero and stable across retries; a new/merged action gets a
+ * new ID from work_mode_allocate_report_id(). No on-wire format change. */
 int jt808_send_location_work_mode(uint32_t alarm_bits,
-                                  bool historical_position);
+                                  bool historical_position, uint32_t report_id);
 bool jt808_location_snapshot_valid(const gps_data_t *gps, uint32_t now);
 int jt808_send_general_resp(uint16_t resp_sn, uint16_t resp_id, uint8_t result);
 int jt808_send_general_resp_to(uint8_t channel, uint16_t resp_sn,
@@ -110,7 +114,6 @@ void jt808_trigger_alarm(uint32_t alarm_bit);
 
 /* Get/set heartbeat interval (seconds) */
 void jt808_set_heartbeat_s(uint16_t s);
-uint16_t jt808_get_heartbeat_s(void);
 
 /* Get/set reporting interval */
 void jt808_set_report_interval(uint16_t moving_s, uint16_t stopped_s);

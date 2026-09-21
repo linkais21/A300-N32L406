@@ -1,0 +1,45 @@
+[
+  {
+    "command": [
+      "git",
+      "-c",
+      "core.safecrlf=false",
+      "diff",
+      "--check",
+      "--",
+      "include/at_config.h",
+      "include/gps.h",
+      "include/log_platform.h",
+      "src/at_config.c",
+      "src/cfg_query.c",
+      "src/f39_reply.c",
+      "src/flash_config.c",
+      "src/fota.c",
+      "src/gps.c",
+      "src/jt808.c",
+      "src/log_platform.c",
+      "src/main.c",
+      "src/motion_corner.c",
+      "tools/release_guard.py"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "command": [
+      "node",
+      "--check",
+      "D:\\A300_406_tools\\A300_406\\test-platform\\server.js"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "command": [
+      "python",
+      "tools/release_guard.py"
+    ],
+    "exit": 0,
+    "output": "release-guard: PASS\n"
+  }
+]

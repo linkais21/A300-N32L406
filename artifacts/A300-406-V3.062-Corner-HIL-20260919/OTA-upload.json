@@ -1,0 +1,12 @@
+{
+  "file": "A300-406-OTA-V3062.bin",
+  "deviceModel": "A300-406",
+  "versionCode": 3062,
+  "versionName": "T360-A300_406_20260919115744,V3.062",
+  "active": false,
+  "mandatory": false,
+  "releaseNotes": "V3.062 corner reporting enabled for factory defaults; persistent ANGLEREP console switch fixed; existing OTA settings preserved. HIL only; RAM gate incomplete.",
+  "signing": "platform-detached",
+  "sha256": "154a47f17dcdc758fd8c59bf82da7f5a382bbae87e57610deb491039c38b2ca1",
+  "size": 106356
+}

@@ -1,0 +1,9 @@
+{
+  "command": [
+    "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+    "release-gate",
+    "BUILD=build/stability-review-3048/app"
+  ],
+  "exit_code": 2,
+  "log": "release-gate.log"
+}

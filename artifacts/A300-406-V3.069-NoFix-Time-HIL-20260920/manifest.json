@@ -1,0 +1,135 @@
+{
+  "version": "T360-A300_406_20260920150544,V3.069",
+  "versionCode": 3069,
+  "release_approved": false,
+  "hardware_verified": false,
+  "release_gate_exit": 2,
+  "release_gate_reason": "Incomplete whole-program stack/heap/IRQ evidence",
+  "ota_updates_bootloader": false,
+  "swd_factory_initializes": true,
+  "app_bytes": 105152,
+  "boot_bytes": 22556,
+  "package_validation": "passed",
+  "files": {
+    "A300-406-OTA-V3069.bin": {
+      "size": 105184,
+      "sha256": "84ac3ffda5d1df21e0fb1ffd6045204ab07c4835322a14cb792f97cccba589e3"
+    },
+    "diagnostics/App-V3069.bin": {
+      "size": 105152,
+      "sha256": "dbc096105c1ab91b596c41d9b3a364d05eee5d681292a74081028079cb2128db"
+    },
+    "diagnostics/App-V3069.elf": {
+      "size": 162920,
+      "sha256": "a730891b8213b8e13be0f0d0343cf3686e4ffe5be7a93960999a40d8a8bc5fbc"
+    },
+    "diagnostics/App-V3069.hex": {
+      "size": 295844,
+      "sha256": "2b7d10896cf156a9df30b6a2e9925b4140572ba871ae8098000edec7b55bf8db"
+    },
+    "diagnostics/App-V3069.map": {
+      "size": 108665,
+      "sha256": "5d03401ec71d526750019f74ad7e64daf5a9ff8d9789a3854108862c49c4fb7b"
+    },
+    "diagnostics/Bootloader-V3069.bin": {
+      "size": 22556,
+      "sha256": "e4a5fb92e97192ab559de353a60266e73990fda605dad4c97502e22c0c12d53f"
+    },
+    "diagnostics/Bootloader-V3069.elf": {
+      "size": 32720,
+      "sha256": "8cead5735842a8657b41ebdf2faa1597fc330ed39958fdd7abedfa686f873197"
+    },
+    "diagnostics/Bootloader-V3069.hex": {
+      "size": 40913,
+      "sha256": "4064b4c316e6ca87312066f2a8378c73bc3e9035ea021cb7f76831fbb4bd2457"
+    },
+    "diagnostics/Bootloader-V3069.map": {
+      "size": 63501,
+      "sha256": "0ee4ef6d88a54e2146d99efe3249015955a0ef34be7c5a99cbc85b9c17daa6e1"
+    },
+    "OTA-upload.json": {
+      "size": 422,
+      "sha256": "1f3716257ad3036306d5d3a1b1f9dba7ac8f6204dd5bbf03578026936ef06a85"
+    },
+    "README.md": {
+      "size": 2687,
+      "sha256": "f8c9d95f6c7da7991f221f1aad2eef480153902251ce85218d2bde9817571527"
+    },
+    "release_identity.json": {
+      "size": 310,
+      "sha256": "2a7a3f4a3c2558c894456b737b7fbe6cb4cf90bab32b169b5c832f9f08396be9"
+    },
+    "SWD-Combined-V3069.bin": {
+      "size": 129728,
+      "sha256": "13998402c42cd960fc5692cf4c80b1dc6c6f5fada47793ff07a31aa6b2b961cf"
+    },
+    "SWD-Combined-V3069.hex": {
+      "size": 364928,
+      "sha256": "094445be4fe13152255bb6e3972b792039c1320833cbcd77431054bd39ce9fca"
+    },
+    "validation/app-build-command.json": {
+      "size": 239,
+      "sha256": "670871cb18a322462a2630707955504d4275a3b4b81b9201a1337e4bbee6ba66"
+    },
+    "validation/app-build.log": {
+      "size": 82364,
+      "sha256": "9ed8c036b838441434489eafaf0041f0e119d7c275704416d6f005ec7b46378e"
+    },
+    "validation/boot-build-command.json": {
+      "size": 248,
+      "sha256": "a4fdd653243e59169809b0453fe529262083968fc745a9e596ab691c64135b13"
+    },
+    "validation/boot-build.log": {
+      "size": 15761,
+      "sha256": "1e617542a055f7ef20206affd5671bcf9a0c6b4881fab829a72cba4f02f4fb52"
+    },
+    "validation/boot-ram.log": {
+      "size": 125,
+      "sha256": "1a7d6e5e63c73253d6e9dd2710c52289c125b879617e2972a6eeb1c74ef81ba2"
+    },
+    "validation/flash-build-profile.json": {
+      "size": 4102,
+      "sha256": "7f5be0473447dab7d69a49ca9766935e073b26e3afeffd6d5cf12cda2c675a0c"
+    },
+    "validation/flash-capacity.json": {
+      "size": 4710,
+      "sha256": "1892fe9234c4dea3784a07fe9af6476bdfa44ba78394f4b0482af91d14bdd009"
+    },
+    "validation/gates.json": {
+      "size": 728,
+      "sha256": "f8eb612e823856b49993ad7291551dbec3a6f4f97db10b4c37317cbd1e64901b"
+    },
+    "validation/libc-parser.log": {
+      "size": 125,
+      "sha256": "c275ef3e5b566a67ac142062a4be95abbbc4b215d85c9fd4b6f7c969611d2207"
+    },
+    "validation/nofix-clock-fix.md": {
+      "size": 4192,
+      "sha256": "8424952d262b7bdb1eabbb6cc76e5c888f152cba256c7b513819c5fcdc1d584e"
+    },
+    "validation/package_hil.py": {
+      "size": 9275,
+      "sha256": "6e57adabbe47bf6d9ac58357c5a2265fd8f9fa904494caf94d3a5bf19a893cdd"
+    },
+    "validation/release-gate.log": {
+      "size": 1770,
+      "sha256": "9e3ab82c302f077038a1803df8dfb12981b8bce65ad354f574e2bdb8ff7066a0"
+    },
+    "validation/source-sha256.json": {
+      "size": 36227,
+      "sha256": "0d853928106b6ef8f06657e85ba8de8a926abbd5b70415b7fd6e7761e5e427c2"
+    },
+    "validation/stack-analysis.json": {
+      "size": 325976,
+      "sha256": "40aaf353b89f1591e530713bc6552064b1826dc6c231db3ed8387a3f9ce098c4"
+    },
+    "validation/stack-evidence.json": {
+      "size": 663,
+      "sha256": "1d7f3ea4bb3835d15c8ac6ebac85f9297aef521ce3e61f01c7230c8b984e599c"
+    },
+    "validation/tests.json": {
+      "size": 4102,
+      "sha256": "f3cc17ebcad74c168fac2c16f0e56f79fe23aae433927891b9d9f4a6194287a2"
+    }
+  }
+}

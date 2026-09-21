@@ -107,7 +107,10 @@ def check_wake_filter_race() -> None:
 def check_retained_clock_monotonic() -> None:
     require("retained_clock_is_newer" in GPS,
             "no monotonicity guard on the retained clock")
-    capture = function_body(GPS, "gps_capture_last_trusted")
+    require("gps_capture_last_trusted_snapshot(&s_gps)" in
+            function_body(GPS, "gps_capture_last_trusted"),
+            "live capture must delegate to the guarded snapshot capture")
+    capture = function_body(GPS, "gps_capture_last_trusted_snapshot")
     require("retained_clock_is_newer" in capture,
             "the capture path does not check clock monotonicity")
     # The guard must only refuse an older clock, and only when a snapshot

@@ -1,0 +1,757 @@
+[
+  {
+    "label": "motion_corner_policy",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_motion_corner_policy.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "corner_blind_zone_replay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_corner_blind_zone_replay.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "at_config_serial_f39",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_at_config_serial_f39.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "flash_config_v3",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_flash_config_v3.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "console_numeric",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_console_numeric.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "gps_report_filter",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_report_filter.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "gps_report_wire",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_report_wire.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "blind_zone_ack_channel",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_ack_channel.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "f39_config",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_config.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "release_identity_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "build_version_refresh",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_build_version_refresh.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "dev_release_manifest",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_dev_release_manifest.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "a300_ota_image",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_a300_ota_image.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "factory_init_artifact",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_factory_init_artifact.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "platform_trust_anchor",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_platform_trust_anchor.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "feature_guards",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_feature_guards.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "fota_package",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_package.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "fota_active",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_active.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "fota_platform_flow",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_platform_flow.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "fota_check_parser",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_check_parser.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "fota_resume",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_resume.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "fota_checkpoint_powercut",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_checkpoint_powercut.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "fota_verify_scan",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_verify_scan.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "fota_modem_handoff",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_modem_handoff.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "fota_modem_imei",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_modem_imei.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "fota_key_config",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_key_config.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "fota_no_api_key_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_no_api_key_contract.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "fota_stack_guard",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_stack_guard.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "bootloader_factory_init",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_factory_init.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "bootloader_bcr_failclosed",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_bcr_failclosed.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "bootloader_platform_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_platform_contract.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "bootloader_invalid_vector_recovery",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_invalid_vector_recovery.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "bootloader_legacy_recovery",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_legacy_recovery.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "bootloader_lkg_powercut_c",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_lkg_powercut_c.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "bootloader_powercut",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_powercut.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "boot_bcr_device_gate",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_bcr_device_gate.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "boot_cold_start_recovery",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_cold_start_recovery.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "boot_spi_timing",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_spi_timing.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "boot_progress_uart",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_progress_uart.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "ext_flash_store_host",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_store_host.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "ext_flash_layout",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ext_flash_layout.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "internal_flash_layout",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_internal_flash_layout.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "blind_zone_store",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_store.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "blind_zone_replay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_replay.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "heap_bounds",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_heap_bounds.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "ram_watermark",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ram_watermark.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "stack_health_observability",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_stack_health_observability.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "stack_machine_frames",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_stack_machine_frames.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "stack_table_targets",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_stack_table_targets.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "stack_tail_evidence",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_stack_tail_evidence.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "stack_indirect_evidence",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_stack_indirect_evidence.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "lto_stack_guard",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_lto_stack_guard.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "ram_guard",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ram_guard.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "ec800m_stack_reentry",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ec800m_stack_reentry.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "ec800m_urc_demux",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ec800m_urc_demux.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "ec800m_dma_wrap",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ec800m_dma_wrap.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "ec800m_udp_transaction",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ec800m_udp_transaction.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "ec800m_udp_wire",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ec800m_udp_wire.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "jt808_boot_terminal_info",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_boot_terminal_info.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "jt808_params_wire",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_params_wire.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "cfg_query_f39",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_cfg_query_f39.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "cfg_query_pass",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_cfg_query_pass.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "text_ack_order",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_text_ack_order.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "car_reply_encoding",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_car_reply_encoding.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "app-build",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "SHELL=cmd.exe",
+      "-o",
+      "include/build_version.h",
+      "BUILD=build/corner-auto-v3063-20260919/app",
+      "TOOLCHAIN_DIR=D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin",
+      "-j4",
+      "all"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "boot-build",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "SHELL=cmd.exe",
+      "TOOLCHAIN_ROOT=D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin",
+      "-j4",
+      "all"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first\\build\\corner-auto-v3063-20260919\\source\\bootloader",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "release-gate",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "SHELL=cmd.exe",
+      "-o",
+      "include/build_version.h",
+      "BUILD=build/corner-auto-v3063-20260919/app",
+      "TOOLCHAIN_DIR=D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin",
+      "release-gate"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 2,
+    "expected": 2
+  },
+  {
+    "label": "remaining-gates",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "SHELL=cmd.exe",
+      "-o",
+      "include/build_version.h",
+      "BUILD=build/corner-auto-v3063-20260919/app",
+      "TOOLCHAIN_DIR=D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin",
+      "platform-trust-guard",
+      "flash-guard"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "boot-ram",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build\\corner-auto-v3063-20260919\\source\\bootloader\\build\\bootloader.map"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "libc-parser",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/libc_parser_guard.py",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build\\corner-auto-v3063-20260919\\app\\a300_firmware.map"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "frame-budget",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ram01_frame_budget.py",
+      "D:\\A300_406_tools\\A300_406\\A300-first\\build\\corner-auto-v3063-20260919\\app"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  },
+  {
+    "label": "diff-check",
+    "command": [
+      "git",
+      "diff",
+      "--check",
+      "--",
+      "release_identity.json",
+      "include/config.h",
+      "include/build_version.h",
+      "tools/release_guard.py",
+      "tools/tests/test_release_identity_contract.py",
+      "src/at_config.c",
+      "src/flash_config.c",
+      "tools/tests/test_at_config_serial_f39.py",
+      "tools/tests/test_flash_config_v3.py"
+    ],
+    "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+    "exit_code": 0,
+    "expected": 0
+  }
+]

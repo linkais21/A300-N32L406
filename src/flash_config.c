@@ -22,7 +22,6 @@ typedef struct __attribute__((packed)) {
 
 #define SLOT_CURRENT_BODY_LEN \
     (sizeof(slot_v3_hdr_t) + sizeof(device_config_t) + 4U)
-#define SLOT_CURRENT_TOTAL (SLOT_CURRENT_BODY_LEN + 4U)
 #define CFG_V1_DATA_LEN ((uint16_t)offsetof(device_config_t, pid))
 #define CFG_V2_DATA_LEN ((uint16_t)offsetof(device_config_t, backup_auth_code))
 #define CFG_V3_DATA_LEN ((uint16_t)offsetof(device_config_t, device_api_key))
@@ -59,7 +58,7 @@ const device_config_t k_config_defaults = {
     .report_stopped_s   = 180,
     .autoapn_en         = 1,
     .apn                = "",
-    .agps_en            = 0,
+    .agps_en            = 1,
     .agps_ip            = "0.0.0.0",
     .agps_port          = 0,
     .agnss_user         = "",
@@ -67,7 +66,7 @@ const device_config_t k_config_defaults = {
     .has_acc            = 1,
     .stopdrift_en       = 1,
     .stopdrift_thr      = 50,
-    .anglerep_en        = 0,
+    .anglerep_en        = 1,
     .anglerep_angle     = 30,
     .anglerep_speed     = 2,
     .georep_en          = 0,
@@ -88,10 +87,9 @@ const device_config_t k_config_defaults = {
     .sos_alm_en         = 1,
     .lowbat_alm_en      = 1,
     .lowexbat_alm_en    = 1,
-    /* Smaller values are more sensitive; 20 is the shipped wake default.
-     * Field configuration may select 15 for installations needing a more
-     * sensitive trigger. */
-    .vib_sens           = 20,
+    /* Smaller values are more sensitive; preserve later explicit settings. */
+    .vib_sens           = 15,
+    .vib_default_migrated = 1,
     .pid                = "",
     .terminal_model     = "T360-A300",
     .speed_limit_kmh    = 120,
@@ -102,6 +100,12 @@ const device_config_t k_config_defaults = {
 };
 
 /* ── Read and validate one flash slot ────────────────────────────────────── */
+/* Share the sparse default assignment across reset and migration paths. */
+static void __attribute__((noinline)) config_defaults(device_config_t *out)
+{
+    *out = k_config_defaults;
+}
+
 static bool crc_region_locked(uint32_t addr, uint32_t length, uint32_t *crc)
 {
     uint8_t chunk[64];
@@ -185,7 +189,7 @@ static bool slot_load_locked(uint32_t addr, const slot_probe_t *probe,
     uint32_t offset;
     if (probe == NULL || out == NULL || probe->format == SLOT_INVALID)
         return false;
-    *out = k_config_defaults;
+    config_defaults(out);
     offset = (probe->format == SLOT_V3 || probe->format == SLOT_V4) ?
              sizeof(slot_v3_hdr_t) : sizeof(legacy_slot_hdr_t);
     return ext_flash_read(EXT_FLASH_OWNER_CONFIG, addr + offset, out,
@@ -281,7 +285,7 @@ static void log_persist_failure(char slot, uint32_t generation,
 }
 
 /* ── Public API ───────────────────────────────────────────────────────────── */
-void cfg_init(void)
+static void cfg_load(void)
 {
     slot_probe_t slot_a;
     slot_probe_t slot_b;
@@ -291,7 +295,7 @@ void cfg_init(void)
     s_mileage_dirty = false;
 
     if (!ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG)) {
-        s_cfg = k_config_defaults;
+        config_defaults(&s_cfg);
         return;
     }
 
@@ -308,7 +312,7 @@ void cfg_init(void)
         const slot_probe_t *selected = use_b ? &slot_b : &slot_a;
         if (!slot_load_locked(use_b ? CFG_FLASH_ADDR_B : CFG_FLASH_ADDR_A,
                               selected, &s_cfg)) {
-            s_cfg = k_config_defaults;
+            config_defaults(&s_cfg);
             ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
             return;
         }
@@ -342,7 +346,7 @@ void cfg_init(void)
         uint32_t target = use_b ? CFG_FLASH_ADDR_A : CFG_FLASH_ADDR_B;
         uint32_t next_generation = selected->generation + 1U;
         if (!slot_load_locked(source, selected, &s_cfg)) {
-            s_cfg = k_config_defaults;
+            config_defaults(&s_cfg);
             ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
             return;
         }
@@ -368,7 +372,7 @@ void cfg_init(void)
         uint32_t source = use_b ? CFG_FLASH_ADDR_B : CFG_FLASH_ADDR_A;
         uint32_t target = use_b ? CFG_FLASH_ADDR_A : CFG_FLASH_ADDR_B;
         if (!slot_load_locked(source, selected, &s_cfg)) {
-            s_cfg = k_config_defaults;
+            config_defaults(&s_cfg);
             ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
             return;
         }
@@ -382,7 +386,7 @@ void cfg_init(void)
     }
 
     dbg_printf("[CFG] no valid config, applying defaults\r\n");
-    s_cfg = k_config_defaults;
+    config_defaults(&s_cfg);
     {
         cfg_store_result_t result =
             write_and_activate_locked(CFG_FLASH_ADDR_B, &s_cfg, 1U);
@@ -397,6 +401,22 @@ void cfg_init(void)
         }
     }
     ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
+}
+
+void cfg_init(void)
+{
+    cfg_load();
+    /* Defaults enable corner reporting; a saved explicit OFF remains OFF. */
+    if (s_cfg.vib_default_migrated == 0U) {
+        if (s_cfg.vib_sens == 10U || s_cfg.vib_sens == 20U)
+            s_cfg.vib_sens = 15U;
+        s_cfg.vib_default_migrated = 1U;
+        /* Existing A/B transaction commits marker and value together. A
+         * failed save leaves the old slot intact and retries on next boot. */
+        cfg_store_result_t result = cfg_store_candidate_result(&s_cfg);
+        if (result != CFG_STORE_OK)
+            dbg_printf("[CFG] VIB migrate failed=%u\r\n", (unsigned)result);
+    }
 }
 
 cfg_store_result_t cfg_store_candidate_result(const device_config_t *candidate)
@@ -469,12 +489,6 @@ void cfg_save(void)
     (void)cfg_store_candidate(&s_cfg);
 }
 
-void cfg_factory_reset(void)
-{
-    s_cfg = k_config_defaults;
-    cfg_save();
-}
-
 device_config_t *cfg_get(void) { return &s_cfg; }
 
 bool cfg_set_auth_code(uint8_t channel, const char *code)
@@ -501,35 +515,9 @@ bool cfg_set_auth_code(uint8_t channel, const char *code)
     return stored;
 }
 
-void cfg_set_server(const char *ip, uint16_t port, bool backup)
-{
-    if (!backup) {
-        strncpy(s_cfg.server_ip, ip, CFG_IP_LEN - 1);
-        s_cfg.server_port = port;
-    } else {
-        strncpy(s_cfg.backup_ip, ip, CFG_IP_LEN - 1);
-        s_cfg.backup_port = port;
-    }
-    cfg_save();
-}
-
 void cfg_set_heartbeat(uint16_t s)
 {
     s_cfg.heartbeat_s = s;
-    cfg_save();
-}
-
-void cfg_set_report_interval(uint16_t moving_s, uint16_t stopped_s)
-{
-    s_cfg.report_moving_s  = moving_s;
-    s_cfg.report_stopped_s = stopped_s;
-    cfg_save();
-}
-
-void cfg_set_mileage(uint32_t metres)
-{
-    s_cfg.mileage_m = metres;
-    s_mileage_dirty = true;
     cfg_save();
 }
 

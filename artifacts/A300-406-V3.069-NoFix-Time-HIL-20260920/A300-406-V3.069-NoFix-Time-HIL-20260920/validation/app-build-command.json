@@ -1,0 +1,8 @@
+{
+  "command": [
+    "D:\\ST\\STM32CubeIDE_2.1.1\\STM32CubeIDE\\plugins\\com.st.stm32cube.ide.mcu.externaltools.make.win32_2.2.100.202601091506\\tools\\bin\\make.exe",
+    "all",
+    "BUILD=build-v3069-nofix"
+  ],
+  "exit_code": 0
+}

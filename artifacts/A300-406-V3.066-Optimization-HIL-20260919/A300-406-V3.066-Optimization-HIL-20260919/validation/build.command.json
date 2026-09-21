@@ -1,0 +1,15 @@
+{
+  "command": [
+    "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+    "SHELL=cmd.exe",
+    "-o",
+    "include/build_version.h",
+    "BUILD=build/optimization-v3066-20260919/app",
+    "TOOLCHAIN_DIR=D:/A300_406_tools/A300_406/A300-first/.toolchain/bin",
+    "-j4",
+    "all"
+  ],
+  "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+  "exit_code": 0,
+  "elapsed_seconds": 8.77211594581604
+}

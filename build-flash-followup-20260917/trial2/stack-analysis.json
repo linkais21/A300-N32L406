@@ -1,0 +1,6999 @@
+{
+  "schema_version": 1,
+  "status": "incomplete",
+  "roots": {
+    "ADC_IRQHandler": {
+      "known_frame_sum": 0,
+      "path": [
+        "ADC_IRQHandler"
+      ]
+    },
+    "CopyDataInit": {
+      "known_frame_sum": 0,
+      "path": [
+        "CopyDataInit"
+      ]
+    },
+    "DMA_Channel5_IRQHandler": {
+      "known_frame_sum": 0,
+      "path": [
+        "DMA_Channel5_IRQHandler"
+      ]
+    },
+    "Delay_2ADC_Colck": {
+      "known_frame_sum": 8,
+      "path": [
+        "Delay_2ADC_Colck"
+      ]
+    },
+    "EXTI0_IRQHandler": {
+      "known_frame_sum": 8,
+      "path": [
+        "EXTI0_IRQHandler"
+      ]
+    },
+    "EXTI15_10_IRQHandler": {
+      "known_frame_sum": 16,
+      "path": [
+        "EXTI15_10_IRQHandler",
+        "hw_acc_is_on"
+      ]
+    },
+    "EXTI2_IRQHandler": {
+      "known_frame_sum": 8,
+      "path": [
+        "EXTI2_IRQHandler"
+      ]
+    },
+    "EXTI3_IRQHandler": {
+      "known_frame_sum": 8,
+      "path": [
+        "EXTI3_IRQHandler"
+      ]
+    },
+    "EXTI_GetITStatus": {
+      "known_frame_sum": 0,
+      "path": [
+        "EXTI_GetITStatus"
+      ]
+    },
+    "EXTI_InitPeripheral.part.0.constprop.0": {
+      "known_frame_sum": 8,
+      "path": [
+        "EXTI_InitPeripheral.part.0.constprop.0"
+      ]
+    },
+    "FillZerobss": {
+      "known_frame_sum": 0,
+      "path": [
+        "FillZerobss"
+      ]
+    },
+    "GPIO_InitPeripheral": {
+      "known_frame_sum": 36,
+      "path": [
+        "GPIO_InitPeripheral"
+      ]
+    },
+    "HardFault_Handler": {
+      "known_frame_sum": 0,
+      "path": [
+        "HardFault_Handler"
+      ]
+    },
+    "LoopCopyDataInit": {
+      "known_frame_sum": 0,
+      "path": [
+        "LoopCopyDataInit"
+      ]
+    },
+    "LoopFillZerobss": {
+      "known_frame_sum": 2408,
+      "path": [
+        "LoopFillZerobss",
+        "main",
+        "fota_process",
+        "fota_verify_manifest.constprop.0",
+        "firmware_signature_verify",
+        "uECC_verify",
+        "uECC_vli_modMult",
+        "uECC_vli_mmod",
+        "uECC_vli_clear"
+      ]
+    },
+    "NVIC_Init.part.0.constprop.0.isra.0": {
+      "known_frame_sum": 0,
+      "path": [
+        "NVIC_Init.part.0.constprop.0.isra.0"
+      ]
+    },
+    "RCC_GetClocksFreqValue": {
+      "known_frame_sum": 12,
+      "path": [
+        "RCC_GetClocksFreqValue"
+      ]
+    },
+    "RCC_GetFlagStatus": {
+      "known_frame_sum": 0,
+      "path": [
+        "RCC_GetFlagStatus"
+      ]
+    },
+    "RTCAlarm_IRQHandler": {
+      "known_frame_sum": 0,
+      "path": [
+        "RTCAlarm_IRQHandler"
+      ]
+    },
+    "Reset_Handler": {
+      "known_frame_sum": 0,
+      "path": [
+        "Reset_Handler"
+      ]
+    },
+    "SysTick_Handler": {
+      "known_frame_sum": 16,
+      "path": [
+        "SysTick_Handler",
+        "hw_acc_is_on"
+      ]
+    },
+    "SystemInit": {
+      "known_frame_sum": 0,
+      "path": [
+        "SystemInit"
+      ]
+    },
+    "TIM8_UP_IRQHandler": {
+      "known_frame_sum": 0,
+      "path": [
+        "TIM8_UP_IRQHandler"
+      ]
+    },
+    "UART4_IRQHandler": {
+      "known_frame_sum": 16,
+      "path": [
+        "UART4_IRQHandler"
+      ]
+    },
+    "USART1_IRQHandler": {
+      "known_frame_sum": 0,
+      "path": [
+        "USART1_IRQHandler"
+      ]
+    },
+    "USART_Init.constprop.0": {
+      "known_frame_sum": 44,
+      "path": [
+        "USART_Init.constprop.0",
+        "RCC_GetClocksFreqValue"
+      ]
+    },
+    "XYcZ_add": {
+      "known_frame_sum": 200,
+      "path": [
+        "XYcZ_add",
+        "uECC_vli_modMult_fast",
+        "uECC_vli_mult"
+      ]
+    },
+    "__NVIC_SystemReset.lto_priv.0": {
+      "known_frame_sum": 0,
+      "path": [
+        "__NVIC_SystemReset.lto_priv.0"
+      ]
+    },
+    "__NVIC_SystemReset.lto_priv.1": {
+      "known_frame_sum": 0,
+      "path": [
+        "__NVIC_SystemReset.lto_priv.1"
+      ]
+    },
+    "__adddf3": {
+      "known_frame_sum": 0,
+      "path": [
+        "__adddf3"
+      ]
+    },
+    "__aeabi_cdcmpeq": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_cdcmpeq"
+      ]
+    },
+    "__aeabi_cdrcmple": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_cdrcmple"
+      ]
+    },
+    "__aeabi_d2f": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_d2f"
+      ]
+    },
+    "__aeabi_d2iz": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_d2iz"
+      ]
+    },
+    "__aeabi_d2uiz": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_d2uiz"
+      ]
+    },
+    "__aeabi_dcmpeq": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_dcmpeq"
+      ]
+    },
+    "__aeabi_dcmpge": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_dcmpge"
+      ]
+    },
+    "__aeabi_dcmpgt": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_dcmpgt"
+      ]
+    },
+    "__aeabi_dcmple": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_dcmple"
+      ]
+    },
+    "__aeabi_dcmplt": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_dcmplt"
+      ]
+    },
+    "__aeabi_dcmpun": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_dcmpun"
+      ]
+    },
+    "__aeabi_ddiv": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_ddiv"
+      ]
+    },
+    "__aeabi_dmul": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_dmul"
+      ]
+    },
+    "__aeabi_drsub": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_drsub"
+      ]
+    },
+    "__aeabi_dsub": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_dsub"
+      ]
+    },
+    "__aeabi_f2d": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_f2d"
+      ]
+    },
+    "__aeabi_i2d": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_i2d"
+      ]
+    },
+    "__aeabi_l2d": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_l2d"
+      ]
+    },
+    "__aeabi_ui2d": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_ui2d"
+      ]
+    },
+    "__aeabi_ul2d": {
+      "known_frame_sum": 0,
+      "path": [
+        "__aeabi_ul2d"
+      ]
+    },
+    "__cmpdf2": {
+      "known_frame_sum": 0,
+      "path": [
+        "__cmpdf2"
+      ]
+    },
+    "__do_global_dtors_aux": {
+      "known_frame_sum": 0,
+      "path": [
+        "__do_global_dtors_aux"
+      ]
+    },
+    "__errno": {
+      "known_frame_sum": 0,
+      "path": [
+        "__errno"
+      ]
+    },
+    "__gedf2": {
+      "known_frame_sum": 0,
+      "path": [
+        "__gedf2"
+      ]
+    },
+    "__ieee754_fmodf": {
+      "known_frame_sum": 0,
+      "path": [
+        "__ieee754_fmodf"
+      ]
+    },
+    "__ieee754_sqrtf": {
+      "known_frame_sum": 0,
+      "path": [
+        "__ieee754_sqrtf"
+      ]
+    },
+    "__ledf2": {
+      "known_frame_sum": 0,
+      "path": [
+        "__ledf2"
+      ]
+    },
+    "__libc_init_array": {
+      "known_frame_sum": 0,
+      "path": [
+        "__libc_init_array"
+      ]
+    },
+    "__malloc_lock": {
+      "known_frame_sum": 0,
+      "path": [
+        "__malloc_lock"
+      ]
+    },
+    "__malloc_unlock": {
+      "known_frame_sum": 0,
+      "path": [
+        "__malloc_unlock"
+      ]
+    },
+    "__retarget_lock_acquire_recursive": {
+      "known_frame_sum": 0,
+      "path": [
+        "__retarget_lock_acquire_recursive"
+      ]
+    },
+    "__retarget_lock_release_recursive": {
+      "known_frame_sum": 0,
+      "path": [
+        "__retarget_lock_release_recursive"
+      ]
+    },
+    "__ssputs_r": {
+      "known_frame_sum": 16,
+      "path": [
+        "__ssputs_r",
+        "_malloc_r",
+        "_sbrk_r",
+        "_sbrk"
+      ]
+    },
+    "_close": {
+      "known_frame_sum": 0,
+      "path": [
+        "_close"
+      ]
+    },
+    "_exit": {
+      "known_frame_sum": 0,
+      "path": [
+        "_exit"
+      ]
+    },
+    "_fini": {
+      "known_frame_sum": 0,
+      "path": [
+        "_fini"
+      ]
+    },
+    "_free_r": {
+      "known_frame_sum": 0,
+      "path": [
+        "_free_r"
+      ]
+    },
+    "_init": {
+      "known_frame_sum": 0,
+      "path": [
+        "_init"
+      ]
+    },
+    "_lseek": {
+      "known_frame_sum": 0,
+      "path": [
+        "_lseek"
+      ]
+    },
+    "_malloc_r": {
+      "known_frame_sum": 16,
+      "path": [
+        "_malloc_r",
+        "_sbrk_r",
+        "_sbrk"
+      ]
+    },
+    "_malloc_usable_size_r": {
+      "known_frame_sum": 0,
+      "path": [
+        "_malloc_usable_size_r"
+      ]
+    },
+    "_printf_common": {
+      "known_frame_sum": 0,
+      "path": [
+        "_printf_common"
+      ]
+    },
+    "_printf_i": {
+      "known_frame_sum": 0,
+      "path": [
+        "_printf_i"
+      ]
+    },
+    "_read": {
+      "known_frame_sum": 0,
+      "path": [
+        "_read"
+      ]
+    },
+    "_realloc_r": {
+      "known_frame_sum": 16,
+      "path": [
+        "_realloc_r",
+        "_malloc_r",
+        "_sbrk_r",
+        "_sbrk"
+      ]
+    },
+    "_sbrk": {
+      "known_frame_sum": 16,
+      "path": [
+        "_sbrk"
+      ]
+    },
+    "_sbrk_r": {
+      "known_frame_sum": 16,
+      "path": [
+        "_sbrk_r",
+        "_sbrk"
+      ]
+    },
+    "_strtol_l.isra.0": {
+      "known_frame_sum": 0,
+      "path": [
+        "_strtol_l.isra.0"
+      ]
+    },
+    "_svfiprintf_r": {
+      "known_frame_sum": 16,
+      "path": [
+        "_svfiprintf_r",
+        "__ssputs_r",
+        "_malloc_r",
+        "_sbrk_r",
+        "_sbrk"
+      ]
+    },
+    "_vsniprintf_r": {
+      "known_frame_sum": 16,
+      "path": [
+        "_vsniprintf_r",
+        "_svfiprintf_r",
+        "__ssputs_r",
+        "_malloc_r",
+        "_sbrk_r",
+        "_sbrk"
+      ]
+    },
+    "_write": {
+      "known_frame_sum": 0,
+      "path": [
+        "_write"
+      ]
+    },
+    "acc_report_settle": {
+      "known_frame_sum": 704,
+      "path": [
+        "acc_report_settle",
+        "jt808_send_location_work_mode",
+        "build_header",
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "adc_monitor_process": {
+      "known_frame_sum": 40,
+      "path": [
+        "adc_monitor_process",
+        "adc_read_ch",
+        "Delay_2ADC_Colck"
+      ]
+    },
+    "adc_monitor_valid": {
+      "known_frame_sum": 0,
+      "path": [
+        "adc_monitor_valid"
+      ]
+    },
+    "adc_read_ch": {
+      "known_frame_sum": 16,
+      "path": [
+        "adc_read_ch",
+        "Delay_2ADC_Colck"
+      ]
+    },
+    "adopt_record_locked": {
+      "known_frame_sum": 180,
+      "path": [
+        "adopt_record_locked",
+        "advance_to_sequence_locked",
+        "flash_record_valid",
+        "classify_record",
+        "flash_record_body_valid",
+        "crc32_compute",
+        "crc32_update"
+      ]
+    },
+    "advance_to_sequence_locked": {
+      "known_frame_sum": 140,
+      "path": [
+        "advance_to_sequence_locked",
+        "flash_record_valid",
+        "classify_record",
+        "flash_record_body_valid",
+        "crc32_compute",
+        "crc32_update"
+      ]
+    },
+    "agnss_init": {
+      "known_frame_sum": 720,
+      "path": [
+        "agnss_init",
+        "finish",
+        "ec800m_tcp_close.part.0",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "agnss_network_rx": {
+      "known_frame_sum": 40,
+      "path": [
+        "agnss_network_rx",
+        "key"
+      ]
+    },
+    "agnss_process": {
+      "known_frame_sum": 968,
+      "path": [
+        "agnss_process",
+        "ec800m_tcp_open",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "apply_z": {
+      "known_frame_sum": 184,
+      "path": [
+        "apply_z",
+        "uECC_vli_modMult_fast",
+        "uECC_vli_mult"
+      ]
+    },
+    "arg_equals.constprop.0": {
+      "known_frame_sum": 40,
+      "path": [
+        "arg_equals.constprop.0",
+        "argument"
+      ]
+    },
+    "argument": {
+      "known_frame_sum": 16,
+      "path": [
+        "argument"
+      ]
+    },
+    "at_config_execute_sms.isra.0": {
+      "known_frame_sum": 2192,
+      "path": [
+        "at_config_execute_sms.isra.0",
+        "f39_execute.constprop.0",
+        "prepare_operation",
+        "prepare_endpoint.constprop.0",
+        "copy_arg",
+        "argument"
+      ]
+    },
+    "at_config_execute_text_command": {
+      "known_frame_sum": 1912,
+      "path": [
+        "at_config_execute_text_command",
+        "f39_execute.constprop.0",
+        "prepare_operation",
+        "prepare_endpoint.constprop.0",
+        "copy_arg",
+        "argument"
+      ]
+    },
+    "at_config_feed": {
+      "known_frame_sum": 0,
+      "path": [
+        "at_config_feed"
+      ]
+    },
+    "at_config_process": {
+      "known_frame_sum": 2112,
+      "path": [
+        "at_config_process",
+        "f39_execute.constprop.0",
+        "prepare_operation",
+        "prepare_endpoint.constprop.0",
+        "copy_arg",
+        "argument"
+      ]
+    },
+    "at_owner_release": {
+      "known_frame_sum": 0,
+      "path": [
+        "at_owner_release"
+      ]
+    },
+    "at_send_wait": {
+      "known_frame_sum": 640,
+      "path": [
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "at_send_wait_owned": {
+      "known_frame_sum": 392,
+      "path": [
+        "at_send_wait_owned",
+        "gps_process",
+        "dispatch_nmea",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "at_wait_prompt_owned.constprop.0": {
+      "known_frame_sum": 360,
+      "path": [
+        "at_wait_prompt_owned.constprop.0",
+        "gps_process",
+        "dispatch_nmea",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "atoi": {
+      "known_frame_sum": 0,
+      "path": [
+        "atoi"
+      ]
+    },
+    "authorization_valid": {
+      "known_frame_sum": 28,
+      "path": [
+        "authorization_valid",
+        "crc32_compute",
+        "crc32_update"
+      ]
+    },
+    "begin_append_transaction": {
+      "known_frame_sum": 16,
+      "path": [
+        "begin_append_transaction"
+      ]
+    },
+    "begin_check": {
+      "known_frame_sum": 968,
+      "path": [
+        "begin_check",
+        "ec800m_ota_channel_prepare",
+        "ec800m_tcp_close.part.0",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "begin_reconcile": {
+      "known_frame_sum": 0,
+      "path": [
+        "begin_reconcile"
+      ]
+    },
+    "bits2int": {
+      "known_frame_sum": 64,
+      "path": [
+        "bits2int",
+        "uECC_vli_bytesToNative",
+        "uECC_vli_clear"
+      ]
+    },
+    "blind_zone_allocate_event_id": {
+      "known_frame_sum": 0,
+      "path": [
+        "blind_zone_allocate_event_id"
+      ]
+    },
+    "blind_zone_append": {
+      "known_frame_sum": 384,
+      "path": [
+        "blind_zone_append",
+        "ext_flash_write_result.constprop.0",
+        "spi_flash_write_result",
+        "write_enable",
+        "refresh_status",
+        "read_status_command"
+      ]
+    },
+    "blind_zone_init.isra.0": {
+      "known_frame_sum": 24,
+      "path": [
+        "blind_zone_init.isra.0"
+      ]
+    },
+    "blind_zone_recovery_process.part.0": {
+      "known_frame_sum": 464,
+      "path": [
+        "blind_zone_recovery_process.part.0",
+        "write_meta_locked",
+        "ext_flash_write_verified",
+        "spi_flash_write_result",
+        "write_enable",
+        "refresh_status",
+        "read_status_command"
+      ]
+    },
+    "blind_zone_replay_process": {
+      "known_frame_sum": 648,
+      "path": [
+        "blind_zone_replay_process",
+        "build_header",
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "blind_zone_replay_reset": {
+      "known_frame_sum": 0,
+      "path": [
+        "blind_zone_replay_reset"
+      ]
+    },
+    "build_header": {
+      "known_frame_sum": 528,
+      "path": [
+        "build_header",
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "bus_scl": {
+      "known_frame_sum": 0,
+      "path": [
+        "bus_scl"
+      ]
+    },
+    "bus_sda": {
+      "known_frame_sum": 0,
+      "path": [
+        "bus_sda"
+      ]
+    },
+    "cfg_init": {
+      "known_frame_sum": 416,
+      "path": [
+        "cfg_init",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "cfg_query_process": {
+      "known_frame_sum": 592,
+      "path": [
+        "cfg_query_process",
+        "ec800m_udp_send_once",
+        "at_send_wait_owned",
+        "gps_process",
+        "dispatch_nmea",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "cfg_set_auth_code": {
+      "known_frame_sum": 432,
+      "path": [
+        "cfg_set_auth_code",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "cfg_store_candidate_result": {
+      "known_frame_sum": 376,
+      "path": [
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "ch_on_fail": {
+      "known_frame_sum": 696,
+      "path": [
+        "ch_on_fail",
+        "ec800m_tcp_close.part.0",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "ch_process": {
+      "known_frame_sum": 704,
+      "path": [
+        "ch_process",
+        "ec800m_tcp_close.part.0",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "ch_start_connect": {
+      "known_frame_sum": 920,
+      "path": [
+        "ch_start_connect",
+        "ec800m_tcp_open",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "checkpoint_load": {
+      "known_frame_sum": 896,
+      "path": [
+        "checkpoint_load",
+        "newest",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "checkpoint_save": {
+      "known_frame_sum": 984,
+      "path": [
+        "checkpoint_save",
+        "newest",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "checkpoint_url_from_download_url.constprop.0": {
+      "known_frame_sum": 40,
+      "path": [
+        "checkpoint_url_from_download_url.constprop.0"
+      ]
+    },
+    "classify_record": {
+      "known_frame_sum": 36,
+      "path": [
+        "classify_record",
+        "flash_record_body_valid",
+        "crc32_compute",
+        "crc32_update"
+      ]
+    },
+    "clear_candidate": {
+      "known_frame_sum": 0,
+      "path": [
+        "clear_candidate"
+      ]
+    },
+    "commit_meta_locked": {
+      "known_frame_sum": 24,
+      "path": [
+        "commit_meta_locked"
+      ]
+    },
+    "config_string": {
+      "known_frame_sum": 0,
+      "path": [
+        "config_string"
+      ]
+    },
+    "confirm_append_if_sequence": {
+      "known_frame_sum": 0,
+      "path": [
+        "confirm_append_if_sequence"
+      ]
+    },
+    "consider_run": {
+      "known_frame_sum": 20,
+      "path": [
+        "consider_run"
+      ]
+    },
+    "copy_arg": {
+      "known_frame_sum": 48,
+      "path": [
+        "copy_arg",
+        "argument"
+      ]
+    },
+    "crc32_compute": {
+      "known_frame_sum": 20,
+      "path": [
+        "crc32_compute",
+        "crc32_update"
+      ]
+    },
+    "crc32_update": {
+      "known_frame_sum": 12,
+      "path": [
+        "crc32_update"
+      ]
+    },
+    "crc_region_locked.constprop.0": {
+      "known_frame_sum": 176,
+      "path": [
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "dbg_printf": {
+      "known_frame_sum": 120,
+      "path": [
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "dbg_putchar": {
+      "known_frame_sum": 8,
+      "path": [
+        "dbg_putchar"
+      ]
+    },
+    "decimal_length_valid.part.0": {
+      "known_frame_sum": 12,
+      "path": [
+        "decimal_length_valid.part.0"
+      ]
+    },
+    "defer_urc": {
+      "known_frame_sum": 84,
+      "path": [
+        "defer_urc",
+        "parse_prefixed_uint.part.0",
+        "parse_uint_field"
+      ]
+    },
+    "delay_ms": {
+      "known_frame_sum": 0,
+      "path": [
+        "delay_ms"
+      ]
+    },
+    "delay_us": {
+      "known_frame_sum": 0,
+      "path": [
+        "delay_us"
+      ]
+    },
+    "deregister_tm_clones": {
+      "known_frame_sum": 0,
+      "path": [
+        "deregister_tm_clones"
+      ]
+    },
+    "device_id.constprop.0": {
+      "known_frame_sum": 40,
+      "path": [
+        "device_id.constprop.0",
+        "exact_decimal_text"
+      ]
+    },
+    "dispatch_nmea": {
+      "known_frame_sum": 320,
+      "path": [
+        "dispatch_nmea",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "double_jacobian_default": {
+      "known_frame_sum": 232,
+      "path": [
+        "double_jacobian_default",
+        "uECC_vli_modMult_fast",
+        "uECC_vli_mult"
+      ]
+    },
+    "download_token_from_url.part.0": {
+      "known_frame_sum": 16,
+      "path": [
+        "download_token_from_url.part.0"
+      ]
+    },
+    "drain_rx": {
+      "known_frame_sum": 336,
+      "path": [
+        "drain_rx",
+        "process_rx_byte",
+        "process_rx_line",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "ec800m_at_response_end.constprop.0": {
+      "known_frame_sum": 40,
+      "path": [
+        "ec800m_at_response_end.constprop.0",
+        "ec800m_at_response_has_line.part.0.constprop.0"
+      ]
+    },
+    "ec800m_at_response_has_line.part.0.constprop.0": {
+      "known_frame_sum": 32,
+      "path": [
+        "ec800m_at_response_has_line.part.0.constprop.0"
+      ]
+    },
+    "ec800m_get_imei": {
+      "known_frame_sum": 16,
+      "path": [
+        "ec800m_get_imei"
+      ]
+    },
+    "ec800m_identity_ready": {
+      "known_frame_sum": 0,
+      "path": [
+        "ec800m_identity_ready"
+      ]
+    },
+    "ec800m_init": {
+      "known_frame_sum": 24,
+      "path": [
+        "ec800m_init"
+      ]
+    },
+    "ec800m_ntp_sync": {
+      "known_frame_sum": 680,
+      "path": [
+        "ec800m_ntp_sync",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "ec800m_ota_channel_prepare": {
+      "known_frame_sum": 696,
+      "path": [
+        "ec800m_ota_channel_prepare",
+        "ec800m_tcp_close.part.0",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "ec800m_parse_reg_status.part.0.constprop.0.isra.0": {
+      "known_frame_sum": 16,
+      "path": [
+        "ec800m_parse_reg_status.part.0.constprop.0.isra.0"
+      ]
+    },
+    "ec800m_power_on": {
+      "known_frame_sum": 384,
+      "path": [
+        "ec800m_power_on",
+        "gps_process",
+        "dispatch_nmea",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "ec800m_process": {
+      "known_frame_sum": 952,
+      "path": [
+        "ec800m_process",
+        "ec800m_reset",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "ec800m_reset": {
+      "known_frame_sum": 656,
+      "path": [
+        "ec800m_reset",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "ec800m_sms_send": {
+      "known_frame_sum": 24,
+      "path": [
+        "ec800m_sms_send"
+      ]
+    },
+    "ec800m_tcp_close.part.0": {
+      "known_frame_sum": 688,
+      "path": [
+        "ec800m_tcp_close.part.0",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "ec800m_tcp_open": {
+      "known_frame_sum": 808,
+      "path": [
+        "ec800m_tcp_open",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "ec800m_tcp_send": {
+      "known_frame_sum": 456,
+      "path": [
+        "ec800m_tcp_send",
+        "at_send_wait_owned",
+        "gps_process",
+        "dispatch_nmea",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "ec800m_udp_send_once": {
+      "known_frame_sum": 552,
+      "path": [
+        "ec800m_udp_send_once",
+        "at_send_wait_owned",
+        "gps_process",
+        "dispatch_nmea",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "encode_location_compact.isra.0": {
+      "known_frame_sum": 48,
+      "path": [
+        "encode_location_compact.isra.0",
+        "hw_acc_is_on"
+      ]
+    },
+    "encode_location_online.isra.0": {
+      "known_frame_sum": 120,
+      "path": [
+        "encode_location_online.isra.0",
+        "encode_location_compact.isra.0",
+        "hw_acc_is_on"
+      ]
+    },
+    "encode_query.constprop.0": {
+      "known_frame_sum": 20,
+      "path": [
+        "encode_query.constprop.0"
+      ]
+    },
+    "endpoint_host": {
+      "known_frame_sum": 8,
+      "path": [
+        "endpoint_host"
+      ]
+    },
+    "enqueue_action": {
+      "known_frame_sum": 76,
+      "path": [
+        "enqueue_action",
+        "enqueue_queued_action",
+        "remove_pending_at"
+      ]
+    },
+    "enqueue_candidate": {
+      "known_frame_sum": 16,
+      "path": [
+        "enqueue_candidate"
+      ]
+    },
+    "enqueue_direct_queued": {
+      "known_frame_sum": 16,
+      "path": [
+        "enqueue_direct_queued"
+      ]
+    },
+    "enqueue_queued_action": {
+      "known_frame_sum": 52,
+      "path": [
+        "enqueue_queued_action",
+        "remove_pending_at"
+      ]
+    },
+    "ensure_id": {
+      "known_frame_sum": 24,
+      "path": [
+        "ensure_id"
+      ]
+    },
+    "enter_realtime": {
+      "known_frame_sum": 84,
+      "path": [
+        "enter_realtime",
+        "enqueue_action",
+        "enqueue_queued_action",
+        "remove_pending_at"
+      ]
+    },
+    "enter_stationary.isra.0": {
+      "known_frame_sum": 84,
+      "path": [
+        "enter_stationary.isra.0",
+        "enqueue_action",
+        "enqueue_queued_action",
+        "remove_pending_at"
+      ]
+    },
+    "exact_decimal_text": {
+      "known_frame_sum": 8,
+      "path": [
+        "exact_decimal_text"
+      ]
+    },
+    "ext_flash_erase.constprop.0": {
+      "known_frame_sum": 88,
+      "path": [
+        "ext_flash_erase.constprop.0",
+        "write_enable",
+        "refresh_status",
+        "read_status_command"
+      ]
+    },
+    "ext_flash_read": {
+      "known_frame_sum": 88,
+      "path": [
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "ext_flash_try_lock.part.0": {
+      "known_frame_sum": 8,
+      "path": [
+        "ext_flash_try_lock.part.0"
+      ]
+    },
+    "ext_flash_try_lock_now": {
+      "known_frame_sum": 0,
+      "path": [
+        "ext_flash_try_lock_now"
+      ]
+    },
+    "ext_flash_unlock": {
+      "known_frame_sum": 0,
+      "path": [
+        "ext_flash_unlock"
+      ]
+    },
+    "ext_flash_write_result.constprop.0": {
+      "known_frame_sum": 192,
+      "path": [
+        "ext_flash_write_result.constprop.0",
+        "spi_flash_write_result",
+        "write_enable",
+        "refresh_status",
+        "read_status_command"
+      ]
+    },
+    "ext_flash_write_verified": {
+      "known_frame_sum": 192,
+      "path": [
+        "ext_flash_write_verified",
+        "spi_flash_write_result",
+        "write_enable",
+        "refresh_status",
+        "read_status_command"
+      ]
+    },
+    "f39_bind_defaults": {
+      "known_frame_sum": 40,
+      "path": [
+        "f39_bind_defaults",
+        "ec800m_get_imei"
+      ]
+    },
+    "f39_clear_reply_transaction": {
+      "known_frame_sum": 0,
+      "path": [
+        "f39_clear_reply_transaction"
+      ]
+    },
+    "f39_default_reset": {
+      "known_frame_sum": 0,
+      "path": [
+        "f39_default_reset"
+      ]
+    },
+    "f39_default_sms_send": {
+      "known_frame_sum": 0,
+      "path": [
+        "f39_default_sms_send"
+      ]
+    },
+    "f39_execute.constprop.0": {
+      "known_frame_sum": 1368,
+      "path": [
+        "f39_execute.constprop.0",
+        "prepare_operation",
+        "prepare_endpoint.constprop.0",
+        "copy_arg",
+        "argument"
+      ]
+    },
+    "f39_fota_recheck": {
+      "known_frame_sum": 0,
+      "path": [
+        "f39_fota_recheck"
+      ]
+    },
+    "f39_gnss_mode": {
+      "known_frame_sum": 8,
+      "path": [
+        "f39_gnss_mode"
+      ]
+    },
+    "f39_gps_speed": {
+      "known_frame_sum": 0,
+      "path": [
+        "f39_gps_speed"
+      ]
+    },
+    "f39_gps_valid": {
+      "known_frame_sum": 0,
+      "path": [
+        "f39_gps_valid"
+      ]
+    },
+    "f39_jt808_auth_reset": {
+      "known_frame_sum": 0,
+      "path": [
+        "f39_jt808_auth_reset"
+      ]
+    },
+    "f39_jt808_reregister": {
+      "known_frame_sum": 448,
+      "path": [
+        "f39_jt808_reregister",
+        "cfg_set_auth_code",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "f39_lookup_root": {
+      "known_frame_sum": 32,
+      "path": [
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "f39_modem_pdp_restart": {
+      "known_frame_sum": 704,
+      "path": [
+        "f39_modem_pdp_restart",
+        "tcp_manager_reconnect",
+        "ec800m_tcp_close.part.0",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "f39_network_reconnect": {
+      "known_frame_sum": 24,
+      "path": [
+        "f39_network_reconnect",
+        "jt808_set_server"
+      ]
+    },
+    "f39_parse": {
+      "known_frame_sum": 72,
+      "path": [
+        "f39_parse",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "f39_persist": {
+      "known_frame_sum": 384,
+      "path": [
+        "f39_persist",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "f39_refresh_live_snapshot": {
+      "known_frame_sum": 32,
+      "path": [
+        "f39_refresh_live_snapshot",
+        "ec800m_get_imei"
+      ]
+    },
+    "f39_relay": {
+      "known_frame_sum": 76,
+      "path": [
+        "f39_relay",
+        "relay_set",
+        "relay_gpio_write",
+        "GPIO_InitPeripheral"
+      ]
+    },
+    "f39_relay_get": {
+      "known_frame_sum": 0,
+      "path": [
+        "f39_relay_get"
+      ]
+    },
+    "f39_remaining_refresh": {
+      "known_frame_sum": 0,
+      "path": [
+        "f39_remaining_refresh"
+      ]
+    },
+    "f39_root_equals": {
+      "known_frame_sum": 16,
+      "path": [
+        "f39_root_equals"
+      ]
+    },
+    "f39_schedule_reply_retry": {
+      "known_frame_sum": 128,
+      "path": [
+        "f39_schedule_reply_retry",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "f39_sms_result": {
+      "known_frame_sum": 144,
+      "path": [
+        "f39_sms_result",
+        "f39_schedule_reply_retry",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "f39_timer_refresh": {
+      "known_frame_sum": 8,
+      "path": [
+        "f39_timer_refresh"
+      ]
+    },
+    "fail_download": {
+      "known_frame_sum": 16,
+      "path": [
+        "fail_download",
+        "release_resources"
+      ]
+    },
+    "failure.isra.0": {
+      "known_frame_sum": 8,
+      "path": [
+        "failure.isra.0"
+      ]
+    },
+    "finish": {
+      "known_frame_sum": 704,
+      "path": [
+        "finish",
+        "ec800m_tcp_close.part.0",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "finish_check": {
+      "known_frame_sum": 16,
+      "path": [
+        "finish_check",
+        "release_resources"
+      ]
+    },
+    "finish_current_run": {
+      "known_frame_sum": 28,
+      "path": [
+        "finish_current_run",
+        "consider_run"
+      ]
+    },
+    "finish_maintenance_locked.isra.0": {
+      "known_frame_sum": 116,
+      "path": [
+        "finish_maintenance_locked.isra.0",
+        "classify_record",
+        "flash_record_body_valid",
+        "crc32_compute",
+        "crc32_update"
+      ]
+    },
+    "firmware_signature_verify": {
+      "known_frame_sum": 840,
+      "path": [
+        "firmware_signature_verify",
+        "uECC_verify",
+        "uECC_vli_modMult",
+        "uECC_vli_mmod",
+        "uECC_vli_clear"
+      ]
+    },
+    "flash_record_body_valid": {
+      "known_frame_sum": 28,
+      "path": [
+        "flash_record_body_valid",
+        "crc32_compute",
+        "crc32_update"
+      ]
+    },
+    "flash_record_valid": {
+      "known_frame_sum": 44,
+      "path": [
+        "flash_record_valid",
+        "classify_record",
+        "flash_record_body_valid",
+        "crc32_compute",
+        "crc32_update"
+      ]
+    },
+    "flush_pending_essentials": {
+      "known_frame_sum": 36,
+      "path": [
+        "flush_pending_essentials",
+        "remove_pending_at"
+      ]
+    },
+    "fmodf": {
+      "known_frame_sum": 0,
+      "path": [
+        "fmodf"
+      ]
+    },
+    "fota_bcr_commit_pending.constprop.0": {
+      "known_frame_sum": 464,
+      "path": [
+        "fota_bcr_commit_pending.constprop.0",
+        "fota_bcr_write_record",
+        "ext_flash_write_verified",
+        "spi_flash_write_result",
+        "write_enable",
+        "refresh_status",
+        "read_status_command"
+      ]
+    },
+    "fota_bcr_load": {
+      "known_frame_sum": 184,
+      "path": [
+        "fota_bcr_load",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "fota_bcr_valid": {
+      "known_frame_sum": 76,
+      "path": [
+        "fota_bcr_valid",
+        "crc32_compute",
+        "crc32_update"
+      ]
+    },
+    "fota_bcr_write_record": {
+      "known_frame_sum": 368,
+      "path": [
+        "fota_bcr_write_record",
+        "ext_flash_write_verified",
+        "spi_flash_write_result",
+        "write_enable",
+        "refresh_status",
+        "read_status_command"
+      ]
+    },
+    "fota_check_consume": {
+      "known_frame_sum": 0,
+      "path": [
+        "fota_check_consume"
+      ]
+    },
+    "fota_check_parse": {
+      "known_frame_sum": 504,
+      "path": [
+        "fota_check_parse",
+        "fota_check_parse_string"
+      ]
+    },
+    "fota_check_parse_literal": {
+      "known_frame_sum": 16,
+      "path": [
+        "fota_check_parse_literal"
+      ]
+    },
+    "fota_check_parse_string": {
+      "known_frame_sum": 32,
+      "path": [
+        "fota_check_parse_string"
+      ]
+    },
+    "fota_check_parse_u32": {
+      "known_frame_sum": 20,
+      "path": [
+        "fota_check_parse_u32"
+      ]
+    },
+    "fota_check_skip_whitespace": {
+      "known_frame_sum": 8,
+      "path": [
+        "fota_check_skip_whitespace"
+      ]
+    },
+    "fota_check_string_equals": {
+      "known_frame_sum": 12,
+      "path": [
+        "fota_check_string_equals"
+      ]
+    },
+    "fota_confirm_trial_process": {
+      "known_frame_sum": 424,
+      "path": [
+        "fota_confirm_trial_process",
+        "fota_bcr_write_record",
+        "ext_flash_write_verified",
+        "spi_flash_write_result",
+        "write_enable",
+        "refresh_status",
+        "read_status_command"
+      ]
+    },
+    "fota_diag_block": {
+      "known_frame_sum": 136,
+      "path": [
+        "fota_diag_block",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "fota_diag_hex.constprop.0": {
+      "known_frame_sum": 12,
+      "path": [
+        "fota_diag_hex.constprop.0"
+      ]
+    },
+    "fota_ec800m_rx": {
+      "known_frame_sum": 232,
+      "path": [
+        "fota_ec800m_rx",
+        "fota_on_http_header",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "fota_init": {
+      "known_frame_sum": 16,
+      "path": [
+        "fota_init"
+      ]
+    },
+    "fota_is_active.lto_priv.0": {
+      "known_frame_sum": 0,
+      "path": [
+        "fota_is_active.lto_priv.0"
+      ]
+    },
+    "fota_on_chunk.part.0": {
+      "known_frame_sum": 1152,
+      "path": [
+        "fota_on_chunk.part.0",
+        "checkpoint_save",
+        "newest",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "fota_on_http_header": {
+      "known_frame_sum": 200,
+      "path": [
+        "fota_on_http_header",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "fota_process": {
+      "known_frame_sum": 2144,
+      "path": [
+        "fota_process",
+        "fota_verify_manifest.constprop.0",
+        "firmware_signature_verify",
+        "uECC_verify",
+        "uECC_vli_modMult",
+        "uECC_vli_mmod",
+        "uECC_vli_clear"
+      ]
+    },
+    "fota_start_request.constprop.0": {
+      "known_frame_sum": 1016,
+      "path": [
+        "fota_start_request.constprop.0",
+        "checkpoint_save",
+        "newest",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "fota_verify_manifest.constprop.0": {
+      "known_frame_sum": 1368,
+      "path": [
+        "fota_verify_manifest.constprop.0",
+        "firmware_signature_verify",
+        "uECC_verify",
+        "uECC_vli_modMult",
+        "uECC_vli_mmod",
+        "uECC_vli_clear"
+      ]
+    },
+    "frame_bytes": {
+      "known_frame_sum": 16,
+      "path": [
+        "frame_bytes"
+      ]
+    },
+    "frame_dummy": {
+      "known_frame_sum": 0,
+      "path": [
+        "frame_dummy"
+      ]
+    },
+    "frame_init": {
+      "known_frame_sum": 0,
+      "path": [
+        "frame_init"
+      ]
+    },
+    "frame_u16": {
+      "known_frame_sum": 12,
+      "path": [
+        "frame_u16"
+      ]
+    },
+    "gnss_vendor_inject": {
+      "known_frame_sum": 120,
+      "path": [
+        "gnss_vendor_inject",
+        "send_frame.lto_priv.1"
+      ]
+    },
+    "gpio_af_rx": {
+      "known_frame_sum": 36,
+      "path": [
+        "gpio_af_rx",
+        "GPIO_InitPeripheral"
+      ]
+    },
+    "gpio_input": {
+      "known_frame_sum": 60,
+      "path": [
+        "gpio_input",
+        "GPIO_InitPeripheral"
+      ]
+    },
+    "gpio_out_pp": {
+      "known_frame_sum": 60,
+      "path": [
+        "gpio_out_pp",
+        "GPIO_InitPeripheral"
+      ]
+    },
+    "gps_capture_last_trusted_snapshot.isra.0": {
+      "known_frame_sum": 64,
+      "path": [
+        "gps_capture_last_trusted_snapshot.isra.0"
+      ]
+    },
+    "gps_configure_output": {
+      "known_frame_sum": 68,
+      "path": [
+        "gps_configure_output",
+        "gps_send_raw",
+        "gps_tx_write"
+      ]
+    },
+    "gps_enable": {
+      "known_frame_sum": 60,
+      "path": [
+        "gps_enable",
+        "GPIO_InitPeripheral"
+      ]
+    },
+    "gps_get_quality.isra.0": {
+      "known_frame_sum": 24,
+      "path": [
+        "gps_get_quality.isra.0"
+      ]
+    },
+    "gps_process": {
+      "known_frame_sum": 328,
+      "path": [
+        "gps_process",
+        "dispatch_nmea",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "gps_quality_fix_fresh": {
+      "known_frame_sum": 0,
+      "path": [
+        "gps_quality_fix_fresh"
+      ]
+    },
+    "gps_report_filter_copy.isra.0": {
+      "known_frame_sum": 64,
+      "path": [
+        "gps_report_filter_copy.isra.0",
+        "report_fix_fresh"
+      ]
+    },
+    "gps_report_filter_process": {
+      "known_frame_sum": 136,
+      "path": [
+        "gps_report_filter_process",
+        "trimmed_mean"
+      ]
+    },
+    "gps_report_filter_reset": {
+      "known_frame_sum": 0,
+      "path": [
+        "gps_report_filter_reset"
+      ]
+    },
+    "gps_send_raw": {
+      "known_frame_sum": 28,
+      "path": [
+        "gps_send_raw",
+        "gps_tx_write"
+      ]
+    },
+    "gps_tx_write": {
+      "known_frame_sum": 20,
+      "path": [
+        "gps_tx_write"
+      ]
+    },
+    "handle_text_message": {
+      "known_frame_sum": 0,
+      "path": [
+        "handle_text_message"
+      ]
+    },
+    "hardfault_capture": {
+      "known_frame_sum": 8,
+      "path": [
+        "hardfault_capture"
+      ]
+    },
+    "header_name": {
+      "known_frame_sum": 8,
+      "path": [
+        "header_name"
+      ]
+    },
+    "http_reset": {
+      "known_frame_sum": 0,
+      "path": [
+        "http_reset"
+      ]
+    },
+    "huada_aid_frame_valid": {
+      "known_frame_sum": 36,
+      "path": [
+        "huada_aid_frame_valid",
+        "valid_frame"
+      ]
+    },
+    "huada_reset_stream": {
+      "known_frame_sum": 0,
+      "path": [
+        "huada_reset_stream"
+      ]
+    },
+    "hw_acc_is_on": {
+      "known_frame_sum": 8,
+      "path": [
+        "hw_acc_is_on"
+      ]
+    },
+    "hw_acc_pin_high": {
+      "known_frame_sum": 0,
+      "path": [
+        "hw_acc_pin_high"
+      ]
+    },
+    "hw_adc_init": {
+      "known_frame_sum": 76,
+      "path": [
+        "hw_adc_init",
+        "GPIO_InitPeripheral"
+      ]
+    },
+    "hw_gpio_init": {
+      "known_frame_sum": 92,
+      "path": [
+        "hw_gpio_init",
+        "gpio_input",
+        "GPIO_InitPeripheral"
+      ]
+    },
+    "hw_i2c_init": {
+      "known_frame_sum": 176,
+      "path": [
+        "hw_i2c_init",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "hw_spi_init": {
+      "known_frame_sum": 60,
+      "path": [
+        "hw_spi_init",
+        "GPIO_InitPeripheral"
+      ]
+    },
+    "hw_usart_init": {
+      "known_frame_sum": 76,
+      "path": [
+        "hw_usart_init",
+        "USART_Init.constprop.0",
+        "RCC_GetClocksFreqValue"
+      ]
+    },
+    "i2c_accel_init": {
+      "known_frame_sum": 240,
+      "path": [
+        "i2c_accel_init",
+        "hw_i2c_init",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "i2c_accel_read": {
+      "known_frame_sum": 64,
+      "path": [
+        "i2c_accel_read",
+        "i2c_wait_flag.constprop.0"
+      ]
+    },
+    "i2c_accel_rearm_wake_interrupt": {
+      "known_frame_sum": 36,
+      "path": [
+        "i2c_accel_rearm_wake_interrupt",
+        "i2c_write_reg",
+        "i2c_wait_event.constprop.0"
+      ]
+    },
+    "i2c_accel_vibration_hit": {
+      "known_frame_sum": 176,
+      "path": [
+        "i2c_accel_vibration_hit",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "i2c_wait_event.constprop.0": {
+      "known_frame_sum": 12,
+      "path": [
+        "i2c_wait_event.constprop.0"
+      ]
+    },
+    "i2c_wait_flag.constprop.0": {
+      "known_frame_sum": 32,
+      "path": [
+        "i2c_wait_flag.constprop.0"
+      ]
+    },
+    "i2c_write_reg": {
+      "known_frame_sum": 28,
+      "path": [
+        "i2c_write_reg",
+        "i2c_wait_event.constprop.0"
+      ]
+    },
+    "iccid_nibble": {
+      "known_frame_sum": 0,
+      "path": [
+        "iccid_nibble"
+      ]
+    },
+    "iccid_text_valid.part.0.constprop.0": {
+      "known_frame_sum": 0,
+      "path": [
+        "iccid_text_valid.part.0.constprop.0"
+      ]
+    },
+    "identity_ready.constprop.0": {
+      "known_frame_sum": 8,
+      "path": [
+        "identity_ready.constprop.0"
+      ]
+    },
+    "invalidate_evidence": {
+      "known_frame_sum": 8,
+      "path": [
+        "invalidate_evidence"
+      ]
+    },
+    "is_deferred_urc": {
+      "known_frame_sum": 8,
+      "path": [
+        "is_deferred_urc"
+      ]
+    },
+    "jt808_channel_online": {
+      "known_frame_sum": 8,
+      "path": [
+        "jt808_channel_online"
+      ]
+    },
+    "jt808_days_in_month": {
+      "known_frame_sum": 0,
+      "path": [
+        "jt808_days_in_month"
+      ]
+    },
+    "jt808_encode_plate_gbk.constprop.0": {
+      "known_frame_sum": 32,
+      "path": [
+        "jt808_encode_plate_gbk.constprop.0"
+      ]
+    },
+    "jt808_init.constprop.0": {
+      "known_frame_sum": 32,
+      "path": [
+        "jt808_init.constprop.0",
+        "jt808_session_init.part.0"
+      ]
+    },
+    "jt808_is_online": {
+      "known_frame_sum": 16,
+      "path": [
+        "jt808_is_online",
+        "jt808_channel_online"
+      ]
+    },
+    "jt808_location_snapshot_valid": {
+      "known_frame_sum": 8,
+      "path": [
+        "jt808_location_snapshot_valid"
+      ]
+    },
+    "jt808_on_recv": {
+      "known_frame_sum": 2184,
+      "path": [
+        "jt808_on_recv",
+        "process_frame",
+        "at_config_execute_text_command",
+        "f39_execute.constprop.0",
+        "prepare_operation",
+        "prepare_endpoint.constprop.0",
+        "copy_arg",
+        "argument"
+      ]
+    },
+    "jt808_process": {
+      "known_frame_sum": 1312,
+      "path": [
+        "jt808_process",
+        "process_location_timer",
+        "jt808_send_location_to",
+        "build_header",
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "jt808_reset_endpoint_auth": {
+      "known_frame_sum": 32,
+      "path": [
+        "jt808_reset_endpoint_auth",
+        "jt808_session_init.part.0"
+      ]
+    },
+    "jt808_send_auth_to.isra.0": {
+      "known_frame_sum": 568,
+      "path": [
+        "jt808_send_auth_to.isra.0",
+        "build_header",
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "jt808_send_general_resp.isra.0": {
+      "known_frame_sum": 0,
+      "path": [
+        "jt808_send_general_resp.isra.0"
+      ]
+    },
+    "jt808_send_general_resp_to.isra.0": {
+      "known_frame_sum": 568,
+      "path": [
+        "jt808_send_general_resp_to.isra.0",
+        "build_header",
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "jt808_send_heartbeat": {
+      "known_frame_sum": 544,
+      "path": [
+        "jt808_send_heartbeat",
+        "build_header",
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "jt808_send_location_to": {
+      "known_frame_sum": 680,
+      "path": [
+        "jt808_send_location_to",
+        "build_header",
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "jt808_send_location_work_mode": {
+      "known_frame_sum": 688,
+      "path": [
+        "jt808_send_location_work_mode",
+        "build_header",
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "jt808_send_raw.isra.0": {
+      "known_frame_sum": 552,
+      "path": [
+        "jt808_send_raw.isra.0",
+        "build_header",
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "jt808_session_init.part.0": {
+      "known_frame_sum": 16,
+      "path": [
+        "jt808_session_init.part.0"
+      ]
+    },
+    "jt808_session_mark_send_failed": {
+      "known_frame_sum": 0,
+      "path": [
+        "jt808_session_mark_send_failed"
+      ]
+    },
+    "jt808_session_mark_sent": {
+      "known_frame_sum": 8,
+      "path": [
+        "jt808_session_mark_sent"
+      ]
+    },
+    "jt808_session_reject_or_timeout": {
+      "known_frame_sum": 0,
+      "path": [
+        "jt808_session_reject_or_timeout"
+      ]
+    },
+    "jt808_set_report_interval": {
+      "known_frame_sum": 0,
+      "path": [
+        "jt808_set_report_interval"
+      ]
+    },
+    "jt808_set_server": {
+      "known_frame_sum": 16,
+      "path": [
+        "jt808_set_server"
+      ]
+    },
+    "jt808_set_server.part.0": {
+      "known_frame_sum": 16,
+      "path": [
+        "jt808_set_server.part.0"
+      ]
+    },
+    "jt808_set_terminal_profile": {
+      "known_frame_sum": 16,
+      "path": [
+        "jt808_set_terminal_profile"
+      ]
+    },
+    "jt808_terminal_info_encode.part.0.constprop.0": {
+      "known_frame_sum": 536,
+      "path": [
+        "jt808_terminal_info_encode.part.0.constprop.0",
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "jt808_trigger_alarm": {
+      "known_frame_sum": 0,
+      "path": [
+        "jt808_trigger_alarm"
+      ]
+    },
+    "key": {
+      "known_frame_sum": 8,
+      "path": [
+        "key"
+      ]
+    },
+    "log_location_unavailable": {
+      "known_frame_sum": 136,
+      "path": [
+        "log_location_unavailable",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "log_persist_failure": {
+      "known_frame_sum": 160,
+      "path": [
+        "log_persist_failure",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "log_platform_process": {
+      "known_frame_sum": 736,
+      "path": [
+        "log_platform_process",
+        "ec800m_udp_send_once",
+        "at_send_wait_owned",
+        "gps_process",
+        "dispatch_nmea",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "main": {
+      "known_frame_sum": 2408,
+      "path": [
+        "main",
+        "fota_process",
+        "fota_verify_manifest.constprop.0",
+        "firmware_signature_verify",
+        "uECC_verify",
+        "uECC_vli_modMult",
+        "uECC_vli_mmod",
+        "uECC_vli_clear"
+      ]
+    },
+    "mark_repair_slot": {
+      "known_frame_sum": 0,
+      "path": [
+        "mark_repair_slot"
+      ]
+    },
+    "memchr": {
+      "known_frame_sum": 0,
+      "path": [
+        "memchr"
+      ]
+    },
+    "memcmp": {
+      "known_frame_sum": 0,
+      "path": [
+        "memcmp"
+      ]
+    },
+    "memcpy": {
+      "known_frame_sum": 0,
+      "path": [
+        "memcpy"
+      ]
+    },
+    "memmove": {
+      "known_frame_sum": 0,
+      "path": [
+        "memmove"
+      ]
+    },
+    "memset": {
+      "known_frame_sum": 0,
+      "path": [
+        "memset"
+      ]
+    },
+    "mileage_flush_at.isra.0": {
+      "known_frame_sum": 392,
+      "path": [
+        "mileage_flush_at.isra.0",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "mileage_force_save.isra.0": {
+      "known_frame_sum": 8,
+      "path": [
+        "mileage_force_save.isra.0"
+      ]
+    },
+    "mileage_sync_persist_generation": {
+      "known_frame_sum": 0,
+      "path": [
+        "mileage_sync_persist_generation"
+      ]
+    },
+    "mileage_trial_sin": {
+      "known_frame_sum": 32,
+      "path": [
+        "mileage_trial_sin"
+      ]
+    },
+    "mileage_update": {
+      "known_frame_sum": 88,
+      "path": [
+        "mileage_update",
+        "mileage_trial_sin"
+      ]
+    },
+    "motion_corner_consume_candidate": {
+      "known_frame_sum": 20,
+      "path": [
+        "motion_corner_consume_candidate"
+      ]
+    },
+    "motion_corner_init": {
+      "known_frame_sum": 16,
+      "path": [
+        "motion_corner_init"
+      ]
+    },
+    "motion_corner_peek_candidate": {
+      "known_frame_sum": 12,
+      "path": [
+        "motion_corner_peek_candidate"
+      ]
+    },
+    "motion_corner_pending_candidates": {
+      "known_frame_sum": 0,
+      "path": [
+        "motion_corner_pending_candidates"
+      ]
+    },
+    "motion_corner_step": {
+      "known_frame_sum": 56,
+      "path": [
+        "motion_corner_step",
+        "enqueue_candidate"
+      ]
+    },
+    "newest": {
+      "known_frame_sum": 320,
+      "path": [
+        "newest",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "nmea_split.constprop.0": {
+      "known_frame_sum": 8,
+      "path": [
+        "nmea_split.constprop.0"
+      ]
+    },
+    "nmea_to_deg": {
+      "known_frame_sum": 72,
+      "path": [
+        "nmea_to_deg",
+        "parse_decimal"
+      ]
+    },
+    "ntp_resync_process": {
+      "known_frame_sum": 728,
+      "path": [
+        "ntp_resync_process",
+        "ec800m_ntp_sync",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "owner_ok": {
+      "known_frame_sum": 0,
+      "path": [
+        "owner_ok"
+      ]
+    },
+    "parse_arg_u32": {
+      "known_frame_sum": 40,
+      "path": [
+        "parse_arg_u32",
+        "argument"
+      ]
+    },
+    "parse_content_range": {
+      "known_frame_sum": 52,
+      "path": [
+        "parse_content_range",
+        "parse_http_u32"
+      ]
+    },
+    "parse_decimal": {
+      "known_frame_sum": 32,
+      "path": [
+        "parse_decimal"
+      ]
+    },
+    "parse_http_u32": {
+      "known_frame_sum": 20,
+      "path": [
+        "parse_http_u32"
+      ]
+    },
+    "parse_iccid_response.constprop.0": {
+      "known_frame_sum": 32,
+      "path": [
+        "parse_iccid_response.constprop.0"
+      ]
+    },
+    "parse_prefixed_uint.part.0": {
+      "known_frame_sum": 52,
+      "path": [
+        "parse_prefixed_uint.part.0",
+        "parse_uint_field"
+      ]
+    },
+    "parse_qiopen": {
+      "known_frame_sum": 44,
+      "path": [
+        "parse_qiopen",
+        "parse_uint_field"
+      ]
+    },
+    "parse_six_digits": {
+      "known_frame_sum": 16,
+      "path": [
+        "parse_six_digits"
+      ]
+    },
+    "parse_uint8": {
+      "known_frame_sum": 12,
+      "path": [
+        "parse_uint8"
+      ]
+    },
+    "parse_uint_field": {
+      "known_frame_sum": 20,
+      "path": [
+        "parse_uint_field"
+      ]
+    },
+    "parse_url": {
+      "known_frame_sum": 24,
+      "path": [
+        "parse_url"
+      ]
+    },
+    "payload_valid": {
+      "known_frame_sum": 16,
+      "path": [
+        "payload_valid"
+      ]
+    },
+    "periodic_status_log": {
+      "known_frame_sum": 200,
+      "path": [
+        "periodic_status_log",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "prepare_endpoint.constprop.0": {
+      "known_frame_sum": 80,
+      "path": [
+        "prepare_endpoint.constprop.0",
+        "copy_arg",
+        "argument"
+      ]
+    },
+    "prepare_operation": {
+      "known_frame_sum": 200,
+      "path": [
+        "prepare_operation",
+        "prepare_endpoint.constprop.0",
+        "copy_arg",
+        "argument"
+      ]
+    },
+    "print_uint_width": {
+      "known_frame_sum": 64,
+      "path": [
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "process_deferred_urc_one": {
+      "known_frame_sum": 624,
+      "path": [
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "process_frame": {
+      "known_frame_sum": 2152,
+      "path": [
+        "process_frame",
+        "at_config_execute_text_command",
+        "f39_execute.constprop.0",
+        "prepare_operation",
+        "prepare_endpoint.constprop.0",
+        "copy_arg",
+        "argument"
+      ]
+    },
+    "process_location_timer": {
+      "known_frame_sum": 1064,
+      "path": [
+        "process_location_timer",
+        "jt808_send_location_to",
+        "build_header",
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "process_rx_byte": {
+      "known_frame_sum": 320,
+      "path": [
+        "process_rx_byte",
+        "process_rx_line",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "process_rx_line": {
+      "known_frame_sum": 288,
+      "path": [
+        "process_rx_line",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "process_urc": {
+      "known_frame_sum": 344,
+      "path": [
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "protected_status": {
+      "known_frame_sum": 0,
+      "path": [
+        "protected_status"
+      ]
+    },
+    "qird_dump_line_head": {
+      "known_frame_sum": 280,
+      "path": [
+        "qird_dump_line_head",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "qird_note_ring_level": {
+      "known_frame_sum": 0,
+      "path": [
+        "qird_note_ring_level"
+      ]
+    },
+    "qird_report_desync": {
+      "known_frame_sum": 152,
+      "path": [
+        "qird_report_desync",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "qird_ring_pending": {
+      "known_frame_sum": 8,
+      "path": [
+        "qird_ring_pending"
+      ]
+    },
+    "quarantine_missing_head_locked": {
+      "known_frame_sum": 260,
+      "path": [
+        "quarantine_missing_head_locked",
+        "advance_to_sequence_locked",
+        "flash_record_valid",
+        "classify_record",
+        "flash_record_body_valid",
+        "crc32_compute",
+        "crc32_update"
+      ]
+    },
+    "query.constprop.0": {
+      "known_frame_sum": 176,
+      "path": [
+        "query.constprop.0",
+        "device_id.constprop.0",
+        "exact_decimal_text"
+      ]
+    },
+    "queued_action_is_stale": {
+      "known_frame_sum": 0,
+      "path": [
+        "queued_action_is_stale"
+      ]
+    },
+    "read_be": {
+      "known_frame_sum": 0,
+      "path": [
+        "read_be"
+      ]
+    },
+    "read_record_locked": {
+      "known_frame_sum": 0,
+      "path": [
+        "read_record_locked"
+      ]
+    },
+    "read_status_command": {
+      "known_frame_sum": 24,
+      "path": [
+        "read_status_command"
+      ]
+    },
+    "ready": {
+      "known_frame_sum": 48,
+      "path": [
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "refresh_status": {
+      "known_frame_sum": 32,
+      "path": [
+        "refresh_status",
+        "read_status_command"
+      ]
+    },
+    "register_tm_clones": {
+      "known_frame_sum": 0,
+      "path": [
+        "register_tm_clones"
+      ]
+    },
+    "relay_gpio_write": {
+      "known_frame_sum": 60,
+      "path": [
+        "relay_gpio_write",
+        "GPIO_InitPeripheral"
+      ]
+    },
+    "relay_log": {
+      "known_frame_sum": 136,
+      "path": [
+        "relay_log",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "relay_set": {
+      "known_frame_sum": 68,
+      "path": [
+        "relay_set",
+        "relay_gpio_write",
+        "GPIO_InitPeripheral"
+      ]
+    },
+    "release_resources": {
+      "known_frame_sum": 8,
+      "path": [
+        "release_resources"
+      ]
+    },
+    "remove_pending_at": {
+      "known_frame_sum": 20,
+      "path": [
+        "remove_pending_at"
+      ]
+    },
+    "reply_append": {
+      "known_frame_sum": 36,
+      "path": [
+        "reply_append",
+        "vsniprintf",
+        "_vsniprintf_r",
+        "_svfiprintf_r",
+        "__ssputs_r",
+        "_malloc_r",
+        "_sbrk_r",
+        "_sbrk"
+      ]
+    },
+    "reply_clear": {
+      "known_frame_sum": 0,
+      "path": [
+        "reply_clear"
+      ]
+    },
+    "report_enabled": {
+      "known_frame_sum": 0,
+      "path": [
+        "report_enabled"
+      ]
+    },
+    "report_fix_fresh": {
+      "known_frame_sum": 40,
+      "path": [
+        "report_fix_fresh"
+      ]
+    },
+    "reset_diag_capture": {
+      "known_frame_sum": 8,
+      "path": [
+        "reset_diag_capture"
+      ]
+    },
+    "reset_diag_runtime_init": {
+      "known_frame_sum": 24,
+      "path": [
+        "reset_diag_runtime_init"
+      ]
+    },
+    "reset_vibration_episode": {
+      "known_frame_sum": 0,
+      "path": [
+        "reset_vibration_episode"
+      ]
+    },
+    "rtc_alarm_clear": {
+      "known_frame_sum": 8,
+      "path": [
+        "rtc_alarm_clear"
+      ]
+    },
+    "rx_write_position": {
+      "known_frame_sum": 0,
+      "path": [
+        "rx_write_position"
+      ]
+    },
+    "same_origin": {
+      "known_frame_sum": 304,
+      "path": [
+        "same_origin",
+        "parse_url"
+      ]
+    },
+    "saturating_increment": {
+      "known_frame_sum": 0,
+      "path": [
+        "saturating_increment"
+      ]
+    },
+    "sbrk_aligned": {
+      "known_frame_sum": 16,
+      "path": [
+        "sbrk_aligned",
+        "_sbrk_r",
+        "_sbrk"
+      ]
+    },
+    "scan_alarms": {
+      "known_frame_sum": 144,
+      "path": [
+        "scan_alarms",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "schedule_tail_cleanup": {
+      "known_frame_sum": 8,
+      "path": [
+        "schedule_tail_cleanup"
+      ]
+    },
+    "scratch_header_valid.constprop.0": {
+      "known_frame_sum": 36,
+      "path": [
+        "scratch_header_valid.constprop.0",
+        "crc32_compute",
+        "crc32_update"
+      ]
+    },
+    "send_frame.lto_priv.1": {
+      "known_frame_sum": 16,
+      "path": [
+        "send_frame.lto_priv.1"
+      ]
+    },
+    "send_frame_broadcast": {
+      "known_frame_sum": 64,
+      "path": [
+        "send_frame_broadcast",
+        "send_frame_channel_delivered",
+        "send_frame_channel"
+      ]
+    },
+    "send_frame_channel": {
+      "known_frame_sum": 24,
+      "path": [
+        "send_frame_channel"
+      ]
+    },
+    "send_frame_channel_delivered": {
+      "known_frame_sum": 32,
+      "path": [
+        "send_frame_channel_delivered",
+        "send_frame_channel"
+      ]
+    },
+    "send_get": {
+      "known_frame_sum": 696,
+      "path": [
+        "send_get",
+        "ec800m_tcp_send",
+        "at_send_wait_owned",
+        "gps_process",
+        "dispatch_nmea",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "send_gnss": {
+      "known_frame_sum": 0,
+      "path": [
+        "send_gnss"
+      ]
+    },
+    "send_request": {
+      "known_frame_sum": 1176,
+      "path": [
+        "send_request",
+        "ec800m_tcp_send",
+        "at_send_wait_owned",
+        "gps_process",
+        "dispatch_nmea",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "send_status_request": {
+      "known_frame_sum": 728,
+      "path": [
+        "send_status_request",
+        "ec800m_tcp_send",
+        "at_send_wait_owned",
+        "gps_process",
+        "dispatch_nmea",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "service_workspace_release.part.0": {
+      "known_frame_sum": 0,
+      "path": [
+        "service_workspace_release.part.0"
+      ]
+    },
+    "service_workspace_try_acquire": {
+      "known_frame_sum": 0,
+      "path": [
+        "service_workspace_try_acquire"
+      ]
+    },
+    "set_deadlines": {
+      "known_frame_sum": 0,
+      "path": [
+        "set_deadlines"
+      ]
+    },
+    "setup_wake_exti": {
+      "known_frame_sum": 40,
+      "path": [
+        "setup_wake_exti",
+        "EXTI_InitPeripheral.part.0.constprop.0"
+      ]
+    },
+    "sha256_block": {
+      "known_frame_sum": 336,
+      "path": [
+        "sha256_block"
+      ]
+    },
+    "sha256_final": {
+      "known_frame_sum": 360,
+      "path": [
+        "sha256_final",
+        "sha256_block"
+      ]
+    },
+    "sha256_update": {
+      "known_frame_sum": 368,
+      "path": [
+        "sha256_update",
+        "sha256_block"
+      ]
+    },
+    "shallow_retained_clock_advance": {
+      "known_frame_sum": 36,
+      "path": [
+        "shallow_retained_clock_advance"
+      ]
+    },
+    "slot_erased": {
+      "known_frame_sum": 0,
+      "path": [
+        "slot_erased"
+      ]
+    },
+    "slot_load_locked.constprop.0": {
+      "known_frame_sum": 24,
+      "path": [
+        "slot_load_locked.constprop.0"
+      ]
+    },
+    "slot_probe_locked": {
+      "known_frame_sum": 232,
+      "path": [
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "sms_command_execute": {
+      "known_frame_sum": 0,
+      "path": [
+        "sms_command_execute"
+      ]
+    },
+    "sms_dispatch": {
+      "known_frame_sum": 208,
+      "path": [
+        "sms_dispatch"
+      ]
+    },
+    "sms_ingress_feed_line": {
+      "known_frame_sum": 264,
+      "path": [
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "sms_send_complete": {
+      "known_frame_sum": 0,
+      "path": [
+        "sms_send_complete"
+      ]
+    },
+    "sniprintf": {
+      "known_frame_sum": 16,
+      "path": [
+        "sniprintf",
+        "_svfiprintf_r",
+        "__ssputs_r",
+        "_malloc_r",
+        "_sbrk_r",
+        "_sbrk"
+      ]
+    },
+    "spi_flash_init": {
+      "known_frame_sum": 144,
+      "path": [
+        "spi_flash_init",
+        "dbg_printf",
+        "print_uint_width",
+        "dbg_putchar"
+      ]
+    },
+    "spi_flash_note_verify_failure": {
+      "known_frame_sum": 40,
+      "path": [
+        "spi_flash_note_verify_failure",
+        "refresh_status",
+        "read_status_command"
+      ]
+    },
+    "spi_flash_read": {
+      "known_frame_sum": 80,
+      "path": [
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "spi_flash_write_result": {
+      "known_frame_sum": 104,
+      "path": [
+        "spi_flash_write_result",
+        "write_enable",
+        "refresh_status",
+        "read_status_command"
+      ]
+    },
+    "sqrtf": {
+      "known_frame_sum": 0,
+      "path": [
+        "sqrtf"
+      ]
+    },
+    "start_repair_locked": {
+      "known_frame_sum": 12,
+      "path": [
+        "start_repair_locked"
+      ]
+    },
+    "strchr": {
+      "known_frame_sum": 0,
+      "path": [
+        "strchr"
+      ]
+    },
+    "strcmp": {
+      "known_frame_sum": 0,
+      "path": [
+        "strcmp"
+      ]
+    },
+    "strcpy": {
+      "known_frame_sum": 0,
+      "path": [
+        "strcpy"
+      ]
+    },
+    "strlen": {
+      "known_frame_sum": 0,
+      "path": [
+        "strlen"
+      ]
+    },
+    "strncmp": {
+      "known_frame_sum": 0,
+      "path": [
+        "strncmp"
+      ]
+    },
+    "strncpy": {
+      "known_frame_sum": 0,
+      "path": [
+        "strncpy"
+      ]
+    },
+    "strspn": {
+      "known_frame_sum": 0,
+      "path": [
+        "strspn"
+      ]
+    },
+    "strstr": {
+      "known_frame_sum": 0,
+      "path": [
+        "strstr"
+      ]
+    },
+    "strtol": {
+      "known_frame_sum": 0,
+      "path": [
+        "strtol"
+      ]
+    },
+    "tcp_manager_ch_online": {
+      "known_frame_sum": 0,
+      "path": [
+        "tcp_manager_ch_online"
+      ]
+    },
+    "tcp_manager_reconnect": {
+      "known_frame_sum": 696,
+      "path": [
+        "tcp_manager_reconnect",
+        "ec800m_tcp_close.part.0",
+        "at_send_wait",
+        "process_deferred_urc_one",
+        "process_urc",
+        "sms_ingress_feed_line",
+        "f39_lookup_root",
+        "f39_root_equals"
+      ]
+    },
+    "tcp_manager_session_generation": {
+      "known_frame_sum": 0,
+      "path": [
+        "tcp_manager_session_generation"
+      ]
+    },
+    "terminal_identity_sync": {
+      "known_frame_sum": 448,
+      "path": [
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "transport_failure": {
+      "known_frame_sum": 912,
+      "path": [
+        "transport_failure",
+        "checkpoint_load",
+        "newest",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "trimmed_mean": {
+      "known_frame_sum": 72,
+      "path": [
+        "trimmed_mean"
+      ]
+    },
+    "uECC_secp256r1": {
+      "known_frame_sum": 0,
+      "path": [
+        "uECC_secp256r1"
+      ]
+    },
+    "uECC_verify": {
+      "known_frame_sum": 816,
+      "path": [
+        "uECC_verify",
+        "uECC_vli_modMult",
+        "uECC_vli_mmod",
+        "uECC_vli_clear"
+      ]
+    },
+    "uECC_vli_add": {
+      "known_frame_sum": 20,
+      "path": [
+        "uECC_vli_add"
+      ]
+    },
+    "uECC_vli_bytesToNative": {
+      "known_frame_sum": 32,
+      "path": [
+        "uECC_vli_bytesToNative",
+        "uECC_vli_clear"
+      ]
+    },
+    "uECC_vli_clear": {
+      "known_frame_sum": 8,
+      "path": [
+        "uECC_vli_clear"
+      ]
+    },
+    "uECC_vli_cmp_unsafe": {
+      "known_frame_sum": 8,
+      "path": [
+        "uECC_vli_cmp_unsafe"
+      ]
+    },
+    "uECC_vli_equal": {
+      "known_frame_sum": 12,
+      "path": [
+        "uECC_vli_equal"
+      ]
+    },
+    "uECC_vli_isZero": {
+      "known_frame_sum": 8,
+      "path": [
+        "uECC_vli_isZero"
+      ]
+    },
+    "uECC_vli_mmod": {
+      "known_frame_sum": 200,
+      "path": [
+        "uECC_vli_mmod",
+        "uECC_vli_clear"
+      ]
+    },
+    "uECC_vli_modAdd": {
+      "known_frame_sum": 36,
+      "path": [
+        "uECC_vli_modAdd",
+        "uECC_vli_add"
+      ]
+    },
+    "uECC_vli_modInv": {
+      "known_frame_sum": 24,
+      "path": [
+        "uECC_vli_modInv",
+        "uECC_vli_isZero"
+      ]
+    },
+    "uECC_vli_modInv.part.0": {
+      "known_frame_sum": 180,
+      "path": [
+        "uECC_vli_modInv.part.0",
+        "vli_modInv_update",
+        "uECC_vli_add"
+      ]
+    },
+    "uECC_vli_modMult": {
+      "known_frame_sum": 280,
+      "path": [
+        "uECC_vli_modMult",
+        "uECC_vli_mmod",
+        "uECC_vli_clear"
+      ]
+    },
+    "uECC_vli_modMult_fast": {
+      "known_frame_sum": 128,
+      "path": [
+        "uECC_vli_modMult_fast",
+        "uECC_vli_mult"
+      ]
+    },
+    "uECC_vli_modSquare_fast": {
+      "known_frame_sum": 0,
+      "path": [
+        "uECC_vli_modSquare_fast"
+      ]
+    },
+    "uECC_vli_modSub": {
+      "known_frame_sum": 36,
+      "path": [
+        "uECC_vli_modSub",
+        "uECC_vli_sub"
+      ]
+    },
+    "uECC_vli_mult": {
+      "known_frame_sum": 48,
+      "path": [
+        "uECC_vli_mult"
+      ]
+    },
+    "uECC_vli_numBits": {
+      "known_frame_sum": 8,
+      "path": [
+        "uECC_vli_numBits"
+      ]
+    },
+    "uECC_vli_rshift1": {
+      "known_frame_sum": 0,
+      "path": [
+        "uECC_vli_rshift1"
+      ]
+    },
+    "uECC_vli_set": {
+      "known_frame_sum": 8,
+      "path": [
+        "uECC_vli_set"
+      ]
+    },
+    "uECC_vli_sub": {
+      "known_frame_sum": 20,
+      "path": [
+        "uECC_vli_sub"
+      ]
+    },
+    "uECC_vli_testBit": {
+      "known_frame_sum": 0,
+      "path": [
+        "uECC_vli_testBit"
+      ]
+    },
+    "usart_send_buf": {
+      "known_frame_sum": 20,
+      "path": [
+        "usart_send_buf"
+      ]
+    },
+    "usart_send_str": {
+      "known_frame_sum": 8,
+      "path": [
+        "usart_send_str"
+      ]
+    },
+    "valid": {
+      "known_frame_sum": 28,
+      "path": [
+        "valid",
+        "crc32_compute",
+        "crc32_update"
+      ]
+    },
+    "valid_at_string_arg": {
+      "known_frame_sum": 32,
+      "path": [
+        "valid_at_string_arg",
+        "argument"
+      ]
+    },
+    "valid_frame": {
+      "known_frame_sum": 20,
+      "path": [
+        "valid_frame"
+      ]
+    },
+    "valid_suffix": {
+      "known_frame_sum": 0,
+      "path": [
+        "valid_suffix"
+      ]
+    },
+    "verify_payload": {
+      "known_frame_sum": 544,
+      "path": [
+        "verify_payload",
+        "sha256_update",
+        "sha256_block"
+      ]
+    },
+    "vibration_hits_required": {
+      "known_frame_sum": 0,
+      "path": [
+        "vibration_hits_required"
+      ]
+    },
+    "vli_mmod_fast_secp256r1": {
+      "known_frame_sum": 76,
+      "path": [
+        "vli_mmod_fast_secp256r1",
+        "uECC_vli_add"
+      ]
+    },
+    "vli_modInv_update": {
+      "known_frame_sum": 36,
+      "path": [
+        "vli_modInv_update",
+        "uECC_vli_add"
+      ]
+    },
+    "vsniprintf": {
+      "known_frame_sum": 16,
+      "path": [
+        "vsniprintf",
+        "_vsniprintf_r",
+        "_svfiprintf_r",
+        "__ssputs_r",
+        "_malloc_r",
+        "_sbrk_r",
+        "_sbrk"
+      ]
+    },
+    "work_mode_allocate_report_id": {
+      "known_frame_sum": 0,
+      "path": [
+        "work_mode_allocate_report_id"
+      ]
+    },
+    "work_mode_config_changed": {
+      "known_frame_sum": 16,
+      "path": [
+        "work_mode_config_changed"
+      ]
+    },
+    "work_mode_init": {
+      "known_frame_sum": 100,
+      "path": [
+        "work_mode_init",
+        "enqueue_action",
+        "enqueue_queued_action",
+        "remove_pending_at"
+      ]
+    },
+    "work_mode_next_action": {
+      "known_frame_sum": 76,
+      "path": [
+        "work_mode_next_action",
+        "flush_pending_essentials",
+        "remove_pending_at"
+      ]
+    },
+    "work_mode_notify_alarm": {
+      "known_frame_sum": 0,
+      "path": [
+        "work_mode_notify_alarm"
+      ]
+    },
+    "work_mode_process": {
+      "known_frame_sum": 880,
+      "path": [
+        "work_mode_process",
+        "acc_report_settle",
+        "jt808_send_location_work_mode",
+        "build_header",
+        "terminal_identity_sync",
+        "cfg_store_candidate_result",
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "work_mode_set_stationary_location_enabled": {
+      "known_frame_sum": 0,
+      "path": [
+        "work_mode_set_stationary_location_enabled"
+      ]
+    },
+    "work_mode_sleep_monotonic_s": {
+      "known_frame_sum": 0,
+      "path": [
+        "work_mode_sleep_monotonic_s"
+      ]
+    },
+    "work_mode_state_name": {
+      "known_frame_sum": 0,
+      "path": [
+        "work_mode_state_name"
+      ]
+    },
+    "work_mode_step": {
+      "known_frame_sum": 116,
+      "path": [
+        "work_mode_step",
+        "enter_realtime",
+        "enqueue_action",
+        "enqueue_queued_action",
+        "remove_pending_at"
+      ]
+    },
+    "write_and_activate_locked": {
+      "known_frame_sum": 360,
+      "path": [
+        "write_and_activate_locked",
+        "slot_probe_locked",
+        "crc_region_locked.constprop.0",
+        "ext_flash_read",
+        "spi_flash_read",
+        "ready",
+        "read_status_command"
+      ]
+    },
+    "write_enable": {
+      "known_frame_sum": 56,
+      "path": [
+        "write_enable",
+        "refresh_status",
+        "read_status_command"
+      ]
+    },
+    "write_meta_locked": {
+      "known_frame_sum": 280,
+      "path": [
+        "write_meta_locked",
+        "ext_flash_write_verified",
+        "spi_flash_write_result",
+        "write_enable",
+        "refresh_status",
+        "read_status_command"
+      ]
+    },
+    "x_side_default": {
+      "known_frame_sum": 192,
+      "path": [
+        "x_side_default",
+        "uECC_vli_modMult_fast",
+        "uECC_vli_mult"
+      ]
+    },
+    "xfer": {
+      "known_frame_sum": 0,
+      "path": [
+        "xfer"
+      ]
+    },
+    "xfer_tracked": {
+      "known_frame_sum": 20,
+      "path": [
+        "xfer_tracked"
+      ]
+    }
+  },
+  "frames": {
+    "f39_default_reset": 0,
+    "encode_query.constprop.0": 20,
+    "delay_us": 0,
+    "cfg_query_process": 40,
+    "argument": 16,
+    "report_enabled": 0,
+    "qird_note_ring_level": 0,
+    "dbg_putchar": 8,
+    "gps_send_raw": 8,
+    "uECC_secp256r1": 0,
+    "set_deadlines": 0,
+    "header_name": 8,
+    "xfer": 0,
+    "ec800m_tcp_send": 64,
+    "work_mode_init": 24,
+    "hw_spi_init": 24,
+    "fota_bcr_load": 96,
+    "download_token_from_url.part.0": 16,
+    "fota_on_chunk.part.0": 168,
+    "f39_lookup_root": 16,
+    "checkpoint_load": 576,
+    "_read": 0,
+    "jt808_set_terminal_profile": 16,
+    "gps_configure_output": 40,
+    "owner_ok": 0,
+    "write_enable": 24,
+    "authorization_valid": 8,
+    "xfer_tracked": 20,
+    "send_frame_channel_delivered": 8,
+    "bus_scl": 0,
+    "sha256_block": 336,
+    "motion_corner_pending_candidates": 0,
+    "scratch_header_valid.constprop.0": 16,
+    "write_meta_locked": 88,
+    "work_mode_sleep_monotonic_s": 0,
+    "confirm_append_if_sequence": 0,
+    "jt808_process": 248,
+    "send_status_request": 272,
+    "build_header": 80,
+    "agnss_network_rx": 32,
+    "relay_set": 8,
+    "adc_monitor_valid": 0,
+    "hw_adc_init": 40,
+    "adc_monitor_process": 24,
+    "sms_command_execute": 0,
+    "work_mode_state_name": 0,
+    "f39_persist": 8,
+    "parse_six_digits": 16,
+    "crc_region_locked.constprop.0": 88,
+    "saturating_increment": 0,
+    "f39_fota_recheck": 0,
+    "process_rx_byte": 32,
+    "work_mode_config_changed": 16,
+    "__NVIC_SystemReset.lto_priv.0": 0,
+    "finish": 16,
+    "frame_init": 0,
+    "f39_parse": 40,
+    "uECC_vli_cmp_unsafe": 8,
+    "work_mode_next_action": 40,
+    "uECC_vli_isZero": 8,
+    "uECC_vli_modMult_fast": 80,
+    "qird_ring_pending": 8,
+    "ch_start_connect": 112,
+    "mileage_flush_at.isra.0": 16,
+    "finish_check": 8,
+    "fota_verify_manifest.constprop.0": 528,
+    "ec800m_get_imei": 16,
+    "work_mode_allocate_report_id": 0,
+    "i2c_accel_init": 64,
+    "f39_remaining_refresh": 0,
+    "mark_repair_slot": 0,
+    "send_frame_broadcast": 32,
+    "at_config_execute_text_command": 544,
+    "work_mode_step": 32,
+    "motion_corner_step": 40,
+    "SysTick_Handler": 8,
+    "motion_corner_peek_candidate": 12,
+    "EXTI0_IRQHandler": 8,
+    "vli_modInv_update": 16,
+    "f39_jt808_reregister": 16,
+    "finish_current_run": 8,
+    "rtc_alarm_clear": 8,
+    "release_resources": 8,
+    "_sbrk": 16,
+    "jt808_send_general_resp.isra.0": 0,
+    "sha256_update": 32,
+    "uECC_vli_mmod": 192,
+    "jt808_send_raw.isra.0": 24,
+    "finish_maintenance_locked.isra.0": 80,
+    "at_config_execute_sms.isra.0": 824,
+    "firmware_signature_verify": 24,
+    "slot_probe_locked": 56,
+    "send_gnss": 0,
+    "flush_pending_essentials": 16,
+    "uECC_vli_equal": 12,
+    "scan_alarms": 24,
+    "fota_confirm_trial_process": 56,
+    "uECC_vli_set": 8,
+    "start_repair_locked": 12,
+    "encode_location_online.isra.0": 72,
+    "log_location_unavailable": 16,
+    "f39_gps_speed": 0,
+    "spi_flash_write_result": 48,
+    "fota_check_string_equals": 12,
+    "hw_gpio_init": 32,
+    "key": 8,
+    "iccid_nibble": 0,
+    "enqueue_action": 24,
+    "sms_send_complete": 0,
+    "uECC_vli_modInv": 16,
+    "begin_reconcile": 0,
+    "uECC_vli_mult": 48,
+    "agnss_init": 16,
+    "identity_ready.constprop.0": 8,
+    "adc_read_ch": 8,
+    "ready": 24,
+    "enqueue_queued_action": 32,
+    "uECC_vli_modAdd": 16,
+    "GPIO_InitPeripheral": 36,
+    "blind_zone_append": 192,
+    "begin_check": 272,
+    "_lseek": 0,
+    "jt808_location_snapshot_valid": 8,
+    "jt808_set_server.part.0": 16,
+    "newest": 232,
+    "nmea_split.constprop.0": 8,
+    "shallow_retained_clock_advance": 36,
+    "fota_bcr_commit_pending.constprop.0": 96,
+    "uECC_vli_add": 20,
+    "parse_iccid_response.constprop.0": 32,
+    "jt808_terminal_info_encode.part.0.constprop.0": 88,
+    "ec800m_at_response_has_line.part.0.constprop.0": 32,
+    "f39_network_reconnect": 8,
+    "jt808_send_general_resp_to.isra.0": 40,
+    "at_config_process": 744,
+    "f39_clear_reply_transaction": 0,
+    "gps_capture_last_trusted_snapshot.isra.0": 64,
+    "USART_Init.constprop.0": 32,
+    "remove_pending_at": 20,
+    "at_owner_release": 0,
+    "EXTI3_IRQHandler": 8,
+    "usart_send_buf": 20,
+    "copy_arg": 32,
+    "parse_url": 24,
+    "jt808_send_location_work_mode": 160,
+    "jt808_set_report_interval": 0,
+    "sms_dispatch": 208,
+    "mileage_force_save.isra.0": 8,
+    "x_side_default": 64,
+    "prepare_operation": 120,
+    "consider_run": 20,
+    "f39_gps_valid": 0,
+    "HardFault_Handler": 0,
+    "ec800m_ntp_sync": 56,
+    "gnss_vendor_inject": 104,
+    "f39_modem_pdp_restart": 8,
+    "NVIC_Init.part.0.constprop.0.isra.0": 0,
+    "f39_default_sms_send": 0,
+    "i2c_accel_vibration_hit": 56,
+    "begin_append_transaction": 16,
+    "uECC_vli_numBits": 8,
+    "qird_dump_line_head": 160,
+    "valid_suffix": 0,
+    "blind_zone_recovery_process.part.0": 184,
+    "ext_flash_try_lock.part.0": 8,
+    "ec800m_tcp_open": 168,
+    "jt808_days_in_month": 0,
+    "_exit": 0,
+    "gps_enable": 24,
+    "parse_uint_field": 20,
+    "dispatch_nmea": 200,
+    "work_mode_set_stationary_location_enabled": 0,
+    "fota_check_consume": 0,
+    "process_frame": 240,
+    "nmea_to_deg": 40,
+    "ec800m_parse_reg_status.part.0.constprop.0.isra.0": 16,
+    "fota_init": 16,
+    "slot_erased": 0,
+    "frame_bytes": 16,
+    "endpoint_host": 8,
+    "fota_process": 776,
+    "prepare_endpoint.constprop.0": 32,
+    "reset_diag_capture": 8,
+    "quarantine_missing_head_locked": 120,
+    "blind_zone_replay_process": 120,
+    "adopt_record_locked": 40,
+    "fota_check_parse_u32": 20,
+    "sha256_final": 24,
+    "jt808_session_reject_or_timeout": 0,
+    "f39_bind_defaults": 24,
+    "work_mode_process": 176,
+    "checkpoint_save": 664,
+    "TIM8_UP_IRQHandler": 0,
+    "RCC_GetFlagStatus": 0,
+    "mileage_update": 56,
+    "jt808_send_location_to": 152,
+    "EXTI2_IRQHandler": 8,
+    "i2c_wait_flag.constprop.0": 32,
+    "process_deferred_urc_one": 280,
+    "gps_process": 8,
+    "is_deferred_urc": 8,
+    "service_workspace_release.part.0": 0,
+    "dbg_printf": 56,
+    "spi_flash_note_verify_failure": 8,
+    "ec800m_identity_ready": 0,
+    "hw_acc_pin_high": 0,
+    "reset_diag_runtime_init": 24,
+    "f39_jt808_auth_reset": 0,
+    "ch_process": 16,
+    "delay_ms": 0,
+    "mileage_trial_sin": 32,
+    "enqueue_candidate": 16,
+    "http_reset": 0,
+    "double_jacobian_default": 104,
+    "payload_valid": 16,
+    "device_id.constprop.0": 32,
+    "ec800m_reset": 16,
+    "jt808_send_auth_to.isra.0": 40,
+    "ext_flash_try_lock_now": 0,
+    "uECC_vli_testBit": 0,
+    "valid": 8,
+    "uECC_vli_clear": 8,
+    "ext_flash_write_verified": 88,
+    "work_mode_notify_alarm": 0,
+    "reply_clear": 0,
+    "jt808_trigger_alarm": 0,
+    "blind_zone_replay_reset": 0,
+    "checkpoint_url_from_download_url.constprop.0": 40,
+    "UART4_IRQHandler": 16,
+    "ext_flash_read": 8,
+    "send_request": 720,
+    "read_record_locked": 0,
+    "exact_decimal_text": 8,
+    "parse_uint8": 12,
+    "gps_tx_write": 20,
+    "apply_z": 56,
+    "f39_timer_refresh": 8,
+    "gpio_input": 24,
+    "ec800m_ota_channel_prepare": 8,
+    "fota_bcr_write_record": 176,
+    "jt808_is_online": 8,
+    "defer_urc": 32,
+    "ntp_resync_process": 48,
+    "uECC_vli_modMult": 80,
+    "jt808_set_server": 16,
+    "same_origin": 280,
+    "ext_flash_unlock": 0,
+    "gps_get_quality.isra.0": 24,
+    "blind_zone_init.isra.0": 24,
+    "EXTI_InitPeripheral.part.0.constprop.0": 8,
+    "f39_schedule_reply_retry": 8,
+    "hardfault_capture": 8,
+    "parse_decimal": 32,
+    "vibration_hits_required": 0,
+    "cfg_init": 56,
+    "fota_diag_block": 16,
+    "XYcZ_add": 72,
+    "ec800m_at_response_end.constprop.0": 8,
+    "parse_http_u32": 20,
+    "ec800m_sms_send": 24,
+    "qird_report_desync": 32,
+    "hw_usart_init": 32,
+    "iccid_text_valid.part.0.constprop.0": 0,
+    "process_location_timer": 384,
+    "jt808_encode_plate_gbk.constprop.0": 32,
+    "tcp_manager_ch_online": 0,
+    "__NVIC_SystemReset.lto_priv.1": 0,
+    "read_be": 0,
+    "cfg_store_candidate_result": 16,
+    "agnss_process": 160,
+    "sms_ingress_feed_line": 232,
+    "uECC_vli_bytesToNative": 24,
+    "acc_report_settle": 16,
+    "fota_check_skip_whitespace": 8,
+    "fota_start_request.constprop.0": 32,
+    "valid_at_string_arg": 16,
+    "fota_check_parse_string": 32,
+    "gps_quality_fix_fresh": 0,
+    "invalidate_evidence": 8,
+    "handle_text_message": 0,
+    "fota_is_active.lto_priv.0": 0,
+    "advance_to_sequence_locked": 96,
+    "RCC_GetClocksFreqValue": 12,
+    "i2c_wait_event.constprop.0": 12,
+    "process_rx_line": 24,
+    "log_platform_process": 184,
+    "valid_frame": 20,
+    "usart_send_str": 8,
+    "flash_record_valid": 8,
+    "huada_reset_stream": 0,
+    "jt808_on_recv": 32,
+    "hw_i2c_init": 56,
+    "motion_corner_init": 16,
+    "gps_report_filter_copy.isra.0": 24,
+    "reset_vibration_episode": 0,
+    "ext_flash_erase.constprop.0": 32,
+    "i2c_accel_rearm_wake_interrupt": 8,
+    "ec800m_init": 24,
+    "arg_equals.constprop.0": 24,
+    "jt808_send_heartbeat": 16,
+    "Delay_2ADC_Colck": 8,
+    "queued_action_is_stale": 0,
+    "reply_append": 20,
+    "f39_relay": 8,
+    "parse_prefixed_uint.part.0": 32,
+    "drain_rx": 16,
+    "at_wait_prompt_owned.constprop.0": 32,
+    "send_frame.lto_priv.1": 16,
+    "EXTI15_10_IRQHandler": 8,
+    "jt808_channel_online": 8,
+    "jt808_reset_endpoint_auth": 16,
+    "i2c_accel_read": 32,
+    "SystemInit": 0,
+    "uECC_vli_modSquare_fast": 0,
+    "classify_record": 8,
+    "relay_log": 16,
+    "refresh_status": 8,
+    "read_status_command": 24,
+    "clear_candidate": 0,
+    "fota_check_parse_literal": 16,
+    "periodic_status_log": 80,
+    "trimmed_mean": 72,
+    "jt808_session_mark_send_failed": 0,
+    "f39_relay_get": 0,
+    "fota_diag_hex.constprop.0": 12,
+    "fota_ec800m_rx": 32,
+    "report_fix_fresh": 40,
+    "hw_acc_is_on": 8,
+    "enqueue_direct_queued": 16,
+    "huada_aid_frame_valid": 16,
+    "at_config_feed": 0,
+    "at_send_wait_owned": 64,
+    "decimal_length_valid.part.0": 12,
+    "uECC_verify": 536,
+    "_close": 0,
+    "gpio_out_pp": 24,
+    "verify_payload": 176,
+    "vli_mmod_fast_secp256r1": 56,
+    "tcp_manager_reconnect": 8,
+    "EXTI_GetITStatus": 0,
+    "slot_load_locked.constprop.0": 24,
+    "parse_arg_u32": 24,
+    "parse_qiopen": 24,
+    "uECC_vli_sub": 20,
+    "ec800m_tcp_close.part.0": 48,
+    "cfg_set_auth_code": 56,
+    "jt808_session_init.part.0": 16,
+    "commit_meta_locked": 24,
+    "gps_report_filter_process": 64,
+    "uECC_vli_rshift1": 0,
+    "crc32_compute": 8,
+    "DMA_Channel5_IRQHandler": 0,
+    "send_frame_channel": 24,
+    "fota_check_parse": 472,
+    "crc32_update": 12,
+    "i2c_write_reg": 16,
+    "ch_on_fail": 8,
+    "rx_write_position": 0,
+    "ensure_id": 24,
+    "schedule_tail_cleanup": 8,
+    "ec800m_power_on": 56,
+    "encode_location_compact.isra.0": 40,
+    "fail_download": 8,
+    "log_persist_failure": 40,
+    "motion_corner_consume_candidate": 20,
+    "f39_sms_result": 16,
+    "f39_execute.constprop.0": 1168,
+    "mileage_sync_persist_generation": 0,
+    "uECC_vli_modSub": 16,
+    "ec800m_process": 296,
+    "parse_content_range": 32,
+    "enter_stationary.isra.0": 8,
+    "relay_gpio_write": 24,
+    "jt808_init.constprop.0": 16,
+    "blind_zone_allocate_event_id": 0,
+    "fota_on_http_header": 80,
+    "spi_flash_init": 24,
+    "tcp_manager_session_generation": 0,
+    "RTCAlarm_IRQHandler": 0,
+    "f39_gnss_mode": 8,
+    "process_urc": 80,
+    "setup_wake_exti": 32,
+    "transport_failure": 16,
+    "uECC_vli_modInv.part.0": 144,
+    "ec800m_udp_send_once": 160,
+    "protected_status": 0,
+    "service_workspace_try_acquire": 0,
+    "gps_report_filter_reset": 0,
+    "write_and_activate_locked": 128,
+    "spi_flash_read": 32,
+    "print_uint_width": 56,
+    "flash_record_body_valid": 8,
+    "f39_refresh_live_snapshot": 16,
+    "f39_root_equals": 16,
+    "query.constprop.0": 136,
+    "fota_bcr_valid": 56,
+    "bus_sda": 0,
+    "ext_flash_write_result.constprop.0": 88,
+    "enter_realtime": 8,
+    "terminal_identity_sync": 72,
+    "USART1_IRQHandler": 0,
+    "config_string": 0,
+    "frame_u16": 12,
+    "jt808_session_mark_sent": 8,
+    "failure.isra.0": 8,
+    "main": 264,
+    "send_get": 240,
+    "bits2int": 32,
+    "_write": 0,
+    "at_send_wait": 16
+  },
+  "direct_edges": {
+    "ADC_IRQHandler": [],
+    "CopyDataInit": [],
+    "DMA_Channel5_IRQHandler": [],
+    "Delay_2ADC_Colck": [],
+    "EXTI0_IRQHandler": [
+      "EXTI_GetITStatus"
+    ],
+    "EXTI15_10_IRQHandler": [
+      "EXTI_GetITStatus",
+      "hw_acc_is_on"
+    ],
+    "EXTI2_IRQHandler": [
+      "EXTI_GetITStatus"
+    ],
+    "EXTI3_IRQHandler": [
+      "EXTI_GetITStatus"
+    ],
+    "EXTI_GetITStatus": [],
+    "EXTI_InitPeripheral.part.0.constprop.0": [],
+    "FillZerobss": [],
+    "GPIO_InitPeripheral": [],
+    "HardFault_Handler": [],
+    "LoopCopyDataInit": [],
+    "LoopFillZerobss": [
+      "SystemInit",
+      "__libc_init_array",
+      "main"
+    ],
+    "NVIC_Init.part.0.constprop.0.isra.0": [],
+    "RCC_GetClocksFreqValue": [],
+    "RCC_GetFlagStatus": [],
+    "RTCAlarm_IRQHandler": [],
+    "Reset_Handler": [],
+    "SysTick_Handler": [
+      "hw_acc_is_on"
+    ],
+    "SystemInit": [],
+    "TIM8_UP_IRQHandler": [],
+    "UART4_IRQHandler": [],
+    "USART1_IRQHandler": [],
+    "USART_Init.constprop.0": [
+      "RCC_GetClocksFreqValue"
+    ],
+    "XYcZ_add": [
+      "uECC_vli_modMult_fast",
+      "uECC_vli_modSquare_fast",
+      "uECC_vli_modSub",
+      "uECC_vli_set"
+    ],
+    "__NVIC_SystemReset.lto_priv.0": [],
+    "__NVIC_SystemReset.lto_priv.1": [],
+    "__adddf3": [],
+    "__aeabi_cdcmpeq": [
+      "__cmpdf2"
+    ],
+    "__aeabi_cdrcmple": [],
+    "__aeabi_d2f": [],
+    "__aeabi_d2iz": [],
+    "__aeabi_d2uiz": [],
+    "__aeabi_dcmpeq": [
+      "__aeabi_cdcmpeq"
+    ],
+    "__aeabi_dcmpge": [
+      "__aeabi_cdrcmple"
+    ],
+    "__aeabi_dcmpgt": [
+      "__aeabi_cdrcmple"
+    ],
+    "__aeabi_dcmple": [
+      "__aeabi_cdcmpeq"
+    ],
+    "__aeabi_dcmplt": [
+      "__aeabi_cdcmpeq"
+    ],
+    "__aeabi_dcmpun": [],
+    "__aeabi_ddiv": [],
+    "__aeabi_dmul": [],
+    "__aeabi_drsub": [],
+    "__aeabi_dsub": [],
+    "__aeabi_f2d": [],
+    "__aeabi_i2d": [],
+    "__aeabi_l2d": [],
+    "__aeabi_ui2d": [],
+    "__aeabi_ul2d": [],
+    "__cmpdf2": [],
+    "__do_global_dtors_aux": [
+      "deregister_tm_clones"
+    ],
+    "__errno": [],
+    "__gedf2": [],
+    "__ieee754_fmodf": [],
+    "__ieee754_sqrtf": [],
+    "__ledf2": [],
+    "__libc_init_array": [
+      "_init"
+    ],
+    "__malloc_lock": [],
+    "__malloc_unlock": [],
+    "__retarget_lock_acquire_recursive": [],
+    "__retarget_lock_release_recursive": [],
+    "__ssputs_r": [
+      "_free_r",
+      "_malloc_r",
+      "_realloc_r",
+      "memcpy",
+      "memmove"
+    ],
+    "_close": [],
+    "_exit": [],
+    "_fini": [],
+    "_free_r": [
+      "__malloc_lock"
+    ],
+    "_init": [],
+    "_lseek": [],
+    "_malloc_r": [
+      "__malloc_lock",
+      "__malloc_unlock",
+      "_sbrk_r",
+      "sbrk_aligned"
+    ],
+    "_malloc_usable_size_r": [],
+    "_printf_common": [],
+    "_printf_i": [
+      "_printf_common",
+      "memchr"
+    ],
+    "_read": [],
+    "_realloc_r": [
+      "_free_r",
+      "_malloc_r",
+      "_malloc_usable_size_r",
+      "memcpy"
+    ],
+    "_sbrk": [
+      "__errno"
+    ],
+    "_sbrk_r": [
+      "_sbrk"
+    ],
+    "_strtol_l.isra.0": [
+      "__errno"
+    ],
+    "_svfiprintf_r": [
+      "__ssputs_r",
+      "_malloc_r",
+      "_printf_i",
+      "memchr"
+    ],
+    "_vsniprintf_r": [
+      "_svfiprintf_r"
+    ],
+    "_write": [],
+    "acc_report_settle": [
+      "dbg_printf",
+      "hw_acc_is_on",
+      "jt808_send_location_work_mode",
+      "work_mode_allocate_report_id"
+    ],
+    "adc_monitor_process": [
+      "adc_read_ch",
+      "jt808_trigger_alarm",
+      "mileage_force_save.isra.0"
+    ],
+    "adc_monitor_valid": [],
+    "adc_read_ch": [
+      "Delay_2ADC_Colck"
+    ],
+    "adopt_record_locked": [
+      "advance_to_sequence_locked",
+      "commit_meta_locked"
+    ],
+    "advance_to_sequence_locked": [
+      "flash_record_valid",
+      "read_record_locked"
+    ],
+    "agnss_init": [
+      "finish"
+    ],
+    "agnss_network_rx": [
+      "key",
+      "memcpy",
+      "memmove",
+      "strncmp",
+      "strstr"
+    ],
+    "agnss_process": [
+      "crc32_compute",
+      "ec800m_tcp_open",
+      "endpoint_host",
+      "ext_flash_read",
+      "ext_flash_try_lock.part.0",
+      "ext_flash_unlock",
+      "fota_is_active.lto_priv.0",
+      "gps_send_raw",
+      "huada_aid_frame_valid",
+      "memcmp",
+      "send_get",
+      "service_workspace_release.part.0",
+      "service_workspace_try_acquire",
+      "valid_frame",
+      "verify_payload"
+    ],
+    "apply_z": [
+      "uECC_vli_modMult_fast",
+      "uECC_vli_modSquare_fast"
+    ],
+    "arg_equals.constprop.0": [
+      "argument",
+      "memcmp",
+      "strlen"
+    ],
+    "argument": [],
+    "at_config_execute_sms.isra.0": [
+      "dbg_printf",
+      "f39_bind_defaults",
+      "f39_execute.constprop.0",
+      "f39_parse",
+      "f39_refresh_live_snapshot",
+      "f39_schedule_reply_retry",
+      "memcpy",
+      "strncpy"
+    ],
+    "at_config_execute_text_command": [
+      "f39_bind_defaults",
+      "f39_execute.constprop.0",
+      "f39_parse",
+      "f39_refresh_live_snapshot"
+    ],
+    "at_config_feed": [],
+    "at_config_process": [
+      "__NVIC_SystemReset.lto_priv.1",
+      "__aeabi_f2d",
+      "adc_monitor_valid",
+      "atoi",
+      "cfg_store_candidate_result",
+      "dbg_printf",
+      "ec800m_get_imei",
+      "ec800m_sms_send",
+      "f39_bind_defaults",
+      "f39_execute.constprop.0",
+      "f39_parse",
+      "f39_refresh_live_snapshot",
+      "f39_schedule_reply_retry",
+      "gps_get_quality.isra.0",
+      "gps_quality_fix_fresh",
+      "hw_acc_is_on",
+      "i2c_accel_read",
+      "jt808_set_report_interval",
+      "jt808_set_server",
+      "jt808_set_server.part.0",
+      "memset",
+      "relay_gpio_write",
+      "relay_log",
+      "relay_set",
+      "strchr",
+      "strcmp",
+      "strlen",
+      "strncmp",
+      "strncpy",
+      "work_mode_config_changed",
+      "work_mode_sleep_monotonic_s"
+    ],
+    "at_owner_release": [],
+    "at_send_wait": [
+      "at_owner_release",
+      "at_send_wait_owned",
+      "process_deferred_urc_one"
+    ],
+    "at_send_wait_owned": [
+      "ec800m_at_response_end.constprop.0",
+      "ec800m_at_response_has_line.part.0.constprop.0",
+      "gps_process",
+      "memcmp",
+      "memset",
+      "process_rx_byte",
+      "rx_write_position",
+      "strcmp",
+      "strlen",
+      "usart_send_str"
+    ],
+    "at_wait_prompt_owned.constprop.0": [
+      "gps_process",
+      "process_rx_byte",
+      "rx_write_position",
+      "usart_send_str"
+    ],
+    "atoi": [],
+    "authorization_valid": [
+      "crc32_compute"
+    ],
+    "begin_append_transaction": [],
+    "begin_check": [
+      "dbg_printf",
+      "ec800m_ota_channel_prepare",
+      "encode_query.constprop.0",
+      "ext_flash_try_lock_now",
+      "fota_bcr_load",
+      "fota_diag_block",
+      "http_reset",
+      "parse_url",
+      "release_resources",
+      "service_workspace_try_acquire",
+      "sniprintf",
+      "strchr",
+      "strlen",
+      "terminal_identity_sync"
+    ],
+    "begin_reconcile": [],
+    "bits2int": [
+      "uECC_vli_bytesToNative",
+      "uECC_vli_clear",
+      "uECC_vli_cmp_unsafe"
+    ],
+    "blind_zone_allocate_event_id": [],
+    "blind_zone_append": [
+      "adopt_record_locked",
+      "advance_to_sequence_locked",
+      "begin_append_transaction",
+      "begin_reconcile",
+      "commit_meta_locked",
+      "crc32_compute",
+      "ext_flash_erase.constprop.0",
+      "ext_flash_try_lock_now",
+      "ext_flash_unlock",
+      "ext_flash_write_result.constprop.0",
+      "ext_flash_write_verified",
+      "flash_record_valid",
+      "mark_repair_slot",
+      "memcmp",
+      "memcpy",
+      "memset",
+      "read_record_locked",
+      "saturating_increment",
+      "slot_erased",
+      "start_repair_locked"
+    ],
+    "blind_zone_init.isra.0": [
+      "memset"
+    ],
+    "blind_zone_recovery_process.part.0": [
+      "adopt_record_locked",
+      "advance_to_sequence_locked",
+      "begin_reconcile",
+      "classify_record",
+      "commit_meta_locked",
+      "confirm_append_if_sequence",
+      "consider_run",
+      "crc32_compute",
+      "crc32_update",
+      "ext_flash_erase.constprop.0",
+      "ext_flash_read",
+      "ext_flash_write_verified",
+      "finish_current_run",
+      "finish_maintenance_locked.isra.0",
+      "flash_record_body_valid",
+      "flash_record_valid",
+      "mark_repair_slot",
+      "memcmp",
+      "memcpy",
+      "memset",
+      "quarantine_missing_head_locked",
+      "read_record_locked",
+      "saturating_increment",
+      "scratch_header_valid.constprop.0",
+      "start_repair_locked",
+      "write_meta_locked"
+    ],
+    "blind_zone_replay_process": [
+      "blind_zone_replay_reset",
+      "build_header",
+      "ext_flash_try_lock_now",
+      "ext_flash_unlock",
+      "flash_record_valid",
+      "frame_bytes",
+      "frame_init",
+      "jt808_channel_online",
+      "jt808_is_online",
+      "mark_repair_slot",
+      "memcpy",
+      "memset",
+      "read_record_locked",
+      "saturating_increment",
+      "send_frame_channel",
+      "start_repair_locked",
+      "tcp_manager_session_generation"
+    ],
+    "blind_zone_replay_reset": [],
+    "build_header": [
+      "exact_decimal_text",
+      "frame_bytes",
+      "frame_u16",
+      "terminal_identity_sync"
+    ],
+    "bus_scl": [],
+    "bus_sda": [],
+    "cfg_init": [
+      "dbg_printf",
+      "ext_flash_try_lock.part.0",
+      "log_persist_failure",
+      "memcpy",
+      "memset",
+      "slot_load_locked.constprop.0",
+      "slot_probe_locked",
+      "write_and_activate_locked"
+    ],
+    "cfg_query_process": [
+      "ec800m_get_imei",
+      "ec800m_udp_send_once",
+      "memcmp",
+      "service_workspace_release.part.0",
+      "service_workspace_try_acquire",
+      "work_mode_config_changed"
+    ],
+    "cfg_set_auth_code": [
+      "cfg_store_candidate_result",
+      "memcpy",
+      "memset",
+      "strlen"
+    ],
+    "cfg_store_candidate_result": [
+      "ext_flash_try_lock.part.0",
+      "ext_flash_unlock",
+      "write_and_activate_locked"
+    ],
+    "ch_on_fail": [
+      "dbg_printf",
+      "ec800m_tcp_close.part.0"
+    ],
+    "ch_process": [
+      "dbg_printf",
+      "ec800m_identity_ready",
+      "ec800m_tcp_close.part.0"
+    ],
+    "ch_start_connect": [
+      "dbg_printf",
+      "decimal_length_valid.part.0",
+      "ec800m_get_imei",
+      "ec800m_identity_ready",
+      "ec800m_tcp_open",
+      "memset",
+      "strlen",
+      "strncpy"
+    ],
+    "checkpoint_load": [
+      "checkpoint_url_from_download_url.constprop.0",
+      "memcpy",
+      "newest",
+      "strcmp",
+      "strncpy"
+    ],
+    "checkpoint_save": [
+      "checkpoint_url_from_download_url.constprop.0",
+      "crc32_compute",
+      "ext_flash_erase.constprop.0",
+      "ext_flash_read",
+      "ext_flash_write_verified",
+      "memcmp",
+      "memcpy",
+      "memset",
+      "newest",
+      "payload_valid",
+      "valid"
+    ],
+    "checkpoint_url_from_download_url.constprop.0": [
+      "memcmp",
+      "memcpy",
+      "strchr",
+      "strcpy",
+      "strlen"
+    ],
+    "classify_record": [
+      "flash_record_body_valid",
+      "slot_erased"
+    ],
+    "clear_candidate": [],
+    "commit_meta_locked": [],
+    "config_string": [],
+    "confirm_append_if_sequence": [],
+    "consider_run": [],
+    "copy_arg": [
+      "argument",
+      "memcpy"
+    ],
+    "crc32_compute": [
+      "crc32_update"
+    ],
+    "crc32_update": [],
+    "crc_region_locked.constprop.0": [
+      "crc32_update",
+      "ext_flash_read"
+    ],
+    "dbg_printf": [
+      "__adddf3",
+      "__aeabi_d2iz",
+      "__aeabi_d2uiz",
+      "__aeabi_dcmpeq",
+      "__aeabi_dcmplt",
+      "__aeabi_ddiv",
+      "__aeabi_dmul",
+      "__aeabi_dsub",
+      "__aeabi_i2d",
+      "__aeabi_ui2d",
+      "dbg_putchar",
+      "print_uint_width"
+    ],
+    "dbg_putchar": [],
+    "decimal_length_valid.part.0": [],
+    "defer_urc": [
+      "is_deferred_urc",
+      "parse_prefixed_uint.part.0",
+      "parse_qiopen",
+      "strncpy"
+    ],
+    "delay_ms": [],
+    "delay_us": [],
+    "deregister_tm_clones": [],
+    "device_id.constprop.0": [
+      "exact_decimal_text",
+      "memcpy"
+    ],
+    "dispatch_nmea": [
+      "__aeabi_d2f",
+      "__aeabi_dcmpge",
+      "__aeabi_dcmplt",
+      "__aeabi_dmul",
+      "dbg_printf",
+      "nmea_split.constprop.0",
+      "nmea_to_deg",
+      "parse_decimal",
+      "parse_six_digits",
+      "parse_uint8",
+      "strchr",
+      "strncmp"
+    ],
+    "double_jacobian_default": [
+      "uECC_vli_add",
+      "uECC_vli_isZero",
+      "uECC_vli_modAdd",
+      "uECC_vli_modMult_fast",
+      "uECC_vli_modSquare_fast",
+      "uECC_vli_modSub",
+      "uECC_vli_rshift1",
+      "uECC_vli_set"
+    ],
+    "download_token_from_url.part.0": [
+      "memcpy",
+      "strchr",
+      "strncmp",
+      "strstr"
+    ],
+    "drain_rx": [
+      "process_rx_byte",
+      "rx_write_position"
+    ],
+    "ec800m_at_response_end.constprop.0": [
+      "ec800m_at_response_has_line.part.0.constprop.0"
+    ],
+    "ec800m_at_response_has_line.part.0.constprop.0": [
+      "memcmp",
+      "strlen"
+    ],
+    "ec800m_get_imei": [
+      "strncpy"
+    ],
+    "ec800m_identity_ready": [],
+    "ec800m_init": [
+      "memset",
+      "sms_send_complete"
+    ],
+    "ec800m_ntp_sync": [
+      "at_owner_release",
+      "at_send_wait_owned",
+      "parse_uint_field",
+      "process_deferred_urc_one",
+      "strncmp",
+      "strstr"
+    ],
+    "ec800m_ota_channel_prepare": [
+      "ec800m_tcp_close.part.0"
+    ],
+    "ec800m_parse_reg_status.part.0.constprop.0.isra.0": [
+      "strlen",
+      "strstr"
+    ],
+    "ec800m_power_on": [
+      "at_owner_release",
+      "delay_ms",
+      "gps_process",
+      "strstr",
+      "usart_send_str"
+    ],
+    "ec800m_process": [
+      "at_owner_release",
+      "at_send_wait",
+      "dbg_printf",
+      "drain_rx",
+      "ec800m_at_response_end.constprop.0",
+      "ec800m_identity_ready",
+      "ec800m_parse_reg_status.part.0.constprop.0.isra.0",
+      "ec800m_reset",
+      "gps_process",
+      "iccid_text_valid.part.0.constprop.0",
+      "identity_ready.constprop.0",
+      "memset",
+      "parse_iccid_response.constprop.0",
+      "parse_prefixed_uint.part.0",
+      "parse_uint_field",
+      "process_deferred_urc_one",
+      "process_rx_byte",
+      "process_rx_line",
+      "qird_dump_line_head",
+      "qird_note_ring_level",
+      "qird_report_desync",
+      "qird_ring_pending",
+      "rx_write_position",
+      "sms_send_complete",
+      "sniprintf",
+      "strcmp",
+      "strcpy",
+      "strlen",
+      "strncmp",
+      "strstr",
+      "usart_send_buf",
+      "usart_send_str"
+    ],
+    "ec800m_reset": [
+      "at_send_wait",
+      "delay_ms",
+      "ec800m_power_on",
+      "memset",
+      "sms_send_complete"
+    ],
+    "ec800m_sms_send": [
+      "strcpy",
+      "strlen"
+    ],
+    "ec800m_tcp_close.part.0": [
+      "at_send_wait",
+      "sniprintf"
+    ],
+    "ec800m_tcp_open": [
+      "at_send_wait",
+      "drain_rx",
+      "sniprintf",
+      "strncpy"
+    ],
+    "ec800m_tcp_send": [
+      "at_owner_release",
+      "at_send_wait_owned",
+      "at_wait_prompt_owned.constprop.0",
+      "dbg_printf",
+      "sniprintf",
+      "usart_send_buf"
+    ],
+    "ec800m_udp_send_once": [
+      "at_owner_release",
+      "at_send_wait_owned",
+      "at_wait_prompt_owned.constprop.0",
+      "drain_rx",
+      "sniprintf",
+      "usart_send_buf"
+    ],
+    "encode_location_compact.isra.0": [
+      "__aeabi_d2uiz",
+      "__aeabi_dcmplt",
+      "__aeabi_dmul",
+      "hw_acc_is_on",
+      "jt808_days_in_month"
+    ],
+    "encode_location_online.isra.0": [
+      "__aeabi_d2uiz",
+      "__aeabi_dcmple",
+      "__aeabi_dcmplt",
+      "__aeabi_dmul",
+      "__aeabi_dsub",
+      "__aeabi_f2d",
+      "__aeabi_ui2d",
+      "encode_location_compact.isra.0",
+      "hw_acc_is_on"
+    ],
+    "encode_query.constprop.0": [],
+    "endpoint_host": [
+      "memcmp"
+    ],
+    "enqueue_action": [
+      "enqueue_queued_action",
+      "work_mode_allocate_report_id"
+    ],
+    "enqueue_candidate": [],
+    "enqueue_direct_queued": [],
+    "enqueue_queued_action": [
+      "enqueue_direct_queued",
+      "queued_action_is_stale",
+      "remove_pending_at",
+      "work_mode_allocate_report_id"
+    ],
+    "ensure_id": [
+      "xfer"
+    ],
+    "enter_realtime": [
+      "enqueue_action"
+    ],
+    "enter_stationary.isra.0": [
+      "enqueue_action"
+    ],
+    "exact_decimal_text": [],
+    "ext_flash_erase.constprop.0": [
+      "ensure_id",
+      "owner_ok",
+      "protected_status",
+      "ready",
+      "refresh_status",
+      "write_enable",
+      "xfer"
+    ],
+    "ext_flash_read": [
+      "owner_ok",
+      "spi_flash_read"
+    ],
+    "ext_flash_try_lock.part.0": [],
+    "ext_flash_try_lock_now": [],
+    "ext_flash_unlock": [],
+    "ext_flash_write_result.constprop.0": [
+      "owner_ok",
+      "spi_flash_note_verify_failure",
+      "spi_flash_read",
+      "spi_flash_write_result"
+    ],
+    "ext_flash_write_verified": [
+      "owner_ok",
+      "spi_flash_note_verify_failure",
+      "spi_flash_read",
+      "spi_flash_write_result"
+    ],
+    "f39_bind_defaults": [
+      "ec800m_get_imei",
+      "hw_acc_is_on",
+      "memset",
+      "strlen",
+      "strncpy"
+    ],
+    "f39_clear_reply_transaction": [],
+    "f39_default_reset": [],
+    "f39_default_sms_send": [],
+    "f39_execute.constprop.0": [
+      "argument",
+      "copy_arg",
+      "f39_parse",
+      "failure.isra.0",
+      "memcpy",
+      "memset",
+      "prepare_operation",
+      "query.constprop.0",
+      "reply_append",
+      "reply_clear",
+      "strcmp"
+    ],
+    "f39_fota_recheck": [],
+    "f39_gnss_mode": [
+      "strlen"
+    ],
+    "f39_gps_speed": [],
+    "f39_gps_valid": [],
+    "f39_jt808_auth_reset": [],
+    "f39_jt808_reregister": [
+      "cfg_set_auth_code",
+      "jt808_session_init.part.0",
+      "jt808_set_terminal_profile",
+      "memset"
+    ],
+    "f39_lookup_root": [
+      "f39_root_equals"
+    ],
+    "f39_modem_pdp_restart": [
+      "tcp_manager_reconnect"
+    ],
+    "f39_network_reconnect": [
+      "jt808_set_server",
+      "jt808_set_server.part.0"
+    ],
+    "f39_parse": [
+      "f39_lookup_root",
+      "f39_root_equals",
+      "memcpy",
+      "memset"
+    ],
+    "f39_persist": [
+      "cfg_store_candidate_result"
+    ],
+    "f39_refresh_live_snapshot": [
+      "ec800m_get_imei",
+      "hw_acc_is_on",
+      "strlen",
+      "strncpy"
+    ],
+    "f39_relay": [
+      "relay_set"
+    ],
+    "f39_relay_get": [],
+    "f39_remaining_refresh": [],
+    "f39_root_equals": [],
+    "f39_schedule_reply_retry": [
+      "dbg_printf"
+    ],
+    "f39_sms_result": [
+      "dbg_printf",
+      "f39_clear_reply_transaction",
+      "f39_schedule_reply_retry"
+    ],
+    "f39_timer_refresh": [
+      "jt808_set_report_interval",
+      "work_mode_sleep_monotonic_s"
+    ],
+    "fail_download": [
+      "release_resources"
+    ],
+    "failure.isra.0": [
+      "reply_clear"
+    ],
+    "finish": [
+      "ec800m_tcp_close.part.0"
+    ],
+    "finish_check": [
+      "release_resources"
+    ],
+    "finish_current_run": [
+      "consider_run"
+    ],
+    "finish_maintenance_locked.isra.0": [
+      "classify_record",
+      "mark_repair_slot",
+      "read_record_locked",
+      "slot_erased"
+    ],
+    "firmware_signature_verify": [
+      "uECC_secp256r1",
+      "uECC_verify"
+    ],
+    "flash_record_body_valid": [
+      "crc32_compute"
+    ],
+    "flash_record_valid": [
+      "classify_record"
+    ],
+    "flush_pending_essentials": [
+      "enqueue_direct_queued",
+      "queued_action_is_stale",
+      "remove_pending_at"
+    ],
+    "fmodf": [
+      "__errno",
+      "__ieee754_fmodf"
+    ],
+    "fota_bcr_commit_pending.constprop.0": [
+      "fota_bcr_load",
+      "fota_bcr_write_record",
+      "memset"
+    ],
+    "fota_bcr_load": [
+      "ext_flash_read",
+      "fota_bcr_valid"
+    ],
+    "fota_bcr_valid": [
+      "crc32_compute"
+    ],
+    "fota_bcr_write_record": [
+      "crc32_compute",
+      "ext_flash_erase.constprop.0",
+      "ext_flash_read",
+      "ext_flash_write_verified",
+      "fota_bcr_valid",
+      "memcmp"
+    ],
+    "fota_check_consume": [],
+    "fota_check_parse": [
+      "fota_check_consume",
+      "fota_check_parse_literal",
+      "fota_check_parse_string",
+      "fota_check_parse_u32",
+      "fota_check_skip_whitespace",
+      "fota_check_string_equals",
+      "memcpy",
+      "memset"
+    ],
+    "fota_check_parse_literal": [],
+    "fota_check_parse_string": [
+      "fota_check_consume"
+    ],
+    "fota_check_parse_u32": [],
+    "fota_check_skip_whitespace": [],
+    "fota_check_string_equals": [],
+    "fota_confirm_trial_process": [
+      "__NVIC_SystemReset.lto_priv.0",
+      "ext_flash_try_lock_now",
+      "ext_flash_unlock",
+      "fota_bcr_load",
+      "fota_bcr_write_record"
+    ],
+    "fota_diag_block": [
+      "dbg_printf"
+    ],
+    "fota_diag_hex.constprop.0": [],
+    "fota_ec800m_rx": [
+      "fota_on_http_header",
+      "memcmp",
+      "memcpy",
+      "strncmp"
+    ],
+    "fota_init": [
+      "memset"
+    ],
+    "fota_is_active.lto_priv.0": [],
+    "fota_on_chunk.part.0": [
+      "checkpoint_save",
+      "crc32_update",
+      "dbg_printf",
+      "ext_flash_read",
+      "ext_flash_write_verified",
+      "memcmp"
+    ],
+    "fota_on_http_header": [
+      "dbg_printf",
+      "header_name",
+      "memmove",
+      "parse_content_range",
+      "parse_http_u32",
+      "strchr",
+      "strcmp",
+      "strcpy",
+      "strlen",
+      "strncmp",
+      "strstr"
+    ],
+    "fota_process": [
+      "__NVIC_SystemReset.lto_priv.0",
+      "authorization_valid",
+      "checkpoint_save",
+      "crc32_compute",
+      "dbg_printf",
+      "download_token_from_url.part.0",
+      "ec800m_ota_channel_prepare",
+      "ec800m_tcp_close.part.0",
+      "ec800m_tcp_open",
+      "ext_flash_erase.constprop.0",
+      "ext_flash_read",
+      "ext_flash_write_verified",
+      "fail_download",
+      "finish_check",
+      "fota_bcr_commit_pending.constprop.0",
+      "fota_check_parse",
+      "fota_start_request.constprop.0",
+      "fota_verify_manifest.constprop.0",
+      "http_reset",
+      "memcmp",
+      "memcpy",
+      "memset",
+      "release_resources",
+      "same_origin",
+      "send_request",
+      "send_status_request",
+      "service_workspace_try_acquire",
+      "strcmp"
+    ],
+    "fota_start_request.constprop.0": [
+      "checkpoint_load",
+      "checkpoint_save",
+      "ec800m_ota_channel_prepare",
+      "ext_flash_try_lock_now",
+      "fail_download",
+      "parse_url",
+      "release_resources",
+      "same_origin",
+      "schedule_tail_cleanup",
+      "service_workspace_try_acquire",
+      "strlen",
+      "strncpy"
+    ],
+    "fota_verify_manifest.constprop.0": [
+      "crc32_update",
+      "dbg_printf",
+      "ext_flash_read",
+      "firmware_signature_verify",
+      "fota_bcr_load",
+      "fota_diag_hex.constprop.0",
+      "memcmp",
+      "sha256_final",
+      "sha256_update"
+    ],
+    "frame_bytes": [
+      "memcpy"
+    ],
+    "frame_dummy": [],
+    "frame_init": [],
+    "frame_u16": [],
+    "gnss_vendor_inject": [
+      "__adddf3",
+      "__aeabi_d2iz",
+      "__aeabi_dcmpge",
+      "__aeabi_dcmple",
+      "__aeabi_dcmplt",
+      "__aeabi_dmul",
+      "huada_reset_stream",
+      "memcpy",
+      "memmove",
+      "memset",
+      "send_frame.lto_priv.1"
+    ],
+    "gpio_af_rx": [
+      "GPIO_InitPeripheral"
+    ],
+    "gpio_input": [
+      "GPIO_InitPeripheral"
+    ],
+    "gpio_out_pp": [
+      "GPIO_InitPeripheral"
+    ],
+    "gps_capture_last_trusted_snapshot.isra.0": [
+      "__aeabi_d2iz",
+      "__aeabi_dcmpeq",
+      "__aeabi_dcmpgt",
+      "__aeabi_dcmplt",
+      "__aeabi_dmul"
+    ],
+    "gps_configure_output": [
+      "gps_send_raw"
+    ],
+    "gps_enable": [
+      "GPIO_InitPeripheral"
+    ],
+    "gps_get_quality.isra.0": [],
+    "gps_process": [
+      "dispatch_nmea"
+    ],
+    "gps_quality_fix_fresh": [],
+    "gps_report_filter_copy.isra.0": [
+      "report_enabled",
+      "report_fix_fresh"
+    ],
+    "gps_report_filter_process": [
+      "__aeabi_d2iz",
+      "__aeabi_dmul",
+      "clear_candidate",
+      "i2c_accel_read",
+      "invalidate_evidence",
+      "report_enabled",
+      "report_fix_fresh",
+      "trimmed_mean"
+    ],
+    "gps_report_filter_reset": [],
+    "gps_send_raw": [
+      "gps_tx_write"
+    ],
+    "gps_tx_write": [],
+    "handle_text_message": [],
+    "hardfault_capture": [
+      "__NVIC_SystemReset.lto_priv.0"
+    ],
+    "header_name": [],
+    "http_reset": [],
+    "huada_aid_frame_valid": [
+      "valid_frame"
+    ],
+    "huada_reset_stream": [],
+    "hw_acc_is_on": [
+      "hw_acc_pin_high"
+    ],
+    "hw_acc_pin_high": [],
+    "hw_adc_init": [
+      "GPIO_InitPeripheral",
+      "RCC_GetClocksFreqValue"
+    ],
+    "hw_gpio_init": [
+      "gpio_input",
+      "gpio_out_pp"
+    ],
+    "hw_i2c_init": [
+      "GPIO_InitPeripheral",
+      "RCC_GetClocksFreqValue",
+      "dbg_printf",
+      "delay_us"
+    ],
+    "hw_spi_init": [
+      "GPIO_InitPeripheral"
+    ],
+    "hw_usart_init": [
+      "USART_Init.constprop.0",
+      "gpio_af_rx"
+    ],
+    "i2c_accel_init": [
+      "GPIO_InitPeripheral",
+      "bus_scl",
+      "bus_sda",
+      "dbg_printf",
+      "delay_ms",
+      "delay_us",
+      "hw_i2c_init",
+      "i2c_accel_rearm_wake_interrupt",
+      "i2c_wait_event.constprop.0",
+      "i2c_wait_flag.constprop.0",
+      "i2c_write_reg"
+    ],
+    "i2c_accel_read": [
+      "i2c_wait_event.constprop.0",
+      "i2c_wait_flag.constprop.0"
+    ],
+    "i2c_accel_rearm_wake_interrupt": [
+      "i2c_write_reg"
+    ],
+    "i2c_accel_vibration_hit": [
+      "dbg_printf",
+      "i2c_accel_read"
+    ],
+    "i2c_wait_event.constprop.0": [],
+    "i2c_wait_flag.constprop.0": [],
+    "i2c_write_reg": [
+      "i2c_wait_event.constprop.0"
+    ],
+    "iccid_nibble": [],
+    "iccid_text_valid.part.0.constprop.0": [],
+    "identity_ready.constprop.0": [
+      "iccid_text_valid.part.0.constprop.0"
+    ],
+    "invalidate_evidence": [
+      "clear_candidate"
+    ],
+    "is_deferred_urc": [
+      "strncmp"
+    ],
+    "jt808_channel_online": [
+      "tcp_manager_ch_online",
+      "tcp_manager_session_generation"
+    ],
+    "jt808_days_in_month": [],
+    "jt808_encode_plate_gbk.constprop.0": [
+      "memcmp",
+      "memcpy",
+      "strlen"
+    ],
+    "jt808_init.constprop.0": [
+      "blind_zone_replay_reset",
+      "jt808_session_init.part.0",
+      "memcpy",
+      "memset",
+      "motion_corner_init",
+      "strncpy"
+    ],
+    "jt808_is_online": [
+      "jt808_channel_online"
+    ],
+    "jt808_location_snapshot_valid": [],
+    "jt808_on_recv": [
+      "process_frame",
+      "tcp_manager_session_generation"
+    ],
+    "jt808_process": [
+      "build_header",
+      "cfg_set_auth_code",
+      "dbg_printf",
+      "ec800m_get_imei",
+      "frame_bytes",
+      "frame_init",
+      "jt808_channel_online",
+      "jt808_encode_plate_gbk.constprop.0",
+      "jt808_is_online",
+      "jt808_send_auth_to.isra.0",
+      "jt808_send_heartbeat",
+      "jt808_session_mark_send_failed",
+      "jt808_session_mark_sent",
+      "jt808_session_reject_or_timeout",
+      "jt808_terminal_info_encode.part.0.constprop.0",
+      "memcpy",
+      "memset",
+      "process_location_timer",
+      "send_frame_channel",
+      "send_frame_channel_delivered",
+      "strlen",
+      "strncpy",
+      "tcp_manager_ch_online",
+      "tcp_manager_session_generation",
+      "terminal_identity_sync",
+      "work_mode_sleep_monotonic_s"
+    ],
+    "jt808_reset_endpoint_auth": [
+      "jt808_session_init.part.0",
+      "memset"
+    ],
+    "jt808_send_auth_to.isra.0": [
+      "build_header",
+      "dbg_printf",
+      "frame_bytes",
+      "frame_init",
+      "jt808_session_mark_send_failed",
+      "jt808_session_mark_sent",
+      "send_frame_channel",
+      "strlen"
+    ],
+    "jt808_send_general_resp.isra.0": [],
+    "jt808_send_general_resp_to.isra.0": [
+      "build_header",
+      "frame_init",
+      "frame_u16",
+      "send_frame_channel"
+    ],
+    "jt808_send_heartbeat": [
+      "build_header",
+      "frame_init",
+      "send_frame_broadcast"
+    ],
+    "jt808_send_location_to": [
+      "build_header",
+      "encode_location_online.isra.0",
+      "frame_bytes",
+      "frame_init",
+      "gps_report_filter_copy.isra.0",
+      "jt808_channel_online",
+      "jt808_location_snapshot_valid",
+      "send_frame_channel_delivered"
+    ],
+    "jt808_send_location_work_mode": [
+      "__aeabi_ddiv",
+      "__aeabi_i2d",
+      "blind_zone_allocate_event_id",
+      "blind_zone_append",
+      "build_header",
+      "dbg_printf",
+      "encode_location_online.isra.0",
+      "frame_bytes",
+      "frame_init",
+      "gps_report_filter_copy.isra.0",
+      "hw_acc_is_on",
+      "jt808_is_online",
+      "jt808_location_snapshot_valid",
+      "log_location_unavailable",
+      "memset",
+      "send_frame_broadcast"
+    ],
+    "jt808_send_raw.isra.0": [
+      "build_header",
+      "frame_bytes",
+      "frame_init",
+      "send_frame_channel"
+    ],
+    "jt808_session_init.part.0": [
+      "memset"
+    ],
+    "jt808_session_mark_send_failed": [],
+    "jt808_session_mark_sent": [],
+    "jt808_session_reject_or_timeout": [],
+    "jt808_set_report_interval": [],
+    "jt808_set_server": [
+      "strncpy"
+    ],
+    "jt808_set_server.part.0": [
+      "strncpy"
+    ],
+    "jt808_set_terminal_profile": [
+      "strncpy"
+    ],
+    "jt808_terminal_info_encode.part.0.constprop.0": [
+      "iccid_nibble",
+      "strncpy",
+      "terminal_identity_sync"
+    ],
+    "jt808_trigger_alarm": [],
+    "key": [],
+    "log_location_unavailable": [
+      "dbg_printf"
+    ],
+    "log_persist_failure": [
+      "dbg_printf"
+    ],
+    "log_platform_process": [
+      "adc_monitor_valid",
+      "ec800m_get_imei",
+      "ec800m_udp_send_once",
+      "jt808_is_online",
+      "service_workspace_try_acquire",
+      "sniprintf",
+      "strlen",
+      "strncpy",
+      "strspn"
+    ],
+    "main": [
+      "EXTI_InitPeripheral.part.0.constprop.0",
+      "GPIO_InitPeripheral",
+      "NVIC_Init.part.0.constprop.0.isra.0",
+      "USART_Init.constprop.0",
+      "adc_monitor_process",
+      "agnss_init",
+      "agnss_process",
+      "at_config_process",
+      "at_send_wait",
+      "blind_zone_init.isra.0",
+      "blind_zone_recovery_process.part.0",
+      "blind_zone_replay_process",
+      "cfg_init",
+      "cfg_query_process",
+      "ch_process",
+      "dbg_printf",
+      "delay_ms",
+      "ec800m_init",
+      "ec800m_process",
+      "ext_flash_try_lock_now",
+      "f39_bind_defaults",
+      "fota_confirm_trial_process",
+      "fota_init",
+      "fota_is_active.lto_priv.0",
+      "fota_process",
+      "gps_configure_output",
+      "gps_enable",
+      "gps_process",
+      "gps_report_filter_process",
+      "gps_report_filter_reset",
+      "hw_acc_is_on",
+      "hw_acc_pin_high",
+      "hw_adc_init",
+      "hw_gpio_init",
+      "hw_i2c_init",
+      "hw_spi_init",
+      "hw_usart_init",
+      "i2c_accel_init",
+      "jt808_init.constprop.0",
+      "jt808_is_online",
+      "jt808_process",
+      "jt808_set_report_interval",
+      "jt808_set_server",
+      "jt808_set_server.part.0",
+      "log_platform_process",
+      "memcpy",
+      "memset",
+      "mileage_flush_at.isra.0",
+      "mileage_sync_persist_generation",
+      "mileage_update",
+      "ntp_resync_process",
+      "periodic_status_log",
+      "reset_diag_capture",
+      "reset_diag_runtime_init",
+      "rtc_alarm_clear",
+      "scan_alarms",
+      "setup_wake_exti",
+      "spi_flash_init",
+      "strlen",
+      "strncpy",
+      "tcp_manager_reconnect",
+      "work_mode_init",
+      "work_mode_process",
+      "work_mode_set_stationary_location_enabled",
+      "work_mode_sleep_monotonic_s"
+    ],
+    "mark_repair_slot": [],
+    "memchr": [],
+    "memcmp": [],
+    "memcpy": [],
+    "memmove": [],
+    "memset": [],
+    "mileage_flush_at.isra.0": [
+      "cfg_store_candidate_result"
+    ],
+    "mileage_force_save.isra.0": [
+      "mileage_sync_persist_generation"
+    ],
+    "mileage_sync_persist_generation": [],
+    "mileage_trial_sin": [
+      "__adddf3",
+      "__aeabi_dmul",
+      "__aeabi_dsub"
+    ],
+    "mileage_update": [
+      "__adddf3",
+      "__aeabi_d2f",
+      "__aeabi_d2uiz",
+      "__aeabi_dcmpeq",
+      "__aeabi_dcmpge",
+      "__aeabi_dcmpgt",
+      "__aeabi_dcmple",
+      "__aeabi_dcmplt",
+      "__aeabi_dcmpun",
+      "__aeabi_ddiv",
+      "__aeabi_dmul",
+      "__aeabi_dsub",
+      "__aeabi_f2d",
+      "mileage_trial_sin",
+      "sqrtf"
+    ],
+    "motion_corner_consume_candidate": [],
+    "motion_corner_init": [
+      "memset"
+    ],
+    "motion_corner_peek_candidate": [],
+    "motion_corner_pending_candidates": [],
+    "motion_corner_step": [
+      "enqueue_candidate",
+      "fmodf"
+    ],
+    "newest": [
+      "ext_flash_read",
+      "memcpy",
+      "valid"
+    ],
+    "nmea_split.constprop.0": [],
+    "nmea_to_deg": [
+      "__adddf3",
+      "__aeabi_d2uiz",
+      "__aeabi_dcmpge",
+      "__aeabi_dcmplt",
+      "__aeabi_ddiv",
+      "__aeabi_dmul",
+      "__aeabi_dsub",
+      "__aeabi_ui2d",
+      "parse_decimal"
+    ],
+    "ntp_resync_process": [
+      "dbg_printf",
+      "ec800m_ntp_sync"
+    ],
+    "owner_ok": [],
+    "parse_arg_u32": [
+      "argument"
+    ],
+    "parse_content_range": [
+      "parse_http_u32",
+      "strncmp"
+    ],
+    "parse_decimal": [
+      "__adddf3",
+      "__aeabi_ddiv",
+      "__aeabi_ui2d"
+    ],
+    "parse_http_u32": [],
+    "parse_iccid_response.constprop.0": [
+      "memcpy",
+      "strstr"
+    ],
+    "parse_prefixed_uint.part.0": [
+      "parse_uint_field",
+      "strlen",
+      "strncmp"
+    ],
+    "parse_qiopen": [
+      "parse_uint_field",
+      "strncmp"
+    ],
+    "parse_six_digits": [],
+    "parse_uint8": [],
+    "parse_uint_field": [],
+    "parse_url": [
+      "strcpy",
+      "strlen",
+      "strncmp"
+    ],
+    "payload_valid": [
+      "memchr"
+    ],
+    "periodic_status_log": [
+      "dbg_printf",
+      "hw_acc_is_on",
+      "hw_acc_pin_high",
+      "vibration_hits_required",
+      "work_mode_sleep_monotonic_s",
+      "work_mode_state_name"
+    ],
+    "prepare_endpoint.constprop.0": [
+      "copy_arg",
+      "parse_arg_u32"
+    ],
+    "prepare_operation": [
+      "arg_equals.constprop.0",
+      "argument",
+      "copy_arg",
+      "memcpy",
+      "parse_arg_u32",
+      "prepare_endpoint.constprop.0",
+      "strcmp",
+      "strcpy",
+      "strlen",
+      "valid_at_string_arg"
+    ],
+    "print_uint_width": [
+      "dbg_putchar"
+    ],
+    "process_deferred_urc_one": [
+      "process_urc",
+      "strncpy"
+    ],
+    "process_frame": [
+      "at_config_execute_text_command",
+      "build_header",
+      "cfg_set_auth_code",
+      "cfg_store_candidate_result",
+      "dbg_printf",
+      "encode_location_online.isra.0",
+      "frame_bytes",
+      "frame_init",
+      "gps_report_filter_copy.isra.0",
+      "handle_text_message",
+      "jt808_channel_online",
+      "jt808_encode_plate_gbk.constprop.0",
+      "jt808_is_online",
+      "jt808_location_snapshot_valid",
+      "jt808_reset_endpoint_auth",
+      "jt808_send_general_resp.isra.0",
+      "jt808_send_raw.isra.0",
+      "jt808_session_reject_or_timeout",
+      "jt808_set_report_interval",
+      "jt808_set_server",
+      "jt808_set_server.part.0",
+      "jt808_set_terminal_profile",
+      "jt808_terminal_info_encode.part.0.constprop.0",
+      "memchr",
+      "memcmp",
+      "memcpy",
+      "memset",
+      "read_be",
+      "send_frame_channel",
+      "service_workspace_release.part.0",
+      "service_workspace_try_acquire",
+      "strcmp",
+      "work_mode_config_changed",
+      "work_mode_sleep_monotonic_s"
+    ],
+    "process_location_timer": [
+      "blind_zone_allocate_event_id",
+      "blind_zone_append",
+      "build_header",
+      "encode_location_compact.isra.0",
+      "encode_location_online.isra.0",
+      "frame_bytes",
+      "frame_init",
+      "gps_report_filter_copy.isra.0",
+      "jt808_channel_online",
+      "jt808_location_snapshot_valid",
+      "jt808_send_location_to",
+      "motion_corner_consume_candidate",
+      "motion_corner_peek_candidate",
+      "motion_corner_step",
+      "send_frame_channel_delivered"
+    ],
+    "process_rx_byte": [
+      "memcmp",
+      "process_rx_line"
+    ],
+    "process_rx_line": [
+      "is_deferred_urc",
+      "parse_prefixed_uint.part.0",
+      "parse_qiopen",
+      "sms_ingress_feed_line",
+      "strncmp"
+    ],
+    "process_urc": [
+      "at_owner_release",
+      "at_send_wait",
+      "delay_ms",
+      "is_deferred_urc",
+      "parse_prefixed_uint.part.0",
+      "parse_qiopen",
+      "parse_uint_field",
+      "rx_write_position",
+      "sms_ingress_feed_line",
+      "sms_send_complete",
+      "sniprintf",
+      "strcmp",
+      "strncmp",
+      "strstr"
+    ],
+    "protected_status": [],
+    "qird_dump_line_head": [
+      "dbg_printf"
+    ],
+    "qird_note_ring_level": [],
+    "qird_report_desync": [
+      "dbg_printf"
+    ],
+    "qird_ring_pending": [
+      "rx_write_position"
+    ],
+    "quarantine_missing_head_locked": [
+      "advance_to_sequence_locked",
+      "commit_meta_locked",
+      "flash_record_valid",
+      "read_record_locked",
+      "saturating_increment"
+    ],
+    "query.constprop.0": [
+      "config_string",
+      "device_id.constprop.0",
+      "failure.isra.0",
+      "reply_append",
+      "reply_clear"
+    ],
+    "queued_action_is_stale": [],
+    "read_be": [],
+    "read_record_locked": [],
+    "read_status_command": [
+      "xfer"
+    ],
+    "ready": [
+      "read_status_command"
+    ],
+    "refresh_status": [
+      "read_status_command"
+    ],
+    "register_tm_clones": [],
+    "relay_gpio_write": [
+      "GPIO_InitPeripheral"
+    ],
+    "relay_log": [
+      "dbg_printf"
+    ],
+    "relay_set": [
+      "relay_gpio_write"
+    ],
+    "release_resources": [
+      "ext_flash_unlock",
+      "service_workspace_release.part.0"
+    ],
+    "remove_pending_at": [],
+    "reply_append": [
+      "vsniprintf"
+    ],
+    "reply_clear": [],
+    "report_enabled": [],
+    "report_fix_fresh": [
+      "__aeabi_dcmpge",
+      "__aeabi_dcmpgt",
+      "__aeabi_dcmple",
+      "__aeabi_dcmpun"
+    ],
+    "reset_diag_capture": [
+      "RCC_GetFlagStatus"
+    ],
+    "reset_diag_runtime_init": [
+      "memset"
+    ],
+    "reset_vibration_episode": [],
+    "rtc_alarm_clear": [],
+    "rx_write_position": [],
+    "same_origin": [
+      "parse_url",
+      "strcmp"
+    ],
+    "saturating_increment": [],
+    "sbrk_aligned": [
+      "_sbrk_r"
+    ],
+    "scan_alarms": [
+      "dbg_printf",
+      "jt808_location_snapshot_valid",
+      "jt808_trigger_alarm",
+      "work_mode_notify_alarm"
+    ],
+    "schedule_tail_cleanup": [
+      "http_reset"
+    ],
+    "scratch_header_valid.constprop.0": [
+      "crc32_compute"
+    ],
+    "send_frame.lto_priv.1": [],
+    "send_frame_broadcast": [
+      "jt808_channel_online",
+      "send_frame_channel_delivered"
+    ],
+    "send_frame_channel": [
+      "tcp_manager_ch_online"
+    ],
+    "send_frame_channel_delivered": [
+      "send_frame_channel"
+    ],
+    "send_get": [
+      "ec800m_tcp_send",
+      "endpoint_host",
+      "sniprintf"
+    ],
+    "send_gnss": [],
+    "send_request": [
+      "dbg_printf",
+      "ec800m_get_imei",
+      "ec800m_tcp_send",
+      "sniprintf"
+    ],
+    "send_status_request": [
+      "download_token_from_url.part.0",
+      "ec800m_tcp_send",
+      "http_reset",
+      "parse_url",
+      "sniprintf",
+      "strlen",
+      "terminal_identity_sync"
+    ],
+    "service_workspace_release.part.0": [],
+    "service_workspace_try_acquire": [],
+    "set_deadlines": [],
+    "setup_wake_exti": [
+      "EXTI_InitPeripheral.part.0.constprop.0"
+    ],
+    "sha256_block": [],
+    "sha256_final": [
+      "sha256_block"
+    ],
+    "sha256_update": [
+      "memcpy",
+      "sha256_block"
+    ],
+    "shallow_retained_clock_advance": [],
+    "slot_erased": [],
+    "slot_load_locked.constprop.0": [
+      "memcpy",
+      "memset"
+    ],
+    "slot_probe_locked": [
+      "crc_region_locked.constprop.0",
+      "ext_flash_read"
+    ],
+    "sms_command_execute": [],
+    "sms_dispatch": [
+      "memcpy"
+    ],
+    "sms_ingress_feed_line": [
+      "f39_lookup_root",
+      "memcpy",
+      "strchr",
+      "strcmp",
+      "strncmp",
+      "valid_suffix"
+    ],
+    "sms_send_complete": [],
+    "sniprintf": [
+      "_svfiprintf_r"
+    ],
+    "spi_flash_init": [
+      "dbg_printf",
+      "delay_ms",
+      "ensure_id",
+      "refresh_status"
+    ],
+    "spi_flash_note_verify_failure": [
+      "protected_status",
+      "refresh_status"
+    ],
+    "spi_flash_read": [
+      "ensure_id",
+      "ready",
+      "xfer"
+    ],
+    "spi_flash_write_result": [
+      "ensure_id",
+      "protected_status",
+      "ready",
+      "refresh_status",
+      "write_enable",
+      "xfer",
+      "xfer_tracked"
+    ],
+    "sqrtf": [
+      "__errno",
+      "__ieee754_sqrtf"
+    ],
+    "start_repair_locked": [],
+    "strchr": [],
+    "strcmp": [],
+    "strcpy": [],
+    "strlen": [],
+    "strncmp": [],
+    "strncpy": [],
+    "strspn": [],
+    "strstr": [],
+    "strtol": [],
+    "tcp_manager_ch_online": [],
+    "tcp_manager_reconnect": [
+      "ec800m_tcp_close.part.0",
+      "fota_is_active.lto_priv.0"
+    ],
+    "tcp_manager_session_generation": [],
+    "terminal_identity_sync": [
+      "cfg_store_candidate_result",
+      "ec800m_get_imei",
+      "exact_decimal_text",
+      "memcmp",
+      "memset"
+    ],
+    "transport_failure": [
+      "checkpoint_load",
+      "ec800m_tcp_close.part.0",
+      "http_reset"
+    ],
+    "trimmed_mean": [
+      "__adddf3",
+      "__aeabi_dcmpgt",
+      "__aeabi_dcmplt",
+      "__aeabi_ddiv",
+      "__aeabi_dsub",
+      "__aeabi_i2d"
+    ],
+    "uECC_secp256r1": [],
+    "uECC_verify": [
+      "XYcZ_add",
+      "apply_z",
+      "bits2int",
+      "uECC_vli_bytesToNative",
+      "uECC_vli_clear",
+      "uECC_vli_cmp_unsafe",
+      "uECC_vli_equal",
+      "uECC_vli_isZero",
+      "uECC_vli_modInv",
+      "uECC_vli_modMult",
+      "uECC_vli_modMult_fast",
+      "uECC_vli_modSub",
+      "uECC_vli_numBits",
+      "uECC_vli_set",
+      "uECC_vli_sub",
+      "uECC_vli_testBit"
+    ],
+    "uECC_vli_add": [],
+    "uECC_vli_bytesToNative": [
+      "uECC_vli_clear"
+    ],
+    "uECC_vli_clear": [],
+    "uECC_vli_cmp_unsafe": [],
+    "uECC_vli_equal": [],
+    "uECC_vli_isZero": [],
+    "uECC_vli_mmod": [
+      "uECC_vli_clear",
+      "uECC_vli_numBits",
+      "uECC_vli_rshift1",
+      "uECC_vli_set"
+    ],
+    "uECC_vli_modAdd": [
+      "uECC_vli_add",
+      "uECC_vli_cmp_unsafe"
+    ],
+    "uECC_vli_modInv": [
+      "uECC_vli_isZero"
+    ],
+    "uECC_vli_modInv.part.0": [
+      "uECC_vli_add",
+      "uECC_vli_clear",
+      "uECC_vli_cmp_unsafe",
+      "uECC_vli_rshift1",
+      "uECC_vli_set",
+      "uECC_vli_sub",
+      "vli_modInv_update"
+    ],
+    "uECC_vli_modMult": [
+      "uECC_vli_mmod",
+      "uECC_vli_mult"
+    ],
+    "uECC_vli_modMult_fast": [
+      "uECC_vli_mult"
+    ],
+    "uECC_vli_modSquare_fast": [],
+    "uECC_vli_modSub": [
+      "uECC_vli_sub"
+    ],
+    "uECC_vli_mult": [],
+    "uECC_vli_numBits": [],
+    "uECC_vli_rshift1": [],
+    "uECC_vli_set": [],
+    "uECC_vli_sub": [],
+    "uECC_vli_testBit": [],
+    "usart_send_buf": [],
+    "usart_send_str": [
+      "strlen"
+    ],
+    "valid": [
+      "crc32_compute",
+      "payload_valid"
+    ],
+    "valid_at_string_arg": [
+      "argument"
+    ],
+    "valid_frame": [],
+    "valid_suffix": [],
+    "verify_payload": [
+      "crc32_update",
+      "ext_flash_read",
+      "ext_flash_try_lock.part.0",
+      "ext_flash_unlock",
+      "memcmp",
+      "service_workspace_release.part.0",
+      "service_workspace_try_acquire",
+      "sha256_final",
+      "sha256_update"
+    ],
+    "vibration_hits_required": [],
+    "vli_mmod_fast_secp256r1": [
+      "uECC_vli_add",
+      "uECC_vli_cmp_unsafe",
+      "uECC_vli_set",
+      "uECC_vli_sub"
+    ],
+    "vli_modInv_update": [
+      "uECC_vli_add",
+      "uECC_vli_rshift1"
+    ],
+    "vsniprintf": [
+      "_vsniprintf_r"
+    ],
+    "work_mode_allocate_report_id": [],
+    "work_mode_config_changed": [
+      "set_deadlines"
+    ],
+    "work_mode_init": [
+      "enqueue_action",
+      "set_deadlines"
+    ],
+    "work_mode_next_action": [
+      "flush_pending_essentials",
+      "queued_action_is_stale"
+    ],
+    "work_mode_notify_alarm": [],
+    "work_mode_process": [
+      "__aeabi_d2iz",
+      "__aeabi_dmul",
+      "acc_report_settle",
+      "dbg_printf",
+      "enqueue_queued_action",
+      "gps_capture_last_trusted_snapshot.isra.0",
+      "gps_configure_output",
+      "gps_enable",
+      "gps_report_filter_copy.isra.0",
+      "gps_report_filter_reset",
+      "hw_acc_is_on",
+      "hw_acc_pin_high",
+      "i2c_accel_rearm_wake_interrupt",
+      "i2c_accel_vibration_hit",
+      "jt808_location_snapshot_valid",
+      "jt808_send_heartbeat",
+      "jt808_send_location_work_mode",
+      "mileage_force_save.isra.0",
+      "shallow_retained_clock_advance",
+      "vibration_hits_required",
+      "work_mode_next_action",
+      "work_mode_sleep_monotonic_s",
+      "work_mode_state_name",
+      "work_mode_step"
+    ],
+    "work_mode_set_stationary_location_enabled": [],
+    "work_mode_sleep_monotonic_s": [],
+    "work_mode_state_name": [],
+    "work_mode_step": [
+      "enqueue_action",
+      "enter_realtime",
+      "enter_stationary.isra.0",
+      "reset_vibration_episode",
+      "vibration_hits_required"
+    ],
+    "write_and_activate_locked": [
+      "crc32_compute",
+      "crc32_update",
+      "ext_flash_erase.constprop.0",
+      "ext_flash_read",
+      "ext_flash_write_result.constprop.0",
+      "ext_flash_write_verified",
+      "memcmp",
+      "memcpy",
+      "slot_probe_locked"
+    ],
+    "write_enable": [
+      "protected_status",
+      "read_status_command",
+      "refresh_status",
+      "xfer"
+    ],
+    "write_meta_locked": [
+      "crc32_compute",
+      "ext_flash_write_verified"
+    ],
+    "x_side_default": [
+      "memset",
+      "uECC_vli_modAdd",
+      "uECC_vli_modMult_fast",
+      "uECC_vli_modSquare_fast",
+      "uECC_vli_modSub"
+    ],
+    "xfer": [],
+    "xfer_tracked": []
+  },
+  "missing_frames": [
+    "ADC_IRQHandler",
+    "CopyDataInit",
+    "FillZerobss",
+    "LoopCopyDataInit",
+    "LoopFillZerobss",
+    "Reset_Handler",
+    "__adddf3",
+    "__aeabi_cdcmpeq",
+    "__aeabi_cdrcmple",
+    "__aeabi_d2f",
+    "__aeabi_d2iz",
+    "__aeabi_d2uiz",
+    "__aeabi_dcmpeq",
+    "__aeabi_dcmpge",
+    "__aeabi_dcmpgt",
+    "__aeabi_dcmple",
+    "__aeabi_dcmplt",
+    "__aeabi_dcmpun",
+    "__aeabi_ddiv",
+    "__aeabi_dmul",
+    "__aeabi_drsub",
+    "__aeabi_dsub",
+    "__aeabi_f2d",
+    "__aeabi_i2d",
+    "__aeabi_l2d",
+    "__aeabi_ui2d",
+    "__aeabi_ul2d",
+    "__cmpdf2",
+    "__do_global_dtors_aux",
+    "__errno",
+    "__gedf2",
+    "__ieee754_fmodf",
+    "__ieee754_sqrtf",
+    "__ledf2",
+    "__libc_init_array",
+    "__malloc_lock",
+    "__malloc_unlock",
+    "__retarget_lock_acquire_recursive",
+    "__retarget_lock_release_recursive",
+    "__ssputs_r",
+    "_fini",
+    "_free_r",
+    "_init",
+    "_malloc_r",
+    "_malloc_usable_size_r",
+    "_printf_common",
+    "_printf_i",
+    "_realloc_r",
+    "_sbrk_r",
+    "_strtol_l.isra.0",
+    "_svfiprintf_r",
+    "_vsniprintf_r",
+    "atoi",
+    "deregister_tm_clones",
+    "fmodf",
+    "frame_dummy",
+    "gpio_af_rx",
+    "memchr",
+    "memcmp",
+    "memcpy",
+    "memmove",
+    "memset",
+    "register_tm_clones",
+    "sbrk_aligned",
+    "sniprintf",
+    "sqrtf",
+    "strchr",
+    "strcmp",
+    "strcpy",
+    "strlen",
+    "strncmp",
+    "strncpy",
+    "strspn",
+    "strstr",
+    "strtol",
+    "vsniprintf"
+  ],
+  "indirect_transfers": [
+    {
+      "caller": "sms_send_complete",
+      "instruction": "800828c:\t4718      \tbx\tr3"
+    },
+    {
+      "caller": "enqueue_action",
+      "instruction": "800862a:\tf85d fb04 \tldr.w\tpc, [sp], #4"
+    },
+    {
+      "caller": "gpio_out_pp",
+      "instruction": "8008baa:\tf85d fb04 \tldr.w\tpc, [sp], #4"
+    },
+    {
+      "caller": "gpio_input",
+      "instruction": "8008bd2:\tf85d fb04 \tldr.w\tpc, [sp], #4"
+    },
+    {
+      "caller": "gpio_af_rx",
+      "instruction": "8008bf4:\tf85d fb04 \tldr.w\tpc, [sp], #4"
+    },
+    {
+      "caller": "sms_dispatch",
+      "instruction": "800a3ec:\t47b0      \tblx\tr6"
+    },
+    {
+      "caller": "relay_gpio_write",
+      "instruction": "800be5c:\tf85d fb04 \tldr.w\tpc, [sp], #4"
+    },
+    {
+      "caller": "dbg_printf",
+      "instruction": "800c2bc:\tf852 f023 \tldr.w\tpc, [r2, r3, lsl #2]"
+    },
+    {
+      "caller": "relay_log",
+      "instruction": "800d100:\tf85d fb04 \tldr.w\tpc, [sp], #4"
+    },
+    {
+      "caller": "jt808_send_heartbeat",
+      "instruction": "801244e:\tf85d fb04 \tldr.w\tpc, [sp], #4"
+    },
+    {
+      "caller": "send_get",
+      "instruction": "801358c:\tf85d fb04 \tldr.w\tpc, [sp], #4"
+    },
+    {
+      "caller": "agnss_process",
+      "instruction": "8013a26:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "agnss_process",
+      "instruction": "8013afe:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "ec800m_process",
+      "instruction": "801489c:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "ec800m_process",
+      "instruction": "8014902:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "query.constprop.0",
+      "instruction": "8016b74:\tf853 f022 \tldr.w\tpc, [r3, r2, lsl #2]"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "instruction": "8016fa8:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "instruction": "8017026:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "instruction": "8017038:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "instruction": "801707a:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "instruction": "80172e8:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "instruction": "8017328:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "instruction": "801733a:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "instruction": "801734c:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "instruction": "801736e:\t47c8      \tblx\tr9"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "instruction": "8017380:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "instruction": "8017392:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "instruction": "80173a4:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "instruction": "80173c2:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "at_config_process",
+      "instruction": "801792a:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "at_config_execute_text_command",
+      "instruction": "8017db0:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "at_config_execute_sms.isra.0",
+      "instruction": "8018a22:\t47c0      \tblx\tr8"
+    },
+    {
+      "caller": "at_config_execute_sms.isra.0",
+      "instruction": "8018a4e:\t47c0      \tblx\tr8"
+    },
+    {
+      "caller": "at_config_execute_sms.isra.0",
+      "instruction": "8018a6e:\t4790      \tblx\tr2"
+    },
+    {
+      "caller": "__aeabi_dcmpeq",
+      "instruction": "801a3e6:\tf85d fb08 \tldr.w\tpc, [sp], #8"
+    },
+    {
+      "caller": "__aeabi_dcmplt",
+      "instruction": "801a3fa:\tf85d fb08 \tldr.w\tpc, [sp], #8"
+    },
+    {
+      "caller": "__aeabi_dcmple",
+      "instruction": "801a40e:\tf85d fb08 \tldr.w\tpc, [sp], #8"
+    },
+    {
+      "caller": "__aeabi_dcmpge",
+      "instruction": "801a422:\tf85d fb08 \tldr.w\tpc, [sp], #8"
+    },
+    {
+      "caller": "__aeabi_dcmpgt",
+      "instruction": "801a436:\tf85d fb08 \tldr.w\tpc, [sp], #8"
+    },
+    {
+      "caller": "deregister_tm_clones",
+      "instruction": "801a5a4:\t4718      \tbx\tr3"
+    },
+    {
+      "caller": "register_tm_clones",
+      "instruction": "801a5c8:\t4718      \tbx\tr3"
+    },
+    {
+      "caller": "main",
+      "instruction": "801adfe:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "uECC_vli_modMult_fast",
+      "instruction": "801b70e:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "uECC_verify",
+      "instruction": "801bc1c:\t47b8      \tblx\tr7"
+    },
+    {
+      "caller": "__libc_init_array",
+      "instruction": "801be44:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "__libc_init_array",
+      "instruction": "801be4e:\t4798      \tblx\tr3"
+    },
+    {
+      "caller": "vsniprintf",
+      "instruction": "801c154:\tf85d fb04 \tldr.w\tpc, [sp], #4"
+    },
+    {
+      "caller": "_printf_common",
+      "instruction": "801c59c:\t47c8      \tblx\tr9"
+    },
+    {
+      "caller": "_printf_common",
+      "instruction": "801c5da:\t47c8      \tblx\tr9"
+    },
+    {
+      "caller": "_printf_common",
+      "instruction": "801c60c:\t47c8      \tblx\tr9"
+    },
+    {
+      "caller": "_printf_i",
+      "instruction": "801c656:\tf851 f023 \tldr.w\tpc, [r1, r3, lsl #2]"
+    },
+    {
+      "caller": "_printf_i",
+      "instruction": "801c81e:\t47c8      \tblx\tr9"
+    },
+    {
+      "caller": "_printf_i",
+      "instruction": "801c83e:\t47c8      \tblx\tr9"
+    }
+  ],
+  "tail_transfers": [
+    {
+      "caller": "xfer",
+      "target": "xfer_tracked"
+    },
+    {
+      "caller": "read_record_locked",
+      "target": "ext_flash_read"
+    },
+    {
+      "caller": "send_gnss",
+      "target": "gps_send_raw"
+    },
+    {
+      "caller": "send_frame.lto_priv.1",
+      "target": "gps_send_raw"
+    },
+    {
+      "caller": "enter_realtime",
+      "target": "enqueue_action"
+    },
+    {
+      "caller": "work_mode_init",
+      "target": "enter_realtime"
+    },
+    {
+      "caller": "work_mode_init",
+      "target": "enqueue_action"
+    },
+    {
+      "caller": "work_mode_config_changed",
+      "target": "work_mode_set_stationary_location_enabled"
+    },
+    {
+      "caller": "f39_timer_refresh",
+      "target": "work_mode_config_changed"
+    },
+    {
+      "caller": "gps_enable",
+      "target": "delay_ms"
+    },
+    {
+      "caller": "slot_load_locked.constprop.0",
+      "target": "ext_flash_read"
+    },
+    {
+      "caller": "ec800m_identity_ready",
+      "target": "identity_ready.constprop.0"
+    },
+    {
+      "caller": "i2c_accel_rearm_wake_interrupt",
+      "target": "i2c_write_reg"
+    },
+    {
+      "caller": "setup_wake_exti",
+      "target": "NVIC_Init.part.0.constprop.0.isra.0"
+    },
+    {
+      "caller": "enter_stationary.isra.0",
+      "target": "enqueue_action"
+    },
+    {
+      "caller": "work_mode_step",
+      "target": "flush_pending_essentials"
+    },
+    {
+      "caller": "jt808_set_server",
+      "target": "jt808_set_server.part.0"
+    },
+    {
+      "caller": "gps_report_filter_reset",
+      "target": "memset"
+    },
+    {
+      "caller": "jt808_reset_endpoint_auth",
+      "target": "jt808_session_init.part.0"
+    },
+    {
+      "caller": "f39_jt808_auth_reset",
+      "target": "jt808_reset_endpoint_auth"
+    },
+    {
+      "caller": "commit_meta_locked",
+      "target": "write_meta_locked"
+    },
+    {
+      "caller": "finish_maintenance_locked.isra.0",
+      "target": "saturating_increment"
+    },
+    {
+      "caller": "finish_maintenance_locked.isra.0",
+      "target": "begin_reconcile"
+    },
+    {
+      "caller": "finish_maintenance_locked.isra.0",
+      "target": "quarantine_missing_head_locked"
+    },
+    {
+      "caller": "finish_maintenance_locked.isra.0",
+      "target": "start_repair_locked"
+    },
+    {
+      "caller": "finish_current_run",
+      "target": "memset"
+    },
+    {
+      "caller": "hw_gpio_init",
+      "target": "gpio_input"
+    },
+    {
+      "caller": "gps_report_filter_process",
+      "target": "invalidate_evidence"
+    },
+    {
+      "caller": "gps_report_filter_process",
+      "target": "clear_candidate"
+    },
+    {
+      "caller": "usart_send_str",
+      "target": "usart_send_buf"
+    },
+    {
+      "caller": "f39_gnss_mode",
+      "target": "gps_tx_write"
+    },
+    {
+      "caller": "scan_alarms",
+      "target": "work_mode_notify_alarm"
+    },
+    {
+      "caller": "qird_note_ring_level",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "gps_configure_output",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "f39_schedule_reply_retry",
+      "target": "f39_clear_reply_transaction"
+    },
+    {
+      "caller": "f39_sms_result",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "f39_sms_result",
+      "target": "f39_clear_reply_transaction"
+    },
+    {
+      "caller": "f39_sms_result",
+      "target": "f39_default_reset"
+    },
+    {
+      "caller": "spi_flash_init",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "i2c_accel_init",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "i2c_accel_init",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "relay_set",
+      "target": "relay_log"
+    },
+    {
+      "caller": "fota_init",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "blind_zone_recovery_process.part.0",
+      "target": "ext_flash_unlock"
+    },
+    {
+      "caller": "cfg_init",
+      "target": "ext_flash_unlock"
+    },
+    {
+      "caller": "mileage_flush_at.isra.0",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "mileage_force_save.isra.0",
+      "target": "mileage_flush_at.isra.0"
+    },
+    {
+      "caller": "adc_monitor_process",
+      "target": "jt808_trigger_alarm"
+    },
+    {
+      "caller": "fota_confirm_trial_process",
+      "target": "ext_flash_unlock"
+    },
+    {
+      "caller": "ec800m_at_response_end.constprop.0",
+      "target": "ec800m_at_response_has_line.part.0.constprop.0"
+    },
+    {
+      "caller": "f39_default_sms_send",
+      "target": "ec800m_sms_send"
+    },
+    {
+      "caller": "ec800m_power_on",
+      "target": "delay_ms"
+    },
+    {
+      "caller": "ec800m_init",
+      "target": "ec800m_power_on"
+    },
+    {
+      "caller": "process_urc",
+      "target": "defer_urc"
+    },
+    {
+      "caller": "process_rx_line",
+      "target": "defer_urc"
+    },
+    {
+      "caller": "process_rx_line",
+      "target": "process_urc"
+    },
+    {
+      "caller": "qird_report_desync",
+      "target": "ec800m_tcp_close.part.0"
+    },
+    {
+      "caller": "finish_check",
+      "target": "ec800m_tcp_close.part.0"
+    },
+    {
+      "caller": "begin_check",
+      "target": "fota_diag_block"
+    },
+    {
+      "caller": "fail_download",
+      "target": "ec800m_tcp_close.part.0"
+    },
+    {
+      "caller": "finish",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "agnss_init",
+      "target": "ext_flash_unlock"
+    },
+    {
+      "caller": "f39_remaining_refresh",
+      "target": "agnss_init"
+    },
+    {
+      "caller": "f39_network_reconnect",
+      "target": "tcp_manager_reconnect"
+    },
+    {
+      "caller": "ntp_resync_process",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "ch_process",
+      "target": "ch_on_fail"
+    },
+    {
+      "caller": "ch_process",
+      "target": "ch_start_connect"
+    },
+    {
+      "caller": "send_frame_channel",
+      "target": "ec800m_tcp_send"
+    },
+    {
+      "caller": "acc_report_settle",
+      "target": "jt808_send_location_work_mode"
+    },
+    {
+      "caller": "blind_zone_replay_process",
+      "target": "saturating_increment"
+    },
+    {
+      "caller": "blind_zone_replay_process",
+      "target": "ext_flash_unlock"
+    },
+    {
+      "caller": "jt808_send_general_resp.isra.0",
+      "target": "jt808_send_general_resp_to.isra.0"
+    },
+    {
+      "caller": "jt808_send_auth_to.isra.0",
+      "target": "jt808_session_mark_send_failed"
+    },
+    {
+      "caller": "jt808_send_auth_to.isra.0",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "agnss_process",
+      "target": "finish"
+    },
+    {
+      "caller": "log_platform_process",
+      "target": "service_workspace_release.part.0"
+    },
+    {
+      "caller": "ec800m_process",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "transport_failure",
+      "target": "finish_check"
+    },
+    {
+      "caller": "transport_failure",
+      "target": "fail_download"
+    },
+    {
+      "caller": "transport_failure",
+      "target": "schedule_tail_cleanup"
+    },
+    {
+      "caller": "fota_ec800m_rx",
+      "target": "fota_on_chunk.part.0"
+    },
+    {
+      "caller": "failure.isra.0",
+      "target": "reply_append"
+    },
+    {
+      "caller": "f39_execute.constprop.0",
+      "target": "query.constprop.0"
+    },
+    {
+      "caller": "handle_text_message",
+      "target": "at_config_execute_text_command"
+    },
+    {
+      "caller": "process_frame",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "process_frame",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "process_frame",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "process_frame",
+      "target": "jt808_session_reject_or_timeout"
+    },
+    {
+      "caller": "process_frame",
+      "target": "jt808_send_general_resp.isra.0"
+    },
+    {
+      "caller": "process_frame",
+      "target": "service_workspace_release.part.0"
+    },
+    {
+      "caller": "process_frame",
+      "target": "jt808_send_general_resp_to.isra.0"
+    },
+    {
+      "caller": "sms_command_execute",
+      "target": "at_config_execute_sms.isra.0"
+    },
+    {
+      "caller": "fota_process",
+      "target": "begin_check"
+    },
+    {
+      "caller": "fota_process",
+      "target": "transport_failure"
+    },
+    {
+      "caller": "fota_process",
+      "target": "finish_check"
+    },
+    {
+      "caller": "fota_process",
+      "target": "schedule_tail_cleanup"
+    },
+    {
+      "caller": "fota_process",
+      "target": "fail_download"
+    },
+    {
+      "caller": "fota_process",
+      "target": "dbg_printf"
+    },
+    {
+      "caller": "HardFault_Handler",
+      "target": "hardfault_capture"
+    },
+    {
+      "caller": "USART1_IRQHandler",
+      "target": "at_config_feed"
+    },
+    {
+      "caller": "__aeabi_drsub",
+      "target": "__adddf3"
+    },
+    {
+      "caller": "__aeabi_ui2d",
+      "target": "__adddf3+0x138"
+    },
+    {
+      "caller": "__aeabi_i2d",
+      "target": "__adddf3+0x138"
+    },
+    {
+      "caller": "__aeabi_f2d",
+      "target": "__adddf3+0x138"
+    },
+    {
+      "caller": "__aeabi_ul2d",
+      "target": "__aeabi_l2d+0x16"
+    },
+    {
+      "caller": "__aeabi_l2d",
+      "target": "__adddf3+0xe6"
+    },
+    {
+      "caller": "__aeabi_l2d",
+      "target": "__adddf3+0xe6"
+    },
+    {
+      "caller": "__aeabi_ddiv",
+      "target": "__aeabi_dmul+0xde"
+    },
+    {
+      "caller": "__aeabi_ddiv",
+      "target": "__aeabi_dmul+0xde"
+    },
+    {
+      "caller": "__aeabi_ddiv",
+      "target": "__aeabi_dmul+0xde"
+    },
+    {
+      "caller": "__aeabi_ddiv",
+      "target": "__aeabi_dmul+0x24a"
+    },
+    {
+      "caller": "__aeabi_ddiv",
+      "target": "__aeabi_dmul+0x24a"
+    },
+    {
+      "caller": "__aeabi_ddiv",
+      "target": "__aeabi_dmul+0x234"
+    },
+    {
+      "caller": "__aeabi_ddiv",
+      "target": "__aeabi_dmul+0x24a"
+    },
+    {
+      "caller": "__aeabi_ddiv",
+      "target": "__aeabi_dmul+0x1f8"
+    },
+    {
+      "caller": "__aeabi_ddiv",
+      "target": "__aeabi_dmul+0x24a"
+    },
+    {
+      "caller": "__aeabi_ddiv",
+      "target": "__aeabi_dmul+0x19c"
+    },
+    {
+      "caller": "__aeabi_ddiv",
+      "target": "__aeabi_dmul+0x234"
+    },
+    {
+      "caller": "__aeabi_ddiv",
+      "target": "__aeabi_dmul+0x1f8"
+    },
+    {
+      "caller": "__aeabi_ddiv",
+      "target": "__aeabi_dmul+0x24a"
+    },
+    {
+      "caller": "__gedf2",
+      "target": "__cmpdf2+0x4"
+    },
+    {
+      "caller": "__ledf2",
+      "target": "__cmpdf2+0x4"
+    },
+    {
+      "caller": "__aeabi_cdrcmple",
+      "target": "__aeabi_cdcmpeq"
+    },
+    {
+      "caller": "frame_dummy",
+      "target": "register_tm_clones"
+    },
+    {
+      "caller": "uECC_vli_modAdd",
+      "target": "uECC_vli_sub"
+    },
+    {
+      "caller": "bits2int",
+      "target": "uECC_vli_sub"
+    },
+    {
+      "caller": "uECC_vli_modSub",
+      "target": "uECC_vli_add"
+    },
+    {
+      "caller": "uECC_vli_modInv",
+      "target": "uECC_vli_clear"
+    },
+    {
+      "caller": "uECC_vli_modInv",
+      "target": "uECC_vli_modInv.part.0"
+    },
+    {
+      "caller": "uECC_vli_modSquare_fast",
+      "target": "uECC_vli_modMult_fast"
+    },
+    {
+      "caller": "Reset_Handler",
+      "target": "LoopCopyDataInit"
+    },
+    {
+      "caller": "LoopCopyDataInit",
+      "target": "CopyDataInit"
+    },
+    {
+      "caller": "LoopCopyDataInit",
+      "target": "LoopFillZerobss"
+    },
+    {
+      "caller": "LoopFillZerobss",
+      "target": "FillZerobss"
+    },
+    {
+      "caller": "atoi",
+      "target": "strtol"
+    },
+    {
+      "caller": "strtol",
+      "target": "_strtol_l.isra.0"
+    },
+    {
+      "caller": "_free_r",
+      "target": "__malloc_unlock"
+    },
+    {
+      "caller": "__malloc_lock",
+      "target": "__retarget_lock_acquire_recursive"
+    },
+    {
+      "caller": "__malloc_unlock",
+      "target": "__retarget_lock_release_recursive"
+    },
+    {
+      "caller": "_realloc_r",
+      "target": "_malloc_r"
+    }
+  ],
+  "cycles": [
+    "LoopFillZerobss -> main -> agnss_init -> finish -> ec800m_tcp_close.part.0 -> at_send_wait -> process_deferred_urc_one -> process_urc -> at_send_wait"
+  ],
+  "complete": false,
+  "elf_sha256": "8b91b0fa63b5e5cac9dc7a19846a6f99aadcf007d36cf567d1e1f062c3135e05",
+  "map_sha256": "8c77f1ffb3226f60826378efafe2b126ae66e1b6effdbb601f713b383625e185",
+  "evidence_sha256": "010cd7bf60e3f95a6091b9e6e437afb8653a662395c29323dad9f3bc4d56f76a",
+  "known_main_frame_sum": 2408,
+  "runtime_gaps": [
+    "heap peak/hard bound is unverified (RAM-02)",
+    "IRQ nesting, hardware/FPU/alignment and fault frames are unverified",
+    "cold-start and stress HIL stack watermarks are unverified"
+  ],
+  "error": "no proven whole-program stack/heap/exception bound"
+}

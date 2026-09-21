@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "elf_sha256": "b246a1a89fcf2e4dad2cdebf1b65ca024367fea1f7220949f6c7b793d114621d",
+  "map_sha256": "a3c475a49ad24521f19b4f26ff6def7f536bbc7b91f782c4d9db99e49d120f5a",
+  "reports": [
+    {
+      "path": "a300_firmware.elf.ltrans0.ltrans.su",
+      "sha256": "25288023973e4ee61d72b060a7b7ed69bc0066e3fcc5149b4816d87adcaa200e"
+    },
+    {
+      "path": "src/firmware_signature.su",
+      "sha256": "3ba4ceab972d2904f3e7d0dcd13bbb5dcc511926459289c59d661d55b2d1ad05"
+    },
+    {
+      "path": "third_party/micro-ecc/uECC.su",
+      "sha256": "ddb7c3ec1567aa953c039f37591e0cf57900f31049ecd351155890d498f63f42"
+    }
+  ]
+}

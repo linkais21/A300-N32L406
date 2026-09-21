@@ -1,0 +1,250 @@
+[
+  {
+    "name": "log_platform_wire",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_log_platform_wire.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "log_platform_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_log_platform_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "build_version_refresh",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_build_version_refresh.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "gps_report_filter",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_report_filter.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "gps_report_wire",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_report_wire.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "gps_ntp_apply",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_gps_ntp_apply.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "jt808_dual_session",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_dual_session.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "jt808_first_location",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_first_location.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "jt808_params_wire",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_jt808_params_wire.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "blind_zone_replay",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_blind_zone_replay.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "acc_stop1_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_acc_stop1_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "terminal_identity",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_terminal_identity.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "release_identity_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_release_identity_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "ec800m_identity_recovery",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ec800m_identity_recovery.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "ec800m_urc_demux",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ec800m_urc_demux.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "ec800m_ntp_sync",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ec800m_ntp_sync.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "ec800m_udp_async_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_ec800m_udp_async_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "stop1_rtc_wakeup_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_stop1_rtc_wakeup_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "size_trial",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_size_trial.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "dev_release_manifest",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_dev_release_manifest.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "flash_config_v3",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_flash_config_v3.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "f39_end_to_end",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_f39_end_to_end.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "fota_active",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_active.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "fota_stack_guard",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_fota_stack_guard.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "feature_guards",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_feature_guards.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "bootloader_factory_init",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_factory_init.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "bootloader_platform_contract",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_bootloader_platform_contract.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "boot_bcr_device_gate",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_bcr_device_gate.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "boot_cold_start_recovery",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_boot_cold_start_recovery.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "internal_flash_layout",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_internal_flash_layout.py"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "flash_combined_script",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "tools/tests/test_flash_combined_script.py"
+    ],
+    "exit_code": 0
+  }
+]

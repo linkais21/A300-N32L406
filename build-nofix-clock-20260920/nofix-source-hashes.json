@@ -1,0 +1,12 @@
+{
+  "src/gps.c": "da48e909f5a01488b8b357a540f5ae0783c10a967c8451e374705fb375f4203c",
+  "src/main.c": "9ef81d94abea20f8bd79000169876782826b1d82d2d033526e8534e68e942e90",
+  "include/gps.h": "67898505d7dd884a707772a4fa831f6025772c86758e18644771062bc9380b33",
+  "include/config.h": "ee14a36358cc37567f1878d0256f1cf399561a92e149f89f29ee91fd05e11769",
+  "include/build_version.h": "6c8f46448093da399e2e808cafa0eb94a9f3be9c7656d357bce85637735e6ff2",
+  "release_identity.json": "8ab3a48a6b58c1b3f5a1247bbb96303555d8ad3ca4a768035cec6a1fb7c9a589",
+  "tools/tests/test_gps_retained_clock.py": "01f4c1b0d9176e3638a17249ce982d35cdaf60a996cbfe2f379e9f225399ff09",
+  "tools/tests/test_jt808_nofix_clock.py": "fb23d49af978a719158cbd303e9ef10bfa0c8836bd92c03634d64e518c30fd87",
+  "tools/tests/test_shallow_sleep_contract.py": "905a18d071bfeb598502bf99aab95173b4351469d219da15de5a709785a61b8b",
+  "tools/tests/test_acc_bounce_hardening.py": "296ceaac5b6c5b5519a157591897662711876bd814e633f4d3e0779f6511cb1f"
+}
