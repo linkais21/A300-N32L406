@@ -29,6 +29,14 @@ __attribute__((weak)) void work_mode_config_changed(const device_config_t *cfg,
 #include "peripherals.h"
 #include <string.h>
 
+#ifdef A300_FIRMWARE_IMAGE
+#include "f39_production_bindings.h"
+#include "at_config_production_callbacks.h"
+#define F39_BINDING_VIS
+#else
+#define F39_BINDING_VIS static
+#endif
+
 #define CMD_BUF_SIZE  128
 #define ARG_MAX        8
 #define F39_SMS_MAX_RETRIES 2U
@@ -43,8 +51,10 @@ static bool    s_cmd_ready = false;
 static bool    s_cmd_discard = false;
 
 static f39_platform_t s_f39_platform;
+#ifndef A300_FIRMWARE_IMAGE
 static at_config_sms_send_fn s_sms_send;
 static at_config_reset_fn s_schedule_reset;
+#endif
 static bool s_f39_bound;
 static bool s_f39_uses_defaults;
 static volatile bool s_reset_pending;
@@ -63,10 +73,21 @@ static bool s_retry_in_flight;
 static bool f39_execute_console(const char *line);
 static void f39_refresh_live_snapshot(void);
 
-static bool f39_persist(const device_config_t *candidate, void *context) { (void)context; return cfg_store_candidate(candidate); }
-static void f39_timer_refresh(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_heartbeat_s(c->heartbeat_s); jt808_set_report_interval(c->report_moving_s, c->report_stopped_s); work_mode_config_changed(c, work_mode_sleep_monotonic_s()); }
-static void f39_network_reconnect(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_server(c->server_ip, c->server_port, false); jt808_set_server(c->backup_ip, c->backup_port, true); tcp_manager_reconnect(); }
-static void f39_jt808_auth_reset(uint8_t channel_mask, void *context)
+F39_BINDING_VIS bool f39_production_persist(const device_config_t *candidate, void *context) { (void)context; return cfg_store_candidate(candidate); }
+F39_BINDING_VIS void f39_production_timer_refresh(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_heartbeat_s(c->heartbeat_s); jt808_set_report_interval(c->report_moving_s, c->report_stopped_s); work_mode_config_changed(c, work_mode_sleep_monotonic_s()); }
+static uint8_t s_f39_reconnect_channels;
+F39_BINDING_VIS void f39_production_network_reconnect(void *context)
+{
+    const device_config_t *c = cfg_get();
+    (void)context;
+    jt808_set_server(c->server_ip, c->server_port, false);
+    jt808_set_server(c->backup_ip, c->backup_port, true);
+    /* Endpoint effects set this mask before invoking network_reconnect. */
+    if (s_f39_reconnect_channels != 0U)
+        tcp_manager_reconnect_channels(s_f39_reconnect_channels);
+    s_f39_reconnect_channels = 0U;
+}
+F39_BINDING_VIS void f39_production_jt808_auth_reset(uint8_t channel_mask, void *context)
 {
     uint8_t jt808_mask = 0U;
     (void)context;
@@ -75,21 +96,25 @@ static void f39_jt808_auth_reset(uint8_t channel_mask, void *context)
     if ((channel_mask & F39_AUTH_CHANNEL_BACKUP) != 0U)
         jt808_mask |= JT808_ENDPOINT_BACKUP_MASK;
     jt808_reset_endpoint_auth(jt808_mask);
+    if ((channel_mask & F39_AUTH_CHANNEL_MAIN) != 0U)
+        s_f39_reconnect_channels |= (1U << TCP_CH_MAIN);
+    if ((channel_mask & F39_AUTH_CHANNEL_BACKUP) != 0U)
+        s_f39_reconnect_channels |= (1U << TCP_CH_BACKUP);
 }
-static void f39_modem_pdp_restart(void *context) { (void)context; tcp_manager_reconnect(); ec800m_restart_pdp(); }
-static void f39_gnss_mode(gnss_type_t type, uint8_t mode, void *context)
+F39_BINDING_VIS void f39_production_modem_pdp_restart(void *context) { (void)context; tcp_manager_reconnect(); ec800m_restart_pdp(); }
+F39_BINDING_VIS void f39_production_gnss_set_mode(gnss_type_t type, uint8_t mode, void *context)
 {
     static const char *const commands[] = { NULL, "$PCAS04,1*18\r\n", "$PCAS04,2*1B\r\n", "$PCAS04,7*1E\r\n" };
     (void)context; gnss_vendor_set_type(type);
     if (mode >= 1U && mode <= 3U) gps_send_cmd(commands[mode]);
 }
-static void f39_jt808_reregister(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_terminal_profile(c->terminal_model, c->plate_no); jt808_request_reregister(); }
-static void f39_remaining_refresh(void *context) { (void)context; agnss_init(cfg_get()->gnss_type); }
-static void f39_fota_recheck(void *context) { (void)context; (void)fota_request_check(); }
-static bool f39_relay(bool cut, void *context) { (void)context; if (cut && relay_test_remaining() != 0U) return false; relay_set(cut); return true; }
-static bool f39_gps_valid(void *context) { (void)context; return gps_is_valid(); }
-static float f39_gps_speed(void *context) { (void)context; return gps_get_data()->speed_kmh; }
-static bool f39_relay_get(void *context) { (void)context; return relay_get(); }
+F39_BINDING_VIS void f39_production_jt808_reregister(void *context) { const device_config_t *c = cfg_get(); (void)context; jt808_set_terminal_profile(c->terminal_model, c->plate_no); jt808_request_reregister(); }
+F39_BINDING_VIS void f39_production_remaining_refresh(void *context) { (void)context; agnss_init(cfg_get()->gnss_type); }
+F39_BINDING_VIS void f39_production_fota_recheck(void *context) { (void)context; (void)fota_request_check(); }
+F39_BINDING_VIS bool f39_production_relay_set(bool cut, void *context) { (void)context; if (cut && relay_test_remaining() != 0U) return false; relay_set(cut); return true; }
+F39_BINDING_VIS bool f39_production_gps_valid(void *context) { (void)context; return gps_is_valid(); }
+F39_BINDING_VIS float f39_production_gps_speed_kmh(void *context) { (void)context; return gps_get_data()->speed_kmh; }
+F39_BINDING_VIS bool f39_production_relay_get(void *context) { (void)context; return relay_get(); }
 static void f39_default_reset(uint32_t delay_ms, void *context)
 {
     (void)context;
@@ -124,7 +149,7 @@ static void f39_schedule_reply_retry(void)
     s_retry_due_ms = TICK_MS() + 1000U;
 }
 
-static void f39_sms_result(bool success)
+F39_BINDING_VIS void f39_sms_result(bool success)
 {
     uint32_t reset_delay;
     bool reset_after_send;
@@ -152,16 +177,19 @@ static void f39_bind_defaults(void)
 {
     if (s_f39_bound) return;
     memset(&s_f39_platform, 0, sizeof s_f39_platform);
-    s_f39_platform.config = cfg_get(); s_f39_platform.persist = f39_persist;
-    s_f39_platform.timer_refresh = f39_timer_refresh; s_f39_platform.network_reconnect = f39_network_reconnect; s_f39_platform.jt808_auth_reset = f39_jt808_auth_reset;
-    s_f39_platform.modem_pdp_restart = f39_modem_pdp_restart;
-    s_f39_platform.gnss_set_mode = f39_gnss_mode; s_f39_platform.jt808_reregister = f39_jt808_reregister;
-    s_f39_platform.remaining_refresh = f39_remaining_refresh; s_f39_platform.relay_set = f39_relay;
-    s_f39_platform.fota_recheck = f39_fota_recheck;
-    s_f39_platform.gps_valid = f39_gps_valid; s_f39_platform.gps_speed_kmh = f39_gps_speed; s_f39_platform.relay_get = f39_relay_get;
+    s_f39_platform.config = cfg_get(); s_f39_platform.persist = f39_production_persist;
+    s_f39_platform.timer_refresh = f39_production_timer_refresh; s_f39_platform.network_reconnect = f39_production_network_reconnect; s_f39_platform.jt808_auth_reset = f39_production_jt808_auth_reset;
+    s_f39_platform.modem_pdp_restart = f39_production_modem_pdp_restart;
+    s_f39_platform.gnss_set_mode = f39_production_gnss_set_mode; s_f39_platform.jt808_reregister = f39_production_jt808_reregister;
+    s_f39_platform.remaining_refresh = f39_production_remaining_refresh; s_f39_platform.relay_set = f39_production_relay_set;
+    s_f39_platform.fota_recheck = f39_production_fota_recheck;
+    s_f39_platform.gps_valid = f39_production_gps_valid; s_f39_platform.gps_speed_kmh = f39_production_gps_speed_kmh; s_f39_platform.relay_get = f39_production_relay_get;
     s_f39_platform.version = FW_VERSION_STR; s_f39_platform.version_len = (uint16_t)strlen(FW_VERSION_STR);
     f39_refresh_live_snapshot();
-    s_sms_send = f39_default_sms_send; s_schedule_reset = f39_default_reset; sms_set_send_result_cb(f39_sms_result); s_f39_bound = true; s_f39_uses_defaults = true;
+#ifndef A300_FIRMWARE_IMAGE
+    s_sms_send = f39_default_sms_send; s_schedule_reset = f39_default_reset;
+#endif
+    sms_set_send_result_cb(f39_sms_result); s_f39_bound = true; s_f39_uses_defaults = true;
 }
 
 /* ── Feed bytes from serial ───────────────────────────────────────────────── */
@@ -378,6 +406,7 @@ void __attribute__((noinline)) at_config_process(void)
     handle_cmd(local);
 }
 
+#ifndef A300_FIRMWARE_IMAGE
 void at_config_bind_f39(f39_platform_t *platform, at_config_sms_send_fn send,
                         at_config_reset_fn schedule_reset, void *context)
 {
@@ -392,6 +421,7 @@ void at_config_bind_f39(f39_platform_t *platform, at_config_sms_send_fn send,
     s_f39_bound = true;
     s_f39_uses_defaults = false;
 }
+#endif
 
 static void f39_refresh_live_snapshot(void)
 {
@@ -457,8 +487,14 @@ static bool f39_execute_console(const char *line)
      * it as a plain string rather than passing a length it would not consume. */
     reply.data[reply.len] = '\0';
     dbg_printf("%s", (const char *)reply.data);
-    if (reply.reset_pending && s_schedule_reset != NULL)
-        s_schedule_reset(reply.reset_delay_ms, s_f39_platform.context);
+    if (reply.reset_pending) {
+#ifdef A300_FIRMWARE_IMAGE
+        f39_default_reset(reply.reset_delay_ms, s_f39_platform.context);
+#else
+        if (s_schedule_reset != NULL)
+            s_schedule_reset(reply.reset_delay_ms, s_f39_platform.context);
+#endif
+    }
     return true;
 }
 
@@ -483,21 +519,45 @@ bool at_config_execute_text_response(const uint8_t *text, uint16_t len,
     uint32_t effects = F39_EFFECT_NONE;
     bool success = false;
 
+#ifdef A300_FIRMWARE_IMAGE
+    if ((ack != NULL && ack != cfg_query_ack && ack != jt808_text_command_ack) ||
+        (reply_fn != NULL && (ack != jt808_text_command_ack ||
+                              reply_fn != jt808_text_command_reply)))
+        return false;
+#endif
     if (!s_f39_bound) f39_bind_defaults();
     if (!text || !s_f39_bound ||
         f39_parse(text, len, &request) != F39_RESULT_OK) {
+#ifdef A300_FIRMWARE_IMAGE
+        if (ack == cfg_query_ack) cfg_query_ack(false, context);
+        else if (ack == jt808_text_command_ack) jt808_text_command_ack(false, context);
+#else
         if (ack != NULL) ack(false, context);
+#endif
         return false;
     }
     if (s_f39_uses_defaults) f39_refresh_live_snapshot();
     success = f39_execute_deferred(&request, &s_f39_platform, &reply, &effects) == F39_RESULT_OK;
+#ifdef A300_FIRMWARE_IMAGE
+    if (ack == cfg_query_ack) cfg_query_ack(success, context);
+    else if (ack == jt808_text_command_ack) jt808_text_command_ack(success, context);
+    if (reply_fn == jt808_text_command_reply && reply.len != 0U)
+        jt808_text_command_reply(reply.data, reply.len, context);
+#else
     if (ack != NULL) ack(success, context);
     if (reply_fn != NULL && reply.len != 0U) reply_fn(reply.data, reply.len, context);
+#endif
     /* Persistence is already committed. Even a failed transport handoff must
      * not leave runtime configuration stale or wait indefinitely for an ACK. */
     if (effects != F39_EFFECT_NONE) f39_apply_effects(effects, &s_f39_platform);
-    if (success && reply.reset_pending && s_schedule_reset != NULL)
-        s_schedule_reset(reply.reset_delay_ms, s_f39_platform.context);
+    if (success && reply.reset_pending) {
+#ifdef A300_FIRMWARE_IMAGE
+        f39_default_reset(reply.reset_delay_ms, s_f39_platform.context);
+#else
+        if (s_schedule_reset != NULL)
+            s_schedule_reset(reply.reset_delay_ms, s_f39_platform.context);
+#endif
+    }
     return success;
 }
 
@@ -531,7 +591,11 @@ bool at_config_execute_sms(const char *sender, const uint8_t *text, uint16_t len
         s_reset_waiting_handoff = (result == F39_RESULT_OK && reply.reset_pending);
         s_reset_handoff_delay_ms = s_reset_waiting_handoff ? reply.reset_delay_ms : 0U;
     }
+#ifdef A300_FIRMWARE_IMAGE
+    if (f39_default_sms_send(sender, (const char *)reply.data, s_f39_platform.context) != 0) {
+#else
     if (s_sms_send(sender, (const char *)reply.data, s_f39_platform.context) != 0) {
+#endif
         if (default_send) {
             s_retry_in_flight = false;
             f39_schedule_reply_retry();
@@ -539,8 +603,10 @@ bool at_config_execute_sms(const char *sender, const uint8_t *text, uint16_t len
         dbg_printf("[SMS] reply handoff failed for %s\r\n", sender);
         return default_send;
     }
+#ifndef A300_FIRMWARE_IMAGE
     if (!default_send && result == F39_RESULT_OK && reply.reset_pending)
         s_schedule_reset(reply.reset_delay_ms, s_f39_platform.context);
+#endif
     return true;
 }
 

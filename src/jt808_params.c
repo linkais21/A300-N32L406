@@ -5,6 +5,7 @@
 #include "jt808_terminal_info.h"
 #include "service_workspace.h"
 #include "tcp_manager.h"
+#include "config.h"
 #include "ec800m.h"
 #include "work_mode.h"
 #include "work_mode_sleep.h"
@@ -121,8 +122,8 @@ static bool apply_param(device_config_t *c, const param_t *p, const uint8_t *v, 
 
 void jt808_params_handle_set(const uint8_t *body, uint16_t len, uint16_t sn)
 {
-    uint8_t result = 2U, reset_mask = 0U;
-    bool changed = false, acquired = false, network_changed = false, apn_changed = false;
+    uint8_t result = 2U, reset_mask = 0U, network_mask = 0U;
+    bool changed = false, acquired = false, apn_changed = false;
     uint16_t pos = 1U;
     uint32_t seen = 0U;
     device_config_t *c;
@@ -155,7 +156,7 @@ void jt808_params_handle_set(const uint8_t *body, uint16_t len, uint16_t sn)
         reset_mask |= JT808_ENDPOINT_MAIN_MASK;
     if (strcmp(c->backup_ip, old->backup_ip) != 0 || c->backup_port != old->backup_port)
         reset_mask |= JT808_ENDPOINT_BACKUP_MASK;
-    network_changed = reset_mask != 0U;
+    network_mask = reset_mask;
     if (memcmp(c->province_be, old->province_be, 2U) != 0 || memcmp(c->city_be, old->city_be, 2U) != 0 ||
         c->plate_color != old->plate_color || c->plate_color_valid != old->plate_color_valid ||
         strcmp(c->plate_no, old->plate_no) != 0)
@@ -176,11 +177,16 @@ done:
         work_mode_config_changed(live, work_mode_sleep_monotonic_s());
         jt808_set_terminal_profile(live->terminal_model, live->plate_no);
         if (reset_mask != 0U) jt808_reset_endpoint_auth(reset_mask);
-        if (network_changed || apn_changed) {
-            jt808_set_server(live->server_ip, live->server_port, false);
-            jt808_set_server(live->backup_ip, live->backup_port, true);
+        if (apn_changed) {
             tcp_manager_request_reconnect();
-            if (apn_changed) ec800m_restart_pdp();
+            ec800m_restart_pdp();
+        } else if (network_mask != 0U) {
+            /* The committed config is already the connection manager's source.
+             * Keep the unaffected endpoint online, including during OTA deferral. */
+            uint8_t channels = 0U;
+            if (network_mask & JT808_ENDPOINT_MAIN_MASK) channels |= 1U << TCP_CH_MAIN;
+            if (network_mask & JT808_ENDPOINT_BACKUP_MASK) channels |= 1U << TCP_CH_BACKUP;
+            tcp_manager_reconnect_channels(channels);
         }
     }
     dbg_printf("[808] 0x8103 result=%u\r\n", result);

@@ -1,0 +1,23 @@
+{
+  "purpose": "DEDICATED_DEVICE_AGNSS_RAWTRACE_HIL_ONLY",
+  "firmware_version": "T360-A300_406_20260930154352,V3.080",
+  "version_counter": 3080,
+  "mcu": "N32L406CBL7",
+  "app_origin": "0x08006000",
+  "app_limit_bytes": 106496,
+  "app_used_bytes": 106276,
+  "app_remaining_bytes": 220,
+  "release_guard": "pass",
+  "flash_guard": "passed with LOW_HEADROOM",
+  "ram_stack_guard": "incomplete: ADC_IRQHandler",
+  "files": {
+    "App-N32L406-V3.080-RAWTRACE.bin": {
+      "bytes": 106276,
+      "sha256": "2f506283679dc878b96c70db3e673e2285cad3a65904b51400c73e56c4889169"
+    },
+    "App-N32L406-V3.080-RAWTRACE.hex": {
+      "bytes": 299002,
+      "sha256": "c66c94fd1ed12da07d50c7204e28fcc783f472485a7c37b3ff06765a92cbaf7d"
+    }
+  }
+}

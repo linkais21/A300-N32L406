@@ -1,0 +1,36 @@
+{
+  "purpose": "DEDICATED_DEVICE_HIL_ONLY",
+  "release_approved": false,
+  "product": "A300-406",
+  "mcu": "N32L406CBL7",
+  "firmware_version": "T360-A300_406_20261003135453,V3.082",
+  "version_counter": 3082,
+  "app_origin": "0x08006000",
+  "app_limit_bytes": 106496,
+  "bootloader_included": false,
+  "ota_package_included": false,
+  "fix_scope": "Apply UART5_RX DMA request remap after DMA5 initialization and before channel enable",
+  "source_revision": "27281ba34c2d",
+  "source_worktree_dirty": true,
+  "validation": {
+    "host_tests": "passed: DMA remap order, DMA wrap, stalled tick, hardware pin contract, URC demux, identity recovery",
+    "app_build": "passed",
+    "app_vectors": "passed",
+    "flash_guard": "passed: 105188/106496 bytes; LOW_HEADROOM and CONFIGURATION_CHANGED alerts",
+    "release_guard": "passed",
+    "ram_guard": "failed: changed IRQ policy source src/hw_init.c; whole-program stack bound incomplete",
+    "hardware_hil": "pending: no firmware was flashed by this packaging step"
+  },
+  "files": {
+    "App-N32L406CBL7-V3.082-EC800M-DMA-REMAP.bin": {
+      "bytes": 105188,
+      "sha256": "09bf568adbdea51e326c5fd56648f097e93f38400ac423bae7c52cf4be03e49d",
+      "flash_address": "0x08006000"
+    },
+    "App-N32L406CBL7-V3.082-EC800M-DMA-REMAP.hex": {
+      "bytes": 295929,
+      "sha256": "6e884d93a5015d689c7f202405da8f7db281bc7db8aad244dd17133aca4be595",
+      "addressing": "Intel HEX absolute addresses beginning at 0x08006000"
+    }
+  }
+}

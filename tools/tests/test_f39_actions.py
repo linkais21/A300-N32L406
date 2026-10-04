@@ -54,7 +54,7 @@ int main(void){static const char*queries[]={"PID","IP","FIP","FREQ","HBT","MODEL
  {unsigned resets=s.auth_resets;strcpy(c.auth_code,"MAIN-AUTH");assert(run("IP,new-main,7001",&c,&s,&r)==F39_RESULT_OK);assert(strcmp(c.auth_code,"MAIN-AUTH")==0);assert(s.auth_resets==resets);}
  {unsigned resets=s.auth_resets;strcpy(c.backup_auth_code,"BACK-AUTH");assert(run("FIP,new-backup,7018",&c,&s,&r)==F39_RESULT_OK);assert(c.backup_auth_code[0]=='\0');assert(s.auth_resets==resets+1U&&s.auth_reset_mask==(F39_AUTH_CHANNEL_MAIN|F39_AUTH_CHANNEL_BACKUP));}
  assert(run("GPSBDS,1",&c,&s,&r)==F39_RESULT_OK);assert(s.gnss==1&&s.receiver==GNSS_TYPE_TAU804M&&s.mode==1);
- c.gnss_type=GNSS_TYPE_ATGM332D_F7N;before=c;{unsigned saves=s.saves,calls=s.gnss;assert(run("GPSBDS,3",&c,&s,&r)!=F39_RESULT_OK);assert(strstr((char*)r.data,"unsupported-receiver"));assert(s.saves==saves&&s.gnss==calls&&memcmp(&c,&before,sizeof(c))==0);}
+ c.gnss_type=GNSS_TYPE_ATGM332D_F7N;before=c;{unsigned saves=s.saves,calls=s.gnss;assert(run("GPSBDS,3",&c,&s,&r)!=F39_RESULT_OK);assert(strcmp((char*)r.data,"GPSBDS=Fail! unsupported-receiver\r\n")==0);assert(s.saves==saves&&s.gnss==calls&&memcmp(&c,&before,sizeof(c))==0);}
  c.gnss_type=GNSS_TYPE_UNKNOWN;before=c;{unsigned saves=s.saves;assert(run("GPSBDS,2",&c,&s,&r)!=F39_RESULT_OK);assert(s.saves==saves&&memcmp(&c,&before,sizeof(c))==0);}
  c.gnss_type=GNSS_TYPE_TAU804M;s.gps_ok=false;s.speed=0;assert(run("RELAY,1",&c,&s,&r)!=F39_RESULT_OK);assert(s.relays==0);
  s.gps_ok=true;s.speed=20.0f;assert(run("RELAY,1",&c,&s,&r)!=F39_RESULT_OK);assert(s.relays==0);
@@ -62,7 +62,7 @@ int main(void){static const char*queries[]={"PID","IP","FIP","FREQ","HBT","MODEL
  s.speed=NAN;assert(run("RELAY,1",&c,&s,&r)!=F39_RESULT_OK);assert(s.relays==1);
  s.gps_ok=false;s.speed=100;assert(run("RELAY,0",&c,&s,&r)==F39_RESULT_OK);assert(!s.relay&&s.relays==2);
  s.order_len=0;assert(run("DUALSET,FREQ,5,60*IP,new,8000*GPSBDS,3*MODEL,T360",&c,&s,&r)==F39_RESULT_OK);assert(strcmp(s.order,"TANGJR")==0);
- before=c;s.persist_ok=false;{unsigned saves=s.saves;unsigned gnss_calls=s.gnss;assert(run("GPSBDS,1",&c,&s,&r)!=F39_RESULT_OK);assert(s.saves==saves+1&&s.gnss==gnss_calls&&memcmp(&c,&before,sizeof(c))==0);}s.persist_ok=true;
+ before=c;s.persist_ok=false;{unsigned saves=s.saves;unsigned gnss_calls=s.gnss;assert(run("GPSBDS,1",&c,&s,&r)!=F39_RESULT_OK);assert(strcmp((char*)r.data,"GPSBDS=Fail! config\r\n")==0);assert(s.saves==saves+1&&s.gnss==gnss_calls&&memcmp(&c,&before,sizeof(c))==0);}s.persist_ok=true;
  {static const char*cmds[]={"FREQ,5,60","IP,x,1","GPSBDS,1","MODEL,X","MODEL,X"};unsigned i;for(i=0;i<5;i++){f39_request_t q;device_config_t x=seed();spy_t z={0};f39_reply_t rr;f39_platform_t p=platform(&x,&z);z.persist_ok=true;if(i==0)p.timer_refresh=0;if(i==1)p.network_reconnect=0;if(i==2)p.gnss_set_mode=0;if(i==3)p.jt808_reregister=0;if(i==4)p.remaining_refresh=0;assert(f39_parse((const uint8_t*)cmds[i],(uint16_t)strlen(cmds[i]),&q)==F39_RESULT_OK);assert(f39_execute(&q,&p,&rr)!=F39_RESULT_OK);assert(z.saves==0);} }
  s.resets=0;assert(run("RESET",&c,&s,&r)==F39_RESULT_OK);assert(s.resets==0);assert(r.reset_pending&&r.reset_delay_ms==F39_RESET_DELAY_MS);assert(strstr((char*)r.data,"Success!")!=0);
  { device_config_t q=seed(); spy_t z={0}; f39_reply_t rr; assert(run("PID",&q,&z,&rr)==F39_RESULT_OK); assert(strcmp((char*)rr.data,"PID,12345678901=Success!\r\n")==0); assert(run("PARAM",&q,&z,&rr)==F39_RESULT_OK); assert(strstr((char*)rr.data,"PID[12345678901]")!=0); }

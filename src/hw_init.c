@@ -215,9 +215,6 @@ void hw_usart_init(void)
     /* Configure DMA_Channel5 for UART5 RX (based on vendor firmware) */
     RCC_EnableAHBPeriphClk(RCC_AHB_PERIPH_DMA, ENABLE);
 
-    /* ⚠️ Critical: configure DMA Remap to map UART5_RX to DMA_CH5 */
-    DMA_RequestRemap(DMA_REMAP_UART5_RX, DMA, DMA_CH5, ENABLE);
-
     DMA_InitType dma;
     DMA_DeInit(DMA_CH5);
     dma.PeriphAddr     = (uint32_t)&(EC800M_UART->DAT);
@@ -233,6 +230,8 @@ void hw_usart_init(void)
     dma.Mem2Mem        = DMA_M2M_DISABLE;
     DMA_Init(DMA_CH5, &dma);
 
+    /* Select UART5 RX after channel reset/configuration, before enabling DMA. */
+    DMA_RequestRemap(DMA_REMAP_UART5_RX, DMA, DMA_CH5, ENABLE);
     DMA_ConfigInt(DMA_CH5, DMA_INT_HTX | DMA_INT_TXC, ENABLE);
     DMA_EnableChannel(DMA_CH5, ENABLE);
 

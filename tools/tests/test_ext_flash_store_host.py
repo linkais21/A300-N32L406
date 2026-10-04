@@ -104,6 +104,7 @@ int ec800m_tcp_open(int c,const char *h,uint16_t p){(void)c;(void)h;(void)p;retu
 int ec800m_tcp_send(int c,const uint8_t *p,uint16_t n){(void)c;(void)p;(void)n;return -1;}
 void ec800m_tcp_close(int c){(void)c;}
 bool ec800m_is_ready(void){return true;}
+bool jt808_is_online(void){return true;}
 void ec800m_get_imei(char *out,uint8_t n){if(n)out[0]=0;}
 bool ec800m_ota_channel_prepare(void){return true;}
 tcp_state_t ec800m_tcp_state(int c){(void)c;return TCP_STATE_CLOSED;}

@@ -79,6 +79,7 @@ uint32_t work_mode_sleep_monotonic_s(void) { return 1234U; }
 void work_mode_config_changed(const device_config_t *c, uint32_t now_s)
 { (void)c; refreshed_at_s = now_s; }
 void tcp_manager_reconnect(void) { }
+void tcp_manager_reconnect_channels(uint8_t mask) { (void)mask; }
 void ec800m_restart_pdp(void) { }
 void gnss_vendor_set_type(gnss_type_t t) { (void)t; }
 void agnss_init(gnss_type_t t) { (void)t; }
@@ -308,7 +309,11 @@ int main(void) {
     assert(saves==corner_saves);
     line("ANGLEREP=ON");line("ANGLEREP=ON");assert(config.anglerep_en==1);
     const char *legacy[]={"SOSALM","GMT","CELLAUTOGMT","GEOREP","MILEAGE","AUTOAPN","SENDS=1"};
-    for(unsigned i=0;i<sizeof legacy/sizeof legacy[0];i++){line(legacy[i]);assert(strstr(console,"OK"));}
+    for(unsigned i=0;i<sizeof legacy/sizeof legacy[0];i++){
+        device_config_t before=config;unsigned previous=saves;
+        line(legacy[i]);assert(strstr(console,"ERR") && !strstr(console,"OK"));
+        assert(saves==previous && !memcmp(&config,&before,sizeof config));
+    }
     line("SENDS");assert(strstr(console,"ERR"));
 
     return 0;

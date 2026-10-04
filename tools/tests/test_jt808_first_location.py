@@ -78,6 +78,7 @@ def main() -> int:
     cc=dual.compiler()
     if not cc: return 1
     source=dual.HARNESS[:dual.HARNESS.index("int main(void) {")] + LOCATION_MAIN
+    source += '\n#include "' + (ROOT/'tools/tests/jt808_host_support.h').as_posix() + '"\n'
     source=source.replace(
         "bool gps_get_last_trusted(gps_data_t *out) { (void)out; return false; }",
         "bool gps_get_last_trusted(gps_data_t *out) { *out=gps; return true; }",

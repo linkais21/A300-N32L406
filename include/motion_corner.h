@@ -28,8 +28,6 @@ typedef struct {
 
 typedef struct {
     float enter_accum_deg;
-    float meaningful_step_deg;
-    float opposing_noise_deg;
     float exit_stable_deg;
     uint8_t confirm_samples;
     uint8_t exit_stable_samples;
@@ -54,7 +52,6 @@ typedef struct {
     motion_corner_config_t config;
     motion_corner_state_t state;
     float previous_heading;
-    int8_t direction;
     float accumulated_deg;
     uint8_t confirm_count;
     uint8_t stable_count;
@@ -73,6 +70,7 @@ void motion_corner_reset(motion_corner_ctx_t *ctx);
 motion_corner_event_t motion_corner_step(motion_corner_ctx_t *ctx,
                                          const motion_corner_sample_t *sample);
 motion_corner_state_t motion_corner_state(const motion_corner_ctx_t *ctx);
+/* Both headings are finite degrees in [0, 360). */
 float motion_corner_heading_delta(float from_deg, float to_deg);
 uint32_t motion_corner_interval_ms(float speed_kmh, bool sharp);
 uint8_t motion_corner_pending_candidates(const motion_corner_ctx_t *ctx);

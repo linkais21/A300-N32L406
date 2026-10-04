@@ -30,10 +30,15 @@ bool at_config_execute_text_command_ack(const uint8_t *text, uint16_t len,
 
 typedef int (*at_config_sms_send_fn)(const char *to, const char *text, void *context);
 typedef void (*at_config_reset_fn)(uint32_t delay_ms, void *context);
+#ifndef A300_FIRMWARE_IMAGE
 void at_config_bind_f39(f39_platform_t *platform,
                         at_config_sms_send_fn send,
                         at_config_reset_fn schedule_reset,
                         void *context);
+#endif
 void at_config_receive_sms(const char *from, const uint8_t *text, uint16_t len);
+#ifdef A300_FIRMWARE_IMAGE
+void f39_sms_result(bool success);
+#endif
 
 #endif

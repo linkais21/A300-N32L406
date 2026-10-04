@@ -18,6 +18,7 @@ def test_ota_lockout_and_retry_deadline():
 #include "agnss_vendor.h"
 #include "fota.h"
 uint32_t tick;
+int dbg_printf(const char *fmt,...){(void)fmt;return 0;}
 void agnss_online_reset(void){}
 bool agnss_online_process(gnss_type_t t){(void)t;return false;}
 bool agnss_online_has_injected(void){return false;}
@@ -27,6 +28,7 @@ fota_state_t fota_get_state(void){return state;}
 bool ec800m_is_ready(void){return true;}
 bool gps_is_valid(void){return false;}
 void gnss_vendor_set_type(gnss_type_t t){(void)t;}
+bool gnss_vendor_inject_pending(void){return false;}
 bool gnss_vendor_inject(gnss_type_t t,const uint8_t *p,uint16_t n){(void)t;(void)p;(void)n;return true;}
 void agnss_storage_read_close(void){}
 bool agnss_storage_init(void){return true;}

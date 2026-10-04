@@ -33,7 +33,10 @@ static void replace_url(const char *url) {
 int main(void) {
     fresh();seed_report(BCR_TRIAL,FW_VERSION_COUNTER);g_tick_ms=29999;
     fota_confirm_trial_process();assert(!resets && !opens);
-    g_tick_ms=30000;bcr_read_verified=true;fota_confirm_trial_process();assert(resets==1);
+    g_tick_ms=30000;bcr_read_verified=true;
+    ready=false;fota_confirm_trial_process();assert(!resets);
+    ready=true;online=false;fota_confirm_trial_process();assert(!resets);
+    online=true;fota_confirm_trial_process();assert(resets==1);
     fota_init();resets=0;report_open();reply(201);
     fresh();seed_report(BCR_TRIAL,FW_VERSION_COUNTER+1);g_tick_ms=30000;
     fota_confirm_trial_process();assert(!resets && !opens);

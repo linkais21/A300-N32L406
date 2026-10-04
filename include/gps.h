@@ -43,12 +43,16 @@ typedef struct {
 } gps_diag_t;
 
 void gps_init(void);
+void gps_trusted_store_init(void);
+void gps_trusted_store_process(void);
 typedef struct {
-    uint8_t satellites, average, maximum;
+    uint8_t satellites, average, maximum, cn_threshold, qualified;
     uint32_t sequence;
 } gps_quality_t;
-/* Complete, recent GSV cycles only. False clears the output. */
+/* Complete, recent GSV cycles only. False clears measurements, keeps CNTH. */
 bool gps_get_quality(gps_quality_t *out);
+/* RAM-only production threshold, 20..50 dB-Hz. A change discards old cycles. */
+bool gps_set_quality_cn_threshold(uint8_t threshold);
 bool gps_quality_fix_fresh(void);
 bool gps_is_enabled(void);
 void gps_enable(bool en);           /* power gate via GPS_EN */
@@ -67,6 +71,11 @@ bool gps_capture_last_trusted(void);
 bool gps_capture_last_trusted_snapshot(const gps_data_t *snapshot);
 /* Coordinates stay retained; UTC advances with SysTick even without a fix. */
 bool gps_get_last_trusted(gps_data_t *out);
+/* Same retained coordinates, but their original acquisition UTC for location
+ * reports, with valid=false to prevent use as a live fix. False until a live
+ * fix supplies that time; legacy Flash records
+ * only saved an advanced clock. Does not fabricate a new position. */
+bool gps_get_last_trusted_location(gps_data_t *out);
 /* No fix ever acquired: zero position and invalid fix; UTC if synchronized,
  * otherwise an all-zero unknown timestamp. Never creates a trusted fix. */
 void gps_get_unfixed_report(gps_data_t *out);
@@ -77,9 +86,9 @@ void gps_advance_last_trusted_seconds(uint32_t elapsed_seconds);
 /* Reapply the required NMEA output setup after STOP1 wake without clearing
  * the retained STOP1 position. */
 void gps_resume_after_wake(void);
-/* Correct the retained STOP1 fix's clock from an external UTC time source
+/* Correct the retained STOP1 clock in either direction from an external UTC source
  * (NTP). Also supplies UTC to no-fix reports before the first fix; never touches
- * lat/lon/speed/heading/altitude/fix_quality. */
+ * lat/lon/speed/heading/altitude/fix_quality or location acquisition UTC. */
 void gps_apply_ntp_utc(uint16_t year, uint8_t month, uint8_t day,
                        uint8_t hour, uint8_t minute, uint8_t second);
 const volatile gps_diag_t *gps_get_diag(void);

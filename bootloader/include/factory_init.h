@@ -29,6 +29,7 @@ typedef struct __attribute__((packed)) {
 } factory_init_request_t;
 
 typedef enum {
+    FACTORY_INIT_RESULT_DEVICE_UNAVAILABLE = -2,
     FACTORY_INIT_RESULT_ERROR = -1,
     FACTORY_INIT_RESULT_ALREADY_DONE = 0,
     FACTORY_INIT_RESULT_APPLIED = 1,

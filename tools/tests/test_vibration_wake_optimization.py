@@ -252,7 +252,7 @@ class VibrationPolicyTests(unittest.TestCase):
 class VibrationInterruptTests(unittest.TestCase):
     def test_09_da218e_interrupt_is_single_event_latched(self) -> None:
         self.assertRegex(
-            SOURCE, r"i2c_write_reg\(DA218E_REG_INT_LATCH,\s*0x07U\)",
+            SOURCE, r"\{DA218E_REG_INT_LATCH,\s*0x07U\}",
         )
 
     def test_10_driver_exposes_bounded_interrupt_rearm(self) -> None:

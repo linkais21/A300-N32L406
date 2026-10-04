@@ -38,17 +38,12 @@
 static jt808_terminal_t s_terminal;
 static overspeed_policy_t s_overspeed_policy;
 static volatile bool s_iwdg_started;
-static void sms_command_execute(const char *from, const char *text)
+void sms_command_execute(const char *from, const char *text)
 {
     uint16_t len = 0;
     while (len < SMS_COMMAND_MAX_LEN && text[len] != '\0') ++len;
     (void)at_config_execute_sms(from, (const uint8_t *)text, len);
 }
-static void agnss_network_rx(uint8_t ch, const uint8_t *data, uint16_t len)
-{
-    agnss_online_rx(ch, data, len);
-}
-
 void ec800m_wait_service_hook(void)
 {
     gps_process();
@@ -234,8 +229,6 @@ static void periodic_status_log(void)
     last_ms = TICK_MS();
 
     ram_watermark_t ram = {0U, 0U, 0U, RAM_AVAIL};
-    const volatile gps_diag_t *gps_diag = gps_get_diag();
-    const accel_diag_t *accel_diag = i2c_accel_get_diag();
     bool measured = ram_watermark_measure(&_ebss, sys_heap_break(), &_estack, &ram);
     if (!measured || ram.free_gap < STACK_MARGIN_MIN)
         s_stack_margin_fault = 1;
@@ -245,38 +238,6 @@ static void periodic_status_log(void)
                gps_get_data()->valid,
                ram.heap_used, ram.stack_peak, ram.free_gap,
                ram.total_available, s_stack_margin_fault);
-    dbg_printf("[GPS] RX=%lu SENT=%lu GGA=%lu RMC=%lu OK=%lu CS=%lu FMT=%lu NOFIX=%lu DROP=%lu QDROP=%lu LDROP=%lu OREF=%lu\r\n",
-               (unsigned long)gps_diag->rx_bytes,
-               (unsigned long)gps_diag->sentences,
-               (unsigned long)gps_diag->gga,
-               (unsigned long)gps_diag->rmc,
-               (unsigned long)gps_diag->parsed,
-               (unsigned long)gps_diag->checksum_fail,
-               (unsigned long)gps_diag->format_fail,
-               (unsigned long)gps_diag->no_fix,
-               (unsigned long)gps_diag->drop,
-               (unsigned long)gps_diag->drop_queue,
-               (unsigned long)gps_diag->drop_length,
-               (unsigned long)gps_diag->overrun);
-    dbg_printf("[ACCEL] addr=0x%02x INT1=%u X=%d Y=%d Z=%d read_ok=%u samples=%lu fails=%lu delta=%u threshold=%u hits=%lu\r\n",
-               accel_diag->address,
-               (unsigned)GPIO_ReadInputDataBit(DA218E_INT1_PORT, DA218E_INT1_PIN),
-               accel_diag->x, accel_diag->y, accel_diag->z,
-               (unsigned)accel_diag->read_ok,
-               (unsigned long)accel_diag->sample_count,
-               (unsigned long)accel_diag->read_fail_count,
-               (unsigned)accel_diag->delta, (unsigned)accel_diag->threshold,
-               (unsigned long)accel_diag->vibration_hit_count);
-    dbg_printf("[WORK] state=%s pin_high=%u acc_on=%u logical_acc=%u vib=%u hits=%u/%u stop=%u now=%lu\r\n",
-               work_mode_state_name(work_mode_state()),
-               (unsigned)hw_acc_pin_high(),
-               (unsigned)hw_acc_is_on(),
-               (unsigned)work_mode_logical_acc(),
-               (unsigned)s_work_vibration_hit,
-               (unsigned)work_mode_vibration_hits(),
-               (unsigned)work_mode_vibration_required(),
-               (unsigned)work_mode_sleep_is_in_stop1(),
-               (unsigned long)work_mode_sleep_monotonic_s());
 }
 
 /* ── Alarm scanning ──────────────────────────────────────────────────────── */
@@ -417,8 +378,7 @@ static void acc_report_settle(uint32_t now_s)
     s_acc_report_s = now_s;
     dbg_printf("[ACC] report settled level=%u\r\n",
                (unsigned)s_acc_report_pending);
-    if (jt808_send_location_work_mode(0U, false, work_mode_allocate_report_id()) == JT808_SEND_NO_POSITION)
-        (void)jt808_send_location_work_mode(0U, true, work_mode_allocate_report_id());
+    (void)jt808_send_location_work_mode(0U, false, work_mode_allocate_report_id());
 }
 
 void work_mode_process(void)
@@ -619,14 +579,9 @@ void work_mode_process(void)
             }
             sent = jt808_send_location_work_mode(action.alarm_bits,
                                                  action.historical_position, action.report_id);
-            /* Re-queue a transport failure, but never JT808_SEND_NO_POSITION:
-             * that means GNSS has no fix and nothing was ever captured, which
-             * only time can clear.  Retrying it immediately spun this loop at
-             * full speed -- a field capture showed 1092 attempts and nothing
-             * else in 1131 lines, because the blocking debug UART then starved
-             * the very loop that would have acquired the fix.  The scheduler
-             * re-arms this report on the next reporting deadline. */
-            if (sent != 0 && sent != JT808_SEND_NO_POSITION) {
+            /* The sender supplies a retained or unfixed snapshot internally.
+             * Retry transport/storage failure, yielding this dispatcher pass. */
+            if (sent != 0) {
                 work_mode_retry_action(&action);
                 processed = 8U;
             }
@@ -696,14 +651,6 @@ void work_mode_process(void)
 #endif
 }
 
-static void log_hardware_contract(void)
-{
-    dbg_printf("[HW] ACC=PA12 pin_high=%u acc_on=%u logical_acc=%u CAR_ADC=PA3/CH4 I2C=I2C2/PD14/PD15 DA218E_INT1=%u\r\n",
-               (unsigned)hw_acc_pin_high(), (unsigned)hw_acc_is_on(),
-               (unsigned)work_mode_logical_acc(),
-               (unsigned)GPIO_ReadInputDataBit(DA218E_INT1_PORT, DA218E_INT1_PIN));
-}
-
 static void idle_sleep_process(void)
 {
     /* SysTick wakes shallow WFI every millisecond, so PA12 is polled without
@@ -712,10 +659,30 @@ static void idle_sleep_process(void)
         work_mode_sleep_shallow();
 }
 
+/* A modem/platform outage must not leave the application in a degraded state
+ * indefinitely. Blind-zone records are committed to NOR before this guard is
+ * reached, so an MCU reset preserves them for replay after reconnection. */
+#define PLATFORM_OFFLINE_RESET_S (25UL * 60UL * 60UL)
+static void platform_offline_reset_process(void)
+{
+    static uint32_t offline_since_s;
+    uint32_t now = work_mode_sleep_monotonic_s();
+    if (jt808_is_online()) {
+        offline_since_s = 0U;
+        return;
+    }
+    if (offline_since_s == 0U) offline_since_s = now;
+    if ((uint32_t)(now - offline_since_s) >= PLATFORM_OFFLINE_RESET_S) {
+        IWDG_ReloadKey();
+        NVIC_SystemReset();
+    }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * main
  * ═══════════════════════════════════════════════════════════════════════════ */
-int main(void)
+static void boot_init(void) __attribute__((noinline));
+static void boot_init(void)
 {
     /* ── 1. Core hardware init ───────────────────────────────────────────── */
     reset_diag_capture();
@@ -761,29 +728,15 @@ int main(void)
         }
     }
     dbg_printf("========================================\r\n");
-    log_hardware_contract();
-
     /* ── 3. Flash config ─────────────────────────────────────────────────── */
     spi_flash_init();
     cfg_init();
     overspeed_policy_init(&s_overspeed_policy);
     blind_zone_init();
     device_config_t *c = cfg_get();
-    uint8_t plate[sizeof c->plate_no + 1U];
-    plate[jt808_encode_plate_gbk(c->plate_no, plate, sizeof c->plate_no)] = '\0';
-    dbg_printf("[CFG] server=%s:%u report=%u/%us effective_stop=%us hb=%us plate=%s\r\n",
-               c->server_ip, c->server_port,
-               (unsigned)c->report_moving_s,
-               (unsigned)c->report_stopped_s,
-               (unsigned)(c->report_stopped_s != 0U ?
-                          c->report_stopped_s :
-                          WORK_MODE_DEFAULT_STOPPED_REPORT_S),
-               (unsigned)c->heartbeat_s, plate);
-
     /* ── 4. Peripheral drivers ───────────────────────────────────────────── */
     adc_monitor_init();
     agnss_init(cfg_get()->gnss_type);
-    agnss_set_inject_callback(gnss_vendor_inject);
     at_config_init();
     log_platform_init();
     cfg_query_init();
@@ -806,13 +759,14 @@ int main(void)
     i2c_accel_init();
     s_vibration_rearm_fault = !i2c_accel_get_diag()->int1_rearm_ok;
     gps_init();
+    gps_trusted_store_init();
     gps_report_filter_init();
 
     /* ── 7. 4G modem ─────────────────────────────────────────────────────── */
     ec800m_init();
     /* Modem initialization clears channel callbacks; bind OTA afterwards. */
     fota_init();
-    ec800m_register_agnss_recv(agnss_network_rx);
+    ec800m_register_agnss_recv(agnss_online_rx);
     sms_set_recv_cb(sms_command_execute);
 
     /* ── 8. JT808 + TCP manager ──────────────────────────────────────────── */
@@ -837,61 +791,102 @@ int main(void)
     }
 
     dbg_printf("[BOOT] ready\r\n");
+}
 
-    /* ── 10. Main loop ───────────────────────────────────────────────────── */
+/* Keep one-cycle scratch out of the permanent main frame and the F39 path. */
+static void service_network_before_fota(void)
+    __attribute__((noinline));
+static void service_network_before_fota(void)
+{
+    reset_diag_loop_begin();
+    reset_diag_mark_phase(RESET_DIAG_PHASE_EC800M);
+    ec800m_process();
+    reset_diag_mark_phase(RESET_DIAG_PHASE_GPS);
+    gps_process();
+    gps_trusted_store_process();
+    gps_report_filter_process(TICK_MS());
+    reset_diag_mark_phase(RESET_DIAG_PHASE_MILEAGE);
+    mileage_update();
+    mileage_persist_process(TICK_MS());
+    reset_diag_mark_phase(RESET_DIAG_PHASE_TCP_MANAGER);
+    tcp_manager_process();
+    platform_offline_reset_process();
+    reset_diag_mark_phase(RESET_DIAG_PHASE_JT808);
+    jt808_process();
+    reset_diag_mark_phase(RESET_DIAG_PHASE_ADC);
+    adc_monitor_process();
+}
+
+static void service_blind_and_log(void) __attribute__((noinline));
+static void service_blind_and_log(void)
+{
+    reset_diag_mark_phase(RESET_DIAG_PHASE_BLIND_ZONE);
+    blind_zone_recovery_process();
+    blind_zone_replay_process();
+    reset_diag_mark_phase(RESET_DIAG_PHASE_LOG_PLATFORM);
+    log_platform_process();
+}
+
+static void service_fota(void) __attribute__((noinline));
+static void service_fota(void)
+{
+    reset_diag_mark_phase(RESET_DIAG_PHASE_FOTA);
+    fota_process();
+    fota_confirm_trial_process();
+}
+
+static void service_config_query(bool *started) __attribute__((noinline));
+static void service_config_query(bool *started)
+{
+    if (!*started &&
+        !cfg_query_is_busy() && ec800m_is_ready() && jt808_is_online() &&
+        !work_mode_sleep_is_in_stop1() && !fota_is_active() &&
+        cfg_query_start() == 0) {
+        *started = true;
+    }
+    reset_diag_mark_phase(RESET_DIAG_PHASE_CONFIG);
+    cfg_query_process();
+}
+
+static void service_gnss_and_work_mode(void) __attribute__((noinline));
+static void service_gnss_and_work_mode(void)
+{
+    reset_diag_mark_phase(RESET_DIAG_PHASE_AGNSS);
+    agnss_process();
+    reset_diag_mark_phase(RESET_DIAG_PHASE_WORK_MODE);
+    work_mode_process();
+}
+
+static void service_after_commands(void) __attribute__((noinline));
+static void service_after_commands(void)
+{
+    reset_diag_mark_phase(RESET_DIAG_PHASE_SMS);
+    sms_process();
+    reset_diag_mark_phase(RESET_DIAG_PHASE_ALARMS);
+    scan_alarms();
+    reset_diag_mark_phase(RESET_DIAG_PHASE_NTP);
+    ntp_resync_process();
+    reset_diag_mark_phase(RESET_DIAG_PHASE_STATUS);
+    periodic_status_log();
+
+    reset_diag_mark_phase(RESET_DIAG_PHASE_IDLE_SLEEP);
+    idle_sleep_process();
+}
+
+int main(void)
+{
+    /* One query round per boot; cfg_query owns the bounded in-round retries. */
     bool cfg_query_started = false;
-    uint32_t cfg_query_next_ms = 0U;
+    boot_init();
     while (1) {
         IWDG_ReloadKey();
-
-        reset_diag_loop_begin();
-        reset_diag_mark_phase(RESET_DIAG_PHASE_EC800M);
-        ec800m_process();
-        reset_diag_mark_phase(RESET_DIAG_PHASE_GPS);
-        gps_process();
-        gps_report_filter_process(TICK_MS());
-        reset_diag_mark_phase(RESET_DIAG_PHASE_MILEAGE);
-        mileage_update();
-        mileage_persist_process(TICK_MS());
-        reset_diag_mark_phase(RESET_DIAG_PHASE_TCP_MANAGER);
-        tcp_manager_process();
-        reset_diag_mark_phase(RESET_DIAG_PHASE_JT808);
-        jt808_process();
-        reset_diag_mark_phase(RESET_DIAG_PHASE_ADC);
-        adc_monitor_process();
-        reset_diag_mark_phase(RESET_DIAG_PHASE_FOTA);
-        fota_process();
-        fota_confirm_trial_process();
-        reset_diag_mark_phase(RESET_DIAG_PHASE_BLIND_ZONE);
-        blind_zone_recovery_process();
-        blind_zone_replay_process();
-        reset_diag_mark_phase(RESET_DIAG_PHASE_LOG_PLATFORM);
-        log_platform_process();
-        if ((!cfg_query_started || (int32_t)(TICK_MS() - cfg_query_next_ms) >= 0) &&
-            !cfg_query_is_busy() && ec800m_is_ready() && jt808_is_online() &&
-            !work_mode_sleep_is_in_stop1() && !fota_is_active() &&
-            cfg_query_start() == 0) {
-            cfg_query_started = true;
-            cfg_query_next_ms = TICK_MS() + 60000U;
-        }
-        reset_diag_mark_phase(RESET_DIAG_PHASE_CONFIG);
-        cfg_query_process();
-        reset_diag_mark_phase(RESET_DIAG_PHASE_AGNSS);
-        agnss_process();
-        reset_diag_mark_phase(RESET_DIAG_PHASE_WORK_MODE);
-        work_mode_process();
+        service_network_before_fota();
+        service_fota();
+        service_blind_and_log();
+        service_config_query(&cfg_query_started);
+        service_gnss_and_work_mode();
         reset_diag_mark_phase(RESET_DIAG_PHASE_AT_CONFIG);
         at_config_process();
-        reset_diag_mark_phase(RESET_DIAG_PHASE_SMS);
-        sms_process();
-        reset_diag_mark_phase(RESET_DIAG_PHASE_ALARMS);
-        scan_alarms();
-        reset_diag_mark_phase(RESET_DIAG_PHASE_NTP);
-        ntp_resync_process();
-        reset_diag_mark_phase(RESET_DIAG_PHASE_STATUS);
-        periodic_status_log();
-
-        reset_diag_mark_phase(RESET_DIAG_PHASE_IDLE_SLEEP);
-        idle_sleep_process();
+        service_after_commands();
     }
 }

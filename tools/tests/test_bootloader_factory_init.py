@@ -162,7 +162,7 @@ static void test_success_and_terminal_states(void)
     reset_fixture();
     request = pending_request();
     device_valid = false;
-    assert(factory_init_apply(&request) == FACTORY_INIT_RESULT_ERROR);
+    assert(factory_init_apply(&request) == FACTORY_INIT_RESULT_DEVICE_UNAVAILABLE);
     assert(erase_count == 0U && read_count == 0U && mark_count == 0U);
 }
 

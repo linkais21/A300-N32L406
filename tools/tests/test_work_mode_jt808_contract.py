@@ -59,16 +59,17 @@ require("jt808_get_logical_acc" not in compact,
 online = function_body("encode_location_online")
 require("jt808_get_logical_acc()" in online,
         "complete online location status does not use logical ACC")
-require("alarm_bits" in online and
-        re.search(r"body\s*\[\s*0\s*\].*alarm_bits", online) is not None,
+base = function_body("encode_location_base")
+require("encode_location_base(g, body, alarm_bits, jt808_get_logical_acc()," in online and
+        "body[p++]=(alm>>24)" in base and "body[p++]=alm" in base,
         "caller alarm bits do not flow into the online 0x0200 body")
 require("LOC_FLAG_BEIDOU_FIXED" in HEADER,
         "JT808 status contract does not define BeiDou positioning bit19")
 require(re.search(
-    r"historical_position[\s\S]*~\s*LOC_FLAG_GPS_FIXED", online) is not None,
+    r"if\s*\(!historical_position\)\s*status\s*\|=\s*LOC_FLAG_GPS_FIXED", base) is not None,
     "historical reports do not clear the current-fix status bit")
 require(re.search(
-    r"historical_position[\s\S]*~\s*\([^;]*LOC_FLAG_BEIDOU_FIXED", online)
+    r"historical_position[\s\S]*~\s*\([^;]*LOC_FLAG_BEIDOU_FIXED", base)
     is None,
     "historical reports must preserve the trusted BeiDou source bit")
 
@@ -99,7 +100,7 @@ require(wrapper.count("gps_get_last_trusted") >= 2,
         "retained-fix fallback must cover both the historical and live paths")
 # The fallback must still refuse to invent a position when nothing was ever
 # captured, and must say why rather than failing silently.
-require("no-fix-no-trusted" in wrapper,
-        "the no-fix-and-no-retained-fix case is not reported")
+require(wrapper.count("gps_get_unfixed_report(&snapshot)") == 2,
+        "both missing-fix paths must preserve reporting with an unfixed snapshot")
 
 print("test_work_mode_jt808_contract: PASS")

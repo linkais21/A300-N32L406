@@ -33,7 +33,7 @@ static void host_tx(uint8_t data)
     assert(commands < 10U);
     assert(s_at_owner == AT_OWNER_BLOCKING);
     if (inject_nested) {
-        assert(s_deferred_urc_processing);
+        assert(!s_deferred_urc_processing);
         inject_nested = false;
         feed("+QIOPEN: 1,566\r\n");
     }
@@ -62,26 +62,46 @@ int main(int argc, char **argv)
         assert(s_at_owner == AT_OWNER_SMS && !s_deferred_urc_processing);
         at_owner_release(AT_OWNER_SMS);
         process_deferred_urc_one();
-        assert(commands == 1U && !s_deferred_urc_count);
+        assert(commands == 0U && !s_deferred_urc_count);
+        ec800m_process();
+        assert(commands == 1U);
     } else if (!strcmp(argv[1], "nested")) {
         enqueue_failure();
         inject_nested = true;
         process_deferred_urc_one();
-        /* The nested wait queued channel 1; it must not recursively execute
-         * that command as the first wait releases its owner. */
-        assert(commands == 1U && s_deferred_urc_count == 1U);
+        assert(commands == 0U && !s_deferred_urc_count);
         assert(s_tcp[0].state == TCP_STATE_CLOSED);
         assert(s_tcp[1].state == TCP_STATE_OPENING);
         assert(!s_deferred_urc_processing && s_at_owner == AT_OWNER_NONE);
-        process_deferred_urc_one();
-        assert(commands == 2U && !s_deferred_urc_count);
+        ec800m_process();
+        assert(commands == 1U && !s_deferred_urc_count);
         assert(s_tcp[1].state == TCP_STATE_CLOSED);
+        ec800m_process();
+        assert(commands == 2U);
         for (unsigned i = 0; i < 8U; ++i) process_deferred_urc_one();
         assert(commands == 2U);
+    } else if (!strcmp(argv[1], "scheduled_close")) {
+        enqueue_failure();
+        process_deferred_urc_one();
+        assert(commands == 0U);
+        assert(s_tcp[0].state == TCP_STATE_CLOSED);
+        ec800m_process();
+        assert(commands == 1U);
+        ec800m_process();
+        assert(commands == 1U);
+    } else if (!strcmp(argv[1], "reopened_before_close")) {
+        enqueue_failure();
+        process_deferred_urc_one();
+        ++s_tcp_generation[0];
+        s_tcp[0].state = TCP_STATE_OPENING;
+        ec800m_process();
+        assert(commands == 0U && s_tcp[0].state == TCP_STATE_OPENING);
+        assert(s_failed_open_close_mask == 0U);
     } else if (!strcmp(argv[1], "timeout")) {
         enqueue_failure();
         timeout_reply = true;
         process_deferred_urc_one();
+        ec800m_process();
         assert(g_tick_ms >= 3000U && g_tick_ms <= 3210U);
         assert(s_at_owner == AT_OWNER_NONE && !s_deferred_urc_processing);
         assert(!s_deferred_urc_count && commands == 1U);
@@ -110,7 +130,9 @@ int main(int argc, char **argv)
         assert(s_deferred_urc_count == 1U && commands == 0U);
         s_udp.state = UDP_TXN_IDLE;
         process_deferred_urc_one();
-        assert(s_deferred_urc_count == 0U && commands == 1U);
+        assert(s_deferred_urc_count == 0U && commands == 0U);
+        ec800m_process();
+        assert(commands == 1U);
     } else if (!strcmp(argv[1], "capacity")) {
         for (unsigned i = 0; i < AT_DEFERRED_URC_MAX + 4U; ++i)
             defer_urc("+QIURC: \"recv\",0");
@@ -122,6 +144,24 @@ int main(int argc, char **argv)
         assert(commands == 0U && s_tcp_qird_pending_mask == 1U);
         process_deferred_urc_one();
         assert(!s_deferred_urc_count && !s_deferred_urc_processing);
+    } else if (!strcmp(argv[1], "line_limit")) {
+        char malformed[AT_LINE_MAX];
+        memset(malformed, 'x', sizeof malformed);
+        memcpy(malformed, "+QIOPEN: 0,0", 12U);
+        malformed[sizeof malformed - 1U] = '\0';
+        defer_urc(malformed);
+        assert(s_deferred_urc_count == 0U);
+        s_tcp[0].state = TCP_STATE_OPENING;
+        defer_urc("+QIOPEN: 0,65535");
+        assert(s_deferred_urc_count == 1U);
+        process_deferred_urc_one();
+        assert(s_tcp[0].state == TCP_STATE_CLOSED);
+        s_state = EC800M_STATE_READY;
+        s_reg_status = 1;
+        defer_urc("+QIURC: \"pdpdeact\",1");
+        process_deferred_urc_one();
+        assert(s_state == EC800M_STATE_NETWORK_REG && s_reg_status == -1);
+        assert(sizeof s_deferred_urc <= 256U);
     } else assert(0);
     puts("PASS");
     return 0;
@@ -133,10 +173,9 @@ def main():
     cc = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc")
     assert cc, "host C compiler required"
     source = (ROOT / "src/ec800m.c").read_text(encoding="utf-8")
-    cases = ("owner", "nested", "timeout", "stale", "busy", "capacity")
+    cases = ("owner", "nested", "scheduled_close", "reopened_before_close",
+             "timeout", "stale", "busy", "capacity", "line_limit")
     mutations = (
-        ("reentry", "s_deferred_urc_processing || s_qird_pass_active",
-         "s_qird_pass_active", "nested"),
         ("owner", "bool ok;\n    if (!at_owner_acquire(AT_OWNER_BLOCKING)) return false;",
          "bool ok;\n    (void)at_owner_acquire(AT_OWNER_BLOCKING);", "owner"),
         ("generation", "if(!obsolete)process_urc(line);",

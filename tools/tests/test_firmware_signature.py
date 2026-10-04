@@ -30,7 +30,7 @@ def test_real_firmware_verifier():
     def c_array(data):
         return ",".join(f"0x{x:02x}" for x in data)
 
-    def build_and_run(work, name, embedded_public, expect_valid):
+    def build_and_run(work, name, embedded_public, expect_valid, firmware_image):
         work = Path(td)
         include_dir = work / name
         include_dir.mkdir()
@@ -64,6 +64,8 @@ int main(void){{
         flags = ["-std=c99", "-DuECC_SUPPORTS_secp160r1=0", "-DuECC_SUPPORTS_secp192r1=0",
                  "-DuECC_SUPPORTS_secp224r1=0", "-DuECC_SUPPORTS_secp256k1=0",
                  "-DuECC_SUPPORTS_secp256r1=1", "-DuECC_SUPPORT_COMPRESSED_POINT=0"]
+        if firmware_image:
+            flags.extend(["-DA300_FIRMWARE_IMAGE=1", "-DuECC_PLATFORM=uECC_arch_other"])
         subprocess.run([cc, *flags, "-I", str(include_dir), "-I", str(ROOT / "include"),
                         "-I", str(ROOT / "third_party" / "micro-ecc"),
                         str(include_dir / "harness.c"), str(ROOT / "src" / "firmware_signature.c"),
@@ -73,11 +75,14 @@ int main(void){{
 
     with tempfile.TemporaryDirectory() as td:
         work = Path(td)
-        build_and_run(work, "valid-key", public_bytes, True)
         flipped_public = bytearray(public_bytes)
         flipped_public[0] ^= 1
-        build_and_run(work, "flipped-public-key", bytes(flipped_public), False)
-        build_and_run(work, "wrong-public-key", wrong_public_bytes, False)
+        for firmware_image, suffix in ((False, "host"), (True, "firmware")):
+            build_and_run(work, f"valid-key-{suffix}", public_bytes, True, firmware_image)
+            build_and_run(work, f"flipped-public-key-{suffix}", bytes(flipped_public),
+                          False, firmware_image)
+            build_and_run(work, f"wrong-public-key-{suffix}", wrong_public_bytes,
+                          False, firmware_image)
 
 
 if __name__ == "__main__":

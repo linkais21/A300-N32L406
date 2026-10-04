@@ -49,17 +49,29 @@ bool production_test_command(const char *line)
         uint16_t held = down ? s_sos_ms : 0U;
         dbg_printf("SOSSTAT,DOWN=%u,HOLD_MS=%u,LEVEL=%s,ACTIVE=%u=Success!\r\n",
                    (unsigned)down, held, down ? "LOW" : "HIGH", (unsigned)down);
-    } else if (strcmp(line, "GNSSSTAT#") == 0) {
+    } else if (strcmp(line, "GNSSSTAT#") == 0 || strncmp(line, "GNSSSTAT,", 9U) == 0) {
+        if (line[8] == ',') {
+            /* Exactly two decimal digits and '#'; never accept trailing data. */
+            if (strlen(line) != 12U || line[9] < '0' || line[9] > '9' ||
+                line[10] < '0' || line[10] > '9' || line[11] != '#' ||
+                !gps_set_quality_cn_threshold((uint8_t)((line[9]-'0')*10 + line[10]-'0'))) {
+                dbg_printf("GNSSSTAT=Fail!INVALID_ARGUMENT\r\n");
+                return true;
+            }
+        }
         const gps_data_t *g = gps_get_data();
         gps_quality_t q = {0};
         bool fresh = gps_quality_fix_fresh();
         (void)gps_get_quality(&q);
-        unsigned hdop = fresh && g->hdop > 0.0f && g->hdop < 100.0f ?
-                        (unsigned)(g->hdop * 10.0f + 0.5f) : 0U;
-        dbg_printf("GNSSSTAT,FIX=%u,GPS=%u,HDOP=%u.%u,CNSAT=%u,CNAVG=%u,CNMAX=%u,SEQ=%lu=Success!\r\n",
+        float scaled_hdop = fresh && g->hdop > 0.0f && g->hdop < 100.0f ?
+                            g->hdop * 1000.0f : 0.0f;
+        unsigned hdop = (unsigned)scaled_hdop;
+        /* Never round an over-limit reading down onto a passing boundary. */
+        if (scaled_hdop > (float)hdop) ++hdop;
+        dbg_printf("GNSSSTAT,FIX=%u,GPS=%u,HDOP=%u.%03u,CNSAT=%u,CNAVG=%u,CNMAX=%u,SEQ=%lu,CNTH=%u,CNGOOD=%u=Success!\r\n",
                    fresh ? g->fix_quality : 0U, fresh ? g->satellites : 0U,
-                   hdop / 10U, hdop % 10U, q.satellites, q.average, q.maximum,
-                   (unsigned long)q.sequence);
+                   hdop / 1000U, hdop % 1000U, q.satellites, q.average, q.maximum,
+                   (unsigned long)q.sequence, q.cn_threshold, q.qualified);
     } else if (strcmp(line, "GNSSRAW#") == 0) {
         gps_trace_start();
         dbg_printf("GNSSRAW,MAX=32,WINDOW_MS=5000=Success!\r\n");

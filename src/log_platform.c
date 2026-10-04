@@ -13,6 +13,7 @@
 #include "n32l40x_rtc.h"
 #include <math.h>
 #include <stdio.h>
+#include "a300_format.h"
 #include <string.h>
 
 /* UINT32_MAX is the pending-event sentinel; keeps state to one word. */

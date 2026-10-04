@@ -62,6 +62,7 @@ void jt808_set_server(const char *ip, uint16_t p, bool b) { (void)ip; (void)p; (
 void cfg_save(void) { }
 int dbg_printf(const char *fmt, ...) { (void)fmt; return 0; }
 void tcp_manager_reconnect(void) { effect('N'); }
+void tcp_manager_reconnect_channels(uint8_t mask) { (void)mask; effect('N'); }
 bool fota_request_check(void) { return true; }
 void gnss_vendor_set_type(gnss_type_t t) { (void)t; }
 void agnss_init(gnss_type_t t) { (void)t; }
@@ -178,11 +179,12 @@ def test_f39_end_to_end():
         harness.write_text(HARNESS, encoding="ascii")
         (tmp / "n32l40x.h").write_text("#ifndef N32L40X_H\n#define N32L40X_H\n#include <stdint.h>\ntypedef int BitAction;\n#define ENABLE 1\n#define DISABLE 0\n#define Bit_RESET 0\n#define GPIOA ((void*)0)\n#define GPIO_PIN_3 3\n#define GPIO_PIN_12 12\nint GPIO_ReadInputDataBit(void*,unsigned);\nvoid NVIC_SystemReset(void);\n#endif\n", encoding="ascii")
         cmd = [
-            cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-ffunction-sections",
+            cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-DA300_COMPACT_FORMAT=1", "-ffunction-sections",
             "-fdata-sections", "-I", str(tmp), "-I", str(ROOT / "include"), str(harness),
             str(ROOT / "src" / "at_config.c"), str(ROOT / "src" / "sms_command.c"),
             str(ROOT / "src" / "sms_ingress.c"), str(ROOT / "src" / "f39_command.c"),
             str(ROOT / "src/plate_encoding.c"), str(ROOT / "src" / "f39_config_adapter.c"), str(ROOT / "src" / "f39_reply.c"),
+            str(ROOT / "src/a300_format.c"),
             str(ROOT / "src" / "terminal_identity.c"),
             "-Wl,--gc-sections", "-lm", "-o", str(exe),
         ]
@@ -200,6 +202,9 @@ PRODUCTION_HARNESS = r'''
 #include "config.h"
 #include "ec800m.h"
 #include "f39_reply.h"
+#ifdef A300_FIRMWARE_IMAGE
+#include "f39_production_bindings.h"
+#endif
 #include "fota.h"
 #include "log_platform.h"
 fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
@@ -212,6 +217,7 @@ volatile uint32_t g_tick_ms;
 static device_config_t config;
 static unsigned saves, reset_scheduled, system_resets;
 static unsigned cfg_saves, timer_calls, network_calls, gnss_calls;
+static uint8_t reconnect_mask;
 static unsigned jt808_register_calls, relay_calls, relay_state;
 static unsigned jt808_profile_calls;
 static char runtime_model[CFG_MODEL_LEN];
@@ -247,6 +253,7 @@ void jt808_set_heartbeat_s(uint16_t s) { (void)s; ++timer_calls; }
 void jt808_set_report_interval(uint16_t a, uint16_t b) { (void)a; (void)b; ++timer_calls; }
 void jt808_set_server(const char *ip, uint16_t p, bool backup) { if (backup) { strncpy(backup_endpoint, ip, sizeof(backup_endpoint) - 1U); backup_endpoint[sizeof(backup_endpoint) - 1U] = '\0'; backup_endpoint_port = p; } ++network_calls; }
 void tcp_manager_reconnect(void) { ++network_calls; }
+void tcp_manager_reconnect_channels(uint8_t mask) { reconnect_mask=mask; ++network_calls; }
 bool fota_request_check(void) { return true; }
 void gnss_vendor_set_type(gnss_type_t t) { (void)t; ++gnss_calls; }
 void agnss_init(gnss_type_t t) { (void)t; ++gnss_calls; }
@@ -276,12 +283,36 @@ void GPIO_ResetBits(void *p, unsigned pin) { (void)p; (void)pin; }
 int GPIO_ReadInputDataBit(void *p, unsigned pin) { (void)p; (void)pin; return 1; }
 bool hw_acc_is_on(void) { return true; }
 
+#ifdef A300_FIRMWARE_IMAGE
+static unsigned transport_acks, transport_replies;
+void jt808_on_recv(uint8_t ch, const uint8_t *data, uint16_t len)
+{ (void)ch; (void)data; (void)len; }
+void fota_ec800m_rx(uint8_t ch, const uint8_t *data, uint16_t len)
+{ (void)ch; (void)data; (void)len; }
+void agnss_online_rx(uint8_t ch, const uint8_t *data, uint16_t len)
+{ (void)ch; (void)data; (void)len; }
+void cfg_query_ack(bool success, void *context) { (void)success; (void)context; ++transport_acks; }
+void jt808_text_command_ack(bool success, void *context) { (void)success; (void)context; ++transport_acks; }
+void jt808_text_command_reply(const uint8_t *text, uint16_t len, void *context)
+{ (void)text; (void)len; (void)context; ++transport_replies; }
+static void wrong_transport_ack(bool success, void *context)
+{ (void)success; (void)context; assert(0); }
+#endif
+
 static void sms_dispatch(const char *from, const char *text) {
     uint16_t n = (uint16_t)strlen(text);
     (void)at_config_execute_sms(from, (const uint8_t *)text, n);
 }
+#ifdef A300_FIRMWARE_IMAGE
+void sms_command_execute(const char *from, const char *text) { sms_dispatch(from, text); }
+#endif
+#ifndef A300_FIRMWARE_IMAGE
 static bool persist(const device_config_t *c, void *ctx) { (void)ctx; config = *c; ++saves; return true; }
 static void reset_schedule(uint32_t delay, void *ctx) { (void)ctx; assert(delay == F39_RESET_DELAY_MS); ++reset_scheduled; }
+#else
+static bool wrong_persist(const device_config_t *c, void *ctx) { (void)c; (void)ctx; return true; }
+static void wrong_timer(void *ctx) { (void)ctx; }
+#endif
 
 static void feed_cmt(const char *from, const char *body) {
     char line[64];
@@ -297,13 +328,20 @@ static void complete_sms(bool ok) {
 }
 
 int main(void) {
+#ifndef A300_FIRMWARE_IMAGE
     f39_platform_t platform;
+#endif
     memset(&config, 0, sizeof config);
     config.gnss_type = GNSS_TYPE_TAU804M;
     ec800m_test_set_state(EC800M_STATE_READY);
     ec800m_test_set_imei("123456789012345");
     ec800m_test_set_iccid("89860492192080502719");
+#ifdef A300_FIRMWARE_IMAGE
+    sms_set_recv_cb(sms_command_execute);
+#else
     sms_set_recv_cb(sms_dispatch);
+#endif
+#ifndef A300_FIRMWARE_IMAGE
     memset(&platform, 0, sizeof platform);
     platform.config = &config; platform.persist = persist;
     platform.version = "V3"; platform.version_len = 2;
@@ -312,7 +350,39 @@ int main(void) {
     at_config_bind_f39(&platform, NULL, reset_schedule, NULL);
     /* NULL send is invalid, so defaults are used by at_config_init(). */
     at_config_bind_f39(NULL, NULL, NULL, NULL);
+#endif
     at_config_init();
+#ifdef A300_FIRMWARE_IMAGE
+    {
+        unsigned before = saves;
+        assert(!at_config_execute_text_response((const uint8_t *)"FREQ,5,60", 9U,
+            wrong_transport_ack, NULL, NULL));
+        assert(saves == before && transport_acks == 0U);
+        assert(!at_config_execute_text_response((const uint8_t *)"BAD", 3U,
+            cfg_query_ack, NULL, NULL));
+        assert(transport_acks == 1U && saves == before);
+        assert(at_config_execute_text_response((const uint8_t *)"FREQ,5,60", 9U,
+            jt808_text_command_ack, jt808_text_command_reply, NULL));
+        assert(transport_acks == 2U && transport_replies == 1U && saves == before + 1U);
+    }
+    {
+        f39_request_t request;
+        f39_reply_t reply;
+        f39_platform_t bad = {0};
+        uint32_t effects = 0U;
+        unsigned before = saves;
+        assert(f39_parse((const uint8_t *)"FREQ,5,60", 9U, &request) == F39_RESULT_OK);
+        bad.config = &config;
+        bad.persist = wrong_persist;
+        bad.timer_refresh = f39_production_timer_refresh;
+        assert(f39_execute_deferred(&request, &bad, &reply, &effects) != F39_RESULT_OK);
+        assert(effects == F39_EFFECT_NONE && saves == before);
+        bad.persist = f39_production_persist;
+        bad.timer_refresh = wrong_timer;
+        assert(f39_execute_deferred(&request, &bad, &reply, &effects) != F39_RESULT_OK);
+        assert(effects == F39_EFFECT_NONE && saves == before);
+    }
+#endif
 
     /* A runtime APN change rebuilds context 1 before data traffic resumes. */
     config.autoapn_en = 0U;
@@ -354,10 +424,12 @@ int main(void) {
     modem_step(); sms_process(); modem_step(); complete_sms(true);
     assert(!strcmp(config.server_ip, "default.example") && config.server_port == 9001);
     assert(cfg_saves > 0 && network_calls >= 2);
+    assert(reconnect_mask == (1U << EC800M_CH_MAIN));
     feed_cmt("13900000001", "FIP,58.61.154.237,7018#");
     modem_step(); sms_process(); modem_step(); complete_sms(true);
     assert(!strcmp(config.backup_ip, "58.61.154.237") && config.backup_port == 7018U);
     assert(!strcmp(backup_endpoint, "58.61.154.237") && backup_endpoint_port == 7018U);
+    assert(reconnect_mask == (1U << EC800M_CH_BACKUP));
     feed_cmt("13900000001", "FIP,0#");
     modem_step(); sms_process(); modem_step(); complete_sms(true);
     assert(config.backup_ip[0] == '\0' && config.backup_port == 0U);
@@ -608,7 +680,7 @@ uint8_t USART_ReceiveData(usart_t *u) { (void)u; return 0; }
 void IWDG_ReloadKey(void) { ++g_tick_ms; }
 ''', encoding="ascii")
         cmd = [
-            cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-Wno-dangling-else", "-DEC800M_HOST_TEST",
+            cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-Wno-dangling-else", "-DEC800M_HOST_TEST", "-DA300_COMPACT_FORMAT=1",
             "-I", str(tmp), "-I", str(ROOT / "include"), str(tmp / "harness.c"), str(tmp / "stub.c"),
             str(ROOT / "src" / "ec800m.c"), str(ROOT / "src" / "ec800m_at_response.c"),
             str(ROOT / "src" / "peripherals.c"),
@@ -616,11 +688,18 @@ void IWDG_ReloadKey(void) { ++g_tick_ms; }
             str(ROOT / "src" / "sms_ingress.c"), str(ROOT / "src" / "f39_command.c"),
             str(ROOT / "src" / "plate_encoding.c"),
             str(ROOT / "src" / "f39_config_adapter.c"), str(ROOT / "src" / "f39_reply.c"),
+            str(ROOT / "src/a300_format.c"),
             str(ROOT / "src" / "terminal_identity.c"),
             "-Wl,--gc-sections", "-lm", "-o", str(tmp / "production.exe"),
         ]
-        subprocess.run(cmd, check=True, cwd=ROOT)
-        subprocess.run([str(tmp / "production.exe")], check=True, cwd=ROOT)
+        for firmware_image in (False, True):
+            executable = tmp / ("firmware_binding.exe" if firmware_image else "production.exe")
+            variant_cmd = cmd.copy()
+            variant_cmd[-1] = str(executable)
+            if firmware_image:
+                variant_cmd.insert(1, "-DA300_FIRMWARE_IMAGE=1")
+            subprocess.run(variant_cmd, check=True, cwd=ROOT)
+            subprocess.run([str(executable)], check=True, cwd=ROOT)
 
 
 if __name__ == "__main__":

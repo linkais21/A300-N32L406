@@ -298,13 +298,12 @@ static void test_corner_switch_survives_restart(void)
     next.anglerep_en = 0U;
     assert(cfg_store_candidate(&next));
     restart_without_fault();
-    next.anglerep_en = 1U;
-    assert(cfg_get()->anglerep_en == 1U); /* OTA starts enabled without commands. */
+    assert(cfg_get()->anglerep_en == 0U); /* Persisted opt-out survives restart. */
     assert(memcmp(cfg_get(), &next, sizeof(next)) == 0);
     /* No migration erase/program is required, including repeated boots. */
     assert(operation_count == 0);
     restart_without_fault();
-    assert(cfg_get()->anglerep_en == 1U);
+    assert(cfg_get()->anglerep_en == 0U);
     assert(operation_count == 0);
     next = *cfg_get();
     next.anglerep_en = 1U;

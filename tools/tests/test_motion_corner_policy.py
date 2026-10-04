@@ -37,6 +37,25 @@ static void enter_turn(motion_corner_ctx_t *c, unsigned *ms) {
 int main(void) {
     motion_corner_ctx_t c;
     motion_corner_config_t cfg = motion_corner_default_config();
+    /* Opposing headings cancel entry even after the first threshold crossing. */
+    {
+        motion_corner_config_t deferred = cfg;
+        deferred.enter_accum_deg = 10.0f;
+        deferred.confirm_samples = 4U;
+        motion_corner_init(&c, &deferred);
+        step(&c, 0.0f, 40.0f, 1000U);
+        step(&c, 10.0f, 40.0f, 2000U);
+        assert(motion_corner_state(&c) == MOTION_CORNER_TURN_ENTER);
+        step(&c, 5.0f, 40.0f, 3000U);
+        step(&c, 6.0f, 40.0f, 4000U);
+        motion_corner_event_t cancelled = step(&c, 7.0f, 40.0f, 5000U);
+        assert(motion_corner_state(&c) == MOTION_CORNER_STRAIGHT);
+        assert(!cancelled.report_due && !motion_corner_pending_candidates(&c));
+    }
+    assert(cfg.enter_accum_deg == 30.0f && cfg.exit_stable_deg == 0.5f);
+    /* The scenarios below also exercise non-default policy thresholds. */
+    cfg.enter_accum_deg = 20.0f;
+    cfg.exit_stable_deg = 3.0f;
     motion_corner_init(&c, &cfg);
 
     /* Heading wrap 359 -> 1 is a +2 degree step, not -358. */
@@ -44,6 +63,15 @@ int main(void) {
     e = step(&c, 1.0f, 40.0f, 2000);
     assert(e.reason == MOTION_CORNER_REASON_NONE);
     assert(motion_corner_heading_delta(359.0f, 1.0f) == 2.0f);
+    assert(motion_corner_heading_delta(1.0f, 359.0f) == -2.0f);
+    assert(motion_corner_heading_delta(0.0f, 180.0f) == 180.0f);
+    assert(motion_corner_heading_delta(180.0f, 0.0f) == -180.0f);
+    motion_corner_ctx_t invalid_ctx;
+    motion_corner_init(&invalid_ctx, NULL);
+    step(&invalid_ctx, 10.0f, 40.0f, 1000);
+    motion_corner_sample_t invalid_heading = make_sample(360.0f, 40.0f, 2000);
+    motion_corner_step(&invalid_ctx, &invalid_heading);
+    assert(invalid_ctx.previous_heading == 10.0f);
 
     /* Seven same-direction 3 degree samples reach the 20 degree gate. */
     unsigned ms = 3000;
@@ -72,7 +100,9 @@ int main(void) {
     assert(motion_corner_interval_ms(80.0f, false) == 2000U);
     assert(motion_corner_interval_ms(10.0f, true) == 1000U);
 
-    /* Five stable <=3 degree samples transition through TURN_EXIT. */
+    while (motion_corner_pending_candidates(&c))
+        motion_corner_consume_candidate(&c);
+    /* Five stable <=3 degree samples emit the exit and leave the turn. */
     for (int i = 0; i < 5; ++i) {
         e = step(&c, 22.0f + i, 40.0f, ms);
         ms += 1000;
@@ -98,15 +128,16 @@ int main(void) {
     /* Report generation stops at 12 accepted candidates. */
     motion_corner_reset(&c); ms = 1000; enter_turn(&c, &ms);
     unsigned accepted = 0;
-    while (accepted < 12) {
+    for (unsigned attempts = 0; accepted < 12 && attempts < 100U; ++attempts) {
         motion_corner_candidate_t x;
         if (motion_corner_peek_candidate(&c, &x)) {
             motion_corner_consume_candidate(&c);
             ++accepted;
         }
-        e = step(&c, 21.0f + 4.0f * accepted, 80.0f, ms);
+        e = step(&c, 21.0f + 4.0f * (attempts + 1U), 80.0f, ms);
         ms += 2000;
     }
+    assert(accepted == 12);
     assert(motion_corner_state(&c) == MOTION_CORNER_STRAIGHT);
     assert(!e.report_due || accepted == 12);
 
@@ -142,7 +173,8 @@ def main() -> int:
         build = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
         if build.returncode:
             raise AssertionError("host build failed:\n" + build.stderr)
-        run = subprocess.run([str(exe)], cwd=ROOT, capture_output=True, text=True)
+        run = subprocess.run([str(exe)], cwd=ROOT, capture_output=True, text=True,
+                             timeout=15)
         if run.returncode:
             raise AssertionError("motion corner policy failed:\n" + run.stderr)
     print("motion corner policy: PASS")

@@ -165,6 +165,17 @@ struct uECC_Curve_t {
 #endif
 };
 
+#ifdef A300_FIRMWARE_IMAGE
+#if !uECC_SUPPORTS_secp256r1 || uECC_SUPPORTS_secp160r1 || \
+    uECC_SUPPORTS_secp192r1 || uECC_SUPPORTS_secp224r1 || \
+    uECC_SUPPORTS_secp256k1 || uECC_PLATFORM != uECC_arch_other || \
+    uECC_OPTIMIZATION_LEVEL == 0
+#error "A300 direct curve binding requires the reviewed secp256r1-only configuration"
+#endif
+static const struct uECC_Curve_t curve_secp256r1;
+static void vli_mmod_fast_secp256r1(uECC_word_t *result, uECC_word_t *product);
+#endif
+
 #if uECC_VLI_NATIVE_LITTLE_ENDIAN
 static void bcopy(uint8_t *dst,
                   const uint8_t *src,
@@ -629,7 +640,14 @@ uECC_VLI_API void uECC_vli_modMult_fast(uECC_word_t *result,
     uECC_word_t product[2 * uECC_MAX_WORDS];
     uECC_vli_mult(product, left, right, curve->num_words);
 #if (uECC_OPTIMIZATION_LEVEL > 0)
+#ifdef A300_FIRMWARE_IMAGE
+    if (curve == &curve_secp256r1)
+        vli_mmod_fast_secp256r1(result, product);
+    else
+        uECC_vli_mmod(result, product, curve->p, curve->num_words);
+#else
     curve->mmod_fast(result, product);
+#endif
 #else
     uECC_vli_mmod(result, product, curve->p, curve->num_words);
 #endif
@@ -1483,8 +1501,14 @@ int uECC_verify(const uint8_t *public_key,
     uECC_word_t _public[uECC_MAX_WORDS * 2];
 #endif    
     uECC_word_t r[uECC_MAX_WORDS], s[uECC_MAX_WORDS];
-    wordcount_t num_words = curve->num_words;
-    wordcount_t num_n_words = BITS_TO_WORDS(curve->num_n_bits);
+    wordcount_t num_words;
+    wordcount_t num_n_words;
+
+#ifdef A300_FIRMWARE_IMAGE
+    if (curve != &curve_secp256r1) return 0;
+#endif
+    num_words = curve->num_words;
+    num_n_words = BITS_TO_WORDS(curve->num_n_bits);
 
     rx[num_n_words - 1] = 0;
     r[num_n_words - 1] = 0;
@@ -1547,7 +1571,11 @@ int uECC_verify(const uint8_t *public_key,
     for (i = num_bits - 2; i >= 0; --i) {
         uECC_word_t index;
         uECC_WATCHDOG_HOOK();
+#ifdef A300_FIRMWARE_IMAGE
+        double_jacobian_default(rx, ry, z, curve);
+#else
         curve->double_jacobian(rx, ry, z, curve);
+#endif
 
         index = (!!uECC_vli_testBit(u1, i)) | ((!!uECC_vli_testBit(u2, i)) << 1);
         point = points[index];

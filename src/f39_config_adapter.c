@@ -5,6 +5,10 @@
 #include <stddef.h>
 #include <string.h>
 
+#ifdef A300_FIRMWARE_IMAGE
+#include "f39_production_bindings.h"
+#endif
+
 static bool argument(const f39_request_t *request, uint8_t index,
                      const uint8_t **data, uint16_t *length)
 {
@@ -513,8 +517,14 @@ f39_result_t f39_commit_config(f39_transaction_t *transaction)
         return F39_RESULT_INVALID;
     }
     transaction->prepared = false;
+#ifdef A300_FIRMWARE_IMAGE
+    if (transaction->persist != f39_production_persist ||
+        !f39_production_persist(&transaction->candidate,
+                                transaction->persist_context)) {
+#else
     if (!transaction->persist(&transaction->candidate,
                               transaction->persist_context)) {
+#endif
         transaction->effects = F39_EFFECT_NONE;
         return F39_RESULT_INVALID;
     }

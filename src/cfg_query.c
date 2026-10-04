@@ -1,12 +1,15 @@
 #include "cfg_query.h"
+#include "f39_command.h"
 #include "service_workspace.h"
 #include "ec800m.h"
 #include "at_config.h"
+#include "at_config_production_callbacks.h"
 #include "debug_uart.h"
 #include "config.h"
 #include "work_mode_sleep.h"
 #include <string.h>
 #include <stdio.h>
+#include "a300_format.h"
 
 static uint8_t s_flags;
 #define CFGQ_BUSY 1U
@@ -29,7 +32,7 @@ static bool cfg_query_id(uint8_t out[8])
     return true;
 }
 
-static void cfg_query_ack(bool success, void *context)
+void cfg_query_ack(bool success, void *context)
 {
     uint8_t *req = context;
     if (!success) return;
@@ -40,13 +43,18 @@ static void cfg_query_ack(bool success, void *context)
     s_result = ec800m_udp_send_once(CFG_QUERY_HOST, CFG_QUERY_PORT, req, 16U) == 0 ? 0 : -1;
 }
 
-static int cfg_query_apply(const uint8_t *p, uint16_t n, uint8_t *req)
+#define CFG_QUERY_RX_CAPACITY 384U
+typedef char cfg_query_workspace_fits[
+    (SERVICE_WORKSPACE_CAPACITY >= CFG_QUERY_RX_CAPACITY +
+     F39_COMMAND_MAX_LENGTH + 16U) ? 1 : -1];
+
+static int cfg_query_apply(const uint8_t *p, uint16_t n, uint8_t *req,
+                           uint8_t command[F39_COMMAND_MAX_LENGTH])
 {
     if (n == 1U && p[0] == 0U) {
         dbg_printf("[CFGQ] pending=0\r\n");
         return 0;
     }
-    uint8_t command[F39_COMMAND_MAX_LENGTH];
     uint16_t used = 8U;
     uint8_t items = 0U;
     if (n < 2U || *p++ != 1U) return -1;
@@ -90,12 +98,12 @@ static int cfg_query_apply(const uint8_t *p, uint16_t n, uint8_t *req)
                 return at_config_execute_text_command_ack(value, bytes, cfg_query_ack, req) ? 1 : -1;
         } else {
             if (f39_lookup_root(name, names) == F39_OPERATION_INVALID ||
-                used + names + 1U >= sizeof command) return -1;
+                used + names + 1U >= F39_COMMAND_MAX_LENGTH) return -1;
             memcpy(command + used, name, names); used += names;
             command[used++] = ',';
         }
         if (bytes == 0U || memchr(value, '*', bytes) || memchr(value, '#', bytes) ||
-            (uint32_t)used + bytes + 1U > sizeof command) return -1;
+            (uint32_t)used + bytes + 1U > F39_COMMAND_MAX_LENGTH) return -1;
         memcpy(command + used, value, bytes); used += bytes;
         command[used++] = '*';
         ++items;
@@ -131,7 +139,7 @@ void cfg_query_process(void)
         req[3] = 0U; req[4] = 9U; req[13] = 0U;
         req[14] = cfg_query_checksum(req, 14U); req[15] = 0x0dU;
         if (ec800m_udp_txn_start(CFG_QUERY_HOST, CFG_QUERY_PORT, req, 16U,
-                                 buf, 384U, 8000U) != 0) {
+                                 buf, CFG_QUERY_RX_CAPACITY, 8000U) != 0) {
             s_result = -1; goto done;
         }
         ++s_attempts; s_started = true; return;
@@ -148,7 +156,8 @@ void cfg_query_process(void)
         cfg_query_parse_92(buf, (uint16_t)s_result, &req[5])) {
         uint16_t data_len = (uint16_t)(((uint16_t)buf[3] << 8) | buf[4]);
         uint16_t payload_len = data_len >= 8U ? (uint16_t)(data_len - 8U) : 0U;
-        int applied = payload_len ? cfg_query_apply(buf + 13U, payload_len, req) : 0;
+        int applied = payload_len ? cfg_query_apply(
+            buf + 13U, payload_len, req, buf + CFG_QUERY_RX_CAPACITY) : 0;
         if (applied <= 0) { s_result = (int16_t)applied; goto done; }
     } else s_result = -1;
 done:

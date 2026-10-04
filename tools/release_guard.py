@@ -46,7 +46,7 @@ INTEGER_LITERAL = re.compile(
 # command spec, not hardcoded seven-byte JT808 terminal ids.
 IDENTITY_LITERAL_ALLOWLIST = {"DUALSET", "VIBSENS", "invalid"}
 IDENTITY_SERVICE_REQUIREMENTS = {
-    "src/main.c": ("main", re.compile(
+    "src/main.c": ("boot_init", re.compile(
         r"\bs_terminal\.terminal_id\s*\[\s*0\s*\]\s*=\s*'\\0'\s*;"
     ), None, ()),
     "src/jt808.c": ("refresh_terminal_identity", re.compile(
@@ -143,8 +143,8 @@ TRIGRAPHS = {
     "??!": "|", "??<": "{", "??>": "}", "??-": "~",
 }
 CANONICAL_CONSUMER_SHA256 = {
-    # Reviewed: OTA ERROR permits config polling; identity initialization unchanged.
-    "src/main.c": "23d778bff85cc6dae773751666afe39513aa886dfb362c443073c85715e5ce5c",
+    # Reviewed: stack-split boot_init; identity initialization remains unchanged.
+    "src/main.c": "c9239822ad6a20b0046c004cd90ebf8316f7dac631e6a48885a7126fef15100d",
     "src/jt808.c": "d38583fc4d2e47eab4fe184b90a21205dc6e2606266a20e824bff69321871586",
     "src/jt808_params.c": "2f4c5cefaa334a336896ec36cc7feaaa56ae1b56dcaef44e4b33a33008dc7a11",
     "src/jt808_terminal_info.c": "0ce1a9cf82880062c0d84b88bc50ae047c59ec7f6e5e17ea59266b50a0499d49",
@@ -152,12 +152,12 @@ CANONICAL_CONSUMER_SHA256 = {
     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
 }
 CANONICAL_IDENTITY_FILE_SHA256 = {
-    # Reviewed: V3.071 identity/counter only; generated timestamps stay normalized.
-    "include/config.h": "65035af4d3c34932ded7df54c47c5cd558b7763eb80a60420f75ae97dd80c612",
-    "include/build_version.h": "fa5217260129bb93b55ded2090be088888d04e459171fe17aa489492a13eadf5",
+    # Reviewed: V3.084/3084 identity; generated timestamps stay normalized.
+    "include/config.h": "829cd4a132923ecc8092fd179803c6378432a39ebdea731314acececa5ad3900",
+    "include/build_version.h": "7388459fa5b86fe9ac0c22ea3aba1e3b2c81e6dd62116e976c3b19517f259455",
     "include/f39_reply.h": "4519c084bcc677d23c02aa4ac509f2390527f16111139f011052017f08c615ed",
     # Reviewed: remove unused heartbeat getter declaration only; identity/wire unchanged.
-    "include/jt808.h": "d1f6f11e0fcfb1ee85062080501c1e8a3901f8d313ae96d0b206393ab694e71d",
+    "include/jt808.h": "86a37c1e7c89ac947083f88d475ab5caf5ba41a4ef7300ee06b7824f62fb174d",
     "include/jt808_terminal_info.h": "ed27611b540da8fe8ed50a3d349d52ada04f2e66aa62db8f3d6b85497c35d8df",
 }
 
@@ -350,6 +350,16 @@ def c_function_body(text: str, name: str) -> str | None:
     return None
 
 
+def main_calls_boot_init_first(text: str) -> bool:
+    body = c_function_body(text, "main")
+    if body is None or body.count("boot_init(") != 1:
+        return False
+    prefix, separator, _ = body.partition("while (1)")
+    return bool(separator and re.fullmatch(
+        r"\s*bool\s+cfg_query_started\s*=\s*false\s*;\s*boot_init\s*\(\s*\)\s*;\s*",
+        prefix))
+
+
 def canonical_body_digest(body: str) -> str:
     """Hash a comment-free body after stable newline/trailing-space normalization."""
     normalized = body.replace("\r\n", "\n").replace("\r", "\n")
@@ -505,6 +515,9 @@ def scan(root: Path, paths: tuple[str, ...] = DEFAULT_PATHS):
                 if pattern.search(line):
                     findings.append((path, number, token, line.strip()))
         relative = path.relative_to(root).as_posix()
+        if relative == "src/main.c" and not main_calls_boot_init_first("\n".join(lines)):
+            findings.append((path, 0, "<identity-service>",
+                             "boot_init() must run once before the main loop"))
         expected_file_digest = CANONICAL_IDENTITY_FILE_SHA256.get(relative)
         if (expected_file_digest is not None and canonical_file_digest(
                 release_texts.get(path, ""), relative) != expected_file_digest):

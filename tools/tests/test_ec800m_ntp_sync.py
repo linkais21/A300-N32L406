@@ -66,6 +66,7 @@ void delay_us(uint32_t us);
 extern volatile uint32_t g_tick_ms;
 #define TICK_MS() (g_tick_ms)
 #define EC800M_RX_BUF_SIZE 1024U
+#define EC800M_DMA_CH_RX ((dma_t *)8)
 #define EC800M_POWER_EN_PORT GPIOA
 #define EC800M_POWER_EN_PIN GPIO_PIN_15
 #define EC800M_PWRKEY_PORT GPIOA

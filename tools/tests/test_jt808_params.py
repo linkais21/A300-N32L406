@@ -16,11 +16,13 @@ HARNESS=r'''
 #include "jt808_terminal_info.h"
 #include "work_mode.h"
 #include "service_workspace.h"
+#include "config.h"
 volatile uint32_t g_tick_ms;
 static device_config_t cfg, disk;
 static unsigned saves, effects, reconnects, acks, pdp_restarts;
 static bool fail_store;
 static uint8_t result, response[1024];
+static uint8_t reconnect_mask;
 static uint16_t response_len;
 device_config_t *cfg_get(void){return &cfg;}
 bool cfg_store_candidate(const device_config_t *c){++saves;if(fail_store)return false;disk=cfg=*c;return true;}
@@ -33,7 +35,8 @@ void jt808_set_terminal_profile(const char *m,const char *p){(void)m;(void)p;++e
 void jt808_reset_endpoint_auth(uint8_t mask){assert(mask);++effects;}
 void jt808_request_reregister(void){++effects;}
 void tcp_manager_reconnect(void){assert(acks);++reconnects;}
-void tcp_manager_request_reconnect(void){assert(acks);++reconnects;}
+void tcp_manager_request_reconnect(void){assert(acks);++reconnects;reconnect_mask=0x09U;}
+void tcp_manager_reconnect_channels(uint8_t mask){assert(acks);++reconnects;reconnect_mask=mask;}
 void ec800m_restart_pdp(void){assert(acks);++effects;++pdp_restarts;}
 uint32_t work_mode_sleep_monotonic_s(void){return 777;}
 void work_mode_config_changed(const device_config_t *c,uint32_t s){assert(c==&cfg);(void)s;++effects;}
@@ -81,8 +84,20 @@ int main(void){
     b[0]=1;n=1+item(b+1,0x18,9100,4);
     jt808_params_handle_set(b,n,9);assert(result==0&&cfg.server_port==9100);
     assert(cfg.backup_port==7018&&!strcmp(cfg.backup_auth_code,"BACKUP-AUTH"));
+    assert(reconnect_mask==(1U<<TCP_CH_MAIN));
     cfg=disk;assert(cfg.backup_port==7018);
-    s=saves;jt808_params_handle_set(b,n,9);assert(result==0&&saves==s);
+    s=saves;unsigned previous_reconnects=reconnects;
+    jt808_params_handle_set(b,n,9);assert(result==0&&saves==s);
+    assert(reconnects==previous_reconnects);
+    /* Backup-only and simultaneous changes use their own channel masks. */
+    strcpy(cfg.auth_code,"MAIN-AUTH");
+    n=1+item(b+1,0x17,0x6261636b,4);
+    jt808_params_handle_set(b,n,9);
+    assert(result==0&&reconnect_mask==(1U<<TCP_CH_BACKUP));
+    assert(!strcmp(cfg.auth_code,"MAIN-AUTH"));
+    b[0]=2;n=1+item(b+1,0x13,0x6d61696e,4);n+=item(b+n,0x17,0x62616b32,4);
+    jt808_params_handle_set(b,n,9);
+    assert(result==0&&reconnect_mask==((1U<<TCP_CH_MAIN)|(1U<<TCP_CH_BACKUP)));
     b[0]=1;n=1+item(b+1,0x80,0xffffffff,4);reject(b,n);
     n=1+item(b+1,0x18,65536,4);reject(b,n);
     n=1+item(b+1,0x29,0,4);reject(b,n);
@@ -114,6 +129,7 @@ int main(void){
     cfg.autoapn_en=1;b[0]=1;n=1+item(b+1,0x10,0x74657374,4);
     jt808_params_handle_set(b,n,9);
     assert(result==0&&!cfg.autoapn_en&&!strcmp(cfg.apn,"test")&&pdp_restarts==1);
+    assert(reconnect_mask==((1U<<TCP_CH_MAIN)|(1U<<TCP_CH_BACKUP)));
     cfg=disk;assert(!cfg.autoapn_en&&!strcmp(cfg.apn,"test"));
     s=saves;jt808_params_handle_set(b,n,9);assert(saves==s&&pdp_restarts==1);
     n=1+item(b+1,0x11,0x75736572,4);jt808_params_handle_set(b,n,9);

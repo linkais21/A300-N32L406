@@ -51,6 +51,7 @@ int main(void) {
 
 def main():
     source = dual.HARNESS.split('int main(void) {')[0]
+    source += '\n#define HOST_REAL_GPS\n#include "' + (ROOT/'tools/tests/jt808_host_support.h').as_posix() + '"\n'
     source = '\n'.join(line for line in source.splitlines()
                        if not line.startswith(('const gps_data_t *gps_get_data(',
                                                'bool gps_get_last_trusted(',

@@ -44,7 +44,12 @@ bool boot_bcr_readback(uint32_t a,const void*p,uint32_t n){step();bool ok=!memcm
 void boot_bcr_retry_wait(unsigned attempt,bool io){(void)attempt;(void)io;}
 bool boot_int_flash_read(uint32_t a,void*p,uint32_t n){assert(a>=APP_FLASH_BASE && a-APP_FLASH_BASE+n<=sizeof internal);return read_bytes(internal+a-APP_FLASH_BASE,p,n);}
 bool boot_int_flash_program(uint32_t a,const void*p,uint32_t n){assert(a>=APP_FLASH_BASE && a-APP_FLASH_BASE+n<=sizeof internal);return program_bytes(internal+a-APP_FLASH_BASE,p,n);}
-bool boot_int_flash_erase(uint32_t a,uint32_t n){assert(a%2048==0 && n%2048==0 && a>=APP_FLASH_BASE && a-APP_FLASH_BASE+n<=sizeof internal);return erase_bytes(internal+a-APP_FLASH_BASE,n);}
+bool boot_int_flash_erase(uint32_t a,uint32_t n){
+    bcr_record_t committed;
+    assert(bcr_load(&committed)==BCR_LOAD_FOUND && committed.reserved==0U);
+    assert(a%2048==0 && n%2048==0 && a>=APP_FLASH_BASE && a-APP_FLASH_BASE+n<=sizeof internal);
+    return erase_bytes(internal+a-APP_FLASH_BASE,n);
+}
 bool boot_rollback_counter(uint32_t *v){*v=1;return true;}
 bool firmware_signature_verify(const uint8_t *d,const uint8_t *s){(void)d;return s[0]==0x5a;}
 void boot_watchdog_feed(void){}
@@ -55,7 +60,8 @@ static void install(void){bcr_record_t r;assert(bcr_load(&r)==BCR_LOAD_FOUND);if
 int main(void){
     bcr_record_t r={0};int count;static int scenarios;
     memset(ext,255,sizeof ext);memcpy(ext+0x10000,package,sizeof package);memcpy(ext+FOTA_AUTH_SLOT_A_ADDR,auth,sizeof auth);
-    r.sequence=1;r.state=BCR_PENDING;r.image_version=3002;r.transaction_length=sizeof package-32;r.target_address=APP_FLASH_BASE;
+    r.sequence=1;r.state=BCR_PENDING;r.reserved=BCR_INSTALL_NOT_STARTED;
+    r.image_version=3002;r.transaction_length=sizeof package-32;r.target_address=APP_FLASH_BASE;
     assert(bcr_commit(&r));assert(BCR_SLOT_B_ADDR==BCR_SLOT_A_ADDR+4096);
     memcpy(baseline,ext+BCR_SLOT_A_ADDR,8192);memset(internal,0x31,sizeof internal);
     cut=100000000;steps=0;install();count=steps;cut=-1;

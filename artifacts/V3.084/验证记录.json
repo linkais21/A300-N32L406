@@ -1,0 +1,109 @@
+{
+  "firmware_version": "T360-A300_406_20261004191838,V3.084",
+  "package_structure": {
+    "passed": true,
+    "version": "T360-A300_406_20261004191838,V3.084",
+    "app_bytes": 105124,
+    "ota_bytes": 105156,
+    "combined_bytes": 129700,
+    "unchanged_business_sources": true,
+    "hex_matches_bin": true,
+    "ota_matches_app": true,
+    "archived_platform_signature_verified": true
+  },
+  "production_functional_replay": {
+    "version": "V3.084",
+    "validation": "production NMEA/filter/JT808 I/O replay; virtual hardware/network/storage",
+    "cases": {
+      "clock_drift_and_correction": {
+        "passed": true,
+        "simulated_tick_ppm": 1000,
+        "gnss_elapsed_seconds": 110000,
+        "clock_error_before_after_ntp_s": [
+          0,
+          0
+        ]
+      },
+      "loss_recovery_query_alarm_storage": {
+        "passed": true,
+        "checks": {
+          "historical_uses_measurement_time": true,
+          "historical_coordinates_preserved": true,
+          "historical_not_fixed": true,
+          "acc_and_alarm_sent": true,
+          "blind_zone_pending_then_stored": true,
+          "recovery_live_time_and_coordinates": true,
+          "query_response_present": true
+        },
+        "wire_frames": 37,
+        "historical_time_errors_s": [
+          0
+        ]
+      },
+      "sleep_calendar_tick_wrap": {
+        "passed": true,
+        "checks": {
+          "rtc_calendar_and_tick_wrap": true,
+          "sleep_position_time_not_advanced": true,
+          "before_first_fix_no_position_fabricated": true
+        }
+      },
+      "restart_legacy_cached_position": {
+        "passed": true,
+        "checks": {
+          "old_flash_clock_not_used_as_position_time": true,
+          "restart_still_reports_alarm_and_acc": true,
+          "fresh_fix_reenables_retained_reporting": true,
+          "reports_complete": true
+        }
+      },
+      "stationary_filter_then_loss": {
+        "passed": true,
+        "checks": {
+          "stationary_live_uses_anchor": true,
+          "no_fix_keeps_same_selected_position": true,
+          "same_measurement_utc": true,
+          "no_fix_remains_invalid": true
+        },
+        "historical_vs_live_offset_m": 0.0
+      },
+      "supplied_road_records": {
+        "passed": true,
+        "tracks": {
+          "5002": {
+            "records": 985,
+            "invalid_time_mismatches": 0,
+            "measurement_time_mismatches": 0,
+            "suspect_segments": 1,
+            "max_suspect_distance_m": 151.84,
+            "passed": true
+          },
+          "0063": {
+            "records": 2682,
+            "invalid_time_mismatches": 0,
+            "measurement_time_mismatches": 0,
+            "suspect_segments": 1,
+            "max_suspect_distance_m": 154.93,
+            "passed": true
+          }
+        },
+        "method": "platform records reconstructed as NMEA events, injected +110s initial clock error; missing raw GNSS epochs are not reconstructed"
+      }
+    },
+    "all_passed": true
+  },
+  "build_checks": {
+    "app_build": true,
+    "bootloader_build": true,
+    "app_flash": true,
+    "app_ram_budget": true,
+    "libc_parser": true,
+    "release_identity": true,
+    "bootloader_static_capacity": true
+  },
+  "hardware_ota_and_road_validation": "pending",
+  "stack_bound": "incomplete",
+  "flash_headroom_bytes": 1372,
+  "static_ram_bytes": 16056,
+  "ram_budget_gap_bytes": 4112
+}

@@ -186,11 +186,15 @@ def check_tail_placement_and_gate() -> None:
     require("work_mode_sleep_shallow()" not in process,
             "the shallow WFI must not run inside work_mode_process")
     main_body = function_body(MAIN, "int main")
-    require("idle_sleep_process()" in main_body,
-            "the shallow WFI helper must run in the main loop")
-    tail = main_body[main_body.rfind("idle_sleep_process()") +
-                     len("idle_sleep_process()"):]
-    require(re.search(r"_process\s*\(", tail) is None,
+    last_phase = function_body(MAIN, "static void service_after_commands")
+    require("service_after_commands()" in main_body and
+            "idle_sleep_process()" in last_phase,
+            "the shallow WFI helper must run in the last main-loop phase")
+    phase_tail = last_phase[last_phase.rfind("idle_sleep_process()") +
+                            len("idle_sleep_process()"):]
+    main_tail = main_body[main_body.rfind("service_after_commands()") +
+                          len("service_after_commands()"):]
+    require(re.search(r"_process\s*\(", phase_tail + main_tail) is None,
             "the shallow WFI must be the last thing in the loop, after every "
             "_process() has had its pass")
 

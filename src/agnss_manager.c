@@ -6,10 +6,10 @@
 #include "gps.h"
 #include "fota.h"
 #include "config.h"
+#include "debug_uart.h"
 #include <stddef.h>
 #ifdef A300_HARDWARE_BRINGUP
 void agnss_init(gnss_type_t t) { (void)t; }
-void agnss_set_inject_callback(agnss_inject_cb_t cb) { (void)cb; }
 bool agnss_has_injected(void) { return false; }
 bool agnss_retry_due(uint32_t now) { (void)now; return false; }
 void agnss_process(void) {}
@@ -19,7 +19,6 @@ void agnss_process(void) {}
 static gnss_type_t s_type, s_meta_type;
 static bool s_boot_pending, s_injected;
 static uint32_t s_last_attempt, s_retry_at, s_off, s_meta_seq, s_meta_len, s_meta_crc;
-static agnss_inject_cb_t s_cb;
 
 void agnss_init(gnss_type_t t)
 {
@@ -32,11 +31,6 @@ void agnss_init(gnss_type_t t)
     s_off = 0;
     gnss_vendor_set_type(t);
     (void)agnss_storage_init();
-}
-
-void agnss_set_inject_callback(agnss_inject_cb_t cb)
-{
-    s_cb = cb;
 }
 
 bool agnss_has_injected(void)
@@ -56,11 +50,11 @@ void agnss_process(void)
     agnss_meta_t m;
     uint16_t cap, n;
     uint8_t *buf;
+    uint8_t failure = 1;
     if (s_type != GNSS_TYPE_TAU804M || fota_is_active() || !ec800m_is_ready()) return;
     if (!s_boot_pending &&
         (gps_is_valid() || (uint32_t)(now - s_last_attempt) < AGNSS_REFRESH_MS)) return;
     if (!agnss_retry_due(now)) return;
-    if (!s_cb) s_cb = gnss_vendor_inject;
 
     /* Pin the validated payload; restart the offset only for a new identity. */
     if (!agnss_storage_read_open(&m) || m.type != (uint8_t)s_type) goto retry;
@@ -75,8 +69,12 @@ void agnss_process(void)
     }
     /* Completion is acknowledged separately from the last data block. */
     if (s_off >= m.length) {
-        if (!s_cb(s_type, NULL, 0)) goto retry;
+        if (!gnss_vendor_inject(s_type, NULL, 0)) {
+            if (gnss_vendor_inject_pending()) return;
+            failure = 2; goto retry;
+        }
         agnss_storage_read_close();
+        dbg_printf("[AGNSS-CACHE] tx_done=1 bytes=%lu\r\n", (unsigned long)m.length);
         s_off = 0;
         s_boot_pending = false;
         s_injected = true;
@@ -85,11 +83,21 @@ void agnss_process(void)
     }
     buf = agnss_storage_scratch(&cap);
     n = (uint16_t)((m.length - s_off) > cap ? cap : (m.length - s_off));
-    if (!agnss_storage_read_chunk(s_off, buf, n) || !s_cb(s_type, buf, n)) goto retry;
+    if (!agnss_storage_read_chunk(s_off, buf, n)) {
+        failure = 3;
+        goto retry;
+    }
+    if (!gnss_vendor_inject(s_type, buf, n)) {
+        if (gnss_vendor_inject_pending()) return;
+        failure = 4;
+        goto retry;
+    }
     s_off += n;
     return;
 retry:
     agnss_storage_read_close();
+    dbg_printf("[AGNSS-CACHE] tx_done=0 reason=%u off=%lu\r\n",
+               (unsigned)failure, (unsigned long)s_off);
     s_retry_at = now + AGNSS_RETRY_MS;
 }
 #endif

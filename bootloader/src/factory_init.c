@@ -81,7 +81,7 @@ factory_init_result_t factory_init_apply(const factory_init_request_t *request)
         return FACTORY_INIT_RESULT_ALREADY_DONE;
     if (request->completion != FACTORY_INIT_PENDING)
         return FACTORY_INIT_RESULT_ERROR;
-    if (!boot_ext_device_valid()) return FACTORY_INIT_RESULT_ERROR;
+    if (!boot_ext_device_valid()) return FACTORY_INIT_RESULT_DEVICE_UNAVAILABLE;
 
     for (uint32_t i = 0U;
          i < (uint32_t)(sizeof k_factory_init_sectors / sizeof k_factory_init_sectors[0]);

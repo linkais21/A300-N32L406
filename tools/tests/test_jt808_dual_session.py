@@ -288,11 +288,13 @@ int main(void) {
     assert(appended.event_id!=first.event_id);
     gps.valid=false;
     unsigned saved_calls=append_calls;
-    assert(jt808_send_location_work_mode(0U,false,1U)==JT808_SEND_NO_POSITION);
-    assert(append_calls==saved_calls);
+    assert(jt808_send_location_work_mode(0U,false,1U)==0);
+    assert(append_calls==saved_calls+1U);
+    assert((appended.location[7]&2U)==0U);
+    assert(!memcmp(appended.location+8,(uint8_t[8]){0},8));
     trusted_available=true;
     assert(jt808_send_location_work_mode(0U,true,1U)==0);
-    assert(append_calls==saved_calls+1U);
+    assert(append_calls==saved_calls+2U);
     assert((appended.location[7]&2U)==0U); /* retained fix is not live */
     trusted_available=false;
     gps.valid=true;gps.lat-=0.01;
@@ -306,7 +308,9 @@ int main(void) {
     assert(memcmp(d3+16U,(uint8_t[]){0x00U,0x08U,0x00U,0x02U},4U)==0);
     jt808_trigger_alarm(ALM_OVERSPEED);
     fail_send[3]=true;before0=sends[0];before3=sends[3];
-    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false,1U)!=0);
+    saved_calls=append_calls;
+    assert(jt808_send_location_work_mode(ALM_OVERSPEED,false,1U)==0);
+    assert(append_calls==saved_calls); /* backup failure cannot create main backlog */
     assert(sends[0]==before0+1U && sends[3]==before3+1U);
     assert(msg(0U,&sn0,d0,&l0)==0x0200U);
     assert(memcmp(d0+12U,(uint8_t[]){0x00U,0x00U,0x00U,0x02U},4U)==0);
@@ -321,6 +325,9 @@ int main(void) {
     assert(jt808_send_location_work_mode(0U,false,1U)==0);
     assert(sends[0]==before0+1U && sends[3]==before3+1U);
     fail_send[0]=fail_send[3]=true;ambiguous_send[0]=ambiguous_send[3]=true;
+    /* An unconfirmed main delivery needs durable storage before success. */
+    assert(jt808_send_location_work_mode(0U,false,1U)!=0);
+    append_result=BLIND_ZONE_OK;
     assert(jt808_send_location_work_mode(0U,false,1U)==0);
     fail_send[0]=fail_send[3]=false;ambiguous_send[0]=ambiguous_send[3]=false;
     assert(jt808_send_location_to(0U,&gps)==0);
@@ -514,7 +521,20 @@ def main():
     cc=compiler()
     if not cc: print("test_jt808_dual_session: FAIL (host compiler required)");return 1
     with tempfile.TemporaryDirectory(prefix="jt808_dual_") as directory:
-        t=Path(directory);h=t/"h.c";b=t/"h.exe";h.write_text(HARNESS,encoding="ascii")
+        t=Path(directory);h=t/"h.c";b=t/"h.exe"
+        stubs = r'''
+#include "fota.h"
+#include "at_config.h"
+fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
+void ec800m_tcp_close(uint8_t ch) { open_ch[ch]=false; }
+void gps_get_unfixed_report(gps_data_t *out) { memset(out,0,sizeof(*out)); }
+bool gps_report_filter_motion_pending(uint32_t now) { (void)now; return false; }
+void gps_report_filter_motion_ack(void) {}
+bool at_config_execute_text_response(const uint8_t *text, uint16_t len,
+    at_config_text_ack_fn ack, at_config_text_reply_fn reply, void *ctx)
+{ (void)text; (void)len; (void)ack; (void)reply; (void)ctx; return false; }
+'''
+        h.write_text(HARNESS.replace('int main(void) {', stubs + '\nint main(void) {'),encoding="ascii")
         (t/"n32l40x.h").write_text("#ifndef N32L40X_H\n#define N32L40X_H\n#define GPIOA ((void*)0)\n#define GPIO_PIN_12 12U\n#define Bit_RESET 0\nint GPIO_ReadInputDataBit(void*,unsigned);\n#endif\n",encoding="ascii")
         cmd=[cc,"-std=c99","-Wall","-Wextra","-Werror","-I",str(t),"-I",str(ROOT/"include"),str(h),str(ROOT / "src/plate_encoding.c"), str(ROOT/"src/jt808.c"),str(ROOT/"src/jt808_session.c"),str(ROOT/"src/terminal_identity.c"),"-lm","-o",str(b)]
         x=subprocess.run(cmd,cwd=ROOT,capture_output=True,text=True)

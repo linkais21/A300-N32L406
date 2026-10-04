@@ -66,7 +66,9 @@ def main():
  }
 '''
     original = actions.HARNESS
-    actions.HARNESS = original.replace(' return 0; }', extra + ' return 0; }')
+    before_return, marker, tail = original.rpartition(' return 0; }')
+    assert marker and 'int main(' in before_return
+    actions.HARNESS = before_return + extra + marker + tail
     try:
         result = actions.main()
     finally:

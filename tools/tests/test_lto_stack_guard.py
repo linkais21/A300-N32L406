@@ -26,7 +26,9 @@ class StackTests(unittest.TestCase):
             path = Path(tmp) / "app.map"
             path.write_text("FLASH 0x08006000 0x1a000 xr\n"
                             " 0x0801fd30 _app_load_end = LOADADDR (.data) + SIZEOF (.data)\n"
-                            ".data 0x20000000 0x128\n.bss 0x20000128 0x4474\n")
+                            ".data 0x20000000 0x128\n.bss 0x20000128 0x4474\n"
+                            " 0x2000459c PROVIDE (_end = .)\n"
+                            " 0x2000499c _heap_limit = .\n")
             result = subprocess.run([sys.executable, str(ROOT / "tools/map_ram_guard.py"),
                                      "app", str(path)], capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0, result.stdout)
@@ -38,7 +40,9 @@ class StackTests(unittest.TestCase):
             path = root / "app.map"
             path.write_text("FLASH 0x08006000 0x1a000 xr\n"
                             " 0x0801fd30 _app_load_end = LOADADDR (.data) + SIZEOF (.data)\n"
-                            ".data 0x20000000 0x128\n.bss 0x20000128 0x4474\n")
+                            ".data 0x20000000 0x128\n.bss 0x20000128 0x4474\n"
+                            " 0x2000459c PROVIDE (_end = .)\n"
+                            " 0x2000499c _heap_limit = .\n")
             elf = root / "app.elf"
             manifest = root / "stack-evidence.json"
             elf.write_bytes(b"fixture")
@@ -53,6 +57,44 @@ class StackTests(unittest.TestCase):
                                          "app", str(path)], capture_output=True, text=True)
                 self.assertNotEqual(result.returncode, 0, result.stdout)
                 self.assertIn(message, result.stdout)
+
+    def test_hard_heap_reservation_blocks_known_frame_budget(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "app.map"
+            path.write_text("FLASH 0x08006000 0x1a000 xr\n"
+                            " 0x0801fafc _app_load_end = LOADADDR (.data) + SIZEOF (.data)\n"
+                            ".data 0x20000000 0xa4\n.bss 0x200000a8 0x42b0\n"
+                            " 0x20004358 PROVIDE (_end = .)\n"
+                            " 0x20004758 _heap_limit = .\n")
+            elf = root / "app.elf"
+            evidence = root / "stack-evidence.json"
+            elf.write_bytes(b"fixture")
+            evidence.write_text("{}")
+            (root / "stack-analysis.json").write_text(json.dumps({
+                "map_sha256": guard.digest(path), "elf_sha256": guard.digest(elf),
+                "evidence_sha256": guard.digest(evidence), "known_main_frame_sum": 2632,
+                "status": "incomplete", "error": "unverified IRQ/heap"}))
+            result = subprocess.run([sys.executable, str(ROOT / "tools/map_ram_guard.py"),
+                                     "app", str(path)], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("hard heap reservation", result.stdout)
+            self.assertIn("remaining_after_heap=3680", result.stdout)
+
+    def test_heap_symbols_must_be_unique_and_inside_sram(self):
+        sys.path.insert(0, str(ROOT / "tools"))
+        from map_ram_guard import hard_heap_reservation
+
+        valid = " 0x20004358 PROVIDE (_end = .)\n 0x20004758 _heap_limit = .\n"
+        self.assertEqual(hard_heap_reservation(valid), (0x20004358, 0x20004758))
+        for invalid in (
+            valid.replace(" 0x20004758 _heap_limit = .\n", ""),
+            valid + " 0x20004758 _heap_limit = .\n",
+            valid.replace("0x20004758", "0x20006100"),
+            valid.replace("0x20004758", "0x20004000"),
+        ):
+            with self.assertRaises(ValueError):
+                hard_heap_reservation(invalid)
 
     def test_ota_lto_chain_includes_ecc_children(self):
         frames = dict(main=792, fota_process=1208, firmware_signature_verify=24,

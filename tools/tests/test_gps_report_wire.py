@@ -151,11 +151,11 @@ int main(void) {
    before=sends[0];unsigned back_before=sends[3];appends_before=append_calls;
    assert(jt808_send_location()==0);
    assert(sends[0]==before+1 && sends[3]==back_before+1);
-   assert(append_calls==appends_before+(mask==3));
+   assert(append_calls==appends_before+((mask&1)!=0));
  }
  fail_send[0]=false;fail_send[3]=true;appends_before=append_calls;
  assert(jt808_send_location_work_mode(1U,false,99U)==0);
- assert(append_calls==appends_before+1);
+ assert(append_calls==appends_before); /* Backup failure cannot create main backlog. */
  fail_send[3]=false;before=sends[0];
  assert(jt808_send_location()==0 && sends[0]==before+1);
  /* Exercise the real corner state machine and its cached-point broadcast. */
@@ -171,7 +171,7 @@ int main(void) {
      gps.heading=i*15.0f;jt808_process();
    }
    assert(sends[0]==before+2 && sends[3]==back_before+2);
-   assert(append_calls==appends_before+(mask==3?2:0));
+   assert(append_calls==appends_before+((mask&1)?2:0));
  }
  return 0;
 }

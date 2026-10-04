@@ -6,8 +6,14 @@
 #include "peripherals.h"
 #include "flash_config.h"
 #include "n32l40x.h"
+#ifdef A300_FIRMWARE_IMAGE
+#include "fota.h"
+#include "jt808.h"
+#include "agnss_online.h"
+#endif
 #include <string.h>
 #include <stdio.h>
+#include "a300_format.h"
 #include <stdlib.h>
 
 __attribute__((weak)) void ec800m_wait_service_hook(void)
@@ -59,7 +65,10 @@ static uint16_t rx_write_position(void)
 static char    s_line_buf[AT_LINE_MAX];
 static uint16_t s_line_len = 0;
 #define AT_DEFERRED_URC_MAX 4U
-static char s_deferred_urc[AT_DEFERRED_URC_MAX][AT_LINE_MAX];
+/* Supported socket URCs are under 32 bytes, including a five-digit QIOPEN
+ * error. Keep the full RX line buffer for unrelated modem responses. */
+#define AT_DEFERRED_URC_LINE_MAX 64U
+static char s_deferred_urc[AT_DEFERRED_URC_MAX][AT_DEFERRED_URC_LINE_MAX];
 static uint8_t s_deferred_urc_head;
 static uint8_t s_deferred_urc_tail;
 static uint8_t s_deferred_urc_count;
@@ -67,6 +76,8 @@ static uint8_t s_deferred_urc_count;
  * local channel generation so close/open boundaries retire old results. */
 static uint8_t s_deferred_channel[AT_DEFERRED_URC_MAX];
 static uint32_t s_deferred_generation[AT_DEFERRED_URC_MAX];
+static uint8_t s_failed_open_close_mask;
+static uint32_t s_failed_open_close_generation[EC800M_CH_MAX];
 static bool s_cmt_body_pending;
 static bool s_cmt_line_active;
 static bool s_deferred_urc_processing;
@@ -75,6 +86,28 @@ static bool s_deferred_urc_processing;
 #define AT_RESP_MAX  512
 static char    s_at_resp[AT_RESP_MAX];
 static volatile bool s_at_done = false;
+#ifdef A300_FIRMWARE_IMAGE
+static bool s_at_tx_ok;
+
+static void startup_io_diag(const char *phase, bool tx_ok, unsigned rx)
+    __attribute__((noinline));
+static void startup_io_diag(const char *phase, bool tx_ok, unsigned rx)
+{
+    dbg_printf("[4G-IO] %s tx=%u rx=%u sts=%04x c1=%04x c3=%04x baud=%04x\r\n",
+               phase, tx_ok ? 1U : 0U, rx, (unsigned)EC800M_UART->STS,
+               (unsigned)EC800M_UART->CTRL1, (unsigned)EC800M_UART->CTRL3,
+               (unsigned)EC800M_UART->BRCF);
+    dbg_printf("[4G-IO] dma cfg=%04lx sel=%lu left=%lu en=%u key=%u dtr=%u rxd=%u\r\n",
+               (unsigned long)DMA_CH5->CHCFG, (unsigned long)DMA_CH5->CHSEL,
+               (unsigned long)DMA_CH5->TXNUM,
+               (unsigned)((GPIOA->PID >> 15) & 1U),
+               (unsigned)((GPIOA->PID >> 8) & 1U),
+               (unsigned)((GPIOB->PID >> 7) & 1U),
+               (unsigned)((GPIOB->PID >> 5) & 1U));
+}
+#else
+#define startup_io_diag(phase, tx_ok, rx) ((void)0)
+#endif
 
 /* Module info */
 static char s_imei[16]  = {0};
@@ -281,6 +314,18 @@ static void at_owner_release(at_owner_t owner)
     if (s_at_owner == owner) s_at_owner = AT_OWNER_NONE;
 }
 
+static bool usart_wait_tx_flag(uint16_t flag, uint32_t deadline)
+    __attribute__((noinline));
+static bool usart_wait_tx_flag(uint16_t flag, uint32_t deadline)
+{
+    wait_tick_guard_t guard = {TICK_MS(), 0U};
+    while (USART_GetFlagStatus(EC800M_UART, flag) == RESET) {
+        IWDG_ReloadKey();
+        if ((int32_t)(TICK_MS() - deadline) >= 0 || !wait_tick_alive(&guard)) return false;
+    }
+    return true;
+}
+
 static bool usart_send_buf(const uint8_t *data, uint16_t len)
 {
     /* 115200 baud needs about 87 us/byte on the wire.  Keep a 100 ms
@@ -288,17 +333,10 @@ static bool usart_send_buf(const uint8_t *data, uint16_t len)
     uint32_t deadline = TICK_MS() + 100U + (((uint32_t)len + 7U) / 8U);
     uint16_t i;
     for (i = 0U; i < len; ++i) {
-        while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXDE) == RESET) {
-            IWDG_ReloadKey();
-            if ((int32_t)(TICK_MS() - deadline) >= 0) return false;
-        }
+        if (!usart_wait_tx_flag(USART_FLAG_TXDE, deadline)) return false;
         USART_SendData(EC800M_UART, data[i]);
     }
-    while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_TXC) == RESET) {
-        IWDG_ReloadKey();
-        if ((int32_t)(TICK_MS() - deadline) >= 0) return false;
-    }
-    return true;
+    return usart_wait_tx_flag(USART_FLAG_TXC, deadline);
 }
 
 static bool usart_send_str(const char *s)
@@ -473,11 +511,13 @@ static bool is_deferred_urc(const char *line)
 static void defer_urc(const char *line)
 {
     char *slot;unsigned channel,error;
+    size_t length;
     if (!line || !is_deferred_urc(line) ||
         s_deferred_urc_count >= AT_DEFERRED_URC_MAX) return;
+    length = strlen(line);
+    if (length >= AT_DEFERRED_URC_LINE_MAX) return;
     slot = s_deferred_urc[s_deferred_urc_tail];
-    (void)strncpy(slot, line, AT_LINE_MAX - 1U);
-    slot[AT_LINE_MAX - 1U] = '\0';
+    memcpy(slot, line, length + 1U);
     s_deferred_channel[s_deferred_urc_tail]=0xffU;
     if(parse_qiopen(line,&channel,&error) ||
        parse_prefixed_uint(line,"+QIURC: \"closed\",",EC800M_CH_MAX-1U,&channel) ||
@@ -491,7 +531,7 @@ static void defer_urc(const char *line)
 
 static void process_deferred_urc_one(void)
 {
-    char line[AT_LINE_MAX];
+    char line[AT_DEFERRED_URC_LINE_MAX];
     uint8_t channel;bool obsolete;
 
     if (s_at_owner != AT_OWNER_NONE || udp_txn_active() || s_deferred_urc_count == 0U ||
@@ -615,6 +655,9 @@ static bool at_send_wait_owned(const char *cmd, const char *expect,
 {
     memset(s_at_resp, 0, sizeof(s_at_resp));
     s_at_resp_len = 0;
+#ifdef A300_FIRMWARE_IMAGE
+    s_at_tx_ok = false;
+#endif
 
 #if EC800M_RX_ECHO
     if (strncmp(cmd, "AT+QICSGP=", 11U) == 0)
@@ -625,6 +668,9 @@ static bool at_send_wait_owned(const char *cmd, const char *expect,
     if (cmd[0]) {
         if (!usart_send_str(cmd) || !usart_send_str("\r\n")) return false;
     }
+#ifdef A300_FIRMWARE_IMAGE
+    s_at_tx_ok = true;
+#endif
 
     uint32_t start = TICK_MS();
     wait_tick_guard_t guard = {start, 0U};
@@ -718,24 +764,6 @@ static bool at_send_wait(const char *cmd, const char *expect,
     return ok;
 }
 
-/* Dump the head of an unparsed AT line so a QIRD desync can be told apart from
- * an unexpected +QIRD header format. noinline keeps it out of process_urc's frame. */
-__attribute__((noinline))
-static void qird_dump_line_head(const char *buf, uint16_t len)
-{
-    static const char digits[]="0123456789abcdef";
-    char hex[97], txt[33];
-    uint16_t shown = len > 32U ? 32U : len, i;
-    for (i = 0U; i < shown; ++i) {
-        uint8_t b = (uint8_t)buf[i];
-        hex[3U*i] = digits[b >> 4]; hex[3U*i+1U] = digits[b & 15U]; hex[3U*i+2U] = ' ';
-        txt[i] = (b >= 0x20U && b < 0x7FU) ? (char)b : '.';
-    }
-    hex[3U*shown] = '\0'; txt[shown] = '\0';
-    dbg_printf("[4G-RX] qird_head len=%u hex=%s ascii=|%s|\r\n",
-               (unsigned int)len, hex, txt);
-}
-
 /* Distance between the DMA write pointer and the reader in the RX ring. */
 static uint16_t qird_ring_pending(void)
 {
@@ -769,19 +797,6 @@ static void qird_note_ring_level(uint16_t pending)
  * through the normal line pump keeps queued URCs (notably +QIURC: "recv")
  * alive through the deferred queue; discarding the bytes here would drop a
  * data-available notification and stall the download. */
-/* Command/response accounting.  An untouched "+QIRD:" response found in the
- * ring means the counts disagree; these say which side is off. */
-static uint16_t s_qird_cmds, s_qird_hdrs, s_qird_resid_hdrs;
-/* Headers stranded in the residue of the current drain only.  The cumulative
- * counter above answers "has this ever happened"; this one answers "how many
- * responses were stranded right now", which is the number that matters. */
-static uint16_t s_qird_resid_hdrs_now;
-static uint8_t s_qird_needle_match;
-static uint32_t s_qird_drain_ms;
-static uint16_t s_qird_drain_printable;
-/* Static so the capture cannot deepen the process_urc -> qird stack chain. */
-static char s_qird_residue_head[32];
-static uint8_t s_qird_residue_len;
 
 /* Silence, in ms, that must follow residue before the next command is sent.  A
  * 256-byte response occupies ~24 ms at 115200, so this outlasts anything already
@@ -805,11 +820,6 @@ static uint16_t qird_drain_before_command(void)
     uint16_t drained = 0U;
     uint16_t pending = qird_ring_pending();
 
-    s_qird_drain_printable = 0U;
-    s_qird_residue_len = 0U;
-    s_qird_resid_hdrs_now = 0U;
-    s_qird_needle_match = 0U;
-    s_qird_drain_ms = 0U;
     qird_note_ring_level(pending);
     if (pending == 0U) return 0U;
     start = last_byte = TICK_MS();
@@ -825,29 +835,12 @@ static uint16_t qird_drain_before_command(void)
         }
         for (index = 0U; index < pending; ++index) {
             char byte = (char)EC800M_RX_BUF[s_rx_rd];
-            uint8_t raw = (uint8_t)byte;
-            if ((raw >= 0x20U && raw < 0x7FU) || raw == '\r' || raw == '\n')
-                ++s_qird_drain_printable;
-            if (s_qird_residue_len < sizeof s_qird_residue_head)
-                s_qird_residue_head[s_qird_residue_len++] = byte;
-            {
-                static const char needle[] = "+QIRD:";
-                if (byte == needle[s_qird_needle_match]) {
-                    if (needle[++s_qird_needle_match] == '\0') {
-                        ++s_qird_resid_hdrs; ++s_qird_resid_hdrs_now;
-                        s_qird_needle_match = 0U;
-                    }
-                } else {
-                    s_qird_needle_match = byte == needle[0] ? 1U : 0U;
-                }
-            }
             s_rx_rd = (uint16_t)((s_rx_rd + 1U) % EC800M_RX_BUF_SIZE);
             process_rx_byte(byte);
         }
         drained = (uint16_t)(drained + pending);
         last_byte = TICK_MS();
     }
-    s_qird_drain_ms = TICK_MS() - start;
     return drained;
 }
 
@@ -890,25 +883,13 @@ static uint16_t qird_flush_after_failure(uint32_t quiet_ms, uint32_t limit_ms)
 static uint32_t s_qird_acct[EC800M_CH_MAX];
 static uint32_t s_qird_acct_gen[EC800M_CH_MAX];
 static bool     s_qird_acct_valid[EC800M_CH_MAX];
-static uint16_t s_qird_desyncs;
 /* Surplus the reader tolerates before calling the stream lost.  A steady offset
  * of a few responses is how the modem reports what it has already delivered; a
  * repeated response makes this climb without bound. */
 #define EC800M_QIRD_LAG_LIMIT  (4U * EC800M_QIRD_CHUNK)
-static uint32_t s_qird_lag[EC800M_CH_MAX];
-
-static void qird_report_desync(uint8_t channel, uint32_t have_read,
-                               uint32_t unread, uint8_t reads,
-                               const char *kind)
+static void qird_report_desync(uint8_t channel)
 {
-    ++s_qird_desyncs;
-    dbg_printf("[4G-RX] ch=%u qird_desync=%s have_read=%lu acct=%lu "
-               "unread=%lu reads=%u total=%u\r\n",
-               (unsigned int)channel, kind, (unsigned long)have_read,
-               (unsigned long)s_qird_acct[channel], (unsigned long)unread,
-               (unsigned int)reads, (unsigned int)s_qird_desyncs);
     s_qird_acct_valid[channel] = false;
-    s_qird_lag[channel] = 0U;
     s_qird_pass_active = false;
     ec800m_tcp_close(channel);
 }
@@ -969,9 +950,6 @@ static bool qird_collect_payload(uint8_t channel, uint16_t requested,
     uint16_t total_length = 0U;
     uint16_t body_length = 0U;
     uint16_t declared_length = 0U;
-    uint16_t pending_before = 0U;
-    uint32_t last_sample;
-    uint32_t worst_gap = 0U;
     qird_phase_t phase = QIRD_PHASE_HEADER;
     bool complete = false;
     bool failed = false;
@@ -990,39 +968,16 @@ static bool qird_collect_payload(uint8_t channel, uint16_t requested,
     /* Anything still in the ring is residue from earlier traffic and would be
      * mis-parsed as this command's +QIRD header.  Retire it through the normal
      * line pump first so the transaction starts from an empty ring. */
-    pending_before = qird_drain_before_command();
-    if (pending_before != 0U) {
-        dbg_printf("[4G-RX] ch=%u qird_drained=%u printable=%u cmds=%u hdrs=%u "
-                   "resid_hdrs=%u/%u drain_ms=%lu\r\n",
-                   (unsigned int)channel, (unsigned int)pending_before,
-                   (unsigned int)s_qird_drain_printable,
-                   (unsigned int)s_qird_cmds, (unsigned int)s_qird_hdrs,
-                   (unsigned int)s_qird_resid_hdrs_now,
-                   (unsigned int)s_qird_resid_hdrs,
-                   (unsigned long)s_qird_drain_ms);
-        /* The first bytes name the source: a "+QIRD:" header means the modem
-         * sent a response we never asked for, "+QIURC:" means URC pile-up, and
-         * mid-stream binary means the previous body was left unread. */
-        if (s_qird_residue_len != 0U)
-            qird_dump_line_head(s_qird_residue_head, s_qird_residue_len);
-    }
+    (void)qird_drain_before_command();
     s_line_len = 0U;
     (void)snprintf(cmd, sizeof cmd, "AT+QIRD=%u,%u",
                    (unsigned)channel, (unsigned)requested);
     if (!usart_send_str(cmd) || !usart_send_str("\r\n")) goto done;
-    ++s_qird_cmds;
 
     start = TICK_MS();
-    last_sample = start;
     wait_tick_guard_t guard = {start, 0U};
     while ((TICK_MS() - start) < timeout_ms && wait_tick_alive(&guard)) {
         uint16_t write_position;
-        uint32_t gap = TICK_MS() - last_sample;
-
-        /* The ring holds ~89 ms of traffic at 115200.  Anything that keeps the
-         * reader away for a comparable span is what lets the DMA lap it. */
-        if (gap > worst_gap) worst_gap = gap;
-        last_sample = TICK_MS();
         IWDG_ReloadKey();
         /* Yield to other subsystems only while the modem is quiet.  GPS NMEA
          * parsing can outlast the RX ring at 115200 baud, and stalling here
@@ -1074,7 +1029,6 @@ static bool qird_collect_payload(uint8_t channel, uint16_t requested,
                 if (parse_prefixed_uint(s_line_buf, "+QIRD: ", requested,
                                         &parsed_length)) {
                     declared_length = (uint16_t)parsed_length;
-                    ++s_qird_hdrs;
                     diag->header_offset = 0;
                     diag->declared_length = declared_length;
                     s_line_len = 0U;
@@ -1110,20 +1064,12 @@ static bool qird_collect_payload(uint8_t channel, uint16_t requested,
 done:
     diag->total_length = total_length;
     diag->remaining_length = body_length;
-    if (worst_gap > 20U)
-        dbg_printf("[4G-RX] ch=%u qird_worst_gap=%lums\r\n",
-                   (unsigned int)channel, (unsigned long)worst_gap);
     if (!complete) {
         uint16_t discarded;
-        dbg_printf("[4G-RX] qird_drained_before_fail=%u\r\n",
-                   (unsigned int)pending_before);
-        if (s_line_len != 0U) qird_dump_line_head(s_line_buf, s_line_len);
         /* Resynchronise before returning: the remainder of this dead response
          * must never be read as the next transaction's header. */
         discarded = qird_flush_after_failure(30U, 300U);
-        if (discarded != 0U)
-            dbg_printf("[4G-RX] qird_resync_discarded=%u\r\n",
-                       (unsigned int)discarded);
+        (void)discarded;
     }
     s_line_len = 0U;
     at_owner_release(AT_OWNER_BLOCKING);
@@ -1145,7 +1091,6 @@ static void qird_service_channel(uint8_t ch)
 
     if (ch >= EC800M_CH_MAX) return;
     s_tcp_qird_pending_mask &= (uint8_t)~(1U << ch);
-    dbg_printf("[4G-RX] ch=%u event=recv\r\n", (unsigned int)ch);
     /* Held for the whole pass; every exit below clears it. */
     s_qird_pass_active = true;
     do {
@@ -1161,14 +1106,13 @@ static void qird_service_channel(uint8_t ch)
         if (!qird_query_counters((uint8_t)ch, &have_read, &unread)) break;
         if (!qird_acct_is_live((uint8_t)ch)) {
             qird_acct_seed((uint8_t)ch, have_read);
-            s_qird_lag[ch] = 0U;
         } else if (have_read > s_qird_acct[ch]) {
             /* The modem handed over more than the reader ever saw, so bytes
              * went missing and the stream position is unrecoverable.  Close
              * the socket; the download resumes from the last committed
              * offset with a Range request instead of storing bytes at the
              * wrong offset. */
-            qird_report_desync((uint8_t)ch, have_read, unread, reads, "lost");
+            qird_report_desync(ch);
             return;
         } else if (have_read < s_qird_acct[ch]) {
             /* The reader accounted for more than the modem counts as handed
@@ -1179,21 +1123,11 @@ static void qird_service_channel(uint8_t ch)
              * shows up as a surplus that appears once and then stays put.
              * V3.026 treated any inequality as fatal and aborted downloads
              * at a steady surplus of 768 bytes, the signature of the
-             * harmless case.  Log every change; abort only once the surplus
+             * harmless case. Abort only once the surplus
              * grows past what a reporting lag can explain. */
             uint32_t lag = s_qird_acct[ch] - have_read;
-            if (lag != s_qird_lag[ch]) {
-                s_qird_lag[ch] = lag;
-                dbg_printf("[4G-RX] ch=%u qird_lag=%lu have_read=%lu "
-                           "acct=%lu unread=%lu reads=%u\r\n",
-                           (unsigned int)ch, (unsigned long)lag,
-                           (unsigned long)have_read,
-                           (unsigned long)s_qird_acct[ch],
-                           (unsigned long)unread, (unsigned int)reads);
-            }
             if (lag > EC800M_QIRD_LAG_LIMIT) {
-                qird_report_desync((uint8_t)ch, have_read, unread, reads,
-                                   "surplus");
+                qird_report_desync(ch);
                 return;
             }
         }
@@ -1204,30 +1138,29 @@ static void qird_service_channel(uint8_t ch)
                                  &data_start, &dlen,
                                  &diag, 3000U)) {
             if (dlen == 0U) break;
-            dbg_printf("[4G-RX] ch=%u qird=%u\r\n",
-                       (unsigned int)ch, (unsigned int)dlen);
             if (ch == EC800M_CH_OTA && s_ota_recv_cb) {
-                uint32_t cb_start = TICK_MS(), cb_ms;
+#ifdef A300_FIRMWARE_IMAGE
+                fota_ec800m_rx((uint8_t)ch, data_start, dlen);
+#else
                 s_ota_recv_cb((uint8_t)ch, data_start, dlen);
-                cb_ms = TICK_MS() - cb_start;
-                if (cb_ms > 20U)
-                    dbg_printf("[4G-RX] ota_chunk_ms=%lu\r\n",
-                               (unsigned long)cb_ms);
+#endif
             }
             else if (ch == EC800M_CH_AGPS && s_agnss_recv_cb)
+#ifdef A300_FIRMWARE_IMAGE
+                agnss_online_rx((uint8_t)ch, data_start, dlen);
+#else
                 s_agnss_recv_cb((uint8_t)ch, data_start, dlen);
+#endif
             else if (s_recv_cb)
+#ifdef A300_FIRMWARE_IMAGE
+                jt808_on_recv((uint8_t)ch, data_start, dlen);
+#else
                 s_recv_cb((uint8_t)ch, data_start, dlen);
+#endif
             s_qird_acct[ch] += dlen;
             more_pending = unread > (uint32_t)dlen;
             if (!more_pending) break;
         } else {
-            dbg_printf("[4G-RX] ch=%u qird_fail=FORMAT stage=%u total=%u hdr=%d decl=%u remain=%u tail=%02X\r\n",
-                       (unsigned int)ch, (unsigned int)diag.stage,
-                       (unsigned int)diag.total_length, (int)diag.header_offset,
-                       (unsigned int)diag.declared_length,
-                        (unsigned int)diag.remaining_length,
-                        (unsigned int)diag.tail_mask);
             break;
         }
     }
@@ -1243,21 +1176,34 @@ static void qird_service_channel(uint8_t ch)
 static bool ec800m_is_alive(uint32_t timeout_ms)
 {
     bool alive = false;
+    uint16_t rx_wr;
+    uint8_t dma_pos = 0U;
+    char dma_buf[16];
     if (!at_owner_acquire(AT_OWNER_BLOCKING)) return false;
-    /* Flush receive buffer, but never let a stuck status bit spin forever. */
+
+    /* Keep the direct UART fallback, but also accept responses consumed by
+     * the DMA channel that hw_usart_init() has already enabled. */
     uint32_t flush_deadline = TICK_MS() + timeout_ms;
     wait_tick_guard_t guard = {TICK_MS(), 0U};
     while (USART_GetFlagStatus(EC800M_UART, USART_FLAG_RXDNE) != RESET) {
         IWDG_ReloadKey();
         ec800m_wait_service_hook();
-        if ((int32_t)(TICK_MS() - flush_deadline) >= 0 || !wait_tick_alive(&guard)) {
+        if ((int32_t)(TICK_MS() - flush_deadline) >= 0 ||
+            !wait_tick_alive(&guard)) {
+            startup_io_diag("probe-flush", false, 0U);
             at_owner_release(AT_OWNER_BLOCKING);
             return false;
         }
-        USART_ReceiveData(EC800M_UART);
+        (void)USART_ReceiveData(EC800M_UART);
     }
 
+    /* UART5 RX DMA is already enabled before ec800m_init().  A response can
+     * therefore be consumed by DMA without leaving RXDNE asserted; discard
+     * only the bytes that predate this probe and inspect the ring below. */
+    s_rx_rd = rx_write_position();
+
     if (!usart_send_str("AT\r\n")) {
+        startup_io_diag("probe-tx", false, 0U);
         at_owner_release(AT_OWNER_BLOCKING);
         return false;
     }
@@ -1270,11 +1216,34 @@ static bool ec800m_is_alive(uint32_t timeout_ms)
         ec800m_wait_service_hook();
         if (USART_GetFlagStatus(EC800M_UART, USART_FLAG_RXDNE) != RESET) {
             char c = (char)USART_ReceiveData(EC800M_UART);
-            if (pos < 15) buf[pos++] = c;
+            if (pos == sizeof buf - 1U) {
+                memmove(buf, buf + 1, --pos);
+            }
+            if (pos < sizeof buf - 1U) buf[pos++] = c;
             buf[pos] = '\0';
-            if (strstr(buf, "OK") || strstr(buf, "AT")) { alive = true; break; }
+            if (ec800m_at_response_end(buf, pos) == EC800M_AT_OK) {
+                alive = true;
+                break;
+            }
         }
+        rx_wr = rx_write_position();
+        while (s_rx_rd != rx_wr) {
+            char c = (char)EC800M_RX_BUF[s_rx_rd];
+            s_rx_rd = (uint16_t)((s_rx_rd + 1U) % EC800M_RX_BUF_SIZE);
+            if (dma_pos == sizeof dma_buf - 1U) {
+                memmove(dma_buf, dma_buf + 1, --dma_pos);
+            }
+            if (dma_pos < sizeof dma_buf - 1U) dma_buf[dma_pos++] = c;
+            dma_buf[dma_pos] = '\0';
+            if (ec800m_at_response_end(dma_buf, dma_pos) == EC800M_AT_OK) {
+                alive = true;
+                break;
+            }
+        }
+        if (alive) break;
     }
+    startup_io_diag(alive ? "probe-ok" : "probe-timeout", true,
+                    (unsigned)pos + dma_pos);
     at_owner_release(AT_OWNER_BLOCKING);
     return alive;
 }
@@ -1289,6 +1258,8 @@ void ec800m_power_on(void)
     if (ec800m_is_alive(1000)) {
         return;
     }
+
+    dbg_printf("[4G] power probe failed -> PWRKEY 750ms\r\n");
 
     /* 3. PA8=LOW → pull PWRKEY low → trigger power-on (≥700ms per datasheet) */
     GPIO_ResetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);
@@ -1566,13 +1537,9 @@ static void process_urc(const char *line)
         if (qiopen_err == 0) {
             s_tcp[qiopen_ch].state = TCP_STATE_OPEN;
         } else {
-            char cmd[32];
-            snprintf(cmd, sizeof(cmd), "AT+QICLOSE=%d", qiopen_ch);
-            at_send_wait(cmd, "OK", 3000);
-            /* flush DMA buffer after close to discard any trailing URCs */
-            delay_ms(200);
-            s_rx_rd = rx_write_position();
             s_tcp[qiopen_ch].state = TCP_STATE_CLOSED;
+            s_failed_open_close_generation[qiopen_ch] = s_tcp_generation[qiopen_ch];
+            s_failed_open_close_mask |= (uint8_t)(1U << qiopen_ch);
         }
         return;
     }
@@ -1643,6 +1610,7 @@ void ec800m_init(void)
     s_sms_tx_state=SMS_TX_IDLE; s_at_owner=AT_OWNER_NONE; s_sms_prompt=false;
     s_line_len = 0U; s_sms_prompt_line_start = true; s_cmt_body_pending = false; s_cmt_line_active = false;
     s_deferred_urc_head = 0U; s_deferred_urc_tail = 0U; s_deferred_urc_count = 0U;
+    s_failed_open_close_mask = 0U;
     s_deferred_urc_processing = false;
     s_reg_status = -1;
     s_failure = EC800M_FAILURE_NONE;
@@ -1714,6 +1682,25 @@ void ec800m_process(void)
     }
     sms_tx_process();
     if (s_tcp_qird_pending_mask == 0U) process_deferred_urc_one();
+    if (s_at_owner == AT_OWNER_NONE && !udp_txn_active() &&
+        !s_deferred_urc_processing && !s_qird_pass_active) {
+        for (pending_channel = 0U; pending_channel < EC800M_CH_MAX;
+             ++pending_channel) {
+            uint8_t bit = (uint8_t)(1U << pending_channel);
+            char cmd[32];
+            if ((s_failed_open_close_mask & bit) == 0U) continue;
+            s_failed_open_close_mask &= (uint8_t)~bit;
+            if (s_failed_open_close_generation[pending_channel] !=
+                    s_tcp_generation[pending_channel] ||
+                s_tcp[pending_channel].state != TCP_STATE_CLOSED) continue;
+            ++s_tcp_generation[pending_channel];
+            snprintf(cmd, sizeof cmd, "AT+QICLOSE=%u", (unsigned)pending_channel);
+            (void)at_send_wait(cmd, "OK", 3000U);
+            delay_ms(200U);
+            s_rx_rd = rx_write_position();
+            break;
+        }
+    }
 
     switch (s_state) {
     case EC800M_STATE_BOOTING:
@@ -1777,6 +1764,10 @@ void ec800m_process(void)
         dbg_printf("[4G] state=%s reason=%s reg=%d\r\n",
                    ec800m_state_name(s_state), ec800m_failure_name(s_failure),
                    s_reg_status);
+#ifdef A300_FIRMWARE_IMAGE
+        if (s_state == EC800M_STATE_INIT && s_init_step == 0U)
+            startup_io_diag("init-at", s_at_tx_ok, s_at_resp_len);
+#endif
     }
 }
 
@@ -2195,9 +2186,30 @@ void ec800m_sleep_disable(void)
     at_send_wait("AT+QSCLK=0", "OK", 1000);
 }
 
-void ec800m_register_recv(ec800m_recv_cb_t cb) { s_recv_cb = cb; }
-void ec800m_register_ota_recv(ec800m_recv_cb_t cb) { s_ota_recv_cb = cb; }
-void ec800m_register_agnss_recv(ec800m_recv_cb_t cb) { s_agnss_recv_cb = cb; }
+void ec800m_register_recv(ec800m_recv_cb_t cb)
+{
+#ifdef A300_FIRMWARE_IMAGE
+    s_recv_cb = cb == jt808_on_recv ? cb : NULL;
+#else
+    s_recv_cb = cb;
+#endif
+}
+void ec800m_register_ota_recv(ec800m_recv_cb_t cb)
+{
+#ifdef A300_FIRMWARE_IMAGE
+    s_ota_recv_cb = cb == fota_ec800m_rx ? cb : NULL;
+#else
+    s_ota_recv_cb = cb;
+#endif
+}
+void ec800m_register_agnss_recv(ec800m_recv_cb_t cb)
+{
+#ifdef A300_FIRMWARE_IMAGE
+    s_agnss_recv_cb = cb == agnss_online_rx ? cb : NULL;
+#else
+    s_agnss_recv_cb = cb;
+#endif
+}
 
 bool ec800m_sim_ready(void)
 {

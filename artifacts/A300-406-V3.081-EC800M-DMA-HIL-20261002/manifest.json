@@ -1,0 +1,32 @@
+{
+  "purpose": "DEDICATED_DEVICE_HIL_ONLY",
+  "release_approved": false,
+  "hardware": "N32L406CBL7",
+  "firmware_version": "T360-A300_406_20261002162151,V3.081",
+  "startup_log_version": "T360-A300_406_20261001234347,V3.081",
+  "version_counter": 3081,
+  "app_origin": "0x08006000",
+  "app_limit_bytes": 106496,
+  "app_used_bytes": 104604,
+  "app_remaining_bytes": 1892,
+  "bootloader_included": false,
+  "ota_package_included": false,
+  "release_guard": "failed: identity findings in src/main.c and include/build_version.h",
+  "flash_guard": "passed with LOW_HEADROOM and CONFIGURATION_CHANGED alerts",
+  "ram_guard": "passed; runtime gap 4128 bytes against 4096-byte requirement",
+  "whole_program_stack_guard": "incomplete: no proven whole-program stack/heap/exception bound",
+  "source_revision": "27281ba34c2d7706ec1816f2babeeaf3a1727fd0",
+  "source_worktree_dirty": true,
+  "artifacts": {
+    "App-N32L406CBL7-V3.081-EC800M-DMA-HIL.bin": {
+      "bytes": 104604,
+      "sha256": "da8e6e59b8ddcf9db3809b7fe1d3fb11b5e207fc3683e88c82cc78bf78468ef3",
+      "flash_address": "0x08006000"
+    },
+    "App-N32L406CBL7-V3.081-EC800M-DMA-HIL.hex": {
+      "bytes": 294322,
+      "sha256": "99a6db76dae76c0a510ee8fb687a7cc4b0626f61da61b65222cd31659430a967",
+      "addressing": "Intel HEX absolute addresses"
+    }
+  }
+}

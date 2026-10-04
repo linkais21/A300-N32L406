@@ -4,8 +4,6 @@
 #include <string.h>
 
 #define DEFAULT_ENTER_ACCUM_DEG 30.0f
-#define DEFAULT_MEANINGFUL_STEP_DEG 3.0f
-#define DEFAULT_OPPOSING_NOISE_DEG 6.0f
 #define DEFAULT_EXIT_STABLE_DEG 0.5f
 #define DEFAULT_CONFIRM_SAMPLES 2U
 #define DEFAULT_EXIT_STABLE_SAMPLES 5U
@@ -17,8 +15,6 @@ motion_corner_config_t motion_corner_default_config(void)
 {
     motion_corner_config_t c;
     c.enter_accum_deg = DEFAULT_ENTER_ACCUM_DEG;
-    c.meaningful_step_deg = DEFAULT_MEANINGFUL_STEP_DEG;
-    c.opposing_noise_deg = DEFAULT_OPPOSING_NOISE_DEG;
     c.exit_stable_deg = DEFAULT_EXIT_STABLE_DEG;
     c.confirm_samples = DEFAULT_CONFIRM_SAMPLES;
     c.exit_stable_samples = DEFAULT_EXIT_STABLE_SAMPLES;
@@ -49,7 +45,7 @@ void motion_corner_reset(motion_corner_ctx_t *ctx)
 
 float motion_corner_heading_delta(float from_deg, float to_deg)
 {
-    float delta = fmodf(to_deg - from_deg, 360.0f);
+    float delta = to_deg - from_deg;
     if (delta > 180.0f) delta -= 360.0f;
     else if (delta < -180.0f) delta += 360.0f;
     return delta;
@@ -68,7 +64,6 @@ static void clear_motion(motion_corner_ctx_t *ctx, float heading)
     ctx->state = MOTION_CORNER_STRAIGHT;
     ctx->previous_heading = heading;
     ctx->have_heading = true;
-    ctx->direction = 0;
     ctx->accumulated_deg = 0.0f;
     ctx->confirm_count = 0U;
     ctx->stable_count = 0U;
@@ -103,7 +98,6 @@ motion_corner_event_t motion_corner_step(motion_corner_ctx_t *ctx,
     motion_corner_event_t event = { false, MOTION_CORNER_REASON_NONE, false };
     float step;
     float abs_step;
-    int8_t direction;
     bool sharp;
 
     if (ctx != NULL && ctx->candidate_count != 0U &&
@@ -118,6 +112,7 @@ motion_corner_event_t motion_corner_step(motion_corner_ctx_t *ctx,
     }
     if (ctx == NULL || sample == NULL || !sample->valid ||
         !sample->heading_fresh || !isfinite(sample->heading_deg) ||
+        sample->heading_deg < 0.0f || sample->heading_deg >= 360.0f ||
         !isfinite(sample->speed_kmh) || sample->speed_kmh < 0.0f)
         return event;
 
@@ -130,7 +125,6 @@ motion_corner_event_t motion_corner_step(motion_corner_ctx_t *ctx,
     step = motion_corner_heading_delta(ctx->previous_heading,
                                        sample->heading_deg);
     abs_step = fabsf(step);
-    direction = step > 0.0f ? 1 : (step < 0.0f ? -1 : 0);
     sharp = abs_step >= SHARP_STEP_DEG;
     ctx->previous_heading = sample->heading_deg;
 
@@ -196,10 +190,11 @@ motion_corner_event_t motion_corner_step(motion_corner_ctx_t *ctx,
         ctx->turn_started_ms = sample->sample_ms;
     }
     ctx->accumulated_deg += step;
-    ctx->direction = ctx->accumulated_deg < 0.0f ? -1 : 1;
-    if (direction != 0 && ctx->confirm_count < UINT8_MAX) ++ctx->confirm_count;
-    if (fabsf(ctx->accumulated_deg) >= ctx->config.enter_accum_deg)
-        ctx->state = MOTION_CORNER_TURN_ENTER;
+    if (step != 0.0f && ctx->confirm_count < UINT8_MAX) ++ctx->confirm_count;
+    /* Opposing samples can cancel an unconfirmed turn. Re-evaluate the gate
+     * instead of retaining a threshold crossing from an earlier sample. */
+    ctx->state = fabsf(ctx->accumulated_deg) >= ctx->config.enter_accum_deg ?
+                 MOTION_CORNER_TURN_ENTER : MOTION_CORNER_STRAIGHT;
     if (ctx->state == MOTION_CORNER_TURN_ENTER &&
         (ctx->confirm_count >= ctx->config.confirm_samples || sharp)) {
         ctx->state = MOTION_CORNER_TURN_ACTIVE;

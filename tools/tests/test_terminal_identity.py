@@ -97,6 +97,7 @@ void jt808_reset_endpoint_auth(uint8_t mask) { (void)mask; }
 void jt808_set_server(const char *host, uint16_t port, bool backup)
 { (void)backup; (void)host; (void)port; }
 void tcp_manager_request_reconnect(void) { }
+void tcp_manager_reconnect_channels(uint8_t mask) { (void)mask; }
 void ec800m_restart_pdp(void) { }
 uint8_t jt808_encode_plate_gbk(const char *plate, uint8_t *out, uint8_t capacity)
 {
@@ -1355,7 +1356,7 @@ def main() -> int:
 
         jt808_harness = temp / "jt808_identity_harness.c"
         jt808_binary = temp / "jt808_identity_harness.exe"
-        jt808_harness.write_text(JT808_HARNESS, encoding="ascii")
+        jt808_harness.write_text(JT808_HARNESS + '\n#include "' + (ROOT/'tools/tests/jt808_host_support.h').as_posix() + '"\n', encoding="ascii")
         command = [
             cc, "-std=c99", "-Wall", "-Wextra", "-Werror",
             "-I", str(temp), "-I", str(ROOT / "include"), str(jt808_harness),

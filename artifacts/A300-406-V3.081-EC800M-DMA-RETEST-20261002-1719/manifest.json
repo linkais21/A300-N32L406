@@ -1,0 +1,35 @@
+{
+  "purpose": "REJECTED_HIL_FAILURE_DO_NOT_FLASH",
+  "release_approved": false,
+  "hardware": "N32L406CBL7",
+  "firmware_version": "T360-A300_406_20261002171910,V3.081",
+  "version_counter": 3081,
+  "app_origin": "0x08006000",
+  "app_limit_bytes": 106496,
+  "app_used_bytes": 104716,
+  "app_remaining_bytes": 1780,
+  "bootloader_included": false,
+  "ota_package_included": false,
+  "build": "2026-10-02 17:19:10 Asia/Shanghai",
+  "source_worktree_dirty": true,
+  "validation": {
+    "build": "passed",
+    "release_guard": "passed",
+    "ram_guard": "passed; runtime gap 4128 bytes against 4096-byte requirement",
+    "flash_guard": "passed with LOW_HEADROOM and CONFIGURATION_CHANGED alerts",
+    "whole_program_stack_guard": "incomplete: no proven whole-program stack/heap/exception bound",
+    "hardware_hil": "failed: power probe rx=0 echo=0; no modem AT response"
+  },
+  "artifacts": {
+    "App-N32L406CBL7-V3.081-EC800M-DMA-RETEST.bin": {
+      "bytes": 104716,
+      "sha256": "ad33a5cac6b33a0965ff2ff4e8ff25461f091464e7914ad9633ca118ab09f016",
+      "flash_address": "0x08006000"
+    },
+    "App-N32L406CBL7-V3.081-EC800M-DMA-RETEST.hex": {
+      "bytes": 294608,
+      "sha256": "046ee67b201259bf8fee8b9dbf14acab0ae469158d3a365ae41ede57033de995",
+      "addressing": "Intel HEX absolute addresses"
+    }
+  }
+}

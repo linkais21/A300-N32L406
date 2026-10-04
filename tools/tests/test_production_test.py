@@ -52,6 +52,13 @@ bool gps_quality_fix_fresh(void){return gps.valid && (uint32_t)(g_tick_ms-gps.qu
 static void query(const char *s,const char *want){reply[0]=0;assert(production_test_command(s));if(!strstr(reply,want)){puts(reply);assert(0);}fputs(reply,stdout);}
 static void ticks(unsigned n){while(n--){++g_tick_ms;production_test_tick();}}
 int main(void){
+ query("GNSSSTAT,38#","CNTH=38,CNGOOD=5");
+ query("GNSSSTAT,19#","=Fail!INVALID_ARGUMENT");
+ query("GNSSSTAT,51#","=Fail!INVALID_ARGUMENT");
+ query("GNSSSTAT,38x#","=Fail!INVALID_ARGUMENT");
+ query("GNSSSTAT,38,1#","=Fail!INVALID_ARGUMENT");
+ query("GNSSSTAT,#","=Fail!INVALID_ARGUMENT");
+ query("GNSSSTAT,38","=Fail!INVALID_ARGUMENT");
  query("GNSSRAW#","MAX=32,WINDOW_MS=5000");assert(trace_calls==1);
  diag.gsv_seen=12;diag.gsv_complete=3;
  query("GNSSDIAG#","GSV=12,COMPLETE=3,QUEUE_DROP=0");
@@ -67,7 +74,10 @@ int main(void){
  query("RELAYTEST,LOW#","OUT=LOW,MCU=1,PAD=1");query("RELAYTEST,LOW#","BUSY");
  query("RELAYTEST,HIGH#","OUT=HIGH,MCU=0,PAD=0");
  query("GNSSSTAT#","FIX=0");quality_ok=true;gps.valid=true;gps.fix_quality=1;gps.satellites=8;gps.hdop=0.9f;gps.last_update_ms=g_tick_ms;
- query("GNSSSTAT#","FIX=1,GPS=8,HDOP=0.9,CNSAT=8,CNAVG=35,CNMAX=42,SEQ=7");
+ query("GNSSSTAT#","FIX=1,GPS=8,HDOP=0.900,CNSAT=8,CNAVG=35,CNMAX=42,SEQ=7");
+ gps.hdop=3.01f;query("GNSSSTAT,38#","HDOP=3.010");
+ gps.hdop=3.0f;query("GNSSSTAT,38#","HDOP=3.000");
+ gps.hdop=3.0001f;query("GNSSSTAT,38#","HDOP=3.001");
  g_tick_ms+=6000;query("GNSSSTAT#","FIX=0");
  gps.last_update_ms=g_tick_ms;query("GNSSSTAT#","FIX=0");
  sos=true;ticks(6000);query("SOSSTAT#","DOWN=1,HOLD_MS=0");
@@ -77,6 +87,11 @@ int main(void){
 '''
 
 HEADERS['gps.h'] += 'typedef struct {uint32_t rx_bytes,gga,rmc,gsv_seen,gsv_complete,drop_queue,drop_length,checksum_fail,overrun;} gps_diag_t;\nvoid gps_trace_start(void);\nconst volatile gps_diag_t *gps_get_diag(void);\n'
+HEADERS['gps.h'] = HEADERS['gps.h'].replace('satellites,average,maximum;', 'satellites,average,maximum,cn_threshold,qualified;')
+HEADERS['gps.h'] += 'bool gps_set_quality_cn_threshold(uint8_t);\n'
+HARNESS = HARNESS.replace('bool gps_get_quality(gps_quality_t *q){',
+    'bool gps_set_quality_cn_threshold(uint8_t c){return c>=20&&c<=50;}\n'
+    'bool gps_get_quality(gps_quality_t *q){q->cn_threshold=38;q->qualified=5;')
 
 def main():
     parser=argparse.ArgumentParser()

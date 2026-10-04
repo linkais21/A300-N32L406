@@ -1,0 +1,30 @@
+{
+  "purpose": "DEDICATED_DEVICE_NETWORK_RETEST",
+  "release_approved": false,
+  "artifact_kind": "byte_for_byte_copy_of_known_baseline",
+  "source_directory": "artifacts/V3.081",
+  "hardware": "N32L406CBL7",
+  "firmware_version": "V3.081",
+  "version_counter": 3081,
+  "app_origin": "0x08006000",
+  "bootloader_included": false,
+  "ota_package_included": false,
+  "source_manifest_git_revision": "27281ba34c2d7706ec1816f2babeeaf3a1727fd0",
+  "source_manifest_git_dirty": true,
+  "artifacts": {
+    "App-N32L406CBL7.bin": {
+      "bytes": 103784,
+      "sha256": "85c487566be8739909cb9ce9d24068db5ac031f45ba30e33b70dd89cda9730c7",
+      "flash_address": "0x08006000"
+    },
+    "App-N32L406CBL7.hex": {
+      "bytes": 291990,
+      "sha256": "b68a90732848f44137145476ef555252d827472a153fca5f46ead15bbbee7309",
+      "addressing": "Intel HEX absolute addresses"
+    }
+  },
+  "validation": {
+    "artifact_copy_hashes": "passed_against_source_manifest",
+    "hardware_network_registration": "not_tested"
+  }
+}

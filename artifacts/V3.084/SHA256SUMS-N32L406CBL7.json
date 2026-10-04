@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "status": "hardware-validation-only",
+  "firmware_version": "T360-A300_406_20261004191838,V3.084",
+  "version_counter": 3084,
+  "ota_device_model": "A300-406",
+  "mcu": "N32L406CBL7",
+  "signing": "platform-detached",
+  "ota_format": "a300-header-v1",
+  "memory": {
+    "boot": [
+      134217728,
+      134242304
+    ],
+    "app": [
+      134242304,
+      134348800
+    ]
+  },
+  "app_vectors": {
+    "msp": 536895488,
+    "reset": 134334765
+  },
+  "app_flash_remaining": 1372,
+  "functional_evidence": "V3.084: six production I/O replay groups recompiled and passed",
+  "changed_this_packaging": [
+    "release_identity.json",
+    "include/config.h",
+    "include/build_version.h",
+    "tools/release_guard.py"
+  ],
+  "artifacts": {
+    "App-N32L406CBL7.bin": {
+      "path": "App-N32L406CBL7.bin",
+      "size": 105124,
+      "sha256": "edb4f4267ba7425552f89651b5cd50723c9871a211cd3afe7b915d44710a010d"
+    },
+    "App-N32L406CBL7.hex": {
+      "path": "App-N32L406CBL7.hex",
+      "size": 295749,
+      "sha256": "d00efcb48c9cf5b07fda2ca1e95f23ff57cff2b669da7844383e32206e872896"
+    },
+    "App-N32L406CBL7.elf": {
+      "path": "App-N32L406CBL7.elf",
+      "size": 1473212,
+      "sha256": "f1ea53c6163cc1368c030abbf8fd282d225a0bc0001d784390a3c79a721ba057"
+    },
+    "App-N32L406CBL7.map": {
+      "path": "App-N32L406CBL7.map",
+      "size": 667710,
+      "sha256": "b16a0b7b03fa2b44f4dfd3aad84172068252383d6bd3820ce28519d3c69a3190"
+    },
+    "Bootloader-N32L406CBL7.bin": {
+      "path": "Bootloader-N32L406CBL7.bin",
+      "size": 22556,
+      "sha256": "69d9fe750833dd63e4141810cbe37a386e914b8583ec0a42ffc370bd308d94bb"
+    },
+    "Bootloader-N32L406CBL7.hex": {
+      "path": "Bootloader-N32L406CBL7.hex",
+      "size": 41829,
+      "sha256": "995f922de1e56c0eeda9719408484d90b529d8ccdfc0e8d70d3b6c94877af107"
+    },
+    "Bootloader-N32L406CBL7.elf": {
+      "path": "Bootloader-N32L406CBL7.elf",
+      "size": 32788,
+      "sha256": "d4029b182f29a9f5a9902f0d685a619fd48e8d2ba93c935846048ebd11d5d132"
+    },
+    "Bootloader-N32L406CBL7.map": {
+      "path": "Bootloader-N32L406CBL7.map",
+      "size": 83706,
+      "sha256": "e28dfb84a1be770da9f8bd1c3fe3d78433b02c570178c78b1a0fd42d0c37e8d5"
+    },
+    "Combined-N32L406CBL7.bin": {
+      "path": "Combined-N32L406CBL7.bin",
+      "size": 129700,
+      "sha256": "ab3061055da5f5d8ad08ac1ac4109c726d995355a5e0afde70651c64fcc116fd"
+    },
+    "Combined-N32L406CBL7.hex": {
+      "path": "Combined-N32L406CBL7.hex",
+      "size": 364859,
+      "sha256": "f215528c31d93ff38d376512122afadfbf8543369bc8fc8ccc20152696bfde4f"
+    },
+    "A300-406-OTA-V3084.bin": {
+      "path": "A300-406-OTA-V3084.bin",
+      "size": 105156,
+      "sha256": "f1ace2833ec97a2c915d73065d9e9f2bdcc01926691ec5ff861119d7285d0284"
+    },
+    "flash-capacity.json": {
+      "path": "flash-capacity.json",
+      "size": 4871,
+      "sha256": "0d2c141cecb1af867a2c342a66976924497c103ef382ff3d7ed90ceb82425068"
+    },
+    "验证说明.md": {
+      "path": "验证说明.md",
+      "size": 4619,
+      "sha256": "3969e69c0cbf9d1578282e8cfc290aeea124e9f705afd6f82dc75a6b763cd422"
+    },
+    "验证记录.json": {
+      "path": "验证记录.json",
+      "size": 3512,
+      "sha256": "4aeee30611b0dbe3debe3f1714e292137f1457842bb5e6eda2033ea79e998a42"
+    }
+  }
+}

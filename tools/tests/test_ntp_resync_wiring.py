@@ -55,7 +55,9 @@ def test_gps_apply_ntp_utc_never_touches_position_or_validity():
     for forbidden in ("lat_e7", "lon_e7", "speed_x10", "heading_deg",
                       "altitude_m", "fix_quality", "satellites"):
         assert forbidden not in body
-    assert "s_last_trusted_valid" in body
+    assert "s_last_trusted_valid" not in body
+    assert "s_last_trusted.year = year" in body
+    assert "s_last_trusted_tick_ms = TICK_MS()" in body
 
 
 if __name__ == "__main__":

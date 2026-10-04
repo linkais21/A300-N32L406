@@ -76,7 +76,7 @@ def main():
         (p/'at_config.h').write_text('#include <stdint.h>\n#include <stdbool.h>\nbool at_config_execute_text_command_ack(const uint8_t*,uint16_t,void (*)(bool,void*),void*);\n')
         subprocess.run([shutil.which('gcc'),'-std=c99','-Wall','-Wextra','-Werror',
             '-Wno-misleading-indentation','-I',str(p),'-I',str(ROOT/'include'),
-            str(p/'h.c'),str(ROOT/'src/cfg_query.c'),str(ROOT/'src/service_workspace.c'),
+            str(p/'h.c'),str(ROOT/'src/cfg_query.c'),str(ROOT/'src/service_workspace.c'),str(ROOT/'src/f39_command.c'),
             '-o',str(p/'test.exe')],check=True)
         subprocess.run([str(p/'test.exe')],check=True)
     print('cfg query Pass: PASS (11 scenarios)')

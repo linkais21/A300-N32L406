@@ -18,6 +18,7 @@ def main():
     source+=r'''
 static unsigned reconnect_requests;
 void tcp_manager_request_reconnect(void) { ++reconnect_requests; }
+void tcp_manager_reconnect_channels(uint8_t mask) { assert(mask==1U || mask==8U || mask==9U); ++reconnect_requests; }
 void ec800m_restart_pdp(void) { }
 uint32_t work_mode_sleep_monotonic_s(void) { return g_tick_ms/1000U; }
 void work_mode_config_changed(const device_config_t *c,uint32_t now) { (void)c;(void)now; }
@@ -71,7 +72,7 @@ int main(void) {
 }
 '''
     with tempfile.TemporaryDirectory() as d:
-        p=Path(d);(p/'h.c').write_text(source,encoding='ascii')
+        p=Path(d);(p/'h.c').write_text(source + '\n#include "' + (ROOT/'tools/tests/jt808_host_support.h').as_posix() + '"\n',encoding='ascii')
         (p/'n32l40x.h').write_text('#pragma once\n#define GPIOA ((void*)0)\n#define GPIO_PIN_12 12U\n#define Bit_RESET 0\nint GPIO_ReadInputDataBit(void*,unsigned);\n')
         cmd=[dual.compiler(),'-std=c99','-Wall','-Wextra','-Werror','-I',str(p),'-I',str(ROOT/'include'),str(p/'h.c')]
         cmd += [str(ROOT/'src'/s) for s in ['plate_encoding.c','jt808.c','jt808_session.c','terminal_identity.c','jt808_params.c','service_workspace.c']]

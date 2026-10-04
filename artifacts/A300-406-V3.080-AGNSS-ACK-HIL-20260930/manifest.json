@@ -1,0 +1,23 @@
+{
+  "purpose": "DEDICATED_DEVICE_HIL_ONLY",
+  "firmware_version": "T360-A300_406_20260930140455,V3.080",
+  "version_counter": 3080,
+  "mcu": "N32L406CBL7",
+  "app_origin": "0x08006000",
+  "app_limit_bytes": 106496,
+  "app_used_bytes": 105900,
+  "app_remaining_bytes": 596,
+  "release_guard": "pass",
+  "flash_guard": "passed with LOW_HEADROOM",
+  "ram_stack_guard": "incomplete: ADC_IRQHandler",
+  "files": {
+    "App-N32L406-V3.080-AGNSS-ACK.bin": {
+      "bytes": 105900,
+      "sha256": "640340a2b1e07077b5aeb8a017abd663a30eead674e94e04232591c553bd368a"
+    },
+    "App-N32L406-V3.080-AGNSS-ACK.hex": {
+      "bytes": 297951,
+      "sha256": "71fee838aa0c648c19927a72a1fe4e5a968756dfe9684bebacfac50c6a404853"
+    }
+  }
+}

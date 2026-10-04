@@ -79,14 +79,8 @@ void jt808_set_logical_acc(bool on);
 bool jt808_get_logical_acc(void);
 int jt808_send_location(void);
 int jt808_send_location_to(uint8_t channel, const gps_data_t *snapshot);
-/* Returned when no position can be encoded yet: GNSS has no live fix and no
- * trusted snapshot has ever been captured.  Distinct from a transport failure
- * so the caller does not busy-retry a condition only time can clear. */
-#define JT808_SEND_NO_POSITION (-3)
-/* Minimum spacing between repeats of the "no position yet" notice. */
-#define JT808_LOCATION_DROP_LOG_MS 30000U
-/* Returns 0 on success, JT808_SEND_NO_POSITION when no position is available,
- * or another negative value on a transport failure worth retrying. */
+/* Returns 0 after main delivery or durable blind-zone storage; otherwise a
+ * negative retryable result. Missing fixes use a retained/unfixed snapshot. */
 /* report_id is nonzero and stable across retries; a new/merged action gets a
  * new ID from work_mode_allocate_report_id(). No on-wire format change. */
 int jt808_send_location_work_mode(uint32_t alarm_bits,
@@ -104,7 +98,6 @@ int jt808_send_raw(uint16_t msg_id, uint16_t resp_sn,
                    const uint8_t *body, uint16_t blen);
 int jt808_send_raw_tracked(uint16_t msg_id, const uint8_t *body,
                            uint16_t blen, uint16_t *serial_out);
-uint8_t jt808_online_channel(void);
 
 /* Server address management */
 void jt808_set_server(const char *ip, uint16_t port, bool is_backup);

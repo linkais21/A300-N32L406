@@ -51,3 +51,6 @@ tools/w64devkit-*.7z.exe
 
 # HIL/bench build output bundles (regenerated per run, not source)
 output/
+
+# Isolated diagnostic and experimental build outputs
+/build-*/

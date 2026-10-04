@@ -1,7 +1,11 @@
 #include "gps.h"
+#include "gps_report_filter.h"
 #include "config.h"
 #include "hw_init.h"
 #include "debug_uart.h"
+#include "ext_flash_store.h"
+#include "ext_flash_layout.h"
+#include "crc32.h"
 #include "n32l40x.h"
 #include <string.h>
 #include <math.h>
@@ -32,8 +36,50 @@ typedef struct __attribute__((packed)) {
     uint8_t fix_quality, satellites;
 } gps_retained_compact_t;
 static gps_retained_compact_t s_last_trusted;
+/* RAM-only acquisition UTC. Legacy Flash records contain an advanced clock,
+ * so their position has no recoverable acquisition time until a live fix. */
+static struct __attribute__((packed)) {
+    uint16_t year;
+    uint8_t month, day, hour, minute, second;
+} s_last_fix_utc;
 static bool s_last_trusted_valid;
 static uint32_t s_last_trusted_tick_ms;
+static bool s_trusted_store_dirty;
+static uint32_t s_trusted_store_next_ms;
+static uint32_t s_trusted_store_sequence;
+typedef struct __attribute__((packed)) { uint32_t magic, sequence; gps_retained_compact_t value; uint32_t crc32, marker; } gps_store_record_t;
+#define GPS_STORE_MAGIC 0x47505354UL
+#define GPS_STORE_MARKER 0x434F4D54UL
+#define GPS_STORE_SLOTS (FLASH_SECTOR_SIZE / sizeof(gps_store_record_t))
+#if defined(__GNUC__)
+/* Host GPS harnesses compile this module without the Flash driver. Firmware
+ * links the real implementations from ext_flash_store/crc32. */
+__attribute__((weak)) uint32_t crc32_compute(const void *p, uint32_t n) { (void)p; (void)n; return 0U; }
+__attribute__((weak)) bool ext_flash_try_lock(ext_flash_owner_t o) { (void)o; return false; }
+__attribute__((weak)) bool ext_flash_try_lock_now(ext_flash_owner_t o) { (void)o; return false; }
+__attribute__((weak)) void ext_flash_unlock(ext_flash_owner_t o) { (void)o; }
+__attribute__((weak)) bool ext_flash_read(ext_flash_owner_t o, uint32_t a, void *p, uint32_t n) { (void)o;(void)a;(void)p;(void)n; return false; }
+__attribute__((weak)) bool ext_flash_write_verified(ext_flash_owner_t o, uint32_t a, const void *p, uint32_t n) { (void)o;(void)a;(void)p;(void)n; return false; }
+__attribute__((weak)) bool ext_flash_erase(ext_flash_owner_t o, uint32_t a, uint32_t n) { (void)o;(void)a;(void)n; return false; }
+#endif
+static bool gps_store_valid(const gps_store_record_t *r) { return r->magic == GPS_STORE_MAGIC && r->marker == GPS_STORE_MARKER && r->value.year >= 2000U && r->crc32 == crc32_compute(r, (uint32_t)offsetof(gps_store_record_t, crc32)); }
+void gps_trusted_store_init(void) {
+    gps_store_record_t r, best; uint32_t seq = 0U; bool found = false;
+    if (!ext_flash_try_lock(EXT_FLASH_OWNER_CONFIG)) return;
+    for (uint32_t i=0U;i<GPS_STORE_SLOTS;++i) if (ext_flash_read(EXT_FLASH_OWNER_CONFIG, EXT_FLASH_GPS_TRUSTED_ADDR+i*sizeof(r), &r, sizeof(r)) && gps_store_valid(&r) && (!found || (int32_t)(r.sequence-seq)>0)) { best=r; seq=r.sequence; found=true; }
+    ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
+    s_trusted_store_sequence = found ? seq : 0U;
+    if (found) { s_last_trusted=best.value; s_last_trusted_valid=true; s_last_trusted_tick_ms=TICK_MS(); }
+}
+void gps_trusted_store_process(void) {
+    gps_store_record_t r; if (!s_trusted_store_dirty || !s_last_trusted_valid || (int32_t)(TICK_MS()-s_trusted_store_next_ms)<0) return;
+    memset(&r,0,sizeof(r)); r.magic=GPS_STORE_MAGIC; r.sequence=++s_trusted_store_sequence; r.value=s_last_trusted; r.crc32=crc32_compute(&r,(uint32_t)offsetof(gps_store_record_t,crc32)); r.marker=GPS_STORE_MARKER;
+    if (!ext_flash_try_lock_now(EXT_FLASH_OWNER_CONFIG)) return;
+    uint32_t slot=s_trusted_store_sequence%GPS_STORE_SLOTS;
+    if (slot==0U && !ext_flash_erase(EXT_FLASH_OWNER_CONFIG,EXT_FLASH_GPS_TRUSTED_ADDR,EXT_FLASH_GPS_TRUSTED_SIZE)) { ext_flash_unlock(EXT_FLASH_OWNER_CONFIG); return; }
+    bool ok=ext_flash_write_verified(EXT_FLASH_OWNER_CONFIG,EXT_FLASH_GPS_TRUSTED_ADDR+slot*sizeof(r),&r,sizeof(r)); ext_flash_unlock(EXT_FLASH_OWNER_CONFIG);
+    if (ok) { s_trusted_store_dirty=false; s_trusted_store_next_ms=TICK_MS()+60000U; }
+}
 static volatile gps_diag_t s_diag;
 static uint32_t s_gga_ms;
 static uint32_t s_trace_started;
@@ -47,11 +93,12 @@ void gps_trace_start(void)
 typedef struct {
     uint32_t updated;
     uint16_t sum;
-    uint8_t count, maximum, next, pages, satellites, signal;
+    uint8_t count, maximum, next, pages, satellites, signal, qualified;
 } gsv_cycle_t;
 /* GP, BD/GB, GN: the product's GPS/BDS modes. One signal band avoids
  * counting the same satellite twice on receivers with NMEA 4.1 GSV. */
 static gsv_cycle_t s_gsv[3];
+static uint8_t s_quality_cn_threshold = 38U;
 
 typedef enum {
     NMEA_PARSE_OK = 0,
@@ -303,6 +350,7 @@ static void parse_gsv(char *sentence)
         if (!parse_uint8(v, 99U, &cn)) { c->next = 0U; return; }
         if (cn != 0U && signal == c->signal) {
             c->sum += cn; ++c->count;
+            if (cn >= s_quality_cn_threshold) ++c->qualified;
             if (cn > c->maximum) c->maximum = cn;
         }
     }
@@ -318,6 +366,7 @@ bool gps_get_quality(gps_quality_t *out)
     unsigned sum = 0U, count = 0U, maximum = 0U;
     uint32_t youngest = 5001U;
     memset(out, 0, sizeof(*out));
+    out->cn_threshold = s_quality_cn_threshold;
     for (unsigned i = 0U; i < 3U; ++i) {
         const gsv_cycle_t *c = &s_gsv[i];
         if (c->next != 255U || (uint32_t)(TICK_MS() - c->updated) > 5000U) continue;
@@ -326,11 +375,22 @@ bool gps_get_quality(gps_quality_t *out)
         uint32_t age = (uint32_t)(TICK_MS() - c->updated);
         if (age < youngest) { youngest = age; out->sequence = c->updated; }
         sum += c->sum; count += c->count;
+        out->qualified += c->qualified;
         if (c->maximum > maximum) maximum = c->maximum;
     }
     if (count == 0U) return false;
     out->satellites = (uint8_t)(count > 255U ? 255U : count);
     out->average = (uint8_t)(sum / count); out->maximum = (uint8_t)maximum;
+    return true;
+}
+
+bool gps_set_quality_cn_threshold(uint8_t threshold)
+{
+    if (threshold < 20U || threshold > 50U) return false;
+    if (threshold != s_quality_cn_threshold) {
+        s_quality_cn_threshold = threshold;
+        memset(s_gsv, 0, sizeof(s_gsv));
+    }
     return true;
 }
 
@@ -487,7 +547,10 @@ void gps_init(void)
     memset(&s_gps, 0, sizeof(s_gps));
     memset(s_gsv, 0, sizeof(s_gsv));
     memset(&s_last_trusted, 0, sizeof(s_last_trusted));
+    memset(&s_last_fix_utc, 0, sizeof(s_last_fix_utc));
     s_last_trusted_valid = false;
+    s_trusted_store_dirty = false;
+    s_trusted_store_sequence = 0U;
     memset((void *)&s_diag, 0, sizeof(s_diag));
     s_trace_remaining = 0U;
     s_nmea_pos = 0U;
@@ -540,6 +603,14 @@ void gps_process(void)
         dispatch_nmea(s_nmea_slots[slot]);
         s_nmea_head ^= 1U;
         --s_nmea_count;
+        if (s_gps.valid && s_gps.fix_quality != 0U) {
+            gps_data_t selected;
+            /* History must retain the same live selection used on the wire,
+             * including a stationary anchor, rather than raw GNSS drift.
+             * copy() observes existing evidence; it performs no sensor I/O. */
+            gps_report_filter_copy(&s_gps, &selected, TICK_MS());
+            (void)gps_capture_last_trusted_snapshot(&selected);
+        }
     }
     /* If no update in 5 s → invalid */
     if (s_gps.valid && (TICK_MS() - s_gps.last_update_ms) > 5000)
@@ -548,28 +619,6 @@ void gps_process(void)
 
 bool gps_is_valid(void)               { return s_gps.valid; }
 const gps_data_t *gps_get_data(void)  { return &s_gps; }
-/* True when the supplied civil time is strictly newer than the retained
- * snapshot's clock.  Compared field by field from the most significant, which
- * is exact for the UTC stamps GNSS supplies. */
-static bool retained_clock_is_newer(uint16_t year, uint8_t month, uint8_t day,
-                                    uint8_t hour, uint8_t minute, uint8_t second)
-{
-    uint32_t candidate_date = ((uint32_t)year << 9) |
-                              ((uint32_t)month << 5) | (uint32_t)day;
-    uint32_t retained_date = ((uint32_t)s_last_trusted.year << 9) |
-                             ((uint32_t)s_last_trusted.month << 5) |
-                             (uint32_t)s_last_trusted.day;
-    uint32_t candidate_time, retained_time;
-
-    if (candidate_date != retained_date) return candidate_date > retained_date;
-    candidate_time = ((uint32_t)hour * 3600U) + ((uint32_t)minute * 60U) +
-                     (uint32_t)second;
-    retained_time = ((uint32_t)s_last_trusted.hour * 3600U) +
-                    ((uint32_t)s_last_trusted.minute * 60U) +
-                    (uint32_t)s_last_trusted.second;
-    return candidate_time > retained_time;
-}
-
 bool gps_capture_last_trusted(void)
 {
     return gps_capture_last_trusted_snapshot(&s_gps);
@@ -590,18 +639,10 @@ bool gps_capture_last_trusted_snapshot(const gps_data_t *snapshot)
         snapshot->minute > 59U || snapshot->second > 59U) {
         return false;
     }
-    /* Never let the retained clock run backwards.  While asleep this snapshot's
-     * clock is pushed forward by gps_advance_last_trusted_seconds() on every
-     * STOP1 wake, so a live fix whose own timestamp is older than the advanced
-     * value would rewind reported time.  A field capture showed the retained
-     * stamp going 06:41:17 -> 06:41:06 when ACC bounce drove repeated sleep
-     * entries.  Position is still refreshed; only an older clock is refused. */
-    retained_clock_advance_awake();
-    if (s_last_trusted_valid &&
-        !retained_clock_is_newer(snapshot->year, snapshot->month, snapshot->day,
-                                 snapshot->hour, snapshot->minute, snapshot->second)) {
-        return false;
-    }
+    /* Re-anchor to a validated live measurement, including corrections of a
+     * fast SysTick/RTC. A monotonic max of civil UTC accumulated oscillator
+     * error indefinitely. last_update_ms preserves this measurement's age;
+     * rereading the same snapshot must not restart its clock at `now`. */
     s_last_trusted.lat_e7 = (int32_t)(snapshot->lat * 10000000.0);
     s_last_trusted.lon_e7 = (int32_t)(snapshot->lon * 10000000.0);
     s_last_trusted.speed_x10 = snapshot->speed_kmh <= 0.0f ? 0U :
@@ -610,16 +651,17 @@ bool gps_capture_last_trusted_snapshot(const gps_data_t *snapshot)
         snapshot->heading < 0.0f ? 0U : (uint16_t)snapshot->heading;
     s_last_trusted.altitude_m = snapshot->altitude_m <= -32768.0f ? -32768 :
         snapshot->altitude_m >= 32767.0f ? 32767 : (int16_t)snapshot->altitude_m;
-    s_last_trusted.year = snapshot->year;
-    s_last_trusted.month = snapshot->month;
-    s_last_trusted.day = snapshot->day;
-    s_last_trusted.hour = snapshot->hour;
-    s_last_trusted.minute = snapshot->minute;
-    s_last_trusted.second = snapshot->second;
+    s_last_fix_utc.year = s_last_trusted.year = snapshot->year;
+    s_last_fix_utc.month = s_last_trusted.month = snapshot->month;
+    s_last_fix_utc.day = s_last_trusted.day = snapshot->day;
+    s_last_fix_utc.hour = s_last_trusted.hour = snapshot->hour;
+    s_last_fix_utc.minute = s_last_trusted.minute = snapshot->minute;
+    s_last_fix_utc.second = s_last_trusted.second = snapshot->second;
     s_last_trusted.fix_quality = snapshot->fix_quality;
     s_last_trusted.satellites = snapshot->satellites;
     s_last_trusted_valid = true;
     s_last_trusted_tick_ms = snapshot->last_update_ms;
+    s_trusted_store_dirty = true;
     return true;
 }
 
@@ -645,6 +687,21 @@ bool gps_get_last_trusted(gps_data_t *out)
     out->fix_quality = s_last_trusted.fix_quality;
     out->satellites = s_last_trusted.satellites;
     out->valid = true;
+    return true;
+}
+
+bool gps_get_last_trusted_location(gps_data_t *out)
+{
+    if (s_last_fix_utc.year == 0U || !gps_get_last_trusted(out)) return false;
+    /* A location carries acquisition UTC, not the current event/assist UTC.
+     * Never retimestamp an old coordinate on no-fix, sleep or query reports. */
+    out->year = s_last_fix_utc.year;
+    out->month = s_last_fix_utc.month;
+    out->day = s_last_fix_utc.day;
+    out->hour = s_last_fix_utc.hour;
+    out->minute = s_last_fix_utc.minute;
+    out->second = s_last_fix_utc.second;
+    out->valid = false;
     return true;
 }
 
@@ -689,6 +746,8 @@ void gps_apply_ntp_utc(uint16_t year, uint8_t month, uint8_t day,
     if (year < 2000U || month < 1U || month > 12U ||
         day < 1U || day > 31U || hour > 23U || minute > 59U || second > 59U)
         return;
+    /* UTC is correctable in both directions. Monotonic scheduling uses tick /
+     * RTC counters, not civil time. This must not alter acquisition UTC. */
     s_last_trusted.year = year;
     s_last_trusted.month = month;
     s_last_trusted.day = day;

@@ -32,8 +32,9 @@ def main() -> None:
             r"i2c_accel_prepare_wake_sampling\s*\(\s*\)",
             MAIN, "wake sampling must be prepared before work-mode evaluation")
     require(r"last_delta|delta", HEADER, "diagnostic must expose vibration delta")
-    require(r"\[ACCEL\].*X=%d.*Y=%d.*Z=%d.*read_ok=%u",
-            MAIN, "missing accelerometer sample diagnostics")
+    require(r"s_diag\.x = d\.x.*s_diag\.y = d\.y.*s_diag\.z = d\.z.*"
+            r"s_diag\.read_ok = true", SOURCE,
+            "accelerometer diagnostics must retain actual sample values")
     require(r"\[ACCEL\].*vibration.*X=%d.*Y=%d.*Z=%d",
             SOURCE, "missing vibration sample diagnostics")
     require(r"VIBRATION_SAMPLE_INTERVAL_MS\s+200U", SOURCE,

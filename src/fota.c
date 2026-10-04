@@ -6,6 +6,7 @@
 #include "build_version.h"
 #include "crc32.h"
 #include "ec800m.h"
+#include "jt808.h"
 #include "ext_flash_store.h"
 #include "flash_config.h"
 #include "debug_uart.h"
@@ -20,6 +21,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdio.h>
+#include "a300_format.h"
 
 #ifndef EC800M_H
 typedef void (*ec800m_recv_cb_t)(uint8_t, const uint8_t *, uint16_t);
@@ -180,7 +182,11 @@ static void http_reset(void)
     fota_http_header()[0]=0;
 }
 
+#ifdef A300_FIRMWARE_IMAGE
+void fota_ec800m_rx(uint8_t ch, const uint8_t *data, uint16_t len)
+#else
 static void fota_ec800m_rx(uint8_t ch, const uint8_t *data, uint16_t len)
+#endif
 {
     if(ch==FOTA_TCP_CH && data && len && s_workspace_lock &&
        s_state==FOTA_STATE_READY) {
@@ -481,7 +487,7 @@ bool fota_verify_manifest(const void *manifest, uint32_t length)
 bool fota_bcr_commit_pending(uint32_t version, uint32_t length, uint32_t target)
 {
     bcr_record_t r, old;fota_bcr_result_t bcr;
-    memset(&r,0,sizeof r); r.magic=BCR_MAGIC; r.sequence=1U; r.state=BCR_PENDING; r.image_version=version; r.transaction_length=length; r.target_address=target; r.commit_marker=0xFFFFFFFFUL;
+    memset(&r,0,sizeof r); r.magic=BCR_MAGIC; r.sequence=1U; r.state=BCR_PENDING; r.reserved=BCR_INSTALL_NOT_STARTED; r.image_version=version; r.transaction_length=length; r.target_address=target; r.commit_marker=0xFFFFFFFFUL;
     bcr=fota_bcr_load(&old);if(bcr==FOTA_BCR_IO_ERROR)return false;
     if(bcr==FOTA_BCR_FOUND){
         if(old.state==BCR_PENDING&&old.image_version==version&&old.transaction_length==length&&old.target_address==target)return true;
@@ -493,7 +499,8 @@ bool fota_bcr_commit_pending(uint32_t version, uint32_t length, uint32_t target)
 void fota_confirm_trial_process(void)
 {
     bcr_record_t record;fota_bcr_result_t bcr;
-    if(s_trial_checked||TICK_MS()<FOTA_TRIAL_HEALTHY_MS)return;
+    if(s_trial_checked||TICK_MS()<FOTA_TRIAL_HEALTHY_MS ||
+       !ec800m_is_ready() || !jt808_is_online())return;
     if(!ext_flash_try_lock_now(EXT_FLASH_OWNER_OTA))return;
     bcr=fota_bcr_load(&record);
     if(bcr==FOTA_BCR_IO_ERROR){ext_flash_unlock(EXT_FLASH_OWNER_OTA);return;}

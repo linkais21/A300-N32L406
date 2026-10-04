@@ -1,5 +1,10 @@
 # Makefile for A300_406 GPS Tracker (N32L406CBL7, 128 KiB Flash / 24 KiB SRAM)
 
+# Recipes below use Windows cmd syntax even when sh.exe is on PATH.
+ifeq ($(OS),Windows_NT)
+SHELL := cmd.exe
+endif
+
 # Keep the vendor toolchain path configurable while avoiding a literal legacy
 # platform token in release-input scans.  Make expands the two fragments to
 # the installed vendor directory.
@@ -31,6 +36,7 @@ C_SRCS := \
     src/main.c           \
     src/hw_init.c        \
     src/debug_uart.c     \
+    src/a300_format.c    \
     src/syscalls.c       \
     src/ram_watermark.c  \
     src/ec800m.c         \
@@ -120,17 +126,23 @@ INCLUDES := \
 
 # ── Compiler flags ─────────────────────────────────────────────────────────────
 CPU    := -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-# Debug sections enlarge ELF, not the flashed HEX/BIN. Override with
-# DEBUG_FLAGS=-g3 when source-level debugging is needed.
-DEBUG_FLAGS ?= -g0
+# Keep final-link CFI in the ELF for the RAM release gate. Debug sections do
+# not enter the flashed HEX/BIN.
+DEBUG_FLAGS ?= -g3
 # Measured with ARM GCC 14.3.1: limit inlining at compile and LTO link time
 # to reduce the App load image. Recheck size/stack evidence after toolchain changes.
 # Do not retain single-use service scratch in the permanent main stack.
-SIZE_FLAGS := -Os -finline-limit=128 -fno-inline-functions-called-once
-CFLAGS := $(CPU) $(SIZE_FLAGS) $(DEBUG_FLAGS) -Wall -Wextra -flto=1 -flto-partition=one -fstack-usage \
+SIZE_FLAGS := -Os -finline-limit=128 -fno-inline-small-functions -fno-tree-sra
+# Keep final-LTO control flow explicit for the stack audit. The ARM GCC 14.3.1
+# comparison removed application jump tables and most optimized tail branches
+# at a 4-byte Flash cost; library/startup transfers remain separately audited.
+STACK_AUDIT_FLAGS := -fno-jump-tables -fno-optimize-sibling-calls
+CFLAGS := $(CPU) $(SIZE_FLAGS) $(STACK_AUDIT_FLAGS) $(DEBUG_FLAGS) -Wall -Wextra -flto=1 -flto-partition=one -fstack-usage \
            -ffunction-sections -fdata-sections \
            $(INCLUDES) \
            -DUSE_STDPERIPH_DRIVER \
+           -DA300_FIRMWARE_IMAGE=1 \
+           -DA300_COMPACT_FORMAT=1 \
            -DN32L40X \
            -DSYSCLK_SRC=3 \
            -DSYSCLK_FREQ=64000000 \
@@ -241,11 +253,6 @@ $(BUILD)/$(TARGET).elf $(BUILD)/$(TARGET).map $(BUILD)/$(TARGET).hex $(BUILD)/$(
 	$(OBJCOPY) -O ihex $(BUILD)/$(TARGET).elf $(BUILD)/$(TARGET).hex
 	$(OBJCOPY) -O binary $(BUILD)/$(TARGET).elf $(BUILD)/$(TARGET).bin
 	python tools/flash_capacity_guard.py record --compiler "$(CC)" --elf "$(BUILD)/$(TARGET).elf" --output "$(BUILD)/flash-build-profile.json" --cflags="$(CFLAGS)" --asflags="$(ASFLAGS)" --ldflags="$(LDFLAGS)" --sdk-cflags="$(SDK_CFLAGS)" --signature-cflags="$(SIGNATURE_CFLAGS)" --sources="$(C_SRCS) $(ASM_SRCS)"
-
-# Validated size profile: allow single-use inlining outside main, OTA and
-# cryptographic translation units. Preserve their original per-file flags.
-$(filter-out $(BUILD)/src/main.o $(BUILD)/src/fota.o $(BUILD)/src/firmware_signature.o $(BUILD)/third_party/micro-ecc/uECC.o,$(filter %.o,$(OBJS))): CFLAGS := $(filter-out -fno-inline-functions-called-once,$(CFLAGS))
-LDFLAGS := $(filter-out -fno-inline-functions-called-once,$(LDFLAGS))
 
 size: $(BUILD)/$(TARGET).elf
 	$(SIZE) $<

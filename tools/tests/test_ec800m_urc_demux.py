@@ -398,22 +398,16 @@ int main(void)
     assert(tcp_payload_len == 5U);
     assert(tcp_payload[0] == 0x7eU && tcp_payload[1] == 0x00U);
     assert(tcp_payload[2] == 0x0dU && tcp_payload[3] == 0x0aU && tcp_payload[4] == 0x7eU);
-    assert(strstr(diag_log, "[4G-RX] ch=0 event=recv") != NULL);
-    assert(strstr(diag_log, "[4G-RX] ch=0 qird=5") != NULL);
     assert(strstr(diag_log, "PARAM") == NULL);
 
-    /* Malformed framing reports structure only, never response bytes. */
+    /* Malformed framing must not reach the application or expose payload. */
     tcp_payload_len = 0U;
     qird_phase = 4U;
     host_feed_rx("\r\n+QIURC: \"recv\",0\r\n");
     ec800m_process();
     ec800m_process();
-    assert(strstr(diag_log, "qird_fail=FORMAT stage=") != NULL);
-    assert(strstr(diag_log, " total=") != NULL);
-    assert(strstr(diag_log, " hdr=") != NULL);
-    assert(strstr(diag_log, " decl=") != NULL);
-    assert(strstr(diag_log, " remain=") != NULL);
-    assert(strstr(diag_log, " tail=") != NULL);
+    assert(tcp_payload_len == 0U);
+    assert(strstr(diag_log, "PARAM") == NULL);
 
     /* An OK-looking line inside length-delimited firmware bytes is payload,
      * not the modem's terminal result. The real result arrives later. */

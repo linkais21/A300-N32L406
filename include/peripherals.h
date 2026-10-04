@@ -14,5 +14,8 @@ typedef void (*sms_recv_cb_t)(const char *from, const char *text);
 void sms_set_recv_cb(sms_recv_cb_t cb);
 void sms_process_urc(const char *urc_line); /* feed URC lines from EC800M */
 void sms_process(void);                      /* consume one approved command */
+#ifdef A300_FIRMWARE_IMAGE
+void sms_command_execute(const char *from, const char *text);
+#endif
 
 #endif

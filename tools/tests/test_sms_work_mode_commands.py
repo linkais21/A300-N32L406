@@ -30,6 +30,9 @@ HARNESS = r'''
 #include "f39_config_adapter.h"
 #include "f39_reply.h"
 #include "gps.h"
+#include "fota.h"
+fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
+int log_platform_send_result(void) { return 0; }
 
 static device_config_t cfg;
 static unsigned saves;

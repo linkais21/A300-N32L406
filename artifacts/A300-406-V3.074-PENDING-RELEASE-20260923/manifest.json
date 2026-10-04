@@ -1,0 +1,76 @@
+{
+  "status": "BLOCKED_PENDING_RELEASE",
+  "formal_release_allowed": false,
+  "identity": {
+    "firmware_version_prefix": "T360-A300_406_20260923135425,V3.",
+    "firmware_revision": 74,
+    "firmware_version": "T360-A300_406_20260923135425,V3.074",
+    "firmware_version_counter": 3074,
+    "ota_device_model": "A300-406",
+    "jt808_terminal_model": "T360-A300",
+    "jt808_manufacturer_id": "70110"
+  },
+  "mcu": "N32L406CBL7",
+  "app_flash_address": "0x08006000",
+  "app_size": 104624,
+  "flash_remaining": 1872,
+  "ota_signing": "platform-detached-required",
+  "artifacts": {
+    "A300-406-OTA-V3074.bin": {
+      "size": 104656,
+      "sha256": "af4a85803670488a568b9fb05d48274ab9def2ac5ab301ef676f289fa3c9c6a8"
+    },
+    "App-N32L406-V3.074.bin": {
+      "size": 104624,
+      "sha256": "a639d9cfa709771273c37b194b7c42a09b9f359c2d46f68b4c25895452a70245"
+    },
+    "App-N32L406-V3.074.hex": {
+      "size": 294359,
+      "sha256": "fd907b3d1bf5bc519ab153035b4d9e9b1431863ad8d03a0fe8cadfcffc668afa"
+    },
+    "Bootloader-N32L406-V3.074.bin": {
+      "size": 22556,
+      "sha256": "ed58886b677dab81516528ca7fd8d9c57d86254dcfb7b31a6058acea01a0c395"
+    },
+    "Bootloader-N32L406-V3.074.hex": {
+      "size": 40913,
+      "sha256": "341945a302ad96a846987bf1b96aae1651776c3b3cfbab9192701d9c40dd445d"
+    },
+    "Combined-N32L406-V3.074-Factory.bin": {
+      "size": 129200,
+      "sha256": "1ce3286df722bdbd1872f5ad3458a23fd1156da921de76ce514cad053e256af0"
+    },
+    "README-使用说明.md": {
+      "size": 2911,
+      "sha256": "0431f7ba1cc5600b60625e8d4b1dc31954486473751b9d1e83d197f472e89aa3"
+    },
+    "validation/flash-capacity.json": {
+      "size": 4711,
+      "sha256": "63eefb282b38ed61bbcffdde164abd8420f387bff406ad17ea3db4f4a23d31d6"
+    },
+    "validation/HIL-review.md": {
+      "size": 2551,
+      "sha256": "64debbc89549fa2d439c15d06eed011f4eb735660722f08e35601d75a63c0133"
+    },
+    "validation/release-gate.log": {
+      "size": 688,
+      "sha256": "9deaeb4ae7c9d9f6fb449372fecd6e3e635f50dd08bff09d2b50306cdefd7e1c"
+    },
+    "validation/release-status.json": {
+      "size": 140,
+      "sha256": "01f6f46bfcee7c7c76b6e2f7b3457878dae3fe33839de92f474260832d63b7f0"
+    },
+    "validation/source-hashes.json": {
+      "size": 463945,
+      "sha256": "6636ecd008b4ae287aab517f29816a6ddd9c2b7ba9cd8b5d0c937491b748c8b5"
+    },
+    "validation/stack-analysis.json": {
+      "size": 325066,
+      "sha256": "2e4e8fea41a5b868f031201048679365c615232e1008cf069ea5992c3ca9bb02"
+    },
+    "validation/targeted-validation.json": {
+      "size": 1200,
+      "sha256": "f24761ed4149996065c99688a5296f2882a042021e2a2005e19d77bdcbb86eda"
+    }
+  }
+}

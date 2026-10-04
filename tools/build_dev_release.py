@@ -7,10 +7,8 @@ from zoneinfo import ZoneInfo
 
 ROOT=Path(__file__).resolve().parents[1]
 TOOLCHAIN=Path(os.environ.get("A300_TOOLCHAIN_DIR", ROOT / ".toolchain" / "bin"))
-MAKE=Path(os.environ.get(
-    "A300_MAKE",
-    shutil.which("make") or ROOT.parent / "tools" / "w64devkit" / "w64devkit" / "bin" / "make.exe",
-))
+MAKE=Path(os.environ.get("A300_MAKE") or
+          ROOT.parent / "tools" / "w64devkit" / "w64devkit" / "bin" / "make.exe")
 LABEL="N32L406CBL7"
 VERSION_LABEL_RE = re.compile(r"(?:^|,)V[0-9]+\.[0-9]{3}$")
 FACTORY_INIT_OFFSET = 0x5800
@@ -27,6 +25,13 @@ def run(command:list[str],cwd:Path=ROOT)->str:
     if result.returncode!=0: raise RuntimeError(output)
     if re.search(r"(^|\n).*warning:",output,re.IGNORECASE): raise RuntimeError("build warning rejected:\n"+output)
     return output
+
+
+def validate_make(path: Path) -> None:
+    if path.suffix.lower() != ".exe":
+        raise RuntimeError(f"release make must be an executable, not a batch wrapper: {path}")
+    if not path.is_file():
+        raise RuntimeError(f"make executable not found: {path}")
 
 def digest(path:Path)->dict:
     blob=path.read_bytes()
@@ -121,7 +126,7 @@ def main()->int:
     if not 0<args.version_counter<=0xFFFFFFFF: parser.error("version counter must be 1..0xffffffff")
     if args.version_counter != identity["firmware_version_counter"]:
         parser.error("--version-counter must match release_identity.json firmware_version_counter")
-    if not MAKE.is_file(): raise RuntimeError(f"make executable not found: {MAKE}")
+    validate_make(MAKE)
     objcopy=TOOLCHAIN/"arm-none-eabi-objcopy.exe"
     if not objcopy.is_file(): raise RuntimeError(f"ARM objcopy not found: {objcopy}")
 

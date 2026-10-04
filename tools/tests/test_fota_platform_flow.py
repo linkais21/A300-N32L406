@@ -42,8 +42,10 @@ def run_flow(source, label="flow", real_crypto=False):
                       str(ROOT / "third_party/micro-ecc/uECC.c"),
                       str(ROOT / "bootloader/src/image_verify.c")]
         command = [cc, "-std=c99", "-O1", "-Wall", "-Wextra", "-Werror",
+                   "-DA300_COMPACT_FORMAT=1",
                    "-I", str(temp), "-I", str(ROOT / "include"), "-I", str(ROOT),
                    *[str(ROOT / "src" / name) for name in production], *crypto,
+                   str(ROOT / "src/a300_format.c"),
                    str(harness), "-o", str(exe)]
         result = subprocess.run(command, capture_output=True, text=True)
         assert result.returncode == 0, result.stdout + result.stderr
@@ -73,7 +75,7 @@ volatile uint32_t g_tick_ms;
 static config_t cfg;
 static uint8_t flash[2*1024*1024], workspace[512];
 static int flash_owner, workspace_owner;
-static bool ready, identity_ready, signature_ok, fail_bcr, bcr_read_verified, in_receive, fail_write;
+static bool ready, online, identity_ready, signature_ok, fail_bcr, bcr_read_verified, in_receive, fail_write;
 static uint32_t fail_read_at;
 static unsigned bcr_reads[2],fail_bcr_slot_read;
 static const uint8_t *expected_signature_digest;
@@ -89,6 +91,7 @@ static unsigned event_count;
 static void event(char c){assert(event_count+1<sizeof events);events[event_count++]=c;events[event_count]=0;}
 config_t *cfg_get(void){return &cfg;}
 bool ec800m_is_ready(void){return ready;}
+bool jt808_is_online(void){return online;}
 static const char *modem_imei="860123456789012";
 void ec800m_get_imei(char *out,uint8_t capacity){snprintf(out,capacity,"%s",modem_imei);}
 bool terminal_identity_sync(char pid[12],char phone[13],char terminal[8]){
@@ -134,12 +137,26 @@ void dbg_printf(const char *format,...){va_list a;va_start(a,format);size_t n=st
 static void fresh(void){
     memset(flash,255,sizeof flash);memset(&cfg,0,sizeof cfg);memset(workspace,0,sizeof workspace);
     strcpy(cfg.fota_url,"http://fota.lhhn.net");
-    strcpy(identity,"12345678901");ready=identity_ready=signature_ok=true;
+    strcpy(identity,"12345678901");ready=online=identity_ready=signature_ok=true;
     flash_owner=workspace_owner=0;tcp=TCP_STATE_CLOSED;open_error=send_error=0;
     opens=sends=closes=resets=erases=watchdogs=signature_calls=0;
     fail_bcr=bcr_read_verified=in_receive=fail_write=inline_status_response=false;fail_read_at=0;fail_bcr_slot_read=0;memset(bcr_reads,0,sizeof bcr_reads);expected_signature_digest=NULL;logs[0]=request[0]=events[0]=0;event_count=0;g_tick_ms=0;fota_init();
 }
 static void pump(unsigned count){while(count--){unsigned before=erases;fota_process();assert(erases-before<=1);}}
+void exhaust_transport(bool connect){
+    for(unsigned i=0;i<220 && fota_get_state()!=FOTA_STATE_ERROR;i++){
+        if(connect && tcp==TCP_STATE_OPENING)tcp=TCP_STATE_OPEN;
+        pump(1);
+        if(fota_get_state()!=FOTA_STATE_ERROR)g_tick_ms+=1000;
+    }
+    assert(fota_get_state()==FOTA_STATE_ERROR && opens==3);
+    assert(!workspace_owner && !flash_owner && tcp==TCP_STATE_CLOSED);
+}
+void check_failure_retry(void){
+    uint32_t failed=g_tick_ms;
+    g_tick_ms=failed+59999U;pump(2);assert(opens==3);
+    g_tick_ms=failed+60000U;pump(2);assert(opens==4);
+}
 void connect_check(void){pump(2);assert(opens==1 && sends==0);tcp=TCP_STATE_OPEN;pump(1);assert(sends==1);}
 static void bytes(const void *p,size_t n){assert(receive);in_receive=true;receive(1,p,(uint16_t)n);in_receive=false;}
 static void response(const char *body){char wire[900];int n=snprintf(wire,sizeof wire,"HTTP/1.1 200 OK\r\nContent-Length: %u\r\nContent-Type: application/json\r\n\r\n%s",(unsigned)strlen(body),body);assert(n>0 && n<(int)sizeof wire);bytes(wire,(size_t)n);pump(1);}
@@ -166,9 +183,9 @@ int main(void){
     fresh();workspace_owner=SERVICE_WORKSPACE_OWNER_DIAGNOSTIC;pump(3);assert(!opens);workspace_owner=0;flash_owner=EXT_FLASH_OWNER_CONFIG;pump(3);assert(!opens);flash_owner=0;connect_check();
     /* Async connect has a fixed 30 s deadline; response has a fixed 60 s deadline. */
     fresh();pump(2);g_tick_ms=29999;pump(1);assert(opens==1);g_tick_ms=30000;pump(1);g_tick_ms=31000;pump(2);assert(opens==2);
-    fresh();open_error=-1;for(unsigned i=0;i<80;i++){pump(1);g_tick_ms+=1000;}assert(opens==3 && !sends && fota_get_state()==FOTA_STATE_IDLE);assert(!workspace_owner && !flash_owner);
-    fresh();send_error=-1;for(unsigned i=0;i<80;i++){if(tcp==TCP_STATE_OPENING)tcp=TCP_STATE_OPEN;pump(1);g_tick_ms+=1000;}assert(opens==3 && sends==3 && fota_get_state()==FOTA_STATE_IDLE);
-    fresh();connect_check();for(unsigned i=0;i<200;i++){pump(1);g_tick_ms+=1000;if(tcp==TCP_STATE_OPENING)tcp=TCP_STATE_OPEN;}assert(opens==3 && sends==3 && fota_get_state()==FOTA_STATE_IDLE);
+    fresh();open_error=-1;exhaust_transport(false);assert(!sends);check_failure_retry();
+    fresh();send_error=-1;exhaust_transport(true);assert(sends==3);check_failure_retry();
+    fresh();connect_check();exhaust_transport(true);assert(sends==3);check_failure_retry();
     const char *wire="HTTP/1.1 200 OK\r\nContent-Length: 25\r\nContent-Type: application/json\r\n\r\n{\"updateAvailable\":false}";
     for(size_t split=1;split<strlen(wire);split++){fresh();connect_check();bytes(wire,split);bytes(wire+split,strlen(wire)-split);pump(1);assert(fota_get_state()==FOTA_STATE_IDLE && opens==1);}
     fresh();connect_check();for(size_t i=0;i<strlen(wire);i++)bytes(wire+i,1);pump(1);assert(fota_get_state()==FOTA_STATE_IDLE);
@@ -184,11 +201,11 @@ int main(void){
       "HTTP/1.1 302 Found\r\nContent-Length: 25\r\nLocation: http://evil.invalid\r\n\r\n",
       "HTTP/1.1 401 Unauthorized\r\nContent-Length: 25\r\n\r\n"
     };
-    for(unsigned i=0;i<sizeof bad/sizeof bad[0];i++){fresh();connect_check();bytes(bad[i],strlen(bad[i]));pump(5);assert(fota_get_state()==FOTA_STATE_IDLE && erases==0 && opens==1);assert_no_device_key();}
-    fresh();connect_check();char huge[1100];memset(huge,'A',sizeof huge);bytes(huge,sizeof huge);pump(1);assert(fota_get_state()==FOTA_STATE_IDLE && erases==0);
-    fresh();connect_check();char excess[300];snprintf(excess,sizeof excess,"%sx",wire);bytes(excess,strlen(excess));pump(1);assert(fota_get_state()==FOTA_STATE_IDLE && erases==0);
+    for(unsigned i=0;i<sizeof bad/sizeof bad[0];i++){fresh();connect_check();bytes(bad[i],strlen(bad[i]));pump(5);assert(fota_get_state()==FOTA_STATE_ERROR && erases==0 && opens==1);assert(!workspace_owner && !flash_owner);assert_no_device_key();}
+    fresh();connect_check();char huge[1100];memset(huge,'A',sizeof huge);bytes(huge,sizeof huge);pump(1);assert(fota_get_state()==FOTA_STATE_ERROR && erases==0);
+    fresh();connect_check();char excess[300];snprintf(excess,sizeof excess,"%sx",wire);bytes(excess,strlen(excess));pump(1);assert(fota_get_state()==FOTA_STATE_ERROR && erases==0);
     fresh();connect_check();bytes(wire,strlen(wire)-5);tcp=TCP_STATE_CLOSED;pump(1);g_tick_ms=1000;pump(2);assert(opens==2 && erases==0);
-    fresh();connect_check();for(unsigned i=0;i<3;i++){const char *e="HTTP/1.1 500 Error\r\nContent-Length: 0\r\n\r\n";bytes(e,strlen(e));pump(1);if(i<2){g_tick_ms+=(i+1)*1000;pump(2);tcp=TCP_STATE_OPEN;pump(1);}}assert(opens==3 && fota_get_state()==FOTA_STATE_IDLE);
+    fresh();connect_check();for(unsigned i=0;i<3;i++){const char *e="HTTP/1.1 500 Error\r\nContent-Length: 0\r\n\r\n";bytes(e,strlen(e));pump(1);if(i<2){g_tick_ms+=(i+1)*1000;pump(2);tcp=TCP_STATE_OPEN;pump(1);}}assert(opens==3 && fota_get_state()==FOTA_STATE_ERROR);check_failure_retry();
     for(unsigned i=0;i<6;i++){fresh();connect_check();update(i<2?3001+i:3003,i==5?0:4300,i==2?"http://evil.invalid/fw":i==3?"http://fota.lhhn.net:81/fw":i==4?"https://fota.lhhn.net/fw":"http://fota.lhhn.net/fw");assert(fota_get_state()==FOTA_STATE_IDLE && erases==0);}
     fresh();connect_check();update(FW_VERSION_COUNTER+1,4300,"http://fota.lhhn.net/api/device/updates/tasks/17/download?token=task-token-123");assert(workspace_owner==SERVICE_WORKSPACE_OWNER_OTA && flash_owner==EXT_FLASH_OWNER_OTA);download_open();assert_no_device_key();assert(strstr(request,"GET /api/device/updates/tasks/17/download?token=task-token-123 HTTP/1.1\r\n"));assert(erases==3);assert(erased[1]==0x10000 && erased[2]==0x11000);assert(strstr(events,"DED"));
     fresh();connect_check();update(FW_VERSION_COUNTER+1,4300,"http://fota.lhhn.net/d/task-token-123?d=12345678901");assert(workspace_owner==SERVICE_WORKSPACE_OWNER_OTA && flash_owner==EXT_FLASH_OWNER_OTA);download_open();assert(strstr(request,"GET /d/task-token-123?d=12345678901 HTTP/1.1\r\n"));
@@ -240,7 +257,8 @@ int main(void){
         if(scenario==0){
             bcr_record_t b;memcpy(&b,flash+BCR_SLOT_B_ADDR,sizeof b);
             assert(!resets && fota_get_state()==FOTA_STATE_READY && signature_calls==1);
-            assert(b.state==BCR_PENDING && b.image_version==FW_VERSION_COUNTER+1 && b.transaction_length==sizeof package-FOTA_PACKAGE_HEADER_SIZE);
+            assert(b.state==BCR_PENDING && b.reserved==BCR_INSTALL_NOT_STARTED &&
+                   b.image_version==FW_VERSION_COUNTER+1 && b.transaction_length==sizeof package-FOTA_PACKAGE_HEADER_SIZE);
             fota_checkpoint_t saved;flash_owner=EXT_FLASH_OWNER_OTA;
             assert(fota_checkpoint_read(&saved)==1);flash_owner=0;
             assert(!strcmp(saved.url,"http://fota.lhhn.net/fw?token=task-token-123"));
@@ -342,10 +360,14 @@ int main(void){
         g_tick_ms=5000;
         const char *bad="HTTP/1.1 401 Unauthorized\r\nContent-Length: 25\r\n\r\n";
         bytes(bad,strlen(bad));pump(1);assert(fota_get_state()==FOTA_STATE_ERROR);
-        if(rearm){pump(2);assert(opens==3);}
-        else{g_tick_ms=700+21599999;pump(2);assert(opens==2);g_tick_ms=700+21600000;pump(2);assert(opens==3);}
+        /* Failure clears an earlier rearm and enforces the 60s cooldown. */
+        pump(2);assert(opens==2);
+        g_tick_ms=64999U;pump(2);assert(opens==2);
+        if(rearm)assert(fota_request_check());
+        else g_tick_ms=65000U;
+        pump(2);assert(opens==3);
     }
-    puts("check scheduling: active rearm retained, six hours starts at accepted check response PASS");return 0;
+    puts("check scheduling: failure cooldown 60s; new explicit check can rearm PASS");return 0;
 }
 ''', "rearm_deadline")
 

@@ -17,6 +17,8 @@ void tcp_manager_process(void);   /* call from main loop */
 
 /* Force reconnect (e.g. after server config change) */
 void tcp_manager_reconnect(void);
+/* Bit positions are TCP_CH_MAIN/TCP_CH_BACKUP; preserve other sessions. */
+void tcp_manager_reconnect_channels(uint8_t channel_mask);
 /* Schedule from a receive handler; actual modem work runs in process(). */
 void tcp_manager_request_reconnect(void);
 

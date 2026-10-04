@@ -1,0 +1,35 @@
+{
+  "purpose": "DEDICATED_DEVICE_HIL_ONLY",
+  "version": "T360-A300_406_20260928172551,V3.080",
+  "version_code": 3080,
+  "product": "A300-406",
+  "ota_format": "a300-header-v1; detached signature supplied by FOTA platform",
+  "release_gate": "software_pass; matching-image HIL pending",
+  "runtime_gap_bytes": 4156,
+  "files": {
+    "a300_firmware.elf": {
+      "bytes": 1488212,
+      "sha256": "c9fec000ac915cf44fe0410708e71a073e5bf2947920cfe54e7a588e5c5a0e14"
+    },
+    "a300_firmware.map": {
+      "bytes": 681435,
+      "sha256": "5c717e15b57e5779858fc600eb1500f22faf6af38e5d8d877fc43233b986b59a"
+    },
+    "App-N32L406-V3.080-HIL.bin": {
+      "bytes": 105356,
+      "sha256": "47b036c19c96d4a78e59af6fe9914f9a5a3fbccec0fde7d181590ac120027cdd"
+    },
+    "flash-capacity.json": {
+      "bytes": 4779,
+      "sha256": "49df41c6ba4b8ab7e3abae52025b55efe063374c81017abde7499b15322df0eb"
+    },
+    "OTA-A300-406-V3080-HIL.bin": {
+      "bytes": 105388,
+      "sha256": "2a3001db486d4d26e8ba6f4710faec715d6f84d57b798702ad8fccb3e559d80b"
+    },
+    "ram-budget.json": {
+      "bytes": 873,
+      "sha256": "8f812d6d63a1089fa9be0ca7d23846f599d85cd5e5c7a9223167fbeb4dd4e2c2"
+    }
+  }
+}

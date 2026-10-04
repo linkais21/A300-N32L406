@@ -1,0 +1,12 @@
+{
+  "deviceModel": "A300-406",
+  "versionCode": 3075,
+  "versionName": "T360-A300_406_20260924233944,V3.075",
+  "file": "A300-406-OTA-V3075.bin",
+  "size": 104576,
+  "sha256": "5cb276bf012a114979c2fd541220c9f9338d9564c3f6a0fd2b71fd8c64fb14c0",
+  "format": "a300-header-v1",
+  "signing": "platform-detached",
+  "signature_included": false,
+  "release_approved": false
+}

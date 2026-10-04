@@ -1,12 +1,22 @@
 #include "sms_ingress.h"
 #include "sms_command.h"
+#ifdef A300_FIRMWARE_IMAGE
+#include "at_config.h"
+#endif
 #include <string.h>
 
 static sms_ingress_cb_t s_callback;
 static char s_from[SMS_PHONE_MAX_LEN];
 static bool s_pending;
 
-void sms_ingress_set_callback(sms_ingress_cb_t cb) { s_callback = cb; }
+void sms_ingress_set_callback(sms_ingress_cb_t cb)
+{
+#ifdef A300_FIRMWARE_IMAGE
+    s_callback = cb == at_config_receive_sms ? cb : NULL;
+#else
+    s_callback = cb;
+#endif
+}
 
 void sms_ingress_feed_line(const char *line)
 {
@@ -38,5 +48,9 @@ void sms_ingress_process(void)
     uint8_t cmd[SMS_COMMAND_MAX_LEN];
     uint16_t len;
     if (!s_callback || !sms_queue_pop(from, sizeof(from), cmd, sizeof(cmd), &len)) return;
+#ifdef A300_FIRMWARE_IMAGE
+    at_config_receive_sms(from, cmd, len);
+#else
     s_callback(from, cmd, len);
+#endif
 }

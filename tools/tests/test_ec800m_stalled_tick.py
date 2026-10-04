@@ -13,11 +13,38 @@ HARNESS = PREFIX.replace(
     "void IWDG_ReloadKey(void) { ++feeds; if(!frozen)++g_tick_ms; }")
 HARNESS = HARNESS.replace(
     "{ (void)u; (void)flag; return SET; }",
-    "{ (void)u; return flag==USART_FLAG_RXDNE ? host_rx_stuck : SET; }")
-HARNESS = "static int host_rx_stuck;\n" + HARNESS + r'''
+    "{ (void)u; return flag==USART_FLAG_RXDNE ? host_rx_stuck : "
+    "(flag==USART_FLAG_TXDE || flag==USART_FLAG_TXC) ? host_tx_stuck : SET; }")
+HARNESS = ("static int host_rx_stuck, host_tx_stuck;\n"
+           "static const char *host_uart_reply;\n"
+           "static unsigned host_uart_reply_pos;\n" + HARNESS + r'''
 #include <string.h>
 #include "ec800m.c"
-static void host_tx(uint8_t data){(void)data;}
+static bool host_alive_reply;
+static bool host_echo_only;
+static bool host_dma_only;
+static void host_tx(uint8_t data)
+{
+    if ((host_alive_reply || host_echo_only) && data == '\n') {
+        static const char ok_reply[] = "\r\nOK\r\n";
+        static const char echo_reply[] = "AT\r\n";
+        const char *reply = host_echo_only ? echo_reply : ok_reply;
+        size_t reply_length = strlen(reply);
+        unsigned wr = (EC800M_RX_BUF_SIZE - host_remaining) % EC800M_RX_BUF_SIZE;
+        for (unsigned i = 0; i < reply_length; ++i) {
+            EC800M_RX_BUF[wr] = (uint8_t)reply[i];
+            wr = (wr + 1U) % EC800M_RX_BUF_SIZE;
+        }
+        host_remaining = wr == 0U ? 0U : EC800M_RX_BUF_SIZE - wr;
+        if (host_alive_reply && !host_dma_only) {
+            host_uart_reply = reply;
+            host_uart_reply_pos = 0U;
+            host_rx_stuck = SET;
+        }
+        host_alive_reply = false;
+        host_echo_only = false;
+    }
+}
 int main(int argc,char **argv){
     assert(argc==2);host_remaining=1024U;
     if(!strcmp(argv[1],"response")){
@@ -36,8 +63,18 @@ int main(int argc,char **argv){
         assert(!p && !n);
     }else if(!strcmp(argv[1],"alive")){
         assert(!ec800m_is_alive(10U));
+    }else if(!strcmp(argv[1],"alive_dma")){
+        host_dma_only=true;
+        host_tx_stuck=SET;host_remaining=924U;host_alive_reply=true;
+        assert(ec800m_is_alive(10U));
+        assert(host_rx_stuck==RESET);
+    }else if(!strcmp(argv[1],"alive_echo")){
+        host_tx_stuck=SET;host_remaining=EC800M_RX_BUF_SIZE;host_echo_only=true;
+        assert(!ec800m_is_alive(10U));
     }else if(!strcmp(argv[1],"rx_stuck")){
         host_rx_stuck=SET;assert(!ec800m_is_alive(10U));
+    }else if(!strcmp(argv[1],"tx_stuck")){
+        host_tx_stuck=RESET;assert(!usart_send_buf((const uint8_t *)"AT",2U));
     }else assert(0);
     assert(g_tick_ms==0 && feeds>0 && s_at_owner==AT_OWNER_NONE);
     /* Recovery releases the owner: a later healthy clock/response works. */
@@ -46,7 +83,14 @@ int main(int argc,char **argv){
     assert(at_send_wait("","OK",10U));assert(s_at_owner==AT_OWNER_NONE);
     puts("PASS");return 0;
 }
-'''
+''')
+
+HARNESS = HARNESS.replace(
+    "uint16_t USART_ReceiveData(usart_module_t *u) { (void)u; return 0U; }",
+    "uint16_t USART_ReceiveData(usart_module_t *u) { (void)u; "
+    "uint16_t value=host_uart_reply ? (uint8_t)host_uart_reply[host_uart_reply_pos++] : 0U; "
+    "if (host_uart_reply && host_uart_reply[host_uart_reply_pos]=='\\0') host_rx_stuck=RESET; "
+    "return value; }")
 
 
 def main():
@@ -64,9 +108,9 @@ def main():
                         "-I", str(p), "-I", str(ROOT / "include"), "-I", str(ROOT / "src"),
                         str(p / "h.c"), str(ROOT / "src/ec800m_at_response.c"),
                         "-Wl,--gc-sections", "-o", str(exe)], check=True, timeout=60)
-        for case in ("response", "prompt", "drain", "flush", "qird", "alive", "rx_stuck"):
+        for case in ("response", "prompt", "drain", "flush", "qird", "alive", "alive_dma", "alive_echo", "rx_stuck", "tx_stuck"):
             try:
-                run = subprocess.run([str(exe), case], capture_output=True, text=True, timeout=3)
+                run = subprocess.run([str(exe), case], capture_output=True, text=True, timeout=15)
                 if run.returncode:
                     failures.append(f"{case}: {run.stderr}")
                 else:

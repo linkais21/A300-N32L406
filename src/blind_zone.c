@@ -459,38 +459,39 @@ static bool quarantine_missing_head_locked(bz_recovery_state_t resume)
     uint32_t expected;
     uint32_t skipped;
     uint32_t next_head;
-    if (s_count == 0U) {
-        s_recovery = resume;
-        return true;
-    }
-    expected = s_next_sequence - s_count;
-    if (!read_record_locked(s_head_slot, &head_record)) {
-        saturating_increment(&s_diagnostics.recovery_retry);
-        return false;
-    }
-    if (flash_record_valid(&head_record) && head_record.sequence == expected) {
-        s_quarantine_pending = false;
-        s_recovery = resume;
-        return true;
-    }
-    if (s_count == 1U) {
-        next_head = s_next_slot;
-        skipped = s_span;
-    } else {
-        next_head = advance_to_sequence_locked(s_head_slot, s_span,
-                                               expected + 1U, &skipped);
-        if (next_head >= BLIND_ZONE_PHYSICAL_SLOTS) {
+    /* Bound recovery by the FIFO count without recursive stack growth. */
+    while (s_count != 0U) {
+        expected = s_next_sequence - s_count;
+        if (!read_record_locked(s_head_slot, &head_record)) {
             saturating_increment(&s_diagnostics.recovery_retry);
             return false;
         }
+        if (flash_record_valid(&head_record) && head_record.sequence == expected) {
+            s_quarantine_pending = false;
+            s_recovery = resume;
+            return true;
+        }
+        if (s_count == 1U) {
+            next_head = s_next_slot;
+            skipped = s_span;
+        } else {
+            next_head = advance_to_sequence_locked(s_head_slot, s_span,
+                                                   expected + 1U, &skipped);
+            if (next_head >= BLIND_ZONE_PHYSICAL_SLOTS) {
+                saturating_increment(&s_diagnostics.recovery_retry);
+                return false;
+            }
+        }
+        if (commit_meta_locked(next_head, s_count - 1U, s_span - skipped,
+                               s_next_slot, s_next_sequence) != BZ_META_OK) {
+            saturating_increment(&s_diagnostics.recovery_retry);
+            return false;
+        }
+        saturating_increment(&s_diagnostics.corrupt_quarantine);
     }
-    if (commit_meta_locked(next_head, s_count - 1U, s_span - skipped,
-                           s_next_slot, s_next_sequence) != BZ_META_OK) {
-        saturating_increment(&s_diagnostics.recovery_retry);
-        return false;
-    }
-    saturating_increment(&s_diagnostics.corrupt_quarantine);
-    return quarantine_missing_head_locked(resume);
+    s_quarantine_pending = false;
+    s_recovery = resume;
+    return true;
 }
 
 static void request_head_quarantine_if_missing_locked(void)

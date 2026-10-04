@@ -147,11 +147,12 @@ def test_main_enters_recovery_if_image_jump_returns():
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include "factory_init.h"
 
 int bootloader_main(void);
 static unsigned stage;
-static bool factory_error;
+static unsigned factory_mode;
 void boot_startup_status(const char *name, int32_t value) {(void)name;(void)value;}
 
 bool boot_platform_init(void) { if (stage != 0U) abort(); stage = 1U; return true; }
@@ -166,8 +167,14 @@ factory_init_result_t factory_init_apply(const factory_init_request_t *request)
 {
     if (request == NULL || stage != 2U) abort();
     stage = 3U;
-    return factory_error ? FACTORY_INIT_RESULT_ERROR : FACTORY_INIT_RESULT_ALREADY_DONE;
+    return factory_mode == 1U ? FACTORY_INIT_RESULT_ERROR :
+           factory_mode >= 2U ? FACTORY_INIT_RESULT_DEVICE_UNAVAILABLE :
+           FACTORY_INIT_RESULT_ALREADY_DONE;
 }
+bool boot_app_vectors_valid(uint32_t address)
+{ (void)address; return factory_mode == 2U; }
+void boot_jump_to(uint32_t address)
+{ (void)address; if (stage != 3U) abort(); stage = 6U; }
 bool boot_reset_was_fault_or_watchdog(void) { return false; }
 bool bcr_note_trial_reset(bool fault_or_watchdog)
 { (void)fault_or_watchdog; if (stage != 3U) abort(); stage = 4U; return true; }
@@ -177,7 +184,7 @@ void boot_recovery_step(void)
 {
     static unsigned calls;
     if (++calls == 1025U) {
-        if (stage != (factory_error ? 3U : 5U)) exit(8);
+        if (stage != (factory_mode == 2U ? 6U : factory_mode ? 3U : 5U)) exit(8);
         exit(0);
     }
 }
@@ -185,7 +192,8 @@ void boot_recovery_step(void)
 int main(int argc, char **argv)
 {
     (void)argv;
-    factory_error = argc > 1;
+    factory_mode = argc == 1 ? 0U : !strcmp(argv[1], "factory-error") ? 1U :
+                   !strcmp(argv[1], "factory-unavailable-invalid") ? 3U : 2U;
     (void)bootloader_main();
     return 9;
 }
@@ -210,7 +218,8 @@ int main(int argc, char **argv)
              "-o", str(executable)],
             check=True,
         )
-        for arguments in ([], ["factory-error"]):
+        for arguments in ([], ["factory-error"], ["factory-unavailable"],
+                          ["factory-unavailable-invalid"]):
             result = subprocess.run([str(executable), *arguments], check=False)
             assert result.returncode == 0, (
                 "Bootloader startup order or watchdog-serviced recovery contract failed"
@@ -224,7 +233,7 @@ def test_invalid_app_paths_report_recovery_to_main():
             "recovery must remain active and feed the watchdog")
     assert "for (unsigned i=0; i<1024U; ++i)" not in main, \
         "recovery must not terminate after a fixed number of iterations"
-    compact = re.sub(r"\s+", "", install)
+    compact = re.sub(r"\s+", "", install[install.index("bool bootloader_select_image(void)"):])
     jump = "boot_jump_to(APP_FLASH_BASE);"
     tails = compact.split(jump)[1:]
     assert tails, "Bootloader has no App jump path"
@@ -240,6 +249,12 @@ def test_external_flash_probe_does_not_block_valid_app_boot():
     assert "return jedec_valid();" not in init_body, \
         "optional external Flash probe must not block booting a valid internal App"
     require(init_body, "jedec_valid();", "initialization should still probe external Flash")
+
+
+def test_software_reset_counts_as_trial_attempt():
+    platform = (ROOT / "bootloader" / "src" / "platform_n32l406.c").read_text(encoding="utf-8")
+    init_body = platform[platform.index("bool boot_platform_init"):platform.index("bool boot_ext_device_valid")]
+    assert "RCC_CTRLSTS_FLAG_SFTRSTF" in init_body
 
 
 def test_factory_init_completion_is_fixed_and_relocked():

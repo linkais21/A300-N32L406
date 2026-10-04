@@ -10,6 +10,19 @@ SPEC.loader.exec_module(guard)
 
 
 class TailEvidenceTests(unittest.TestCase):
+    def test_exact_entry_tail_is_bounded_by_both_known_frames(self):
+        text = """08006000 <main>:
+ 8006000: f000 b800 b.w 8006010 <worker>
+08006010 <worker>:
+ 8006010: 4770 bx lr
+"""
+        report = guard.analyze(text, dict(main=24, worker=40))
+        self.assertEqual(report["roots"]["main"]["known_frame_sum"], 64)
+        self.assertEqual(report["tail_transfers"],
+                         [{"caller": "main", "target": "worker"}])
+        self.assertEqual(report["root_gaps"]["main"]["unresolved_tail_transfers"], [])
+        self.assertTrue(report["complete"])
+
     def test_tail_successors_and_missing_library_are_reachable(self):
         text = """08006000 <main>:
  8006000: f000 f800 bl 8006010 <wrapper>
@@ -39,6 +52,7 @@ class TailEvidenceTests(unittest.TestCase):
         self.assertEqual(report["roots"]["main"]["known_frame_sum"], 56)
         self.assertEqual(report["tail_transfers"][0]["target"], "worker+0x4")
         self.assertTrue(report["root_gaps"]["main"]["tail_transfers"])
+        self.assertTrue(report["root_gaps"]["main"]["unresolved_tail_transfers"])
         self.assertFalse(report["complete"])
 
     def test_local_branch_is_not_a_tail_and_unrelated_irq_gap_is_separate(self):

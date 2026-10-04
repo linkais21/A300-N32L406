@@ -90,6 +90,12 @@ int main(void)
     before0 = sends[0]; jt808_process();
     assert(sends[0] == before0 + 1U);
     before0 = sends[0]; g_tick_ms += 60000U; jt808_process();
+    /* An ambiguous modem result is not proof that terminal info arrived. */
+    assert(sends[0] == before0 + 1U);
+    fail_send[0] = ambiguous_send[0] = false;
+    before0 = sends[0]; g_tick_ms += 5000U; jt808_process();
+    assert(sends[0] == before0 + 1U);
+    before0 = sends[0]; jt808_process();
     assert(sends[0] == before0);
     return 0;
 }
@@ -106,7 +112,7 @@ def main() -> int:
         temp = Path(directory)
         harness = temp / "h.c"
         binary = temp / "h.exe"
-        harness.write_text(source, encoding="ascii")
+        harness.write_text(source + '\n#include "' + (ROOT/'tools/tests/jt808_host_support.h').as_posix() + '"\n', encoding="ascii")
         (temp / "n32l40x.h").write_text(
             "#ifndef N32L40X_H\n#define N32L40X_H\n"
             "#define GPIOA ((void*)0)\n#define GPIO_PIN_12 12U\n#define Bit_RESET 0\n"

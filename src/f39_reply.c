@@ -7,7 +7,17 @@
 #include <stdarg.h>
 #include <math.h>
 #include <stdio.h>
+#include "a300_format.h"
 #include <string.h>
+
+#ifdef A300_FIRMWARE_IMAGE
+#include "f39_production_bindings.h"
+#define F39_READY(p, field) ((p)->field == f39_production_##field)
+#define F39_INVOKE(p, field, ...) f39_production_##field(__VA_ARGS__)
+#else
+#define F39_READY(p, field) ((p)->field != NULL)
+#define F39_INVOKE(p, field, ...) ((p)->field(__VA_ARGS__))
+#endif
 
 static void reply_clear(f39_reply_t *reply)
 {
@@ -96,38 +106,38 @@ static f39_result_t query_text(f39_reply_t *reply, const char *name,
 
 void f39_apply_effects(uint32_t effects, f39_platform_t *p)
 {
-    if ((effects & F39_EFFECT_TIMER_REFRESH) != 0U && p->timer_refresh != NULL) {
-        p->timer_refresh(p->context);
+    if ((effects & F39_EFFECT_TIMER_REFRESH) != 0U && F39_READY(p, timer_refresh)) {
+        F39_INVOKE(p, timer_refresh, p->context);
     }
     if ((effects & (F39_EFFECT_MAIN_AUTH_RESET |
                     F39_EFFECT_BACKUP_AUTH_RESET)) != 0U &&
-        p->jt808_auth_reset != NULL) {
+        F39_READY(p, jt808_auth_reset)) {
         uint8_t channel_mask = 0U;
         if ((effects & F39_EFFECT_MAIN_AUTH_RESET) != 0U)
             channel_mask |= F39_AUTH_CHANNEL_MAIN;
         if ((effects & F39_EFFECT_BACKUP_AUTH_RESET) != 0U)
             channel_mask |= F39_AUTH_CHANNEL_BACKUP;
-        p->jt808_auth_reset(channel_mask, p->context);
+        F39_INVOKE(p, jt808_auth_reset, channel_mask, p->context);
     }
-    if ((effects & F39_EFFECT_NETWORK_RECONNECT) != 0U && p->network_reconnect != NULL) {
-        p->network_reconnect(p->context);
+    if ((effects & F39_EFFECT_NETWORK_RECONNECT) != 0U && F39_READY(p, network_reconnect)) {
+        F39_INVOKE(p, network_reconnect, p->context);
     }
     if ((effects & F39_EFFECT_MODEM_PDP_RESTART) != 0U &&
-        p->modem_pdp_restart != NULL) {
-        p->modem_pdp_restart(p->context);
+        F39_READY(p, modem_pdp_restart)) {
+        F39_INVOKE(p, modem_pdp_restart, p->context);
     }
-    if ((effects & F39_EFFECT_GNSS_REFRESH) != 0U && p->gnss_set_mode != NULL &&
+    if ((effects & F39_EFFECT_GNSS_REFRESH) != 0U && F39_READY(p, gnss_set_mode) &&
         p->config != NULL) {
-        p->gnss_set_mode(p->config->gnss_type, p->config->gpsbds_mode, p->context);
+        F39_INVOKE(p, gnss_set_mode, p->config->gnss_type, p->config->gpsbds_mode, p->context);
     }
-    if ((effects & F39_EFFECT_JT808_REREGISTER) != 0U && p->jt808_reregister != NULL) {
-        p->jt808_reregister(p->context);
+    if ((effects & F39_EFFECT_JT808_REREGISTER) != 0U && F39_READY(p, jt808_reregister)) {
+        F39_INVOKE(p, jt808_reregister, p->context);
     }
-    if ((effects & F39_EFFECT_REMAINING_REFRESH) != 0U && p->remaining_refresh != NULL) {
-        p->remaining_refresh(p->context);
+    if ((effects & F39_EFFECT_REMAINING_REFRESH) != 0U && F39_READY(p, remaining_refresh)) {
+        F39_INVOKE(p, remaining_refresh, p->context);
     }
-    if ((effects & F39_EFFECT_FOTA_RECHECK) != 0U && p->fota_recheck != NULL) {
-        p->fota_recheck(p->context);
+    if ((effects & F39_EFFECT_FOTA_RECHECK) != 0U && F39_READY(p, fota_recheck)) {
+        F39_INVOKE(p, fota_recheck, p->context);
     }
 }
 
@@ -167,16 +177,16 @@ static bool device_id(const device_config_t *c, const f39_platform_t *p,
 
 static bool effects_ready(uint32_t effects, const f39_platform_t *p)
 {
-    if ((effects & F39_EFFECT_TIMER_REFRESH) != 0U && p->timer_refresh == NULL) return false;
-    if ((effects & F39_EFFECT_NETWORK_RECONNECT) != 0U && p->network_reconnect == NULL) return false;
+    if ((effects & F39_EFFECT_TIMER_REFRESH) != 0U && !F39_READY(p, timer_refresh)) return false;
+    if ((effects & F39_EFFECT_NETWORK_RECONNECT) != 0U && !F39_READY(p, network_reconnect)) return false;
     if ((effects & (F39_EFFECT_MAIN_AUTH_RESET |
                     F39_EFFECT_BACKUP_AUTH_RESET)) != 0U &&
-        p->jt808_auth_reset == NULL) return false;
-    if ((effects & F39_EFFECT_MODEM_PDP_RESTART) != 0U && p->modem_pdp_restart == NULL) return false;
-    if ((effects & F39_EFFECT_GNSS_REFRESH) != 0U && p->gnss_set_mode == NULL) return false;
-    if ((effects & F39_EFFECT_JT808_REREGISTER) != 0U && p->jt808_reregister == NULL) return false;
-    if ((effects & F39_EFFECT_REMAINING_REFRESH) != 0U && p->remaining_refresh == NULL) return false;
-    if ((effects & F39_EFFECT_FOTA_RECHECK) != 0U && p->fota_recheck == NULL) return false;
+        !F39_READY(p, jt808_auth_reset)) return false;
+    if ((effects & F39_EFFECT_MODEM_PDP_RESTART) != 0U && !F39_READY(p, modem_pdp_restart)) return false;
+    if ((effects & F39_EFFECT_GNSS_REFRESH) != 0U && !F39_READY(p, gnss_set_mode)) return false;
+    if ((effects & F39_EFFECT_JT808_REREGISTER) != 0U && !F39_READY(p, jt808_reregister)) return false;
+    if ((effects & F39_EFFECT_REMAINING_REFRESH) != 0U && !F39_READY(p, remaining_refresh)) return false;
+    if ((effects & F39_EFFECT_FOTA_RECHECK) != 0U && !F39_READY(p, fota_recheck)) return false;
     return true;
 }
 
@@ -299,33 +309,30 @@ static f39_result_t query(const f39_request_t *r, f39_platform_t *p,
     }
 }
 
-/* Keep the 808-byte transaction off query/action paths; no shared mutable
- * workspace is introduced and commit/effect ordering remains unchanged. */
-static f39_result_t execute_config(const f39_request_t *request,
-                                    f39_platform_t *platform, f39_reply_t *reply,
-                                    uint32_t *effects, const char *name)
+/* Return the failure reason so reply formatting runs after tx leaves the stack. */
+static const char *execute_config(const f39_request_t *request,
+                                  f39_platform_t *platform, uint32_t *effects)
     __attribute__((noinline));
-static f39_result_t execute_config(const f39_request_t *request,
-                                    f39_platform_t *platform, f39_reply_t *reply,
-                                    uint32_t *effects, const char *name)
+static const char *execute_config(const f39_request_t *request,
+                                  f39_platform_t *platform, uint32_t *effects)
 {
     f39_transaction_t tx;
-    if (platform->config == NULL || platform->persist == NULL) return failure(reply,name,"invalid");
+    if (platform->config == NULL || !F39_READY(platform, persist)) return "invalid";
     f39_transaction_init(&tx, platform->config, platform->persist, platform->context);
     if (!f39_prepare_config(request, platform->config, &tx)) {
-        return failure(reply,name,"config");
+        return "config";
     }
     if (!effects_ready(tx.effects, platform) ||
         ((tx.effects & F39_EFFECT_GNSS_REFRESH) != 0U &&
-        (platform->gnss_set_mode == NULL ||
+        (!F39_READY(platform, gnss_set_mode) ||
          (tx.candidate.gnss_type != GNSS_TYPE_TAU804M)))) {
-        return failure(reply,name,"unsupported-receiver");
+        return "unsupported-receiver";
     }
     if (f39_commit_config(&tx) != F39_RESULT_OK) {
-        return failure(reply,name,"config");
+        return "config";
     }
     *effects = tx.effects;
-    return F39_RESULT_OK;
+    return NULL;
 }
 
 f39_result_t f39_execute_deferred(const f39_request_t *request,
@@ -333,6 +340,7 @@ f39_result_t f39_execute_deferred(const f39_request_t *request,
                          f39_reply_t *reply, uint32_t *effects)
 {
     const char *name;
+    const char *reason;
     char value[32];
     if (effects == NULL) return F39_RESULT_INVALID;
     *effects = F39_EFFECT_NONE;
@@ -357,28 +365,30 @@ f39_result_t f39_execute_deferred(const f39_request_t *request,
         bool cut;
         float current_speed;
         if (request->argc == 0U) {
-            bool state = platform->relay_get != NULL && platform->relay_get(platform->context);
+            bool state = F39_READY(platform, relay_get) &&
+                         F39_INVOKE(platform, relay_get, platform->context);
             reply_clear(reply);
             return reply_append(reply,"RELAY,%u=Success!\r\n",state?1U:0U)?F39_RESULT_OK:failure(reply,name,"reply-too-long");
         }
         if (request->argc != 1U ||
-            !arg_text(request,0U,value,sizeof(value)) || platform->relay_set == NULL ||
+            !arg_text(request,0U,value,sizeof(value)) || !F39_READY(platform, relay_set) ||
             (strcmp(value,"0") != 0 && strcmp(value,"1") != 0)) return failure(reply,name,"invalid");
         cut = (value[0] == '1');
         if (cut) {
-            if (platform->gps_valid == NULL || !platform->gps_valid(platform->context) ||
-                platform->gps_speed_kmh == NULL) return failure(reply,name,"unsafe");
-            current_speed = platform->gps_speed_kmh(platform->context);
+            if (!F39_READY(platform, gps_valid) ||
+                !F39_INVOKE(platform, gps_valid, platform->context) ||
+                !F39_READY(platform, gps_speed_kmh)) return failure(reply,name,"unsafe");
+            current_speed = F39_INVOKE(platform, gps_speed_kmh, platform->context);
             if (!isfinite(current_speed) || current_speed < 0.0f || current_speed >= 20.0f) {
                 return failure(reply,name,"unsafe");
             }
         }
-        if (!platform->relay_set(cut, platform->context)) return failure(reply,name,"busy");
+        if (!F39_INVOKE(platform, relay_set, cut, platform->context)) return failure(reply,name,"busy");
         reply_clear(reply);
         return reply_append(reply,"RELAY,%u=Success!\r\n",cut?1U:0U)?F39_RESULT_OK:failure(reply,name,"reply-too-long");
     }
-    if (execute_config(request, platform, reply, effects, name) != F39_RESULT_OK)
-        return F39_RESULT_INVALID;
+    reason = execute_config(request, platform, effects);
+    if (reason != NULL) return failure(reply, name, reason);
     /* Formatting must happen after the configuration transaction frame has
      * returned, especially FKEY's query/stdio path. */
     if (request->operation == F39_OPERATION_FKEY)

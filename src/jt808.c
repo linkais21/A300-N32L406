@@ -26,6 +26,7 @@
 #include "work_mode.h"
 #include "work_mode_sleep.h"
 #include "at_config.h"
+#include "at_config_production_callbacks.h"
 #include "fota.h"
 #include <string.h>
 #include <stdlib.h>
@@ -42,9 +43,9 @@ extern void motion_corner_consume_candidate(motion_corner_ctx_t *) __attribute__
 extern uint8_t motion_corner_pending_candidates(const motion_corner_ctx_t *) __attribute__((weak));
 #endif
 
-static void __attribute__((unused)) corner_init_safe(motion_corner_ctx_t *ctx)
+static void corner_init_safe(motion_corner_ctx_t *ctx)
 { if (motion_corner_init != NULL) motion_corner_init(ctx, NULL); else memset(ctx, 0, sizeof(*ctx)); }
-static motion_corner_event_t __attribute__((unused)) corner_step_safe(motion_corner_ctx_t *ctx,
+static motion_corner_event_t corner_step_safe(motion_corner_ctx_t *ctx,
                                               const motion_corner_sample_t *sample)
 { motion_corner_event_t e = { false, MOTION_CORNER_REASON_NONE, false };
   return motion_corner_step != NULL ? motion_corner_step(ctx, sample) : e; }
@@ -291,32 +292,16 @@ static void process_boot_terminal_info(uint32_t now)
 }
 
 /* Escape + wrap in 0x7E and send */
-static int send_frame_broadcast(frame_t *body, bool require_all)
+static int send_frame_broadcast(frame_t *body)
 {
-    bool attempted = false;
-    bool delivered = false;
-    bool failed = false;
-    if (jt808_channel_online(TCP_CH_MAIN)) {
-        attempted = true;
-        if (send_frame_channel_delivered(body, TCP_CH_MAIN) == 0)
-        if (rc == 0)
-            delivered = true;
-        else
-            failed = true;
-    }
-    if (jt808_channel_online(TCP_CH_BACKUP)) {
-        attempted = true;
-        if (send_frame_channel_delivered(body, TCP_CH_BACKUP) == 0)
-        if (rc == 0)
-            delivered = true;
-        else
-            failed = true;
-    }
+    /* Backup is best effort; only main delivery discharges blind-zone duty. */
+    int main_result = -1;
+    if (jt808_channel_online(TCP_CH_MAIN))
+        main_result = send_frame_channel_delivered(body, TCP_CH_MAIN);
+    if (jt808_channel_online(TCP_CH_BACKUP))
+        (void)send_frame_channel_delivered(body, TCP_CH_BACKUP);
     frame_release();
-    if (!attempted || !delivered || (require_all && failed)) {
-        return -1;
-    }
-    return 0;
+    return main_result;
 }
 
 static int finish_frame_channel(frame_t *body, uint8_t channel)
@@ -896,7 +881,7 @@ int jt808_send_location(void)
         if (!build_header(&f, MSG_LOCATION_REPORT, online_length)) { frame_release(); return -1; }
         frame_bytes(&f, online_body, online_length);
     }
-    if (send_frame_broadcast(&f, false) == 0) {
+    if (send_frame_broadcast(&f) == 0) {
         s_alarm_flags = 0;
         return 0;
     }
@@ -944,7 +929,7 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
     if (historical_position) {
         /* GNSS is off in STOP1.  Use only a snapshot captured while a live
          * fix was fresh; never encode the now-invalid live GPS object. */
-        if (!gps_get_last_trusted(&snapshot)) {
+        if (!gps_get_last_trusted_location(&snapshot)) {
             gps_get_unfixed_report(&snapshot);
         }
     } else {
@@ -955,7 +940,7 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
              * lose ACC state changes and the whole stationary reporting
              * cadence until the receiver came back, so fall back to the
              * retained fix and mark the report historical instead. */
-            if (!gps_get_last_trusted(&snapshot)) {
+            if (!gps_get_last_trusted_location(&snapshot)) {
                 gps_get_unfixed_report(&snapshot);
             }
             historical_position = true;
@@ -970,7 +955,7 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
     if (jt808_is_online() && frame_init(&frame)) {
         if (build_header(&frame, MSG_LOCATION_REPORT, length)) {
             frame_bytes(&frame, body, length);
-            result = send_frame_broadcast(&frame, alarm_bits != 0U);
+            result = send_frame_broadcast(&frame);
         } else frame_release();
     }
     if (result != 0) {
@@ -1020,7 +1005,7 @@ static int send_location_only(uint16_t message_id)
     uint16_t length;
     if (!jt808_is_online()) return -1;
     bool historical = !jt808_location_snapshot_valid(&snapshot, TICK_MS());
-    if (historical && !gps_get_last_trusted(&snapshot)) gps_get_unfixed_report(&snapshot);
+    if (historical && !gps_get_last_trusted_location(&snapshot)) gps_get_unfixed_report(&snapshot);
     length = encode_location_online(&snapshot, body, s_alarm_flags, historical);
     if (!frame_init(&frame)) return -1;
     if (!build_header(&frame, message_id, length)) { frame_release(); return -1; }
@@ -1171,7 +1156,7 @@ static void process_location_timer(uint32_t now)
                 if (frame_init(&frame)) {
                     if (build_header(&frame, MSG_LOCATION_REPORT, length)) {
                         frame_bytes(&frame, body, length);
-                        sent = send_frame_broadcast(&frame, false) == 0;
+                        sent = send_frame_broadcast(&frame) == 0;
                     } else frame_release();
                 }
                 if (sent) {
@@ -1251,8 +1236,8 @@ int jt808_send_raw_tracked(uint16_t msg_id, const uint8_t *body,
     if (!build_header(&f, msg_id, blen)) { frame_release(); return -1; }
     *serial_out = s_msg_sn;
     if (blen != 0U) frame_bytes(&f, body, blen);
-    if (!jt808_is_online()) { frame_release(); return -1; }
-    return finish_frame_channel(&f, jt808_online_channel());
+    if (!jt808_channel_online(TCP_CH_MAIN)) { frame_release(); return -1; }
+    return finish_frame_channel(&f, TCP_CH_MAIN);
 }
 
 #if defined(__GNUC__)
@@ -1277,7 +1262,7 @@ __attribute__((weak)) bool at_config_execute_text_command_ack(
 
 typedef struct { uint8_t channel, phone[6]; uint16_t serial, message_id; } text_ack_t;
 
-static void text_command_ack(bool success, void *context)
+void jt808_text_command_ack(bool success, void *context)
 {
     const text_ack_t *ack = context;
     frame_t f;
@@ -1294,7 +1279,7 @@ static void text_command_ack(bool success, void *context)
     (void)finish_frame_channel(&f, ack->channel);
 }
 
-static void text_command_reply(const uint8_t *text, uint16_t len, void *context)
+void jt808_text_command_reply(const uint8_t *text, uint16_t len, void *context)
 {
     const text_ack_t *ack = context;
     frame_t f;
@@ -1326,15 +1311,15 @@ static void __attribute__((noinline)) handle_command_message(const uint8_t *body
 
     if (message_id == MSG_TERMINAL_CTRL) {
         (void)at_config_execute_text_command_ack((const uint8_t *)"RESET", 5U,
-                                                text_command_ack, &ack);
+                                                jt808_text_command_ack, &ack);
         return;
     }
-    if (body_len < 2U) { text_command_ack(false, &ack); return; }
+    if (body_len < 2U) { jt808_text_command_ack(false, &ack); return; }
     text_len = (uint16_t)(body_len - 1U);
     if (body[body_len - 1U] == (uint8_t)'#') --text_len;
-    if (text_len == 0U) { text_command_ack(false, &ack); return; }
-    (void)at_config_execute_text_response(&body[1], text_len, text_command_ack,
-                                         text_command_reply, &ack);
+    if (text_len == 0U) { jt808_text_command_ack(false, &ack); return; }
+    (void)at_config_execute_text_response(&body[1], text_len, jt808_text_command_ack,
+                                         jt808_text_command_reply, &ack);
 }
 
 /* ── RX frame parser ──────────────────────────────────────────────────────── */
@@ -1534,9 +1519,6 @@ uint8_t jt808_online_mask(void)
     if (jt808_channel_online(TCP_CH_BACKUP)) mask |= (uint8_t)(1U << TCP_CH_BACKUP);
     return mask;
 }
-
-uint8_t jt808_online_channel(void)
-{ return jt808_channel_online(TCP_CH_MAIN) ? TCP_CH_MAIN : TCP_CH_BACKUP; }
 
 /* ── Called from EC800M receive callback ─────────────────────────────────── */
 void jt808_on_recv(uint8_t ch, const uint8_t *data, uint16_t len)

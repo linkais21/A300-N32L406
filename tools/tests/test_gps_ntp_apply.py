@@ -78,6 +78,23 @@ void delay_ms(uint32_t ms){g_tick_ms+=ms;}
 int dbg_printf(const char *fmt,...){(void)fmt;return 0;}
 
 static void feed(const char *s){while(*s)gps_rx_isr((uint8_t)*s++);}
+static __attribute__((unused)) void feed_sentence(const char *body){
+    uint8_t checksum=0U;
+    char sentence[160];
+    unsigned pos=1U;
+    sentence[0]='$';
+    for(const char *p=body;*p && pos+6U<sizeof(sentence);p++) {
+        checksum^=(uint8_t)*p;
+        sentence[pos++]=*p;
+    }
+    sentence[pos++]='*';
+    sentence[pos++] = (char)((checksum>>4U) < 10U ? '0'+((checksum>>4U)&0x0FU) :
+                              'A'+(((checksum>>4U)&0x0FU)-10U));
+    sentence[pos++] = (char)((checksum&0x0FU) < 10U ? '0'+(checksum&0x0FU) :
+                              'A'+((checksum&0x0FU)-10U));
+    sentence[pos++]='\r'; sentence[pos++]='\n'; sentence[pos]='\0';
+    feed(sentence);
+}
 
 int main(void){
     gps_data_t out;
@@ -88,22 +105,28 @@ int main(void){
     assert(!gps_get_last_trusted(&out));
 
     /* Establish a real trusted fix via the normal NMEA capture path. */
-    feed("$GPRMC,123519,A,4807.038,N,01131.000,E,22.4,84.4,230394,003.1,W*6A\r\n");
+    feed("$GPRMC,123519,A,4807.038,N,01131.000,E,22.4,84.4,230926,003.1,W*69\r\n");
     feed("$GPGGA,123520,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*4D\r\n");
     gps_process();
     gps_process();
-    assert(gps_capture_last_trusted());
     assert(gps_get_last_trusted(&out));
     {
         double lat0 = out.lat, lon0 = out.lon;
         float speed0 = out.speed_kmh, heading0 = out.heading, alt0 = out.altitude_m;
         uint8_t fixq0 = out.fix_quality, sats0 = out.satellites;
 
-        /* NTP correction: only the clock fields should change. */
-        gps_apply_ntp_utc(2026U, 9U, 4U, 2U, 15U, 30U);
+        /* Older NTP must not rewind the GNSS clock. */
+        gps_apply_ntp_utc(2026U, 9U, 22U, 2U, 15U, 30U);
         assert(gps_get_last_trusted(&out));
-        assert(out.year==2026U && out.month==9U && out.day==4U);
+        assert(out.year==2026U && out.month==9U && out.day==23U);
+        assert(out.hour==12U && out.minute==35U && out.second==20U);
+        /* A newer NTP correction may change only the clock fields. */
+        gps_apply_ntp_utc(2026U, 9U, 24U, 2U, 15U, 30U);
+        assert(gps_get_last_trusted(&out));
+        assert(out.year==2026U && out.month==9U && out.day==24U);
         assert(out.hour==2U && out.minute==15U && out.second==30U);
+        gps_apply_ntp_utc(2026U, 9U, 24U, 2U, 15U, 30U);
+        assert(gps_get_last_trusted(&out) && out.second==30U);
         assert(fabs(out.lat-lat0)<0.0000001 && fabs(out.lon-lon0)<0.0000001);
         assert(fabsf(out.speed_kmh-speed0)<0.001f);
         assert(fabsf(out.heading-heading0)<0.001f);
@@ -115,7 +138,7 @@ int main(void){
     gps_apply_ntp_utc(2026U, 13U, 4U, 2U, 15U, 30U);
     assert(gps_get_last_trusted(&out));
     assert(out.month==9U);
-    gps_apply_ntp_utc(2026U, 9U, 4U, 25U, 15U, 30U);
+    gps_apply_ntp_utc(2026U, 9U, 24U, 25U, 15U, 30U);
     assert(gps_get_last_trusted(&out));
     assert(out.hour==2U);
     gps_apply_ntp_utc(1999U, 9U, 4U, 2U, 15U, 30U);
@@ -123,7 +146,8 @@ int main(void){
     assert(out.year==2026U);
 
     gps_data_t selected = *gps_get_data();
-    selected.year=2099; selected.month=1; selected.day=1;
+    selected.year=2026; selected.month=9; selected.day=24;
+    selected.hour=2; selected.minute=15; selected.second=35;
     selected.lat=10.0; selected.lon=20.0; selected.speed_kmh=0; selected.heading=0;
     selected.valid=true; selected.fix_quality=1; selected.last_update_ms=g_tick_ms;
     assert(!gps_capture_last_trusted_snapshot(NULL));
@@ -131,6 +155,19 @@ int main(void){
     assert(gps_get_last_trusted(&out));
     assert(out.lat==10.0 && out.lon==20.0 && out.speed_kmh==0);
     assert(gps_get_data()->lat != 10.0);
+
+    /* Every fresh live fix must replace the retained point without waiting
+     * for a later GPS-off transition. A subsequent no-fix report then keeps
+     * the last traveled location instead of an old startup point. */
+    feed_sentence("GPRMC,123521,A,4900.000,N,01200.000,E,10.0,90.0,240926,,,A");
+    gps_process();
+    feed_sentence("GPGGA,123521,4900.000,N,01200.000,E,1,08,0.9,545.4,M,46.9,M,,");
+    gps_process();
+    assert(gps_get_last_trusted(&out));
+    assert(fabs(out.lat-(49.0+0.0/60.0))<0.0000001);
+    assert(fabs(out.lon-(12.0+0.0/60.0))<0.0000001);
+    gps_get_unfixed_report(&out);
+    assert(out.lat==0.0 && out.lon==0.0);
     puts("test_gps_ntp_apply: C harness PASS");
     return 0;
 }

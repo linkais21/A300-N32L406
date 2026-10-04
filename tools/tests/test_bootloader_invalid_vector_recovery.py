@@ -20,6 +20,7 @@ def test_trial_vector_rejection_persists_attempts_before_recovery():
 
 static bcr_record_t record;
 static unsigned commits, jumps, restores;
+static bool app_vectors_valid;
 
 bcr_load_result_t bcr_load(bcr_record_t *out) { *out = record; return BCR_LOAD_FOUND; }
 bool bcr_commit(const bcr_record_t *in) { record = *in; ++commits; return true; }
@@ -41,7 +42,7 @@ bool boot_authorization_read_at(uint32_t a,fota_authorization_t*out){(void)a;(vo
 uint32_t image_crc32(const void*p,uint32_t n){(void)p;(void)n;return 0;}
 image_verify_result_t verify_candidate(const image_manifest_t *m) { (void)m; return IMAGE_VERIFY_OK; }
 void boot_jump_to(uint32_t address) { assert(address == APP_FLASH_BASE); ++jumps; }
-bool boot_app_vectors_valid(uint32_t address) { (void)address; return false; }
+bool boot_app_vectors_valid(uint32_t address) { (void)address; return app_vectors_valid; }
 void boot_install_progress(uint32_t done, uint32_t total, bool complete) {(void)done;(void)total;(void)complete;}
 void boot_watchdog_feed(void) {}
 
@@ -52,6 +53,16 @@ int main(void) {
     assert(!bootloader_select_image());
     assert(record.boot_attempts == BOOTLOADER_TRIAL_LIMIT);
     assert(record.state == BCR_RECOVERY && jumps == 0 && commits == 2 && restores == 0);
+    memset(&record, 0, sizeof record);
+    commits = jumps = restores = 0;
+    record.state = BCR_PENDING;
+    record.reserved = BCR_INSTALL_NOT_STARTED;
+    record.target_address = APP_FLASH_BASE;
+    record.transaction_length = 4096U;
+    app_vectors_valid = true;
+    assert(!bootloader_select_image());
+    assert(record.state == BCR_ACTIVE && record.image_version == 0U &&
+           jumps == 1 && restores == 0);
     return 0;
 }
 '''

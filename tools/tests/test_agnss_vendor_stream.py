@@ -24,6 +24,16 @@ typedef struct { double lat, lon; float altitude_m; uint16_t year; uint8_t month
 typedef gps_data_t gps_context_t;
 int gps_send_raw(const uint8_t *, uint32_t);
 const gps_data_t *gps_get_data(void);
+void gps_get_unfixed_report(gps_data_t *);
+uint32_t gps_agnss_ack_sequence(void);
+bool gps_agnss_take_ack(uint32_t *, uint8_t[10]);
+#endif
+""",
+        "config.h": """#ifndef CONFIG_H
+#define CONFIG_H
+#include <stdint.h>
+extern uint32_t tick;
+#define TICK_MS() tick
 #endif
 """,
         "agnss_vendor.h": """#ifndef AGNSS_VENDOR_H
@@ -80,6 +90,17 @@ int gps_send_raw(const uint8_t *p, uint32_t n) {
     ++gps_calls; gps_bytes += n; return fail_uart ? -1 : 0;
 }
 const gps_data_t *gps_get_data(void) { return &g; }
+uint32_t tick;
+static uint32_t ack_seq;
+static int ack_ready;
+static uint8_t ack_frame[10];
+uint32_t gps_agnss_ack_sequence(void) { return ack_seq; }
+bool gps_agnss_take_ack(uint32_t *seq, uint8_t out[10]) {
+    if (!ack_ready || *seq == ack_seq) return false;
+    memcpy(out, ack_frame, sizeof ack_frame);
+    *seq = ack_seq; ack_ready = 0; return true;
+}
+void gps_get_unfixed_report(gps_data_t *out) { *out = g; }
 static fota_state_t ota_state=FOTA_STATE_IDLE;
 fota_state_t fota_get_state(void) { return ota_state; }
 bool ec800m_is_ready(void) { return true; }
@@ -89,14 +110,21 @@ device_config_t *cfg_get(void) { return &c; }
 
 #include "agnss_huada.c"
 
-static void make_huada_zero(uint8_t frame[8]) {
-    frame[0] = 0xf1; frame[1] = 0xd9; frame[2] = 0x0b; frame[3] = 0x10;
-    frame[4] = 0; frame[5] = 0; frame[6] = 0x1b; frame[7] = 0x5c;
+static void make_bds(uint8_t frame[100]) {
+    memset(frame, 0, 100); frame[0]=0xf1; frame[1]=0xd9; frame[2]=0x0b;
+    frame[3]=0x33; frame[4]=0x5c; frame[5]=0x00;
+    uint8_t a=0,b=0; for (unsigned i=2;i<98;i++){a=(uint8_t)(a+frame[i]);b=(uint8_t)(b+a);} frame[98]=a; frame[99]=b;
+}
+static void make_ack(uint8_t ok) {
+    memset(ack_frame,0,sizeof ack_frame); ack_frame[0]=0xf1;ack_frame[1]=0xd9;
+    ack_frame[2]=5;ack_frame[3]=ok;ack_frame[4]=2;ack_frame[6]=0x0b;ack_frame[7]=0x33;
+    uint8_t a=0,b=0; for(unsigned i=2;i<8;i++){a=(uint8_t)(a+ack_frame[i]);b=(uint8_t)(b+a);} ack_frame[8]=a;ack_frame[9]=b;
+    ++ack_seq; ack_ready=1;
 }
 
 int main(void) {
-    uint8_t valid[8], oversized[8] = {0xf1, 0xd9, 0x0b, 0x10, 0xff, 0xff, 0, 0};
-    make_huada_zero(valid);
+    uint8_t valid[100], oversized[8] = {0xf1, 0xd9, 0x0b, 0x10, 0xff, 0xff, 0, 0};
+    make_bds(valid);
     /* Retired receiver must never forward even a valid legacy CSIP frame. */
     { uint8_t legacy[30] = {0xba,0xce,20,0,8,0};
       legacy[26]=20; legacy[28]=8;
@@ -117,25 +145,39 @@ int main(void) {
     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) < 0);
     assert(gps_calls == 1);
     fail_uart = 0;
+    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 1);
+    /* A new transaction starts with cold start, then sends its first BDS frame. */
+    assert(gps_calls == 3 && gnss_vendor_inject_pending());
+    make_ack(1);
     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 0);
-    assert(gps_calls == 2);
+    assert(gps_calls == 3 && !gnss_vendor_inject_pending());
     assert(agnss_huada_inject(&(agnss_source_t){oversized, sizeof oversized}, &(gps_context_t){0}) < 0);
+    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 1);
+    make_ack(1);
     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 0);
-    assert(gps_calls == 3);
-    assert(agnss_huada_inject(&(agnss_source_t){valid, 3}, &(gps_context_t){0}) == 0);
-    assert(gps_calls == 3);
-    assert(agnss_huada_inject(&(agnss_source_t){valid + 3, 5}, &(gps_context_t){0}) == 0);
-    assert(gps_calls == 4);
+    assert(gps_calls == 5);
     assert(agnss_huada_inject(NULL, &(gps_context_t){0}) == 0);
+
+    /* No ACK keeps the caller pending; NAK and timeout fail closed. */
+    make_bds(valid);tick=0;
+    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 1);
+    assert(gnss_vendor_inject_pending());
+    tick=1000;
+    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) < 0);
+    assert(!gnss_vendor_inject_pending());
+    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 1);
+    make_ack(0);
+    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) < 0);
+    assert(!gnss_vendor_inject_pending());
 
     /* Position rounding is away from zero; negative MSL altitude is signed. */
     gps_context_t loc={0};loc.valid=true;loc.lat=-0.00000005;loc.lon=180;loc.altitude_m=-12.5f;
-    assert(inject_location(&loc)==0 && gps_last_len==25);
+    assert(build_location(&loc,gps_last)==25);
     assert(gps_last[7]==0xff && gps_last[8]==0xff && gps_last[9]==0xff && gps_last[10]==0xff);
     assert(gps_last[15]==0x1e && gps_last[16]==0xfb && gps_last[17]==0xff && gps_last[18]==0xff);
-    loc.lat=91;unsigned before=gps_calls;assert(inject_location(&loc)<0 && gps_calls==before);
-    loc.lat=NAN;assert(inject_location(&loc)<0 && gps_calls==before);
-    loc.lat=0;loc.altitude_m=21474836.0f;assert(inject_location(&loc)<0 && gps_calls==before);
+    loc.lat=91;unsigned before=gps_calls;assert(build_location(&loc,gps_last)==0 && gps_calls==before);
+    loc.lat=NAN;assert(build_location(&loc,gps_last)==0 && gps_calls==before);
+    loc.lat=0;loc.altitude_m=21474836.0f;assert(build_location(&loc,gps_last)==0 && gps_calls==before);
 
     return 0;
 }
@@ -162,6 +204,7 @@ def test_c_harness():
             "-I", str(ROOT / "include"), "-I", str(ROOT / "src"),
             str(directory / "harness.c"),
             str(ROOT / "src" / "agnss_stream_workspace.c"),
+            str(ROOT / "src" / "huada_ack.c"),
             "-o", str(output), "-lm"
         ], cwd=ROOT, capture_output=True, text=True)
         if build.returncode:

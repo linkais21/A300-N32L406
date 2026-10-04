@@ -42,7 +42,7 @@ def main():
         subprocess.run([compiler(),'-std=c99','-Wall','-Wextra','-Werror','-I',str(t),'-I',str(ROOT/'include'),str(t/'h.c'),str(ROOT/'src/status_led.c'),'-o',str(t/'h.exe')],check=True)
         subprocess.run([str(t/'h.exe')],check=True)
     source=(ROOT/'src/main.c').read_text(encoding='utf-8')
-    fn=source[source.index('void work_mode_process('):source.index('static void log_hardware_contract(')]
+    fn=source[source.index('void work_mode_process('):source.index('static void idle_sleep_process(')]
     assert fn.index('status_led_process(') < fn.index('case WORK_ACTION_ENTER_STOP1:')
     assert 'src/status_led.c' in (ROOT/'Makefile').read_text(encoding='utf-8')
     print('test_status_led: PASS')

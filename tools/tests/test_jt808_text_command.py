@@ -155,7 +155,7 @@ def main() -> int:
         t = Path(directory)
         h = t / "h.c"
         b = t / "h.exe"
-        h.write_text(source, encoding="ascii")
+        h.write_text(source + '\n#include "' + (ROOT/'tools/tests/jt808_host_support.h').as_posix() + '"\n', encoding="ascii")
         (t / "n32l40x.h").write_text(
             "#ifndef N32L40X_H\n#define N32L40X_H\n"
             "#define GPIOA ((void*)0)\n#define GPIO_PIN_12 12U\n"

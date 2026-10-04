@@ -37,7 +37,7 @@ typedef struct {
 
 static ch_ctx_t s_ch[2];   /* [0]=main  [1]=backup */
 static bool s_boot_summary_logged;
-static bool s_reconnect_pending;
+static uint8_t s_reconnect_pending;
 
 static bool decimal_length_valid(const char *value, size_t first, size_t second)
 {
@@ -221,29 +221,39 @@ void tcp_manager_process(void)
     /* OTA owns modem control. Pause connect/close/recovery without invalidating
      * established JT808 sessions; their data path runs independently. */
     if (tcp_manager_ota_active()) return;
-    if (s_reconnect_pending) tcp_manager_reconnect();
+    if (s_reconnect_pending) tcp_manager_reconnect_channels(s_reconnect_pending);
     ch_process(&s_ch[0]);
     ch_process(&s_ch[1]);
 }
 
 void tcp_manager_request_reconnect(void)
 {
-    s_reconnect_pending = true;
+    s_reconnect_pending |= (1U << TCP_CH_MAIN) | (1U << TCP_CH_BACKUP);
 }
 
 void tcp_manager_reconnect(void)
 {
+    tcp_manager_reconnect_channels((1U << TCP_CH_MAIN) | (1U << TCP_CH_BACKUP));
+}
+
+void tcp_manager_reconnect_channels(uint8_t channel_mask)
+{
+    s_reconnect_pending |= channel_mask & ((1U << TCP_CH_MAIN) | (1U << TCP_CH_BACKUP));
     if (tcp_manager_ota_active()) {
         /* Retain config-triggered reconnects and apply the latest endpoints
          * once OTA releases control. Repeated requests coalesce here. */
-        s_reconnect_pending = true;
         return;
     }
+    channel_mask = s_reconnect_pending;
     s_reconnect_pending = false;
-    ec800m_tcp_close(TCP_CH_MAIN);
-    ec800m_tcp_close(TCP_CH_BACKUP);
-    ch_init(&s_ch[0], TCP_CH_MAIN);
-    ch_init(&s_ch[1], TCP_CH_BACKUP);
+    for (uint8_t i = 0U; i < 2U; ++i) {
+        uint8_t ch = s_ch[i].ch;
+        if ((channel_mask & (1U << ch)) == 0U) continue;
+        uint32_t generation = s_ch[i].generation;
+        ec800m_tcp_close(ch);
+        ch_init(&s_ch[i], ch);
+        s_ch[i].generation = generation;
+    }
 }
 
 bool tcp_manager_is_online(void)

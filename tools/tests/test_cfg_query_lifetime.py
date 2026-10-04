@@ -132,6 +132,7 @@ int main(int argc,char **argv) {
         result = subprocess.run([cc, "-std=c99", "-O0", "-Wall", "-Wextra", "-Werror",
                                  "-I", str(p), "-I", str(ROOT / "include"),
                                  str(p / "harness.c"), str(ROOT / "src/cfg_query.c"),
+                                 str(ROOT / "src/f39_command.c"),
                                  str(ROOT / "src/service_workspace.c"), "-o", str(exe)],
                                 capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, result.stderr

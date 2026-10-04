@@ -35,6 +35,8 @@ bool gps_report_filter_copy(const gps_data_t *raw, gps_data_t *out, uint32_t now
 #include "jt808.h"
 #include "jt808_terminal_info.h"
 #include "work_mode.h"
+#include "fota.h"
+#include "at_config.h"
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -70,6 +72,13 @@ static uint8_t s_last_consumed;
 static uint32_t s_last_consumed_sequence;
 static gps_data_t s_gps;
 static device_config_t s_config;
+fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
+void gps_get_unfixed_report(gps_data_t *out) { memset(out, 0, sizeof(*out)); }
+bool gps_report_filter_motion_pending(uint32_t now) { (void)now; return false; }
+void gps_report_filter_motion_ack(void) {}
+bool at_config_execute_text_response(const uint8_t *text, uint16_t len,
+    at_config_text_ack_fn ack, at_config_text_reply_fn reply, void *ctx)
+{ (void)text; (void)len; (void)ack; (void)reply; (void)ctx; return false; }
 
 device_config_t *cfg_get(void) { return &s_config; }
 void cfg_save(void) {}
@@ -99,6 +108,7 @@ void ec800m_get_iccid(char *buf, uint8_t size)
     memcpy(buf, iccid, n); buf[n] = '\0';
 }
 bool ec800m_is_ready(void) { return true; }
+void ec800m_tcp_close(uint8_t ch) { if (ch == EC800M_CH_MAIN) s_main_online = false; else if (ch == EC800M_CH_BACKUP) s_backup_online = false; }
 void ec800m_register_recv(ec800m_recv_cb_t cb) { (void)cb; }
 int ec800m_tcp_send(uint8_t ch, const uint8_t *data, uint16_t length)
 {
@@ -318,7 +328,7 @@ static void push_record(uint8_t marker)
     blind_zone_record_t record;
     unsigned i;
     memset(&record, 0, sizeof(record));
-    record.length = 34U;
+    record.length = BLIND_ZONE_LOCATION_MAX;
     for (i = 0U; i < record.length; ++i) record.location[i] = marker + i;
     assert(blind_zone_append(&record) == BLIND_ZONE_OK);
 }
@@ -447,6 +457,18 @@ int main(void)
     first_batch = decoded[12U + 1U];
     assert(decoded[12U] == 0U && first_batch > 0U && first_batch < 20U);
     assert(decoded[14U] == 1U); /* type=blind-zone supplement */
+    {
+        uint16_t position = 15U;
+        for (uint8_t i = 0U; i < first_batch; ++i) {
+            uint16_t length = (uint16_t)(((uint16_t)decoded[position] << 8) |
+                                         decoded[position + 1U]);
+            position += 2U;
+            assert(length == s_queue[i].length);
+            assert(memcmp(decoded + position, s_queue[i].location, length) == 0);
+            position = (uint16_t)(position + length);
+        }
+        assert(position == decoded_length - 1U);
+    }
     replay_serial = sent_serial();
 
     blind_zone_replay_process();
@@ -477,6 +499,12 @@ int main(void)
     blind_zone_replay_process();
     assert(s_send_count == 0U && s_consume_count == 3U &&
            s_queue_count == 21U - first_batch);
+    blind_zone_replay_process();
+    assert(s_send_count == 0U); /* acknowledged batches are paced */
+    g_tick_ms += 999U;
+    blind_zone_replay_process();
+    assert(s_send_count == 0U);
+    g_tick_ms += 1U;
     blind_zone_replay_process();
     assert(s_send_count == 1U);
     replay_serial2 = sent_serial();

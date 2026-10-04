@@ -8,11 +8,10 @@ trusted snapshot has ever been captured, so the report failed, main.c re-queued
 it immediately, and it failed again at once. The blocking debug UART then
 starved the very loop that would have acquired the fix.
 
-Two independent guards are pinned here, because either one alone still leaves a
-hot loop or a silent one:
-  1. the sender reports "no position yet" distinctly from a transport failure,
-     and rate-limits the notice;
-  2. the caller does not re-queue that specific outcome.
+The repaired contract sends a zero-coordinate unfixed snapshot when no trusted
+fix exists. A failed transport/storage attempt still yields the dispatcher,
+so retry cannot spin within the same pass. Runtime encoding and storage are
+covered by test_jt808_dual_session and test_jt808_nofix_clock.
 """
 
 from pathlib import Path
@@ -45,50 +44,18 @@ def function_body(source: str, name: str) -> str:
 
 
 def main() -> None:
-    # 1. A distinct, non-zero, negative result for "no position available".
-    require("JT808_SEND_NO_POSITION" in HEADER,
-            "no distinct result for the no-position case")
-    value = re.search(r"#define\s+JT808_SEND_NO_POSITION\s*\(?\s*(-\d+)\s*\)?",
-                      HEADER)
-    require(value is not None, "JT808_SEND_NO_POSITION is not a plain constant")
-    require(int(value.group(1)) < 0,
-            "JT808_SEND_NO_POSITION must stay negative: callers test for failure")
-
     sender = function_body(JT808, "jt808_send_location_work_mode")
-    require(sender.count("JT808_SEND_NO_POSITION") >= 2,
-            "both no-position paths (historical and live) must use the "
-            "distinct result")
-    # The distinct result must not leak into transport failures, or the caller
-    # would stop retrying a genuinely retryable send.
-    require("return -1;" in sender,
-            "transport failures must stay distinguishable from no-position")
-
-    # 2. The notice is rate-limited rather than printed on every attempt.
-    require("log_location_unavailable" in JT808,
-            "the no-position notice is not funnelled through a limiter")
-    limiter = function_body(JT808, "log_location_unavailable")
-    require("JT808_LOCATION_DROP_LOG_MS" in limiter,
-            "the limiter does not use a minimum log interval")
-    require("suppressed" in limiter,
-            "the limiter hides how many notices it dropped")
-    interval = re.search(r"#define\s+JT808_LOCATION_DROP_LOG_MS\s+(\d+)U?",
-                         HEADER)
-    require(interval is not None, "log interval is not a plain constant")
-    require(int(interval.group(1)) >= 1000,
-            "a sub-second log interval defeats the rate limit")
-    # The direct print must be gone from the sender's no-position paths.
+    require(sender.count("gps_get_unfixed_report(&snapshot)") == 2,
+            "historical and live missing-fix paths must still produce a report")
+    require("return JT808_SEND_NO_POSITION" not in sender,
+            "missing GNSS must not discard the work-mode report")
+    require("blind_zone_append" in sender and "return -2;" in sender,
+            "unconfirmed main delivery must retain a retryable storage path")
     require("drop reason=" not in sender,
-            "the sender still prints the drop directly, bypassing the limiter")
+            "missing-fix drop logging has returned")
 
-    # 3. The caller must not re-queue the no-position outcome.
+    # The dispatcher must yield after a failed attempt.
     caller = function_body(MAIN, "work_mode_process")
-    require("JT808_SEND_NO_POSITION" in caller,
-            "the action dispatcher ignores the no-position result")
-    require(re.search(
-        r"jt808_send_location_work_mode[\s\S]*?"
-        r"!=\s*JT808_SEND_NO_POSITION[\s\S]{0,200}?work_mode_retry_action",
-        caller) is not None,
-        "a no-position result is still re-queued immediately")
     # A transport failure must still be retried, or reports would be lost.
     require("work_mode_retry_action" in caller,
             "transport failures are no longer retried at all")

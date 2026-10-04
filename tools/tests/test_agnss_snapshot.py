@@ -7,6 +7,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 HARNESS = r'''
 #include <assert.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stddef.h>
 #include <string.h>
@@ -28,7 +29,9 @@ static const uint8_t *expected;
 static bool fail_read, fail_write, fail_erase, fail_callback;
 static uint32_t write_budget=UINT32_MAX, fail_read_at=UINT32_MAX;
 static unsigned completed;
+static char last_log[128];
 static fota_state_t ota_state;
+int dbg_printf(const char *fmt,...){va_list args;va_start(args,fmt);int n=vsnprintf(last_log,sizeof last_log,fmt,args);va_end(args);return n;}
 
 bool spi_flash_read(uint32_t a,uint8_t *b,uint32_t n) {
     assert(a <= sizeof flash && n <= sizeof flash-a);
@@ -59,6 +62,7 @@ fota_state_t fota_get_state(void){return ota_state;}
 bool ec800m_is_ready(void){return true;}
 bool gps_is_valid(void){return false;}
 void gnss_vendor_set_type(gnss_type_t t){(void)t;}
+bool gnss_vendor_inject_pending(void){return false;}
 bool gnss_vendor_inject(gnss_type_t t,const uint8_t*p,uint16_t n) {
     assert(t==GNSS_TYPE_TAU804M);
     if(fail_callback)return false;
@@ -92,6 +96,7 @@ static void injection(uint32_t length,bool dual) {
     payload_reads=0;
     for(uint32_t i=0;i<(length+1023)/1024+1;i++)agnss_process();
     assert(completed==1 && output_len==length && agnss_has_injected());
+    assert(strstr(last_log,"[AGNSS-CACHE] tx_done=1")&&strstr(last_log,"bytes="));
     printf("length=%u slots=%u payload_reads=%u budget=%u\n",
            (unsigned)length,dual?2:1,(unsigned)payload_reads,(unsigned)(length*(dual?3:2)));
     fflush(stdout);

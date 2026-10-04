@@ -41,6 +41,7 @@ bool ext_flash_read(ext_flash_owner_t owner,uint32_t addr,void *out,uint32_t n){
 bool ext_flash_erase(ext_flash_owner_t owner,uint32_t addr,uint32_t n){assert(flash_owner==owner && n==4096 && addr%4096==0);memset(flash+addr,255,n);return true;}
 bool ext_flash_write_verified(ext_flash_owner_t owner,uint32_t addr,const void *in,uint32_t n){const uint8_t *p=in;assert(flash_owner==owner);for(uint32_t i=0;i<n;i++){assert((flash[addr+i]&p[i])==p[i]);flash[addr+i]&=p[i];}return true;}
 bool terminal_identity_sync(char pid[12],char phone[13],char terminal[8]){strcpy(pid,"12345678901");strcpy(phone,"012345678901");strcpy(terminal,"5678901");return true;}
+bool jt808_is_online(void){return true;}
 bool firmware_signature_verify(const uint8_t *h,const uint8_t *s){(void)h;(void)s;return false;}
 void NVIC_SystemReset(void){assert(!"unexpected reset");}
 int main(void){

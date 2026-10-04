@@ -65,5 +65,5 @@ with tempfile.TemporaryDirectory() as d:
     (d/'n32l40x_rtc.h').write_text('#pragma once\n#include <stdint.h>\ntypedef struct {uint8_t Hours,Minutes,Seconds;} RTC_TimeType;\n#define RTC_FORMAT_BIN 0\nvoid RTC_GetTime(uint32_t,RTC_TimeType *);\n',encoding='ascii')
     (d/'h.c').write_text(HARNESS,encoding='ascii')
     cc=shutil.which('gcc');assert cc
-    subprocess.run([cc,'-std=c99','-Wall','-Wextra','-Werror','-I',str(d),'-I',str(ROOT/'include'),'-I',str(ROOT/'src'),str(d/'h.c'),'-o',str(d/'h.exe')],check=True)
+    subprocess.run([cc,'-std=c99','-Wall','-Wextra','-Werror','-DA300_COMPACT_FORMAT=1','-I',str(d),'-I',str(ROOT/'include'),'-I',str(ROOT/'src'),str(d/'h.c'),str(ROOT/'src/a300_format.c'),'-o',str(d/'h.exe')],check=True)
     subprocess.run([str(d/'h.exe')],check=True)

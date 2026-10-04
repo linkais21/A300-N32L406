@@ -10,12 +10,12 @@ CONTRACT_PATH = ROOT / "release_identity.json"
 
 contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 
-stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.071", contract["firmware_version"]).group(1)
+stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.083", contract["firmware_version"]).group(1)
 assert contract == {
     "firmware_version_prefix": f"T360-A300_406_{stamp},V3.",
-    "firmware_revision": 71,
-    "firmware_version": f"T360-A300_406_{stamp},V3.071",
-    "firmware_version_counter": 3071,
+    "firmware_revision": 83,
+    "firmware_version": f"T360-A300_406_{stamp},V3.083",
+    "firmware_version_counter": 3083,
     "ota_device_model": "A300-406",
     "jt808_terminal_model": "T360-A300",
     "jt808_manufacturer_id": "70110",
@@ -56,6 +56,13 @@ spec = importlib.util.spec_from_file_location("release_guard", ROOT / "tools/rel
 guard = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
 spec.loader.exec_module(guard)
+assert guard.main_calls_boot_init_first(main_source)
+assert not guard.main_calls_boot_init_first(main_source.replace(
+    "    boot_init();", "    /* boot_init removed */", 1))
+assert not guard.main_calls_boot_init_first(main_source.replace(
+    "    boot_init();", "    boot_init();\n    boot_init();", 1))
+assert guard.CANONICAL_CONSUMER_SHA256["src/main.c"] == guard.canonical_body_digest(
+    guard.c_function_body(main_source, "boot_init"))
 assert guard.CANONICAL_IDENTITY_FILE_SHA256["include/build_version.h"] == guard.canonical_file_digest(
     (ROOT / "include/build_version.h").read_text(encoding="utf-8-sig"),
     "include/build_version.h",

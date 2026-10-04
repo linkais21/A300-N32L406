@@ -105,12 +105,9 @@ exti2 = POWER[POWER.index("void EXTI2_IRQHandler(void)"):]
 exti2 = exti2[:exti2.index("void EXTI15_10_IRQHandler(void)")]
 assert "jt808_trigger_alarm" not in exti2
 
-banner = "[HW] ACC=PA12 pin_high=%u acc_on=%u logical_acc=%u CAR_ADC=PA3/CH4 I2C=I2C2/PD14/PD15 DA218E_INT1=%u"
-assert banner in MAIN
-assert "hw_acc_pin_high()" in MAIN
+# Pin truth is checked against initialization and wake routing above, rather
+# than the optional startup banner removed by the earlier Flash optimization.
 assert "hw_acc_is_on()" in MAIN
 assert "work_mode_logical_acc()" in MAIN
-assert "GPIO_ReadInputDataBit(DA218E_INT1_PORT, DA218E_INT1_PIN)" in MAIN
-assert MAIN.count("[HW] ACC=PA12") == 1
 
 print("Hardware pin contract: PASS")

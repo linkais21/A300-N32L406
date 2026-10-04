@@ -132,7 +132,8 @@ bool boot_platform_init(void)
     SPI_InitType spi;
     s_fault_reset = RCC_GetFlagStatus(RCC_CTRLSTS_FLAG_IWDGRSTF) == SET ||
                     RCC_GetFlagStatus(RCC_CTRLSTS_FLAG_WWDGRSTF) == SET ||
-                    RCC_GetFlagStatus(RCC_CTRLSTS_FLAG_LPWRRSTF) == SET;
+                    RCC_GetFlagStatus(RCC_CTRLSTS_FLAG_LPWRRSTF) == SET ||
+                    RCC_GetFlagStatus(RCC_CTRLSTS_FLAG_SFTRSTF) == SET;
     /* The reset flags are deliberately left set here.  Reading them is
      * non-destructive, and clearing them at this point made the App report
      * "Reset: unknown" for every boot -- it runs after us and had nothing left

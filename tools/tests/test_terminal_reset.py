@@ -10,6 +10,8 @@ SUPPORT = r'''
 #include "f39_reply.h"
 #include "sms_command.h"
 #include "peripherals.h"
+int log_platform_send_result(void) { return 0; }
+void tcp_manager_reconnect_channels(uint8_t mask) { (void)mask; }
 static unsigned resets;
 static bool check_ack_order;
 void NVIC_SystemReset(void) { ++resets; }
@@ -112,6 +114,7 @@ int main(void) {
 
 def main():
     source = dual.HARNESS[:dual.HARNESS.index('int main(void) {')] + SUPPORT
+    source += '\n#define HOST_REAL_AT_CONFIG\n#include "' + (ROOT/'tools/tests/jt808_host_support.h').as_posix() + '"\n'
     source = 'static void reset_send_probe(void);\n' + source
     source = source.replace('    assert(channel == 0U || channel == 3U);',
                             '    reset_send_probe();\n    assert(channel == 0U || channel == 3U);')

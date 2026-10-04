@@ -81,12 +81,51 @@ int main(void){
  modem_ready=true;
  assert(command("DUALSET,APN:AUTO*FREQ:20,120#")==0&&pdp_restarts==6&&modem_ready);
  assert(command("hbt,120#")==0&&config.heartbeat_s==120&&modem_ready);
+ /* Sheet1 settings: real UDP reply -> Pass -> F39 -> persisted candidate. */
+ assert(command("PID,12345678902#")==0&&!strcmp(config.pid,"12345678902"));
+ assert(command("IP,primary.example,8888#")==0&&!strcmp(config.server_ip,"primary.example")&&config.server_port==8888);
+ assert(command("FIP,backup.example,9999#")==0&&!strcmp(config.backup_ip,"backup.example")&&config.backup_port==9999);
+ assert(command("FIP,0#")==0&&config.backup_ip[0]==0);
+ assert(command("MODEL,T360-A300#")==0&&!strcmp(config.terminal_model,"T360-A300"));
+ assert(command("SPEED,120#")==0&&config.speed_limit_kmh==120);
+ assert(command("APN,0#")==0&&config.autoapn_en);modem_ready=true;
+ assert(command("GPSDUP,0#")==0&&config.sleep_report_mode==1);
+ assert(command("GPSDUP,1#")==0&&config.sleep_report_mode==0);
+ assert(command("MLG,500#")==0&&config.mileage_m==50000U);
+ assert(command("MLG,3003#")==0&&config.mileage_m==300300U);
+ assert(command("CAR,18B12345#")==0&&!strcmp(config.plate_no,"\xe7\xb2\xa4" "B12345"));
+ for(unsigned mode=1;mode<=3;mode++){
+   char text[24];sprintf(text,"GPSBDS,%u#",mode);
+   assert(command(text)==0&&config.gpsbds_mode==mode);
+ }
+ assert(command("GMTSET,E0800#")==0&&config.gmt_sign==1&&config.gmt_hour==8);
+ assert(command("GMTSET,W0500#")==0&&config.gmt_sign==-1&&config.gmt_hour==5);
+ assert(command("VIBSENS,30#")==0&&config.vib_sens==30);
+ /* Invalid items never partially commit or send a success acknowledgement. */
+ const char *invalid[]={"PID,abc#","FREQ,0,180#","VIBSENS,51#",
+   "DUALSET,HBT:240*VIBSENS:51#","GPSBDS,4#","SPEED,201#"};
+ for(unsigned i=0;i<sizeof invalid/sizeof invalid[0];i++){
+   before=config;a=ack;unsigned saved=saves;
+   assert(command(invalid[i])==-1&&ack==a&&saves==saved&&!memcmp(&before,&config,sizeof config));
+ }
+ assert(command("RELAY,0#")==0&&!relay_state);
+ test_speed=10.0f;assert(command("RELAY,1#")==0&&relay_state);
+ assert(command("RELAY,0#")==0&&!relay_state);
+ test_speed=20.0f;a=ack;assert(command("RELAY,1#")==-1&&ack==a&&!relay_state);
+ /* RESET must confirm before the existing deferred reset runs. */
+ a=ack;assert(command("RESET#")==0&&ack==a+1&&system_resets==0);
+ g_tick_ms+=F39_RESET_DELAY_MS-1U;at_config_process();assert(system_resets==0);
+ g_tick_ms+=1U;at_config_process();assert(system_resets==1);
  return 0;
 }
 '''
 def main():
     source=serial.HARNESS.replace('int main(void)', 'int serial_main(void)').replace(
-        'g.hdop=1.2f;', 'g.hdop=1.2f; g.speed_kmh=30.0f;').replace(
+        'g.hdop=1.2f;', 'g.hdop=1.2f; g.speed_kmh=test_speed;').replace(
+        'static device_config_t config;',
+        'static float test_speed=30.0f; static bool relay_state;\nstatic device_config_t config;').replace(
+        'void relay_set(bool on) { (void)on; }',
+        'void relay_set(bool on) { relay_state=on; }').replace(
         'void ec800m_restart_pdp(void) { }',
         'static bool modem_ready=true; static unsigned pdp_restarts;\n'
         'void ec800m_restart_pdp(void) { modem_ready=false; ++pdp_restarts; }')+MAIN

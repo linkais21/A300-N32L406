@@ -88,6 +88,9 @@ void fota_apply(void);
 
 void fota_on_chunk(const uint8_t *data, uint16_t len, uint32_t offset);
 void fota_on_http_header(const char *header);
+#ifdef A300_FIRMWARE_IMAGE
+void fota_ec800m_rx(uint8_t ch, const uint8_t *data, uint16_t len);
+#endif
 
 bool fota_verify_manifest(const void *manifest, uint32_t length);
 bool fota_bcr_commit_pending(uint32_t version, uint32_t length, uint32_t target);

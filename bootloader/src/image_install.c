@@ -79,7 +79,7 @@ bool install_candidate(const image_manifest_t *manifest)
 {
     bcr_record_t r;
     if (verify_candidate(manifest) != IMAGE_VERIFY_OK) return false;
-    r=(bcr_record_t){.sequence=1U,.state=BCR_PENDING,.image_version=manifest->version,.transaction_offset=0U,.transaction_length=manifest->body_size,.target_address=APP_FLASH_BASE};
+    r=(bcr_record_t){.sequence=1U,.state=BCR_PENDING,.reserved=BCR_INSTALL_NOT_STARTED,.image_version=manifest->version,.transaction_offset=0U,.transaction_length=manifest->body_size,.target_address=APP_FLASH_BASE};
     bcr_record_t previous;
     bcr_load_result_t loaded = bcr_load(&previous);
     if (loaded == BCR_LOAD_IO_ERROR) return false;
@@ -104,6 +104,11 @@ bool install_resume(uint32_t offset)
     reported_bucket = (r.transaction_offset * 10U) / r.transaction_length;
     if (r.transaction_offset < r.transaction_length)
         boot_install_progress(r.transaction_offset, r.transaction_length, false);
+    if (r.reserved == BCR_INSTALL_NOT_STARTED) {
+        r.reserved = 0U;
+        ++r.sequence;
+        if (!bcr_commit(&r)) return false;
+    }
     while (r.transaction_offset < r.transaction_length) {
         uint32_t page_offset = r.transaction_offset;
         uint32_t page_length = r.transaction_length - page_offset;
@@ -155,6 +160,33 @@ bool install_resume(uint32_t offset)
     return true;
 }
 
+static bool rollback_source_available(void)
+{
+    image_manifest_t manifest;
+    fota_authorization_t auth;
+    legacy_image_manifest_t legacy;
+    uint32_t base;
+    if (select_newest_lkg(&manifest, &auth, &base, false) ||
+        verify_legacy_package(LKG_SLOT_A_BASE, 0x100000UL, &legacy)) return true;
+    return (boot_ext_read(FACTORY_BASE, &manifest, sizeof manifest) &&
+            verify_external_manifest(&manifest, FACTORY_BASE, FOTA_FACTORY_AUTH_ADDR)) ||
+           verify_legacy_package(FACTORY_BASE, 0x0C0000UL, &legacy);
+}
+
+static bool boot_unmodified_app(bcr_record_t *record)
+{
+    if (record->reserved != BCR_INSTALL_NOT_STARTED ||
+        record->transaction_offset != 0U || !boot_app_vectors_valid(APP_FLASH_BASE)) return false;
+    record->state = BCR_ACTIVE;
+    record->reserved = 0U;
+    record->image_version = 0U;
+    record->transaction_length = 0U;
+    ++record->sequence;
+    if (!bcr_commit(record)) return false;
+    boot_jump_to(APP_FLASH_BASE);
+    return true;
+}
+
 bool bootloader_select_image(void)
 {
     bcr_record_t r;
@@ -168,8 +200,18 @@ bool bootloader_select_image(void)
     }
     if (loaded != BCR_LOAD_FOUND) return false;
     if (r.state == BCR_PENDING) {
+        if (r.reserved == BCR_INSTALL_NOT_STARTED && r.transaction_offset == 0U &&
+            !rollback_source_available()) {
+            (void)boot_unmodified_app(&r);
+            return false;
+        }
         if (install_resume(r.transaction_offset)) boot_jump_to(APP_FLASH_BASE);
-        else { r.state = BCR_ROLLBACK; r.boot_attempts = BOOTLOADER_TRIAL_LIMIT; ++r.sequence; if (bcr_commit(&r)) (void)bootloader_select_image(); }
+        else {
+            bcr_record_t latest;
+            if (bcr_load(&latest) == BCR_LOAD_FOUND && boot_unmodified_app(&latest)) return false;
+            r.state = BCR_ROLLBACK; r.boot_attempts = BOOTLOADER_TRIAL_LIMIT; ++r.sequence;
+            if (bcr_commit(&r)) (void)bootloader_select_image();
+        }
         return false;
     }
     if (r.state == BCR_ACTIVE) {

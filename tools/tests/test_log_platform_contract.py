@@ -12,7 +12,7 @@ def run():
         assert token in h and token in c
     assert 'service_workspace_try_acquire' in c
     assert 'work_mode_sleep_is_in_stop1' in c
-    assert 'fota_get_state' in c
+    assert 'fota_is_active()' in c
     assert 'jt808_is_online' in c
     assert 'ec800m_get_csq() < 6' in c
     assert 'ec800m_udp_send_once' in c
