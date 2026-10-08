@@ -23,8 +23,8 @@
       "sha256": "3adba189af20e6e027e7371085a0510403175f042132d693c8c060a171f27318"
     },
     "App-V3061.map": {
-      "size": 108909,
-      "sha256": "5690d350f908c285e72da8b77e18d3c9d8245f2521727d2d27e92b435635fc85"
+      "size": 108878,
+      "sha256": "795f0e13a1f98a2537b54581fe48ada52e7b587b8591eb2bb6d06f92ddff9406"
     },
     "Bootloader-V3061.bin": {
       "size": 22556,
@@ -203,8 +203,8 @@
       "sha256": "eaeecdc3bb557aed8b6e574c28b6c1ac1bba3cd49e95e854ffd9c735be6ccc66"
     },
     "validation/flash-capacity.json": {
-      "size": 4708,
-      "sha256": "b24229a92b6fbb736a20947a7494647f49085b15b702be6177df3711168a78dc"
+      "size": 4678,
+      "sha256": "297bd2f8d43963b29dccbc92a3b79634f51d5a9cf5659198ce57ac88f0ab1552"
     },
     "validation/fota_active.log": {
       "size": 24,
@@ -227,8 +227,8 @@
       "sha256": "d9dd7993f98986c5fc2f8bc9c9ecb02df4e612db84866cfef8141474838a345c"
     },
     "validation/fota_modem_handoff.previous.log": {
-      "size": 619,
-      "sha256": "c79ea6e477e9b92a2de46e6b5ddf81768f7b9b844e3c29a2c88b779dc576370a"
+      "size": 618,
+      "sha256": "4329d5fbf840e2ecf2736c2e775fb07150c4d03458e95fcb76d0341e743984a4"
     },
     "validation/fota_modem_imei.log": {
       "size": 30,
@@ -283,8 +283,8 @@
       "sha256": "c275ef3e5b566a67ac142062a4be95abbbc4b215d85c9fd4b6f7c969611d2207"
     },
     "validation/lto_stack_guard.log": {
-      "size": 243,
-      "sha256": "c80c8a618e1aec9e20a6d14f44ad80bbc3973eaa49e8f30cd34ee9dcea1292a8"
+      "size": 240,
+      "sha256": "23800516848cecfc3983353a8165fa301964ca26903f72a8714985de7a1f3506"
     },
     "validation/platform_trust_anchor.log": {
       "size": 89,
@@ -315,12 +315,12 @@
       "sha256": "7f002587bc3903befa74d5989d93658c0e91e80553175e0b2f3a1d7bb42a91fe"
     },
     "validation/stack-analysis.json": {
-      "size": 320273,
-      "sha256": "d81ef4bc67b63ecc619aa12af52c1b77672495171fb84b14a50a752376f7c872"
+      "size": 307517,
+      "sha256": "2f8f9a664f67659cc7f3408506163fa1dddda2a8c9244eaa95c46c03570b18ff"
     },
     "validation/stack-evidence.json": {
-      "size": 663,
-      "sha256": "76eef126023bcafb081690b381b82478b6a1922550620e331ea57fe9136fc929"
+      "size": 644,
+      "sha256": "762be9d0928fc5860b7a203ce1ba0b840f1abe2a1a181805198cf1bc1f434a87"
     },
     "validation/stack_health_observability.log": {
       "size": 43,

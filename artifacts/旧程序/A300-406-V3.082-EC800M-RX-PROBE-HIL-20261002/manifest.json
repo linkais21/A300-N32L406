@@ -1,0 +1,61 @@
+{
+  "purpose": "DEDICATED_DEVICE_HIL_ONLY",
+  "release_approved": false,
+  "version": "T360-A300_406_20261002225718,V3.082",
+  "version_code": 3082,
+  "product": "A300-406",
+  "mcu": "N32L406CBL7",
+  "memory": {
+    "boot_origin": "0x08000000",
+    "app_origin": "0x08006000",
+    "app_limit_bytes": 106496
+  },
+  "fix_scope": "EC800M startup power-probe response path; trajectory/GPS/AGNSS code unchanged",
+  "release_gate": "blocked: stack evidence incomplete and RAM guard reports changed IRQ policy in src/hw_init.c",
+  "files": {
+    "A300-406-OTA-V3082.bin": {
+      "bytes": 104680,
+      "sha256": "bd265bf6bc3061b527957f0954d4695cdfb44fbb6aea6933ee353496e59d7fb4"
+    },
+    "App-N32L406CBL7.bin": {
+      "bytes": 104648,
+      "sha256": "7789d46600c732908288e648154d08e0e2870c15591f032d295ca5bd046f571f"
+    },
+    "App-N32L406CBL7.elf": {
+      "bytes": 1472556,
+      "sha256": "771ff56e0079006be27f776fa7887d480047c4aaa1b9b5c66ca72a924c08053c"
+    },
+    "App-N32L406CBL7.hex": {
+      "bytes": 294420,
+      "sha256": "b8c0870dffbaa57289d380c44ca4f399c721a23a36430904c5ccca15d1c6d47e"
+    },
+    "App-N32L406CBL7.map": {
+      "bytes": 651191,
+      "sha256": "1ed26d751a36b2d67c9b0e4b58f681fb2cf6ed1b1aeb0105d19b986c1eb438c4"
+    },
+    "Bootloader-N32L406CBL7.bin": {
+      "bytes": 22556,
+      "sha256": "39764943de035d5232e1079fdc3de08468de99f89542307ffdf021b2920b89c3"
+    },
+    "Bootloader-N32L406CBL7.elf": {
+      "bytes": 32788,
+      "sha256": "92a1fb037d49a542eca1a4c98d8df788aaf189b7a69ab42b9083e39aee611875"
+    },
+    "Bootloader-N32L406CBL7.hex": {
+      "bytes": 41829,
+      "sha256": "85ef61c1cbfab88b53be4cf9390caaba05b5e7be9cc5fba6823a84c54409b239"
+    },
+    "Bootloader-N32L406CBL7.map": {
+      "bytes": 63590,
+      "sha256": "62314bb355fd3beaa68e99d56cad78910f7f641cd1adfc2ec76614e873b7b4a7"
+    },
+    "Combined-N32L406CBL7.bin": {
+      "bytes": 129224,
+      "sha256": "debbe1f475bf33b1943697f7a6d216bcf5f206ff417c65dcc80c3b9ca5c7d5bc"
+    },
+    "flash-capacity.json": {
+      "bytes": 4842,
+      "sha256": "463403916cec4d5875a224a9ec16fc7c5521775f0db5ecedffc9da945046efda"
+    }
+  }
+}

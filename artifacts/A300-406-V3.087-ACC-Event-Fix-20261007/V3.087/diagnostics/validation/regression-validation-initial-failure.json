@@ -1,0 +1,31 @@
+{
+  "recorded_utc": "2026-10-07T08:36:16.016509+00:00",
+  "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+  "make": "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+  "results": [
+    {
+      "name": "test_wake_entry_event_clock",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_wake_entry_event_clock.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 1.3,
+      "log": "test_wake_entry_event_clock.log",
+      "output_sha256": "ed4d42739ae6a40b3a25440f2f7add0da8e32fd01d4d06ceac590dc5bf43dde5"
+    },
+    {
+      "name": "test_acc_bounce_hardening",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_acc_bounce_hardening.py"
+      ],
+      "exit_code": 1,
+      "duration_seconds": 0.07,
+      "log": "test_acc_bounce_hardening.log",
+      "output_sha256": "b2d1faaf9906b6113c1e79c487a9b09c9aca6dcd623066ae0e55bd0b92111027"
+    }
+  ],
+  "complete": false,
+  "all_passed": false
+}

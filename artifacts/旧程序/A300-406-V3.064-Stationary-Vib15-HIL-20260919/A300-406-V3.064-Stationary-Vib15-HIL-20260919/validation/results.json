@@ -12,7 +12,7 @@
   {
     "label": "host-compiler",
     "command": [
-      "C:\\Users\\86166\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe",
+      "<USERPROFILE>\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe",
       "--version"
     ],
     "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",

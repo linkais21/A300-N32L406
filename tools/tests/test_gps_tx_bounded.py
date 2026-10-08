@@ -78,6 +78,11 @@ HARNESS = r'''
 #include <string.h>
 #include "n32l40x.h"
 #include "gps.h"
+#include "flash_config.h"
+/* UART/ACK tests run with the optional report filter disabled. */
+device_config_t *cfg_get(void) { return NULL; }
+#include "i2c_accel.h"
+bool i2c_accel_read(accel_data_t *out) { (void)out; return false; }
 
 volatile uint32_t g_tick_ms;
 usart_module_t host_uart4;
@@ -245,6 +250,7 @@ def main() -> None:
             str(ROOT / "include"),
             str(harness),
             str(ROOT / "src" / "gps.c"),
+            str(ROOT / "src" / "gps_report_filter.c"),
             "-Wl,--gc-sections",
             "-lm",
             "-o",

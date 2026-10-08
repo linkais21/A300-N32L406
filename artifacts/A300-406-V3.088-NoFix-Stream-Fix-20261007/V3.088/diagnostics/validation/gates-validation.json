@@ -1,0 +1,34 @@
+{
+  "recorded_utc": "2026-10-07T09:17:33.182823+00:00",
+  "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+  "make": "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+  "results": [
+    {
+      "name": "release-gate",
+      "command": [
+        "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+        "release-gate",
+        "TOOLCHAIN_DIR=D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 10.92,
+      "log": "release-gate.log",
+      "output_sha256": "4b804a0059ac54a45fe8ff9e04c81085015516543cdd3e425667888d84508dc2"
+    },
+    {
+      "name": "boot-ram-guard",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/map_ram_guard.py",
+        "bootloader",
+        "bootloader/build/bootloader.map"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.3,
+      "log": "boot-ram-guard.log",
+      "output_sha256": "1a7d6e5e63c73253d6e9dd2710c52289c125b879617e2972a6eeb1c74ef81ba2"
+    }
+  ],
+  "complete": true,
+  "all_passed": true
+}

@@ -17,8 +17,8 @@
       "sha256": "af9541889e4296c0918af2d328c3107e96c79f4e96e4ea58a039c6e67731984e"
     },
     "App-V3060.map": {
-      "size": 110930,
-      "sha256": "ca4b98f90b757b3312703a105a339916beb5d9a271f77d66bc02ffb8ae6aac93"
+      "size": 110899,
+      "sha256": "0acd4effeea5760ea9f1d6088fe9ff1d35be7e1120c8084ed4c5948cef3e879d"
     },
     "Bootloader-V3060.bin": {
       "size": 22556,
@@ -7065,8 +7065,8 @@
       "sha256": "c780c77acb063a663d933f24bb82a44418f64eb222b97b2cf9e5dfd22ad16cc9"
     },
     "validation/flash-capacity.json": {
-      "size": 4708,
-      "sha256": "f7138569fbc7617637e988e002bdb7f48abf2381af0ce49797aa19644274589a"
+      "size": 4678,
+      "sha256": "44414d82941dcd0dbe52d68ca0b5404815bd873fa65aa25468be5ad57bc37249"
     },
     "validation/handoff-no-lto-command.json": {
       "size": 130,
@@ -7089,12 +7089,12 @@
       "sha256": "29fce81b0c27287ae082723aa0b6c175180d0a16fe79ba394f01fd98165a2a57"
     },
     "validation/stack-analysis.json": {
-      "size": 162814,
-      "sha256": "8e4bf0295a44c8717566452edfb3f80ce98808c488ba18e0aac657e687d7ca83"
+      "size": 155900,
+      "sha256": "ea645f9e72ebdca980ecd35b4233a5b8c2a70842ecb49c058b786d37b95a7e96"
     },
     "validation/stack-evidence.json": {
-      "size": 663,
-      "sha256": "92c1f3da5adb159d313f4d23308a799fe873c6de8de4db980bd0c7723c72a9a2"
+      "size": 644,
+      "sha256": "1200a691e7c2fecfe5df06f976ca8afbe8e320c335fcae830ab8c55a7aedd70d"
     },
     "validation/summary.json": {
       "size": 242,
@@ -7109,8 +7109,8 @@
       "sha256": "0a9997dd2c2b18118fb2f4bff4d039f9085455065e49b42746d68b36087024d1"
     },
     "validation/test_at_config_handoff.log": {
-      "size": 1438,
-      "sha256": "e1c2b85c24e6884adbd053250cbc487de40797054630cd5524488c17010ce353"
+      "size": 1432,
+      "sha256": "288bc193fa531baa4fa4a6f60cbf97258ff109220f139907d845e6d00a4ea436"
     },
     "validation/test_at_config_serial_f39.log": {
       "size": 33,
@@ -7269,8 +7269,8 @@
       "sha256": "b8b4738b66525392ba7d8e8eb6ae4008fb5bbd960c061463fc8bec9558adb237"
     },
     "validation/test_f39_end_to_end.log": {
-      "size": 2205,
-      "sha256": "9e5ec229a0e9fc47140b87aa6d7ca7043bbd3353fcdee4aed95053afe5b01764"
+      "size": 2191,
+      "sha256": "b5a000551503e59e8148bd1fe7971f0649791eb08c6b88cc796760fc7a2a34e5"
     },
     "validation/test_f39_parser.log": {
       "size": 56,
@@ -7365,8 +7365,8 @@
       "sha256": "3fd78491a853c880b7d288517f25f2476b18548ad9d5e2b2a185f1a55dfb489f"
     },
     "validation/test_relay_sms.log": {
-      "size": 2139,
-      "sha256": "227ecb07f1322ea9f4faa999a15091a710314e4541776ba4b81cce4e49508010"
+      "size": 2128,
+      "sha256": "19266eb26196c6581d056be540c9005c4503a71e930b4a3f658e37f33a4badb3"
     },
     "validation/test_release_identity_contract.log": {
       "size": 38,

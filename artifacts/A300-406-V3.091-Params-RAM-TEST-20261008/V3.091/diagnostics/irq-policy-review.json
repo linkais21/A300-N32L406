@@ -1,0 +1,34 @@
+{
+  "baseline_git": "3d086a0f425a447b030c22cefbd8321cdff87f8b",
+  "main_before_review_sha256": "ec26f9e7d6bc6d2518b475ad990f40f7baa117dd196610a2b3ec028256eae369",
+  "previous_main_review_sha256": "dd665b55886334334a7190c7279e8cfddf2882fe8212ea1943a45a4aa35ce7fb",
+  "reviewed_functions": {
+    "hardfault_capture": {
+      "unchanged_from_HEAD": true,
+      "body_sha256": "b7e320ffe9f1e5bc5ceb68c4fd923c10fe95922a4addff580749df83a47cc9e0"
+    },
+    "HardFault_Handler": {
+      "unchanged_from_HEAD": true,
+      "body_sha256": "71dbf45bb85a4acda259c763fa0110e9cc42325f5f39f676ecc69f7779c4612e"
+    },
+    "TIM8_UP_IRQHandler": {
+      "unchanged_from_HEAD": true,
+      "body_sha256": "78a6008db71a6e162a363f41d25465680b0916056419e470309141e9a185b363"
+    },
+    "USART1_IRQHandler": {
+      "unchanged_from_HEAD": true,
+      "body_sha256": "7ad125e73940a147cbbe582be4f1677888a2cf50637bc56d1ea620f0fff715a1"
+    },
+    "enable_debug_rx_irq": {
+      "unchanged_from_HEAD": true,
+      "body_sha256": "b94ebb690d4f755e8f74f8218c92b9afaea51cec07036d63ce213e26658d1278"
+    },
+    "boot_init": {
+      "unchanged_from_HEAD": true,
+      "body_sha256": "c9239822ad6a20b0046c004cd90ebf8316f7dac631e6a48885a7126fef15100d"
+    }
+  },
+  "priority_and_exception_API_sequences_unchanged": true,
+  "budgets_unchanged": true,
+  "reason": "Only foreground alarm/report call sites differ; all reviewed reachable execution roots have complete frames/targets."
+}

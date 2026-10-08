@@ -557,14 +557,17 @@ def test_f39_production_chain():
 #ifndef N32L40X_H
 #define N32L40X_H
 #include <stdint.h>
-typedef struct { uint32_t DAT; } usart_t;
-typedef struct { uint32_t DUMMY; } dma_t;
+typedef struct { uint32_t DAT, STS, CTRL1, CTRL3, BRCF; } usart_t;
+typedef struct { uint32_t CHCFG, CHSEL, TXNUM; } dma_t;
+typedef struct { uint32_t PID; } gpio_t;
+extern dma_t host_dma5;
+extern gpio_t host_gpio_a, host_gpio_b, host_gpio_d;
 extern usart_t host_uart5;
 #define UART5 (&host_uart5)
 #define USART1 (&host_uart5)
 #define UART4 (&host_uart5)
 #define DMA2 ((dma_t *)0)
-#define DMA_CH5 ((dma_t *)5)
+#define DMA_CH5 (&host_dma5)
 #define DMA DMA2
 #define DMA_FLAG_HT5 0x01
 #define DMA_FLAG_TC5 0x02
@@ -576,9 +579,9 @@ extern usart_t host_uart5;
 #define ENABLE 1
 #define DISABLE 0
 #define Bit_RESET 0
-#define GPIOA ((void *)0)
-#define GPIOB ((void *)1)
-#define GPIOD ((void *)2)
+#define GPIOA (&host_gpio_a)
+#define GPIOB (&host_gpio_b)
+#define GPIOD (&host_gpio_d)
 #define GPIO_PIN_0 0
 #define GPIO_PIN_1 1
 #define GPIO_PIN_3 3
@@ -619,6 +622,8 @@ void NVIC_SystemReset(void);
 #include "n32l40x.h"
 #include "config.h"
 usart_t host_uart5;
+dma_t host_dma5;
+gpio_t host_gpio_a, host_gpio_b, host_gpio_d;
 static uint16_t wr;
 extern uint8_t EC800M_RX_BUF[EC800M_RX_BUF_SIZE];
 extern volatile uint32_t g_tick_ms;

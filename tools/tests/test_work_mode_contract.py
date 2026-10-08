@@ -192,8 +192,8 @@ def test_vibration_wake_holds_awake_for_confirmation():
 
 def test_vibration_confirmation_tolerates_single_missed_sample():
     source = read(WORK)
-    assert "vibration_miss_count" in source
-    assert "WORK_MODE_VIBRATION_MISS_TOLERANCE" in source
+    assert "WORK_MODE_VIBRATION_MAX_GAP_MS 1000U" in source
+    assert "vibration_hits_required" in source
 
 
 def test_stop1_wake_is_preserved_for_next_work_mode_step():

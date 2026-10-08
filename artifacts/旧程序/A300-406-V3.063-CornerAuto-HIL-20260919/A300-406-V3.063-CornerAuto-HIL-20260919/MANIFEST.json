@@ -23,8 +23,8 @@
       "sha256": "28cb0275d303eea3a1f5787117bf20077f663691307ce7eb5c316811aae75f79"
     },
     "App-V3063.map": {
-      "size": 109966,
-      "sha256": "3cafe84e6450cb11cf3efa30cbfe7d3591023ea5cc8c986e13413ed834170f42"
+      "size": 109935,
+      "sha256": "4763b58429e169b7a72a97b59d59ead3b2dedd3946eafe07cc3311a37f144e76"
     },
     "Bootloader-V3063.bin": {
       "size": 22556,
@@ -219,8 +219,8 @@
       "sha256": "14e8504f60844be89187cc5ebabdb45955ef1b08c2cbda5af3aba71ab477c0cf"
     },
     "validation/flash-capacity.json": {
-      "size": 4708,
-      "sha256": "1423fbb5db65c51d9991b3f77bf724a4dfef98b8a9771d408e8ee9f848bfdec8"
+      "size": 4678,
+      "sha256": "464b89e000d95d5c7f2c46ea077024e823103889b0fd48aa1c5fc40c6b94c965"
     },
     "validation/flash_config_v3.log": {
       "size": 55,
@@ -307,8 +307,8 @@
       "sha256": "c275ef3e5b566a67ac142062a4be95abbbc4b215d85c9fd4b6f7c969611d2207"
     },
     "validation/lto_stack_guard.log": {
-      "size": 243,
-      "sha256": "2220452ac6fbef246bb1ee35373bf9683de4317df208df5ede2b4cc0d7ea57ab"
+      "size": 240,
+      "sha256": "79a7c81aece45e0909fbe472aeca6ce72b8895c6ebdeb628c6a83ebd6043feb2"
     },
     "validation/motion_corner_policy.log": {
       "size": 28,
@@ -327,8 +327,8 @@
       "sha256": "280e4acc50c5dc80099da00cb465eeef539ea4c2911469215424ecc4a7f18bf3"
     },
     "validation/red-flash_config_v3.log": {
-      "size": 183,
-      "sha256": "79c818eaeb3f20a7c28acf8f14fc20fa7036579112b2cd8f173d31da983129d1"
+      "size": 182,
+      "sha256": "d1d51bcfe1223d6cdc3efbef2ec42fe8e0fb541d74c8aa5139867692f46337d3"
     },
     "validation/red-results.json": {
       "size": 763,
@@ -351,12 +351,12 @@
       "sha256": "ef3b9f48518ed2ec698a0df3ce0a99b9a889913a19dd4a7cdd2ac2eaae5ee637"
     },
     "validation/stack-analysis.json": {
-      "size": 319351,
-      "sha256": "c32d963e49f166ab2ac90dcdcfb8b507998fb09df0b2d44ee166734a16487259"
+      "size": 306638,
+      "sha256": "32173a566ac5cd79b2d5f47af26ab8fc10676700aebdb05b1fc9c9f0b23ad497"
     },
     "validation/stack-evidence.json": {
-      "size": 663,
-      "sha256": "bd79494d351f47d1e31099a7331f6a2a71765fd0fddb4fcc3d842dfe8d13631d"
+      "size": 644,
+      "sha256": "ec560806343f380ae1826f46162be10f26a680e62ad97791730c31f847a7a3a6"
     },
     "validation/stack_health_observability.log": {
       "size": 43,

@@ -903,8 +903,9 @@ int jt808_send_location(void)
     return result;
 }
 
-int jt808_send_location_work_mode(uint32_t alarm_bits,
-                                  bool historical_position, uint32_t report_id)
+static int send_location_work_mode(uint32_t alarm_bits,
+                                  bool historical_position, uint32_t report_id,
+                                  bool trace_entry)
 {
     uint8_t body[JT808_LOCATION_ONLINE_MAX];
     frame_t frame;
@@ -928,8 +929,12 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
     }
     if (historical_position) {
         /* GNSS is off in STOP1.  Use only a snapshot captured while a live
-         * fix was fresh; never encode the now-invalid live GPS object. */
-        if (!gps_get_last_trusted_location(&snapshot)) {
+         * fix was fresh; never encode the now-invalid live GPS object.
+         * Every new work-mode 0200 carries the advancing event clock with
+         * GPS_FIXED cleared. Using acquisition UTC on a later periodic
+         * report would precede the entry packet. Queries retain acquisition
+         * UTC separately in send_location_only(). */
+        if (!gps_get_last_trusted(&snapshot)) {
             gps_get_unfixed_report(&snapshot);
         }
     } else {
@@ -940,7 +945,7 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
              * lose ACC state changes and the whole stationary reporting
              * cadence until the receiver came back, so fall back to the
              * retained fix and mark the report historical instead. */
-            if (!gps_get_last_trusted_location(&snapshot)) {
+            if (!gps_get_last_trusted(&snapshot)) {
                 gps_get_unfixed_report(&snapshot);
             }
             historical_position = true;
@@ -957,6 +962,16 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
             frame_bytes(&frame, body, length);
             result = send_frame_broadcast(&frame);
         } else frame_release();
+    }
+    if (trace_entry || historical_position) {
+        /* Inspect encoded wire fields, not the physical ACC pin or raw GPS.
+         * ts is the BCD local time in the actual 0200 body; tx is transport
+         * submission, not proof of platform ACK/display. No coordinates. */
+        dbg_printf("[808-EVENT] t=%lu acc=%u fix=%u ts=%02x%02x%02x%02x%02x%02x tx=%d\r\n",
+                   (unsigned long)TICK_MS(), (unsigned)(body[7] & 1U),
+                   (unsigned)((body[7] >> 1U) & 1U),
+                   (unsigned)body[22], (unsigned)body[23], (unsigned)body[24],
+                   (unsigned)body[25], (unsigned)body[26], (unsigned)body[27], result);
     }
     if (result != 0) {
         /* Store the compact prefix of the exact work-mode snapshot, including
@@ -982,6 +997,18 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
         s_alarm_flags &= ~alarm_bits;
     }
     return result;
+}
+
+int jt808_send_location_work_mode(uint32_t alarm_bits,
+                                  bool historical_position, uint32_t report_id)
+{
+    return send_location_work_mode(alarm_bits, historical_position, report_id, false);
+}
+
+int jt808_send_location_work_mode_event(uint32_t alarm_bits,
+                                       bool historical_position, uint32_t report_id)
+{
+    return send_location_work_mode(alarm_bits, historical_position, report_id, true);
 }
 
 void jt808_set_terminal_profile(const char *model, const char *plate)

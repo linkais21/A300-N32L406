@@ -112,7 +112,11 @@ typedef struct {
     /* Former reserved[0]: 0 legacy, 1 sensitivity-default migration applied.
      * Persist with the value in the same CRC/commit protected A/B record. */
     uint8_t  vib_default_migrated;
-    uint8_t  _reserved[24];
+    uint8_t  _reserved[19];
+    /* Former reserved tail: preserve all deployed offsets and slot lengths.
+     * Valid distinguishes legacy zero-filled bytes (10 s) from explicit 0 s. */
+    uint8_t  speed_limit_time_be[4];
+    uint8_t  speed_limit_time_valid;
 
     /* v2 F39 settings; append-only after the complete v1 prefix */
     char     pid[CFG_PID_LEN];
@@ -130,6 +134,19 @@ typedef struct {
     /* v4 append-only field; the deployed v3 byte prefix ends before this. */
     char     device_api_key[CFG_DEVICE_API_KEY_LEN];
 } device_config_t;
+
+#define CFG_SPEED_LIMIT_TIME_DEFAULT_S 10U
+#define CFG_SPEED_LIMIT_TIME_MAX_S (UINT32_MAX / 1000U)
+
+static inline uint32_t cfg_speed_limit_time_s(const device_config_t *c)
+{
+    uint32_t value = ((uint32_t)c->speed_limit_time_be[0] << 24) |
+                     ((uint32_t)c->speed_limit_time_be[1] << 16) |
+                     ((uint32_t)c->speed_limit_time_be[2] << 8) |
+                     c->speed_limit_time_be[3];
+    return c->speed_limit_time_valid == 1U && value <= CFG_SPEED_LIMIT_TIME_MAX_S ?
+           value : CFG_SPEED_LIMIT_TIME_DEFAULT_S;
+}
 
 typedef enum {
     CFG_STORE_OK = 0,

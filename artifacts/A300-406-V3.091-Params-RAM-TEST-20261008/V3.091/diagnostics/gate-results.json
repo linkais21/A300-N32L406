@@ -1,0 +1,24 @@
+[
+  {
+    "command": [
+      "<USERPROFILE>\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\mingw32-make.exe",
+      "release-gate"
+    ],
+    "label": "release-gate",
+    "exit_code": 0,
+    "seconds": 29.914693355560303
+  },
+  {
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-X",
+      "utf8",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "bootloader/build/bootloader.map"
+    ],
+    "label": "bootloader-map",
+    "exit_code": 0,
+    "seconds": 0.2982497215270996
+  }
+]

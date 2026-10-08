@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define OVERSPEED_PERSIST_MS  10000U
 #define OVERSPEED_COOLDOWN_MS 300000U
 
 typedef struct {
@@ -18,6 +17,6 @@ typedef struct {
 void overspeed_policy_init(overspeed_policy_t *policy);
 bool overspeed_policy_step(overspeed_policy_t *policy, uint32_t now_ms,
                            bool realtime, bool gps_valid, float speed_kmh,
-                           uint16_t limit_kmh);
+                           uint16_t limit_kmh, uint32_t duration_s);
 
 #endif

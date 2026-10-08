@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "version": "T360-A300_406_20261008174141,V3.091",
+  "version_counter": 3091,
+  "app_sha256": "4f2f80a80c8be0d4ed844c0aaea9ab527357717adcf472d1151e50737c61ee4a",
+  "app_bytes": 105532,
+  "ota_header_verified": true,
+  "ota_payload_matches_app": true,
+  "combined_app_matches_ota_payload": true,
+  "combined_factory_request_verified": true,
+  "combined_hex_origin": "0x08000000",
+  "app_hex_origin": "0x08006000",
+  "hex_checksums_and_bytes_verified": true,
+  "explicit_hex_padding_matches_bin": true,
+  "ram_evidence_matches_final_elf": true
+}

@@ -26,8 +26,8 @@
       "sha256": "b22f005515afad42b585482aad616c6dff690e2e3c10545b174be1ebd56ff2a9"
     },
     "diagnostics/App-V3068.map": {
-      "size": 108363,
-      "sha256": "b3b299d68a212afbab2733cc3a26ac4d7449ab9d01963fa28ff06a993497f9c7"
+      "size": 108332,
+      "sha256": "9b802d4313774109d99aabdfc570b9c75bfff7ccdf7e58fc43cf426f5895104c"
     },
     "diagnostics/Bootloader-V3068.bin": {
       "size": 22556,
@@ -86,20 +86,20 @@
       "sha256": "ed62788a2c2405db10da7be0d7142b00ab3db1a96fe709b9f2eccc37c7f01da2"
     },
     "validation/flash-capacity.json": {
-      "size": 4710,
-      "sha256": "2a811abf1b34c73f5c5cd0cd0f24201cb515892958d0e8f843e29a08e776fc2e"
+      "size": 4680,
+      "sha256": "0df60ccd49b71c8ed4da9396c6c74ffd9c1c12c7a220896baf3048d8cac92ed0"
     },
     "validation/source-sha256.json": {
       "size": 13260,
       "sha256": "ff9b64753cddd5e9308fd43ae212ceb8752ca1c3628ea4c1c2004d771793ba80"
     },
     "validation/stack-analysis.json": {
-      "size": 325796,
-      "sha256": "8d3126506e42b13948b361a1555a5178e09eab38fb67c78590e9a5bec26f7aa5"
+      "size": 312843,
+      "sha256": "5a0877461937c4bd2cb4145abf8fcfdc2b44d58880dd5f57d2b7c3dc95096e50"
     },
     "validation/stack-evidence.json": {
-      "size": 663,
-      "sha256": "6aa1e13c15cbe8566ab7ec99de02062bc25a5daab6c546add4c066050c1532c3"
+      "size": 644,
+      "sha256": "0266d58fd7f6c092e9f8da2ce190bc7227cae4492a8e3f3fa8ecbc27ad630228"
     }
   }
 }

@@ -4,7 +4,7 @@
 #include "n32l40x.h"
 
 /* ── Firmware version ─────────────────────────────────────────────────────── */
-#define FW_VERSION_STR          "T360-A300_406_20261004191838,V3.084"
+#define FW_VERSION_STR          "T360-A300_406_20261008174141,V3.091"
 #define FW_OTA_MODEL_STR        "A300-406"
 #define FW_JT808_MODEL_STR      "T360-A300"
 #define FW_MANUFACTURER_ID_STR  "70110"

@@ -1,0 +1,12 @@
+{
+  "command": [
+    "C:\\Python314\\python.exe",
+    "-X",
+    "utf8",
+    "tools/build_dev_release.py",
+    "--output",
+    "artifacts/A300-406-V3.091-Params-RAM-TEST-20261008"
+  ],
+  "exit_code": 0,
+  "seconds": 41.61484122276306
+}

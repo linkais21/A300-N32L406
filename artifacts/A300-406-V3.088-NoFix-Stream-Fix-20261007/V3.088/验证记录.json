@@ -1,0 +1,83 @@
+{
+  "recorded_utc": "2026-10-07T09:20:20.612343+00:00",
+  "firmware_version": "T360-A300_406_20261007171447,V3.088",
+  "version_counter": 3088,
+  "status": "package-verified-hardware-pending",
+  "device_flashed": false,
+  "checks": [
+    "App/Boot HEX addresses, checksums and BIN consistency",
+    "Combined HEX/BIN and factory marker",
+    "App/Boot vectors and memory boundaries",
+    "OTA header/version/model/length/CRC32 and body identity",
+    "release gates and generated manifest",
+    "source stability and prior V3.087 ZIP preserved"
+  ],
+  "artifacts": {
+    "App-N32L406CBL7.bin": {
+      "size": 105176,
+      "sha256": "dc0ea148c9d47eaadf5217f46727367659cc6eea3db1922035014c91d33180c7"
+    },
+    "Bootloader-N32L406CBL7.bin": {
+      "size": 22556,
+      "sha256": "1442fe4c9c593519d567a545583dacbe2d39a6c747f9b1fb9b2b3f4f07914e19"
+    },
+    "Combined-N32L406CBL7.bin": {
+      "size": 129752,
+      "sha256": "e56672ab03d67b0ccec18910d6e7cd3ea91b0f545db6f60499e08d3245fc3db8"
+    },
+    "Combined-N32L406CBL7.hex": {
+      "size": 365002,
+      "sha256": "6275d18733d3bb52958c7df053bce7536f3248b6c25cbe59b31e7fd3905ae218"
+    },
+    "A300-406-OTA-V3088.bin": {
+      "size": 105208,
+      "sha256": "ab6a258670f412b62c5a9569cc56686166cfd990d1d06d07eb01d85a1ab82a4e"
+    }
+  },
+  "app_flash_used": 105176,
+  "app_flash_remaining": 1320,
+  "ram_budget": {
+    "schema_version": 1,
+    "status": "pass",
+    "standalone_stack_report_status": "incomplete",
+    "reviewed_execution_roots_status": "complete",
+    "elf_sha256": "87541b0588b3f2d145eecff3fe81de993bff8bc88202f41dde6537f36cbe03c8",
+    "map_sha256": "db439a361d549345e62f309bbe4e6c5e604b87c81f21c4b8e9ce64336789bce1",
+    "stack_evidence_sha256": "a4126beb4445fb2c2accc86869a0159efb04e6ff8ff46382c293fe4c05db371f",
+    "static_sram": 16048,
+    "linker_alignment": 4,
+    "hard_heap_reservation": 1024,
+    "boot_main_stack": 2796,
+    "exception": {
+      "preemption_group": 2,
+      "normal_group_frames": [
+        16,
+        0,
+        20
+      ],
+      "hardfault_frame": 8,
+      "nmi_frame": 0,
+      "hardware_frame_each": 108,
+      "max_nested_entries": 5,
+      "software_frames": 44,
+      "exception_stack_bytes": 584
+    },
+    "runtime_gap": 4120,
+    "required_gap": 4096
+  },
+  "boot_runtime_stack_audited": false,
+  "old_package_preserved_sha256": {
+    "A300-406-V3.087-ACC-Event-Fix-20261007.zip": "2c00a63f3c04dbc9e1490162f227807364a41e955e50d889a6832b0abd438d0d"
+  },
+  "combined_hex_command": [
+    "D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin\\arm-none-eabi-objcopy.exe",
+    "-I",
+    "binary",
+    "-O",
+    "ihex",
+    "--change-addresses",
+    "0x08000000",
+    "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.088-NoFix-Stream-Fix-20261007\\V3.088\\Combined-N32L406CBL7.bin",
+    "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.088-NoFix-Stream-Fix-20261007\\V3.088\\Combined-N32L406CBL7.hex"
+  ]
+}

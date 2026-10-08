@@ -1,0 +1,12 @@
+[
+  {
+    "name": "agnss_online",
+    "exit": 1,
+    "output": "Assertion failed: (uint32_t)(tick-cold_done)>=200U, file <USERPROFILE>\\AppData\\Local\\Temp\\agnss_online_jzd9vjkz\\test.c, line 48\r\nTraceback (most recent call last):\r\n  File \"D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_agnss_online.py\", line 166, in <module>\r\n    test_online()\r\n    ~~~~~~~~~~~^^\r\n  File \"D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_agnss_online.py\", line 162, in test_online\r\n    subprocess.run([str(exe)], check=True, timeout=20)\r\n    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n  File \"C:\\Python314\\Lib\\subprocess.py\", line 577, in run\r\n    raise CalledProcessError(retcode, process.args,\r\n                             output=stdout, stderr=stderr)\r\nsubprocess.CalledProcessError: Command '['<USERPROFILE>\\\\AppData\\\\Local\\\\Temp\\\\agnss_online_jzd9vjkz\\\\test.exe']' returned non-zero exit status 3.\r\n"
+  },
+  {
+    "name": "agnss_vendor_stream",
+    "exit": 1,
+    "output": "Traceback (most recent call last):\r\n  File \"D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_agnss_vendor_stream.py\", line 250, in <module>\r\n    test_c_harness()\r\n    ~~~~~~~~~~~~~~^^\r\n  File \"D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_agnss_vendor_stream.py\", line 245, in test_c_harness\r\n    raise AssertionError(\"C harness failed (exit %d):\\n%s\" % (run.returncode, run.stderr))\r\nAssertionError: C harness failed (exit 3):\r\nAssertion failed: (uint32_t)(tick-cold_done)>=200U, file <USERPROFILE>\\AppData\\Local\\Temp\\tmpfsckf184\\harness.c, line 22\r\n\r\n"
+  }
+]

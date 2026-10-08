@@ -1,0 +1,37 @@
+{
+  "length": 26395,
+  "sha256": "25cd3b13fd025e24868e6de5337769465dfafe772b15c9b072b630605feebb34",
+  "lines": 640,
+  "events": [
+    {
+      "wake_line": 366,
+      "transition": "[WORK] transition SLEEP->REALTIME now=927 pin_high=0 acc_on=1 logical_acc=1 vib=0",
+      "entry": "[808-EVENT] t=927996 acc=1 fix=0 ts=261007170206 tx=0",
+      "gps_still_unfixed": true,
+      "later_0200_time_logged": false
+    },
+    {
+      "wake_line": 420,
+      "transition": "[WORK] transition SLEEP->REALTIME now=1229 pin_high=1 acc_on=0 logical_acc=1 vib=0",
+      "entry": "[808-EVENT] t=1229445 acc=1 fix=0 ts=261007170706 tx=0",
+      "gps_still_unfixed": true,
+      "later_0200_time_logged": false
+    },
+    {
+      "wake_line": 524,
+      "transition": "[WORK] transition SLEEP->REALTIME now=1478 pin_high=0 acc_on=1 logical_acc=1 vib=0",
+      "entry": "[808-EVENT] t=1478453 acc=1 fix=0 ts=261007171114 tx=0",
+      "gps_still_unfixed": false,
+      "later_0200_time_logged": false
+    },
+    {
+      "wake_line": 620,
+      "transition": "[WORK] transition SLEEP->REALTIME now=1498 pin_high=0 acc_on=1 logical_acc=1 vib=0",
+      "entry": "[808-EVENT] t=1499048 acc=1 fix=0 ts=261007171135 tx=0",
+      "gps_still_unfixed": true,
+      "later_0200_time_logged": false
+    }
+  ],
+  "platform_observation": "User confirms first packet time correct, second packet goes backwards",
+  "wire_payload_available": false
+}

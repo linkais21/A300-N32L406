@@ -64,6 +64,9 @@ HARNESS = r'''
 #include "gps.h"
 #include "n32l40x.h"
 
+/* Clock fixture observes the selected snapshot without sensor/filter I/O. */
+bool gps_report_filter_copy(const gps_data_t *raw, gps_data_t *out, uint32_t now)
+{ (void)now; *out = *raw; return false; }
 volatile uint32_t g_tick_ms = 1000U;
 void GPIO_InitStruct(GPIO_InitType *g){memset(g,0,sizeof(*g));}
 void GPIO_InitPeripheral(GPIO_Module *p, GPIO_InitType *g){(void)p;(void)g;}
@@ -115,9 +118,12 @@ int main(void){
         float speed0 = out.speed_kmh, heading0 = out.heading, alt0 = out.altitude_m;
         uint8_t fixq0 = out.fix_quality, sats0 = out.satellites;
 
-        /* Older NTP must not rewind the GNSS clock. */
+        /* NTP may correct civil event UTC backwards without changing fix UTC. */
         gps_apply_ntp_utc(2026U, 9U, 22U, 2U, 15U, 30U);
         assert(gps_get_last_trusted(&out));
+        assert(out.year==2026U && out.month==9U && out.day==22U);
+        assert(out.hour==2U && out.minute==15U && out.second==30U);
+        assert(gps_get_last_trusted_location(&out));
         assert(out.year==2026U && out.month==9U && out.day==23U);
         assert(out.hour==12U && out.minute==35U && out.second==20U);
         /* A newer NTP correction may change only the clock fields. */

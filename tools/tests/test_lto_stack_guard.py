@@ -34,7 +34,7 @@ class StackTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0, result.stdout)
             self.assertIn("stack evidence", result.stdout)
 
-    def test_ram_budget_shortfall_and_incomplete_bounds_both_block(self):
+    def test_ram_budget_shortfall_and_missing_profile_both_block(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             path = root / "app.map"
@@ -48,7 +48,7 @@ class StackTests(unittest.TestCase):
             elf.write_bytes(b"fixture")
             manifest.write_text("{}")
             for known, message in ((2984, "breaches required runtime gap"),
-                                   (100, "incomplete stack evidence")):
+                                   (100, "flash-build-profile.json")):
                 (root / "stack-analysis.json").write_text(json.dumps({
                     "map_sha256": guard.digest(path), "elf_sha256": guard.digest(elf),
                     "evidence_sha256": guard.digest(manifest), "known_main_frame_sum": known,

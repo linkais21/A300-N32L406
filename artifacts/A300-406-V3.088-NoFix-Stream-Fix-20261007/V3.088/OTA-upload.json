@@ -1,0 +1,10 @@
+{
+  "model": "A300-406",
+  "version": "V3.088",
+  "versionCode": 3088,
+  "file": "A300-406-OTA-V3088.bin",
+  "sha256": "ab6a258670f412b62c5a9569cc56686166cfd990d1d06d07eb01d85a1ab82a4e",
+  "size": 105208,
+  "signing": "platform-detached",
+  "direct_mcu_flash": false
+}

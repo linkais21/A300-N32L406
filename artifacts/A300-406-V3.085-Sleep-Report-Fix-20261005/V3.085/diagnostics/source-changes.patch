@@ -1,0 +1,258 @@
+diff --git a/include/build_version.h b/include/build_version.h
+index 30b68d3..a83114a 100644
+--- a/include/build_version.h
++++ b/include/build_version.h
+@@ -2,9 +2,9 @@
+ #ifndef BUILD_VERSION_H
+ #define BUILD_VERSION_H
+ 
+-#define FW_BUILD_NUMBER  "202610041918"
+-#define FW_BUILD_DATE    "Oct 04 2026 - 19:18:38"
+-#define FW_FULL_VERSION  "T360-A300_406_20261004191838,V3.084"
+-#define FW_VERSION_COUNTER  3084UL
++#define FW_BUILD_NUMBER  "202610050028"
++#define FW_BUILD_DATE    "Oct 05 2026 - 00:28:19"
++#define FW_FULL_VERSION  "T360-A300_406_20261005002819,V3.085"
++#define FW_VERSION_COUNTER  3085UL
+ 
+ #endif /* BUILD_VERSION_H */
+diff --git a/include/config.h b/include/config.h
+index 9720e07..98b511f 100644
+--- a/include/config.h
++++ b/include/config.h
+@@ -4,7 +4,7 @@
+ #include "n32l40x.h"
+ 
+ /* ── Firmware version ─────────────────────────────────────────────────────── */
+-#define FW_VERSION_STR          "T360-A300_406_20261004191838,V3.084"
++#define FW_VERSION_STR          "T360-A300_406_20261005002819,V3.085"
+ #define FW_OTA_MODEL_STR        "A300-406"
+ #define FW_JT808_MODEL_STR      "T360-A300"
+ #define FW_MANUFACTURER_ID_STR  "70110"
+diff --git a/include/work_mode.h b/include/work_mode.h
+index d3defb8..a722d09 100644
+--- a/include/work_mode.h
++++ b/include/work_mode.h
+@@ -31,7 +31,7 @@ typedef struct {
+ } work_mode_input_t;
+ 
+ #define WORK_MODE_ACC_DEBOUNCE_MS 500U
+-#define WORK_MODE_DEFAULT_STOPPED_REPORT_S 180U
++#define WORK_MODE_DEFAULT_STOPPED_REPORT_S 300U
+ 
+ /* Supply the raw PA12 sample and millisecond timestamp before work_mode_step.
+  * Host callers that only have second resolution may omit this call. */
+diff --git a/release_identity.json b/release_identity.json
+index 9519e0b..222ff9f 100644
+--- a/release_identity.json
++++ b/release_identity.json
+@@ -1,8 +1,8 @@
+ {
+-  "firmware_version_prefix": "T360-A300_406_20261004191838,V3.",
+-  "firmware_revision": 84,
+-  "firmware_version": "T360-A300_406_20261004191838,V3.084",
+-  "firmware_version_counter": 3084,
++  "firmware_version_prefix": "T360-A300_406_20261005002819,V3.",
++  "firmware_revision": 85,
++  "firmware_version": "T360-A300_406_20261005002819,V3.085",
++  "firmware_version_counter": 3085,
+   "ota_device_model": "A300-406",
+   "jt808_terminal_model": "T360-A300",
+   "jt808_manufacturer_id": "70110"
+diff --git a/src/flash_config.c b/src/flash_config.c
+index dfa91c7..eba34f7 100644
+--- a/src/flash_config.c
++++ b/src/flash_config.c
+@@ -55,7 +55,7 @@ const device_config_t k_config_defaults = {
+     .backup_port        = 0,
+     .heartbeat_s        = 180,
+     .report_moving_s    = 30,
+-    .report_stopped_s   = 180,
++    .report_stopped_s   = 300,
+     .autoapn_en         = 1,
+     .apn                = "",
+     .agps_en            = 1,
+diff --git a/src/jt808.c b/src/jt808.c
+index 504b832..31bd193 100644
+--- a/src/jt808.c
++++ b/src/jt808.c
+@@ -928,8 +928,13 @@ int jt808_send_location_work_mode(uint32_t alarm_bits,
+     }
+     if (historical_position) {
+         /* GNSS is off in STOP1.  Use only a snapshot captured while a live
+-         * fix was fresh; never encode the now-invalid live GPS object. */
+-        if (!gps_get_last_trusted_location(&snapshot)) {
++         * fix was fresh; never encode the now-invalid live GPS object.
++         * Sleep cadence carries the advancing event clock with GPS_FIXED
++         * cleared. Other no-fix reports retain the acquisition UTC. */
++        bool retained = work_mode_state() == WORK_MODE_STATIONARY_SLEEP ?
++                        gps_get_last_trusted(&snapshot) :
++                        gps_get_last_trusted_location(&snapshot);
++        if (!retained) {
+             gps_get_unfixed_report(&snapshot);
+         }
+     } else {
+diff --git a/src/work_mode.c b/src/work_mode.c
+index 4533278..944a4c9 100644
+--- a/src/work_mode.c
++++ b/src/work_mode.c
+@@ -373,7 +373,7 @@ static void process_vibration(uint32_t now_s, uint32_t now_ms, bool vibration_hi
+ void work_mode_init(const work_mode_config_t *cfg, uint32_t now_s, bool acc_high)
+ {
+     g_work_mode.config.report_moving_s = 30U;
+-    g_work_mode.config.report_stopped_s = 180U;
++    g_work_mode.config.report_stopped_s = WORK_MODE_DEFAULT_STOPPED_REPORT_S;
+     g_work_mode.config.heartbeat_s = 180U;
+     g_work_mode.config.stationary_timeout_s = 300U;
+     g_work_mode.config.vibration_confirm_s = 6U;
+diff --git a/tools/release_guard.py b/tools/release_guard.py
+index d2833b9..b5b6333 100644
+--- a/tools/release_guard.py
++++ b/tools/release_guard.py
+@@ -133,7 +133,7 @@ CANONICAL_MACRO_DEFINITIONS = {
+     "FW_VERSION_STR": re.compile(rf'"{re.escape(TARGET_VERSION)}"'),
+     "MSG_QUERY_TERMINAL_INFO": re.compile(r"0[xX]8107(?:[uUlL]*)"),
+     "F39_IMEI_MAX_LENGTH": re.compile(r"15(?:[uU])?"),
+-    "WORK_MODE_DEFAULT_STOPPED_REPORT_S": re.compile(r"180(?:[uU])?"),
++    "WORK_MODE_DEFAULT_STOPPED_REPORT_S": re.compile(r"300(?:[uU])?"),
+     "TICK_MS": re.compile(r"\(\s*g_tick_ms\s*\)"),
+ }
+ C_IDENTIFIER = r"(?:[^\W\d]|\\(?:u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}))(?:\w|\\(?:u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}))*"
+@@ -152,9 +152,9 @@ CANONICAL_CONSUMER_SHA256 = {
+     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
+ }
+ CANONICAL_IDENTITY_FILE_SHA256 = {
+-    # Reviewed: V3.084/3084 identity; generated timestamps stay normalized.
+-    "include/config.h": "829cd4a132923ecc8092fd179803c6378432a39ebdea731314acececa5ad3900",
+-    "include/build_version.h": "7388459fa5b86fe9ac0c22ea3aba1e3b2c81e6dd62116e976c3b19517f259455",
++    # Reviewed: V3.085/3085 identity; generated timestamps stay normalized.
++    "include/config.h": "addd698e8b8982e60d689e97cd127443325823a63f762b24adb32486f6b55508",
++    "include/build_version.h": "97cbe1032921c82c8ed1ece61af11064fef2c9c1416e79e3eb97dbf2205eb904",
+     "include/f39_reply.h": "4519c084bcc677d23c02aa4ac509f2390527f16111139f011052017f08c615ed",
+     # Reviewed: remove unused heartbeat getter declaration only; identity/wire unchanged.
+     "include/jt808.h": "86a37c1e7c89ac947083f88d475ab5caf5ba41a4ef7300ee06b7824f62fb174d",
+diff --git a/tools/tests/jt808_host_support.h b/tools/tests/jt808_host_support.h
+index a81d205..fe64f6e 100644
+--- a/tools/tests/jt808_host_support.h
++++ b/tools/tests/jt808_host_support.h
+@@ -8,6 +8,13 @@
+ #include "at_config.h"
+ #ifndef HOST_REAL_GPS
+ void gps_get_unfixed_report(gps_data_t *out) { memset(out, 0, sizeof(*out)); }
++/* Unit fixtures have no separate event/acquisition clock. Real-GPS tests
++ * link gps.c and verify the distinction on the encoded wire. */
++bool gps_get_last_trusted_location(gps_data_t *out) {
++    if (!gps_get_last_trusted(out)) return false;
++    out->valid = false;
++    return true;
++}
+ #endif
+ fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
+ bool gps_report_filter_motion_pending(uint32_t now) { (void)now; return false; }
+diff --git a/tools/tests/test_acc_stop1_contract.py b/tools/tests/test_acc_stop1_contract.py
+index 2ad4a33..5f416fb 100644
+--- a/tools/tests/test_acc_stop1_contract.py
++++ b/tools/tests/test_acc_stop1_contract.py
+@@ -145,8 +145,11 @@ def main() -> None:
+     # work-mode/JT808 implementation and that the online service path cannot
+     # force a fresh registration.
+     defaults = MAIN + JT808 + WORK_MODE
+-    if not re.search(r"report_stopped_s\s*=\s*180", defaults):
+-        raise AssertionError("STOP1 location cadence default 180 s is missing")
++    if not re.search(r"report_stopped_s\s*=\s*WORK_MODE_DEFAULT_STOPPED_REPORT_S", defaults):
++        raise AssertionError("STOP1 location cadence must use the shared default")
++    flash_defaults = (ROOT / "src/flash_config.c").read_text(encoding="utf-8")
++    if not re.search(r"report_stopped_s\s*=\s*300", flash_defaults):
++        raise AssertionError("default stopped report interval must be 300 s")
+     if not re.search(r"heartbeat_s\s*=\s*180", defaults):
+         raise AssertionError("STOP1 heartbeat cadence default 180 s is missing")
+     service = function_body(SLEEP, "service_online_window")
+diff --git a/tools/tests/test_jt808_dual_session.py b/tools/tests/test_jt808_dual_session.py
+index f6a8352..d8abd5b 100644
+--- a/tools/tests/test_jt808_dual_session.py
++++ b/tools/tests/test_jt808_dual_session.py
+@@ -528,6 +528,10 @@ def main():
+ fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
+ void ec800m_tcp_close(uint8_t ch) { open_ch[ch]=false; }
+ void gps_get_unfixed_report(gps_data_t *out) { memset(out,0,sizeof(*out)); }
++bool gps_get_last_trusted_location(gps_data_t *out) {
++    if (!gps_get_last_trusted(out)) return false;
++    out->valid=false; return true;
++}
+ bool gps_report_filter_motion_pending(uint32_t now) { (void)now; return false; }
+ void gps_report_filter_motion_ack(void) {}
+ bool at_config_execute_text_response(const uint8_t *text, uint16_t len,
+diff --git a/tools/tests/test_jt808_nofix_clock.py b/tools/tests/test_jt808_nofix_clock.py
+index 8d57083..126d08d 100644
+--- a/tools/tests/test_jt808_nofix_clock.py
++++ b/tools/tests/test_jt808_nofix_clock.py
+@@ -1,4 +1,7 @@
+-"""Actual gps.c -> jt808.c wire time, including immutable blind-zone events."""
++"""No-fix acquisition UTC stays fixed; pending NOR records stay immutable.
++
++Sleep cadence's advancing event UTC is tested by test_sleep_location_reporting.
++"""
+ from pathlib import Path
+ import subprocess
+ import tempfile
+@@ -28,8 +31,7 @@ int main(void) {
+         assert(jt808_send_location_work_mode(0,false,i)==0);
+         for(unsigned ch=0; ch<=3; ch+=3) {
+             assert(msg(ch,&sn0,d,&n)==0x0200);
+-            const uint8_t expected[]={0x26,0x09,0x20,0x13,0x48,
+-                (uint8_t)(((i-1)<<4)|2)};
++            const uint8_t expected[]={0x26,0x09,0x20,0x13,0x47,0x52};
+             assert(memcmp(d+34,expected,6)==0);
+             assert(!(d[19]&2)); /* position is historical, not a current fix */
+         }
+@@ -44,7 +46,7 @@ int main(void) {
+     assert(jt808_send_location_work_mode(0,false,4)==0);
+     assert(memcmp(saved,appended.location,34)==0);
+     assert(jt808_send_location_work_mode(0,false,5)==0);
+-    assert(appended.location[27]==0x42);
++    assert(appended.location[27]==0x52);
+     return 0;
+ }
+ '''
+diff --git a/tools/tests/test_release_identity_contract.py b/tools/tests/test_release_identity_contract.py
+index 488c327..2b70aa3 100644
+--- a/tools/tests/test_release_identity_contract.py
++++ b/tools/tests/test_release_identity_contract.py
+@@ -10,12 +10,12 @@ CONTRACT_PATH = ROOT / "release_identity.json"
+ 
+ contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+ 
+-stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.083", contract["firmware_version"]).group(1)
++stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.085", contract["firmware_version"]).group(1)
+ assert contract == {
+     "firmware_version_prefix": f"T360-A300_406_{stamp},V3.",
+-    "firmware_revision": 83,
+-    "firmware_version": f"T360-A300_406_{stamp},V3.083",
+-    "firmware_version_counter": 3083,
++    "firmware_revision": 85,
++    "firmware_version": f"T360-A300_406_{stamp},V3.085",
++    "firmware_version_counter": 3085,
+     "ota_device_model": "A300-406",
+     "jt808_terminal_model": "T360-A300",
+     "jt808_manufacturer_id": "70110",
+diff --git a/tools/tests/test_work_mode_policy.py b/tools/tests/test_work_mode_policy.py
+index 38fd63d..77780ad 100644
+--- a/tools/tests/test_work_mode_policy.py
++++ b/tools/tests/test_work_mode_policy.py
+@@ -334,10 +334,14 @@ static void test_zero_stopped_interval_uses_default_sleep_report_period(void)
+     step(179U, false, false, 0U, false);
+     assert_actions((const work_mode_action_type_t[]){}, 0U);
+     step(180U, false, false, 0U, false);
++    assert_actions((const work_mode_action_type_t[]){}, 0U);
++    step(299U, false, false, 0U, false);
++    assert_actions((const work_mode_action_type_t[]){}, 0U);
++    step(300U, false, false, 0U, false);
+     assert_actions(expected, ARRAY_LEN(expected));
+-    step(359U, false, false, 0U, false);
++    step(599U, false, false, 0U, false);
+     assert_actions((const work_mode_action_type_t[]){}, 0U);
+-    step(360U, false, false, 0U, false);
++    step(600U, false, false, 0U, false);
+     assert_actions(expected, ARRAY_LEN(expected));
+ }
+ 

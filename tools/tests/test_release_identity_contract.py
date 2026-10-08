@@ -10,12 +10,12 @@ CONTRACT_PATH = ROOT / "release_identity.json"
 
 contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 
-stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.083", contract["firmware_version"]).group(1)
+stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.091", contract["firmware_version"]).group(1)
 assert contract == {
     "firmware_version_prefix": f"T360-A300_406_{stamp},V3.",
-    "firmware_revision": 83,
-    "firmware_version": f"T360-A300_406_{stamp},V3.083",
-    "firmware_version_counter": 3083,
+    "firmware_revision": 91,
+    "firmware_version": f"T360-A300_406_{stamp},V3.091",
+    "firmware_version_counter": 3091,
     "ota_device_model": "A300-406",
     "jt808_terminal_model": "T360-A300",
     "jt808_manufacturer_id": "70110",

@@ -1,0 +1,46 @@
+[
+  {
+    "name": "release-gate",
+    "command": [
+      "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\make.exe",
+      "BUILD=build-v3070-functional",
+      "TOOLCHAIN_DIR=D:/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin",
+      "release-gate"
+    ],
+    "exit_code": 2
+  },
+  {
+    "name": "boot-ram",
+    "command": [
+      "python",
+      "tools/map_ram_guard.py",
+      "bootloader",
+      "bootloader/build/bootloader.map"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "libc-parser",
+    "command": [
+      "python",
+      "tools/libc_parser_guard.py",
+      "build-v3070-functional/a300_firmware.map"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "diff",
+    "command": [
+      "git",
+      "-c",
+      "core.safecrlf=false",
+      "diff",
+      "--check",
+      "--",
+      "release_identity.json",
+      "include/config.h",
+      "include/build_version.h"
+    ],
+    "exit_code": 0
+  }
+]

@@ -16,6 +16,10 @@ static fota_state_t fota_state = FOTA_STATE_IDLE;
 fota_state_t fota_get_state(void) { return fota_state; }
 void ec800m_tcp_close(uint8_t ch) { open_ch[ch]=false; }
 void gps_get_unfixed_report(gps_data_t *out) { memset(out,0,sizeof(*out)); }
+bool gps_get_last_trusted_location(gps_data_t *out) {
+ if (!gps_get_last_trusted(out)) return false;
+ out->valid=false; return true;
+}
 bool at_config_execute_text_response(const uint8_t *text, uint16_t len,
     at_config_text_ack_fn ack, at_config_text_reply_fn reply, void *context) {
  (void)text; (void)len; (void)ack; (void)reply; (void)context;

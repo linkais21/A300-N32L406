@@ -1,0 +1,72 @@
+{
+  "scope": [
+    {
+      "file": "include/build_version.h",
+      "before_sha256": "03ab9c80baa1c82f07b31bd9abf69da0498eff3cade4e668b9b1e4f6e815eadc",
+      "after_sha256": "28bd427629ed47345b8456ba09c5e9032361e0446baec78c918e894996eccaa0"
+    },
+    {
+      "file": "include/config.h",
+      "before_sha256": "83839a0346308ddb214e3db3ae20483c12fd11b0a02df98838f0ccdefe2fe443",
+      "after_sha256": "14fbf1caba1abf2b7dcde2668431dd9442b96fcacdd986b9a18d241623461d1f"
+    },
+    {
+      "file": "include/jt808.h",
+      "before_sha256": "c9e188f8f2bb0842d1681d53f4ab13ef246668715bf1e5f15e81c52af9468029",
+      "after_sha256": "82cd7eac4eb36c7811ddb12a118bb054820fe99e9c063fa47fd5b2b4e381eaaf"
+    },
+    {
+      "file": "release_identity.json",
+      "before_sha256": "a78333bfce286acfc1bb7994e9ec7120c85d765360532b0d9445d3a48704150e",
+      "after_sha256": "b7192da8100f75bb09f1be618815b3342d4aaf059ca98781456645037337a01c"
+    },
+    {
+      "file": "src/jt808.c",
+      "before_sha256": "51f3cb7071dba49dfd064a30d2c7cbd95bc43ea7d6e56864752204b861e0e688",
+      "after_sha256": "3e53affa4355666db5b6252cfd742161eb57ff1f0c28c49b85ac40a619b57b82"
+    },
+    {
+      "file": "tools/release_guard.py",
+      "before_sha256": "440c98af2a91af1b1f9856580ff63f860d9725f5ff6c30aff23dc0b1352085fd",
+      "after_sha256": "30e8506d205f22331fed084ee2178849013da65279a245f1da1b665d6b600f96"
+    },
+    {
+      "file": "tools/tests/test_jt808_nofix_clock.py",
+      "before_sha256": "5f24dc6492e04ff25ce25c1605895719662d8901497791dbbbc3b04fd5b86c60",
+      "after_sha256": "5fce1ca33a92bd72b9039c106e0d1d3f0fc9a5ed006a12225c84d043d6109ab9"
+    },
+    {
+      "file": "tools/tests/test_release_identity_contract.py",
+      "before_sha256": "b8f9150a4d1ce56ec05172ef442449a96b702e8187296e7ff936d053dd246a85",
+      "after_sha256": "82cebc2c56e1cf2dad5001939052f18b3a81398e9b5685155cd9f4578a77bd9e"
+    },
+    {
+      "file": "tools/tests/test_sleep_location_reporting.py",
+      "before_sha256": "95a6c7fb1b02228112128faa8b6774ade90140c685e89a01dc3ebb6a5b594785",
+      "after_sha256": "279ba6dd62e463631c0883fc0342e5d95f52dd2c4e021263d3f1af2d5e04ee8e"
+    },
+    {
+      "file": "tools/tests/test_wake_entry_event_clock.py",
+      "before_sha256": "16bd59eebc619bb0f3ab63b6464a0b451afa0d70de879bd2a668daae5acd041a",
+      "after_sha256": "3692794602fa2abae515103966b2ce04fa2cc8814cf8a2b6fe73b088cc1abc93"
+    },
+    {
+      "file": "tools/tests/test_work_mode_jt808_contract.py",
+      "before_sha256": "5310eec9b28393095ac0954a6ee83821c545c7cbb8eff5ef88f1b6ed5133be9b",
+      "after_sha256": "4235726f14389286cc01ee9983603f1cf6ae3423080ff58d90206d7f667feec6"
+    }
+  ],
+  "review_type": "scoped local review",
+  "runtime_logic_file": "src/jt808.c",
+  "findings": [],
+  "checks": [
+    "both retained-position paths use advancing event UTC",
+    "0201 acquisition getter preserved",
+    "pending same-report NOR transaction remains immutable",
+    "wire ACC/fix/time diagnostic reflects encoded body",
+    "GPIO, ISR, Flash layout and main dispatcher unchanged from V3.087",
+    "only stamp files differ from prebuild hashes"
+  ],
+  "hardware_validation": "pending",
+  "limits": "not an independent peer review; no claim of platform ACK or hardware acceptance"
+}

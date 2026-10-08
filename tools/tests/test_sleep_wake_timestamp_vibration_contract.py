@@ -20,9 +20,8 @@ def test_historical_fix_time_can_be_advanced_after_stop():
 
 
 def test_vibration_episode_tolerates_short_ema_misses():
-    assert "WORK_MODE_VIBRATION_MISS_TOLERANCE 2U" in WORK
-    assert "vibration_miss_count" in WORK
-    assert "vibration_miss_count >" in WORK
+    assert "WORK_MODE_VIBRATION_MAX_GAP_MS 1000U" in WORK
+    assert "vibration_hits_required" in WORK
     assert "return s_diag.vibration_hit;" in ACCEL
     assert "TICK_MS() - s_last_vibration_log_ms >= 5000U" in ACCEL
 

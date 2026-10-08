@@ -79,6 +79,8 @@ def _write_harness(directory):
 
 static int fail_uart;
 static unsigned gps_calls;
+static uint32_t cold_done;
+extern uint32_t tick;
 static uint32_t gps_bytes;
 static uint8_t gps_last[128];
 static uint32_t gps_last_len;
@@ -86,6 +88,8 @@ static gps_data_t g = {0};
 static device_config_t c = {"u", "p"};
 int gps_send_raw(const uint8_t *p, uint32_t n) {
     assert(n <= sizeof gps_last);
+    if(p[2]==6 && p[3]==0x40){tick+=7;cold_done=tick;}
+    else assert((uint32_t)(tick-cold_done)>=1000U);
     memcpy(gps_last, p, n); gps_last_len = n;
     ++gps_calls; gps_bytes += n; return fail_uart ? -1 : 0;
 }
@@ -122,6 +126,18 @@ static void make_ack(uint8_t ok) {
     ++ack_seq; ack_ready=1;
 }
 
+static int settled_inject(const uint8_t *data,uint32_t len,const gps_context_t *ctx){
+    unsigned before=gps_calls;
+    int result=agnss_huada_inject(&(agnss_source_t){data,len},ctx);
+    if(gps_calls==before+1 && gps_last[2]==6){
+        assert(result==1 && gnss_vendor_inject_pending());
+        for(unsigned i=0;i<10;i++)assert(agnss_huada_inject(&(agnss_source_t){data,len},ctx)==1);
+        tick+=999;assert(agnss_huada_inject(&(agnss_source_t){data,len},ctx)==1);
+        assert(gps_calls==before+1);
+        tick++;result=agnss_huada_inject(&(agnss_source_t){data,len},ctx);
+    }
+    return result;
+}
 int main(void) {
     uint8_t valid[100], oversized[8] = {0xf1, 0xd9, 0x0b, 0x10, 0xff, 0xff, 0, 0};
     make_bds(valid);
@@ -145,14 +161,14 @@ int main(void) {
     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) < 0);
     assert(gps_calls == 1);
     fail_uart = 0;
-    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 1);
+    assert(settled_inject(valid, sizeof valid, &(gps_context_t){0}) == 1);
     /* A new transaction starts with cold start, then sends its first BDS frame. */
     assert(gps_calls == 3 && gnss_vendor_inject_pending());
     make_ack(1);
     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 0);
     assert(gps_calls == 3 && !gnss_vendor_inject_pending());
     assert(agnss_huada_inject(&(agnss_source_t){oversized, sizeof oversized}, &(gps_context_t){0}) < 0);
-    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 1);
+    assert(settled_inject(valid, sizeof valid, &(gps_context_t){0}) == 1);
     make_ack(1);
     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 0);
     assert(gps_calls == 5);
@@ -160,16 +176,31 @@ int main(void) {
 
     /* No ACK keeps the caller pending; NAK and timeout fail closed. */
     make_bds(valid);tick=0;
-    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 1);
+    assert(settled_inject(valid, sizeof valid, &(gps_context_t){0}) == 1);
     assert(gnss_vendor_inject_pending());
-    tick=1000;
+    tick+=1000;
     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) < 0);
     assert(!gnss_vendor_inject_pending());
-    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 1);
+    assert(settled_inject(valid, sizeof valid, &(gps_context_t){0}) == 1);
     make_ack(0);
     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) < 0);
     assert(!gnss_vendor_inject_pending());
 
+    /* Reset after failure restarts cold settle, including tick wrap. */
+    tick=UINT32_MAX-100U;
+    assert(settled_inject(valid,sizeof valid,&(gps_context_t){0})==1);
+    make_ack(1);assert(agnss_huada_inject(&(agnss_source_t){valid,sizeof valid},&(gps_context_t){0})==0);
+    assert(agnss_huada_inject(NULL,&(gps_context_t){0})==0);
+    /* Metadata is obtained at actual TX, after the cold settle window. */
+    g.year=2026;g.month=10;g.day=8;g.second=1;
+    assert(agnss_huada_inject(&(agnss_source_t){valid,sizeof valid},&(gps_context_t){0})==1);
+    unsigned pending_calls=gps_calls;
+    tick+=999;g.second=2;
+    assert(agnss_huada_inject(&(agnss_source_t){valid,sizeof valid},&(gps_context_t){0})==1);
+    assert(gps_calls==pending_calls);
+    tick++;assert(agnss_huada_inject(&(agnss_source_t){valid,sizeof valid},&(gps_context_t){0})==1);
+    assert(gps_last[3]==0x11 && gps_last[15]==2);
+    huada_reset_stream();assert(!gnss_vendor_inject_pending());g.year=0;
     /* Position rounding is away from zero; negative MSL altitude is signed. */
     gps_context_t loc={0};loc.valid=true;loc.lat=-0.00000005;loc.lon=180;loc.altitude_m=-12.5f;
     assert(build_location(&loc,gps_last)==25);

@@ -104,27 +104,24 @@ def check_wake_filter_race() -> None:
             f"level (found {filter_line.group(1)})")
 
 
-def check_retained_clock_monotonic() -> None:
-    require("retained_clock_is_newer" in GPS,
-            "no monotonicity guard on the retained clock")
+def check_retained_clock_reanchor() -> None:
+    # Civil UTC is correctable by GNSS/NTP; scheduling stays monotonic.
+    # Re-reading the same fresh fix must not restart its clock at the read time.
     require("gps_capture_last_trusted_snapshot(&s_gps)" in
             function_body(GPS, "gps_capture_last_trusted"),
-            "live capture must delegate to the guarded snapshot capture")
+            "live capture must delegate to validated snapshot capture")
     capture = function_body(GPS, "gps_capture_last_trusted_snapshot")
-    require("retained_clock_is_newer" in capture,
-            "the capture path does not check clock monotonicity")
-    # The guard must only refuse an older clock, and only when a snapshot
-    # already exists -- otherwise the very first capture could never happen.
-    require(re.search(r"s_last_trusted_valid\s*&&[\s\S]{0,120}?"
-                      r"!retained_clock_is_newer", capture) is not None,
-            "the guard must not block the first capture")
-
-    helper = function_body(GPS, "retained_clock_is_newer")
+    require("now - snapshot->last_update_ms" in capture and "5000U" in capture,
+            "retained capture must reject stale fixes")
+    require("s_last_trusted_tick_ms = snapshot->last_update_ms" in capture,
+            "capture must anchor to measurement age, not the read time")
     for field in ("year", "month", "day", "hour", "minute", "second"):
-        require(field in helper,
-                f"the clock comparison ignores the {field} field")
-    require("s_last_trusted." in helper,
-            "the comparison does not read the retained snapshot")
+        require(f"s_last_fix_utc.{field} = s_last_trusted.{field} = snapshot->{field}" in capture,
+                f"validated measurement must re-anchor both {field} clocks")
+    require("retained_clock_advance_awake()" in function_body(GPS, "gps_get_last_trusted"),
+            "event UTC must advance while GNSS is off")
+    require("jt808_send_location_work_mode_event" in function_body(MAIN, "acc_report_settle"),
+            "deferred status report must use event UTC rather than acquisition UTC")
 
 
 def check_acc_wake_hold() -> None:
@@ -169,7 +166,7 @@ def check_acc_wake_hold() -> None:
 def main() -> None:
     check_report_debounce()
     check_wake_filter_race()
-    check_retained_clock_monotonic()
+    check_retained_clock_reanchor()
     check_acc_wake_hold()
     print("test_acc_bounce_hardening: PASS")
 

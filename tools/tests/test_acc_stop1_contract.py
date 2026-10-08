@@ -111,7 +111,7 @@ def main() -> None:
         JT808,
         re.IGNORECASE,
     )
-    send_work_mode = function_body(JT808, "jt808_send_location_work_mode")
+    send_work_mode = function_body(JT808, "send_location_work_mode")
     retained_accessor = re.search(
         r"gps_\w*(?:stop1|last_trusted|retained)\w*\s*\(",
         send_work_mode,
@@ -145,8 +145,11 @@ def main() -> None:
     # work-mode/JT808 implementation and that the online service path cannot
     # force a fresh registration.
     defaults = MAIN + JT808 + WORK_MODE
-    if not re.search(r"report_stopped_s\s*=\s*180", defaults):
-        raise AssertionError("STOP1 location cadence default 180 s is missing")
+    if not re.search(r"report_stopped_s\s*=\s*WORK_MODE_DEFAULT_STOPPED_REPORT_S", defaults):
+        raise AssertionError("STOP1 location cadence must use the shared default")
+    flash_defaults = (ROOT / "src/flash_config.c").read_text(encoding="utf-8")
+    if not re.search(r"report_stopped_s\s*=\s*300", flash_defaults):
+        raise AssertionError("default stopped report interval must be 300 s")
     if not re.search(r"heartbeat_s\s*=\s*180", defaults):
         raise AssertionError("STOP1 heartbeat cadence default 180 s is missing")
     service = function_body(SLEEP, "service_online_window")

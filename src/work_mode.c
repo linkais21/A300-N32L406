@@ -2,7 +2,6 @@
 
 #define WORK_MODE_ACTION_QUEUE_CAPACITY 8U
 #define WORK_MODE_VIBRATION_SAMPLE_MS 200U
-#define WORK_MODE_VIBRATION_MISS_TOLERANCE 2U
 #define WORK_MODE_VIBRATION_MAX_GAP_MS 1000U
 #define WORK_MODE_MS_PER_SECOND 1000U
 #define WORK_MODE_MAX_SAFE_INTERVAL_S 0x7fffffffUL
@@ -28,7 +27,6 @@ typedef struct {
     uint32_t heartbeat_deadline_s;
     uint32_t vibration_hits;
     uint32_t vibration_samples;
-    uint32_t vibration_miss_count;
     uint32_t vibration_started_ms;
     uint32_t vibration_last_hit_ms;
     uint32_t mode_generation;
@@ -130,7 +128,6 @@ static void reset_vibration_episode(void)
 {
     g_work_mode.vibration_hits = 0U;
     g_work_mode.vibration_samples = 0U;
-    g_work_mode.vibration_miss_count = 0U;
     g_work_mode.vibration_started_ms = 0U;
     g_work_mode.vibration_last_hit_ms = 0U;
 }
@@ -275,7 +272,6 @@ static void enter_realtime(uint32_t now_s)
     g_work_mode.wake_fix_pending = waking_from_sleep;
     g_work_mode.vibration_hits = 0U;
     g_work_mode.vibration_samples = 0U;
-    g_work_mode.vibration_miss_count = 0U;
     g_work_mode.vibration_started_ms = 0U;
     g_work_mode.vibration_last_hit_ms = 0U;
     s_acc_sample = 0U;
@@ -299,7 +295,6 @@ static void enter_stationary(uint32_t now_s, bool gps_valid)
     g_work_mode.wake_fix_pending = false;
     g_work_mode.vibration_hits = 0U;
     g_work_mode.vibration_samples = 0U;
-    g_work_mode.vibration_miss_count = 0U;
     g_work_mode.vibration_started_ms = 0U;
     g_work_mode.vibration_last_hit_ms = 0U;
     g_work_mode.stopped_deadline_s = now_s + stopped_report_interval_s();
@@ -317,46 +312,33 @@ static void process_vibration(uint32_t now_s, uint32_t now_ms, bool vibration_hi
     if (now_ms == 0U)
         now_ms = now_s * WORK_MODE_MS_PER_SECOND;
     if (!vibration_hit) {
-        if (g_work_mode.vibration_hits != 0U) {
-            if (g_work_mode.vibration_samples < UINT32_MAX)
-                ++g_work_mode.vibration_samples;
-            if (g_work_mode.vibration_miss_count < UINT32_MAX)
-                ++g_work_mode.vibration_miss_count;
-        }
-        if (g_work_mode.vibration_miss_count >
-                WORK_MODE_VIBRATION_MISS_TOLERANCE ||
-            (g_work_mode.vibration_hits != 0U &&
-             (uint32_t)(now_ms - g_work_mode.vibration_last_hit_ms) >
-                 WORK_MODE_VIBRATION_MAX_GAP_MS)) {
+        if (g_work_mode.vibration_hits == 0U) return;
+        /* Use elapsed quiet time, not a second sample-count reset. Three
+         * 200 ms trough samples must not erase otherwise dense motion while
+         * still inside the one-second maximum gap. */
+        if ((uint32_t)(now_ms - g_work_mode.vibration_last_hit_ms) >
+            WORK_MODE_VIBRATION_MAX_GAP_MS) {
             reset_vibration_episode();
-        } else if (g_work_mode.vibration_hits != 0U &&
-                   (uint32_t)(now_ms - g_work_mode.vibration_started_ms) >=
-                   vibration_confirm_ms() &&
-                   g_work_mode.vibration_hits < vibration_hits_required(
-                       g_work_mode.vibration_samples)) {
-            reset_vibration_episode();
+            return;
         }
-        return;
+    } else {
+        if (g_work_mode.vibration_hits == 0U ||
+            (uint32_t)(now_ms - g_work_mode.vibration_last_hit_ms) >
+            WORK_MODE_VIBRATION_MAX_GAP_MS) {
+            g_work_mode.vibration_started_ms = now_ms;
+            g_work_mode.vibration_hits = 0U;
+            g_work_mode.vibration_samples = 0U;
+        }
+        g_work_mode.vibration_last_hit_ms = now_ms;
+        if (g_work_mode.vibration_hits < UINT32_MAX)
+            ++g_work_mode.vibration_hits;
     }
-
-    g_work_mode.vibration_miss_count = 0U;
-    if (g_work_mode.vibration_hits == 0U ||
-        (uint32_t)(now_ms - g_work_mode.vibration_last_hit_ms) >
-        WORK_MODE_VIBRATION_MAX_GAP_MS) {
-        g_work_mode.vibration_started_ms = now_ms;
-        g_work_mode.vibration_hits = 0U;
-        g_work_mode.vibration_samples = 0U;
-    }
-    g_work_mode.vibration_last_hit_ms = now_ms;
 
     if (g_work_mode.vibration_samples < UINT32_MAX)
         ++g_work_mode.vibration_samples;
-    if (g_work_mode.vibration_hits < UINT32_MAX) {
-        ++g_work_mode.vibration_hits;
-    }
-    /* Confirmation is an elapsed-time contract. Two tolerated sample misses
-     * must not extend six seconds into 6.4 seconds, and a busy cooperative
-     * loop must not require an impossible fixed number of scheduler passes. */
+    /* Evaluate the six-second deadline on misses too: a quiet sample at the
+     * deadline cannot delay a dense, still-recent episode until another hit.
+     * Keep the two-thirds evidence gate and reject sparse isolated spikes. */
     if (g_work_mode.vibration_hits >= vibration_hits_required(
             g_work_mode.vibration_samples) &&
         (uint32_t)(now_ms - g_work_mode.vibration_started_ms) >=
@@ -373,7 +355,7 @@ static void process_vibration(uint32_t now_s, uint32_t now_ms, bool vibration_hi
 void work_mode_init(const work_mode_config_t *cfg, uint32_t now_s, bool acc_high)
 {
     g_work_mode.config.report_moving_s = 30U;
-    g_work_mode.config.report_stopped_s = 180U;
+    g_work_mode.config.report_stopped_s = WORK_MODE_DEFAULT_STOPPED_REPORT_S;
     g_work_mode.config.heartbeat_s = 180U;
     g_work_mode.config.stationary_timeout_s = 300U;
     g_work_mode.config.vibration_confirm_s = 6U;
@@ -401,7 +383,6 @@ void work_mode_init(const work_mode_config_t *cfg, uint32_t now_s, bool acc_high
     g_work_mode.mode_generation = 0U;
     g_work_mode.vibration_hits = 0U;
     g_work_mode.vibration_samples = 0U;
-    g_work_mode.vibration_miss_count = 0U;
     g_work_mode.vibration_started_ms = 0U;
     g_work_mode.vibration_last_hit_ms = 0U;
     s_pending_alarm_bits = 0U;

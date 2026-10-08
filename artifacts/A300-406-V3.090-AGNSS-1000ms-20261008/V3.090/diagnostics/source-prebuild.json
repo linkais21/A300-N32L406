@@ -1,0 +1,11 @@
+{
+  "src/agnss_online.c": "dcf6b8348ae5633c8dfa98316fc204dbe059ab221d345cd4c507ecc56acc70b4",
+  "src/agnss_huada.c": "7dc9248dad83ed7dde245d6873542fc8190666023a9e921f768a513d8205dbe4",
+  "tools/tests/test_agnss_online.py": "e86e28001df505c14cdd4cbd473fce54a30be210c23ad45aa593cee1cfb5e7e1",
+  "tools/tests/test_agnss_vendor_stream.py": "1b23edde6d9d8f422dfd58d398b93e3349d1bae5d29b81c9aae2f48db9ca7a85",
+  "include/config.h": "c118d8ba947c4c0333eddb09d30b7bc14ec695aad9aaffe95c84f39c9e9147ea",
+  "include/build_version.h": "1017d983da823df58bf9ffaaebd6c3ab5daa28e2208a99fe7dfe969861dbbff4",
+  "release_identity.json": "0dd4c25f33fbe3f2e687b641c68bb2fb426e1ca6dec71c2b033ea49d189d3eca",
+  "tools/release_guard.py": "8516847f748f7bb0d6dfabd4bad657f5cc333e7e979ee74a37f5c9dde9686f22",
+  "tools/tests/test_release_identity_contract.py": "dd1a12fa2cc93cc59dbb273f370420f537b31d9cfb4c3f835850e7ed7f92afd3"
+}

@@ -1,0 +1,24 @@
+{
+  "recorded_utc": "2026-10-07T08:36:06.686761+00:00",
+  "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+  "make": "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+  "results": [
+    {
+      "name": "release-build",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/build_dev_release.py",
+        "--output",
+        "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.087-ACC-Event-Fix-20261007",
+        "--version-counter",
+        "3087"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 46.57,
+      "log": "release-build.log",
+      "output_sha256": "9675dc7cf12beefbbcd85062757ccec0aafcfed8536f88261299127fbc7398e5"
+    }
+  ],
+  "complete": true,
+  "all_passed": true
+}

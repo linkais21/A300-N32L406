@@ -1,0 +1,85 @@
+{
+  "purpose": "DEDICATED_DEVICE_HIL_ONLY",
+  "version": "T360-A300_406_20261002200042,V3.082",
+  "version_code": 3082,
+  "product": "A300-406",
+  "mcu": "N32L406CBL7",
+  "ota_format": "a300-header-v1; detached signature supplied by FOTA platform",
+  "memory": {
+    "boot": [
+      134217728,
+      134242304
+    ],
+    "app": [
+      134242304,
+      134348800
+    ]
+  },
+  "images": {
+    "app_size": 104700,
+    "combined_size": 129276,
+    "ota_size": 104732,
+    "app_vectors": {
+      "msp": 536895488,
+      "reset": 134334493
+    }
+  },
+  "files": {
+    "App-N32L406CBL7-V3.082.bin": {
+      "bytes": 104700,
+      "sha256": "25f28855b4e1ceec2ec136f2b8c01b93a209ff2fc5594c613496e698d9a7cde7"
+    },
+    "App-N32L406CBL7-V3.082.elf": {
+      "bytes": 1472108,
+      "sha256": "611f28f9c16bf16c525c270b892dd60e3356a1ebc4647a070b254450b8a887a2"
+    },
+    "App-N32L406CBL7-V3.082.hex": {
+      "bytes": 294563,
+      "sha256": "24614595d295c91d9c5fea75f4f23d0761c48ab37387b83876fef97f1969a5d0"
+    },
+    "App-N32L406CBL7-V3.082.map": {
+      "bytes": 652163,
+      "sha256": "d3e4e93ade3b3a75e58904a1ea492123c0f5c060a9e90d9e25ad35b22e7e53e0"
+    },
+    "Bootloader-N32L406CBL7-V3.082.bin": {
+      "bytes": 22556,
+      "sha256": "39764943de035d5232e1079fdc3de08468de99f89542307ffdf021b2920b89c3"
+    },
+    "Bootloader-N32L406CBL7-V3.082.elf": {
+      "bytes": 32788,
+      "sha256": "92a1fb037d49a542eca1a4c98d8df788aaf189b7a69ab42b9083e39aee611875"
+    },
+    "Bootloader-N32L406CBL7-V3.082.hex": {
+      "bytes": 41829,
+      "sha256": "85ef61c1cbfab88b53be4cf9390caaba05b5e7be9cc5fba6823a84c54409b239"
+    },
+    "Bootloader-N32L406CBL7-V3.082.map": {
+      "bytes": 63702,
+      "sha256": "d6c89033d1ed7e1026a337b94529df08e3ee747ed53a39ec7c8f10b44ed3195b"
+    },
+    "Combined-N32L406CBL7-V3.082.bin": {
+      "bytes": 129276,
+      "sha256": "31502601423f2b07b6bf45870e1cb01de62a534568241b0e447cc8b29041eb9b"
+    },
+    "flash-capacity.json": {
+      "bytes": 4842,
+      "sha256": "baa1a248c7bb9a992ad873eaf7dd98a67a9790b61ce842a2d0b58a58c85abbf7"
+    },
+    "OTA-A300-406-V3082.bin": {
+      "bytes": 104732,
+      "sha256": "5dbaa4d2a9e4609233a62987085292bb95f62fbe0bf74823115b440f6e48a4c5"
+    },
+    "release-gate.json": {
+      "bytes": 452,
+      "sha256": "cc0257e12fd872dc391a12aaa00a95e7d74e895c1b41e27fd623dbc183e625c0"
+    },
+    "stack-analysis.json": {
+      "bytes": 312678,
+      "sha256": "4c575ea1106cdf90b6bf983868ae49746d3a204f390d34ee16f824563b482a73"
+    },
+    "stack-evidence.json": {
+      "bytes": 644,
+      "sha256": "6dcbbd4406e86dd501fdaf19d0292c200fdda24d39a470ec306c8097d6fd3854"
+    }
+  }
+}

@@ -1,0 +1,383 @@
+--- before/src/agnss_online.c
++++ after/src/agnss_online.c
+@@ -11,7 +11,8 @@
+ #include "a300_format.h"
+ #include <string.h>
+ 
+-enum { IDLE, OPENING, RECEIVING, VALIDATING, COLD_START, SENDING, WAIT_ACK, FAILED };
++enum { IDLE, OPENING, RECEIVING, VALIDATING, COLD_START, SENDING, WAIT_ACK, FAILED, COLD_SETTLE };
++#define HUADA_COLD_SETTLE_MS 200U
+ enum { LOCAL_TIME, LOCAL_POS, NETWORK_DATA };
+ static uint8_t s_phase;
+ static bool s_header, s_done, s_attempted, s_socket;
+@@ -153,7 +154,7 @@
+ {
+     uint8_t *b;
+     if(ch!=EC800M_CH_AGPS || !data || !n)return;
+-    if(s_phase==VALIDATING || s_phase==SENDING || s_phase==WAIT_ACK){s_reason="late-data";s_phase=FAILED;return;}
++    if(s_phase==VALIDATING || s_phase==COLD_START || s_phase==COLD_SETTLE || s_phase==SENDING || s_phase==WAIT_ACK){s_reason="late-data";s_phase=FAILED;return;}
+     if(s_phase!=RECEIVING)return;
+     b=buffer();
+     if(!b || n>AGNSS_STREAM_WORKSPACE_CAPACITY-s_used){s_reason="rx-overflow";s_phase=FAILED;return;}
+@@ -293,9 +294,15 @@
+         s_offset+=(uint16_t)n;
+         if(s_offset==s_expected){s_offset=0;s_phase=COLD_START;}
+     } else if (s_phase==COLD_START) {
+-        s_trace_cold_ms=now;
+         if(!send_cold_start())fail("cold-start");
+-        else s_phase=SENDING;
++        else {
++            /* gps_send_raw returns after UART TX completes; do not count TX time. */
++            s_trace_cold_ms=TICK_MS();
++            s_phase=COLD_SETTLE;
++        }
++    } else if(s_phase==COLD_SETTLE) {
++        /* Nonblocking: the main loop continues servicing modem/GNSS/watchdog. */
++        if((uint32_t)(now-s_trace_cold_ms)>=HUADA_COLD_SETTLE_MS) s_phase=SENDING;
+     } else if(s_phase==SENDING) {
+         const uint8_t *b;
+         uint16_t frame;
+--- before/src/agnss_huada.c
++++ after/src/agnss_huada.c
+@@ -19,8 +19,10 @@
+ bool gnss_vendor_inject_pending(void) { return false; }
+ #else
+ #define HUADA_STREAM_MAX 4096U
+-enum { HUADA_STAGE_TIME, HUADA_STAGE_POS, HUADA_STAGE_DATA };
++#define HUADA_COLD_SETTLE_MS 200U
++enum { HUADA_STAGE_TIME, HUADA_STAGE_POS, HUADA_STAGE_DATA, HUADA_STAGE_COLD_SETTLE };
+ static uint32_t s_stream_len;
++static uint32_t s_cold_done_ms;
+ static bool s_stream_started;
+ static bool s_chunk_active;
+ static bool s_frame_active;
+@@ -39,7 +41,7 @@
+     huada_ack_cancel(&s_ack);
+     s_stream_len=0;s_stream_started=false;s_chunk_active=false;
+     s_frame_active=false;s_frame_len=0;s_stage=HUADA_STAGE_TIME;
+-    s_ack_waiting=false;s_failed=false;s_ack_sequence=0;
++    s_ack_waiting=false;s_failed=false;s_ack_sequence=0;s_cold_done_ms=0;
+     agnss_stream_workspace_release(AGNSS_STREAM_OWNER_HUADA);
+ }
+ 
+@@ -142,8 +144,14 @@
+         static const uint8_t cold_start[] = {0xF1,0xD9,0x06,0x40,0x01,0x00,0x01,0x48,0x22};
+         if (gps_send_raw(cold_start,sizeof cold_start) != 0) { huada_reset_stream(); return -1; }
+         s_stream_started=true; s_stream_len=0;
++        /* Start the settle window after the last cold-start byte is sent. */
++        s_cold_done_ms=TICK_MS();s_stage=HUADA_STAGE_COLD_SETTLE;
+     }
+     if (s_failed) { huada_reset_stream(); return -1; }
++    if (s_stage == HUADA_STAGE_COLD_SETTLE) {
++        if ((uint32_t)(TICK_MS()-s_cold_done_ms) < HUADA_COLD_SETTLE_MS) return 1;
++        s_stage=HUADA_STAGE_TIME;
++    }
+     if (s_ack_waiting) {
+         int p=poll_ack();
+         if (p) return p;
+@@ -210,6 +218,7 @@
+ 
+ bool gnss_vendor_inject_pending(void)
+ {
+-    return s_ack_waiting || s_frame_active;
++    return (s_stream_started && s_stage == HUADA_STAGE_COLD_SETTLE) ||
++           s_ack_waiting || s_frame_active;
+ }
+ #endif
+--- before/tools/tests/test_agnss_online.py
++++ after/tools/tests/test_agnss_online.py
+@@ -38,6 +38,7 @@
+ static uint8_t last_id;
+ static void sum(uint8_t *p,unsigned n);
+ static int tx_error;
++static uint32_t cold_done;
+ static char request[256];
+ static char last_log[192];
+ static char trace_hex[1100];
+@@ -63,8 +64,8 @@
+ tcp_state_t ec800m_tcp_state(uint8_t ch){assert(ch==2);return tcp;}
+ int gps_send_raw(const uint8_t *p,uint32_t n){
+     static const uint8_t cold[]={0xf1,0xd9,0x06,0x40,0x01,0x00,0x01,0x48,0x22};
+-    if(n==sizeof cold) assert(!memcmp(p,cold,sizeof cold));
+-    else { assert((n==28U && p[3]==0x11U) || (n==25U && p[3]==0x10U) || (n==100U && p[3]==0x33U)); if(n==100U) assert(!memcmp(p,packet,n)); last_id=p[3]; }
++    if(n==sizeof cold) { assert(!memcmp(p,cold,sizeof cold)); tick+=7; cold_done=tick; }
++    else { assert((n==28U && p[3]==0x11U) || (n==25U && p[3]==0x10U) || (n==100U && p[3]==0x33U)); if(n==100U) assert(!memcmp(p,packet,n)); assert((uint32_t)(tick-cold_done)>=200U); last_id=p[3]; }
+     uart++;return tx_error;
+ }
+ uint32_t gps_agnss_ack_sequence(void){return acks;}
+@@ -72,6 +73,13 @@
+ static void sum(uint8_t *p,unsigned n){uint8_t a=0,b=0;for(unsigned i=2;i<n-2;i++){a+=p[i];b+=a;}p[n-2]=a;p[n-1]=b;}
+ static void start(void){agnss_online_reset();cfg.agps_en=1;tick+=60001;fix=ota=false;ready=enabled=true;tx_error=0;gps=(gps_data_t){.lat=22.5,.lon=113.9,.altitude_m=12.5f,.year=2026,.month=10,.day=1,.hour=12,.minute=30,.second=0,.valid=true};assert(agnss_online_process(GNSS_TYPE_TAU804M));tcp=TCP_STATE_OPEN;assert(agnss_online_process(GNSS_TYPE_TAU804M));assert(strstr(request,"GET /download/ephemeris/HD_BDS.hdb HTTP/1.1\r\n"));}
+ static void pump(unsigned n){while(n--)agnss_online_process(GNSS_TYPE_TAU804M);}
++static void first_aid(void){
++    unsigned before=uart;
++    pump(3);assert(uart==before+1); /* cold TX consumes seven ms */
++    pump(10);assert(uart==before+1);
++    tick+=199;pump(3);assert(uart==before+1);
++    tick++;pump(2);assert(uart==before+2);
++}
+ int main(void){
+     memcpy(packet,"\xf1\xd9\x0b\x33\x5c\x00",6);sum(packet,100);
+     memcpy(ack,"\xf1\xd9\x05\x01\x02\x00\x0b\x33",8);sum(ack,10);
+@@ -81,7 +89,7 @@
+     for(unsigned split=1;split<h+200;split++){
+         start();unsigned before=uart;
+         agnss_online_rx(2,response,split);agnss_online_rx(2,response+split,h+200-split);
+-        pump(5);assert(uart==before+2);pump(4);assert(uart==before+2);
++        first_aid();assert(uart==before+2);pump(4);assert(uart==before+2);
+         acks++;pump(1);pump(1);assert(uart==before+3);
+         acks++;pump(2);assert(uart==before+4);
+         acks++;pump(2);assert(uart==before+5);
+@@ -89,11 +97,11 @@
+         assert(agnss_online_has_injected());
+     }
+     assert(strstr(last_log,"result=1")&&strstr(last_log,"http=200 rx=200/200 tx=4 ack=4 seen=4"));
+-    start();agnss_online_rx(2,response,h+200);pump(5);unsigned before=uart;
++    start();agnss_online_rx(2,response,h+200);first_aid();unsigned before=uart;
+     tick+=1000;pump(3);assert(!agnss_online_has_injected()&&uart==before);
+     assert(strstr(last_log,"reason=ack-timeout")&&strstr(last_log,"tx=1 ack=0 seen=0"));
+     acks++;pump(3);assert(uart==before); /* late ACK does not restart */
+-    start();agnss_online_rx(2,response,h+200);pump(5);ota=true;pump(1);
++    start();agnss_online_rx(2,response,h+200);first_aid();ota=true;pump(1);
+     assert(tcp==TCP_STATE_CLOSED&&!agnss_online_has_injected());ota=false;
+     start();agnss_online_rx(2,response,h+199);tick+=30000;pump(1);
+     assert(tcp==TCP_STATE_CLOSED&&!agnss_online_has_injected());
+@@ -112,7 +120,7 @@
+     start();tx_error=-1;agnss_online_rx(2,response,h+200);pump(6);assert(!agnss_online_has_injected());
+     assert(strstr(last_log,"reason=cold-start")&&strstr(last_log,"tx=0 ack=0 seen=0"));
+     start();agnss_online_rx(2,response,h+200);agnss_online_rx(2,(const uint8_t*)"x",1);before=uart;pump(6);assert(uart==before);
+-    start();agnss_online_rx(2,response,h+200);pump(5);ack[3]=0;sum(ack,10);
++    start();agnss_online_rx(2,response,h+200);first_aid();ack[3]=0;sum(ack,10);
+     trace_used=timing_lines=tx_lines=rx_lines=0;
+     pump(1);assert(trace_used==0 && timing_lines==0 && tx_lines==0 && rx_lines==0);
+     acks++;pump(3);assert(!agnss_online_has_injected());ack[3]=1;sum(ack,10);
+@@ -120,6 +128,23 @@
+     assert(timing_lines==1 && tx_lines==1 && rx_lines==1);
+     assert(trace_used==76 && !memcmp(trace_hex,"f1d90b111400000012ea070a010c1e00",32));
+     assert(strstr(trace_hex,"f1d9050002000b11"));
++    /* UTC is sampled after settling, never cached before the delay. */
++    start();agnss_online_rx(2,response,h+200);pump(3);before=uart;
++    tick+=199;gps.second=1;pump(3);assert(uart==before);
++    tick++;pump(2);ack[3]=0;sum(ack,10);trace_used=0;
++    acks++;pump(2);ack[3]=1;sum(ack,10);
++    assert(!memcmp(trace_hex,"f1d90b111400000012ea070a010c1e01",32));
++    /* The overall deadline still applies during the settle window. */
++    start();agnss_online_rx(2,response,h+200);pump(3);before=uart;
++    tick+=30000;pump(2);assert(uart==before && strstr(last_log,"reason=deadline"));
++    /* Cold settle survives tick wrap; cancellation and late input stop TX. */
++    tick=UINT32_MAX-60101U;start();agnss_online_rx(2,response,h+200);first_aid();
++    agnss_online_reset();assert(!agnss_online_has_injected());
++    start();agnss_online_rx(2,response,h+200);pump(3);before=uart;
++    enabled=false;pump(1);tick+=200;pump(3);assert(uart==before);enabled=true;
++    start();agnss_online_rx(2,response,h+200);pump(3);before=uart;
++    agnss_online_rx(2,(const uint8_t*)"x",1);tick+=200;pump(3);assert(uart==before);
++    assert(strstr(last_log,"reason=late-data"));
+     /* The TAU804M is configured as BDS-only; a GPS AID-PEPH frame is rejected. */
+     { uint8_t gps_packet[73]={0xf1,0xd9,0x0b,0x32,0x41,0x00};
+       uint8_t gps_response[160];
+@@ -130,7 +155,7 @@
+       start();agnss_online_rx(2,gps_response,(uint16_t)(gh+sizeof gps_packet));pump(3);
+       assert(!agnss_online_has_injected());
+     }
+-    start();agnss_online_rx(2,response,h+200);pump(5);enabled=false;pump(1);assert(tcp==TCP_STATE_CLOSED);enabled=true;
++    start();agnss_online_rx(2,response,h+200);first_aid();enabled=false;pump(1);assert(tcp==TCP_STATE_CLOSED);enabled=true;
+     agnss_online_reset();fix=true;assert(agnss_online_process(GNSS_TYPE_TAU804M));fix=false;
+     memset(cfg.agps_ip,'a',sizeof cfg.agps_ip);before=opens;pump(1);assert(opens==before);cfg.agps_ip[0]=0;
+     agnss_online_reset();cfg.agps_en=0;before=opens;pump(10);assert(opens==before);
+--- before/tools/tests/test_agnss_vendor_stream.py
++++ after/tools/tests/test_agnss_vendor_stream.py
+@@ -79,6 +79,8 @@
+ 
+ static int fail_uart;
+ static unsigned gps_calls;
++static uint32_t cold_done;
++extern uint32_t tick;
+ static uint32_t gps_bytes;
+ static uint8_t gps_last[128];
+ static uint32_t gps_last_len;
+@@ -86,6 +88,8 @@
+ static device_config_t c = {"u", "p"};
+ int gps_send_raw(const uint8_t *p, uint32_t n) {
+     assert(n <= sizeof gps_last);
++    if(p[2]==6 && p[3]==0x40){tick+=7;cold_done=tick;}
++    else assert((uint32_t)(tick-cold_done)>=200U);
+     memcpy(gps_last, p, n); gps_last_len = n;
+     ++gps_calls; gps_bytes += n; return fail_uart ? -1 : 0;
+ }
+@@ -122,6 +126,18 @@
+     ++ack_seq; ack_ready=1;
+ }
+ 
++static int settled_inject(const uint8_t *data,uint32_t len,const gps_context_t *ctx){
++    unsigned before=gps_calls;
++    int result=agnss_huada_inject(&(agnss_source_t){data,len},ctx);
++    if(gps_calls==before+1 && gps_last[2]==6){
++        assert(result==1 && gnss_vendor_inject_pending());
++        for(unsigned i=0;i<10;i++)assert(agnss_huada_inject(&(agnss_source_t){data,len},ctx)==1);
++        tick+=199;assert(agnss_huada_inject(&(agnss_source_t){data,len},ctx)==1);
++        assert(gps_calls==before+1);
++        tick++;result=agnss_huada_inject(&(agnss_source_t){data,len},ctx);
++    }
++    return result;
++}
+ int main(void) {
+     uint8_t valid[100], oversized[8] = {0xf1, 0xd9, 0x0b, 0x10, 0xff, 0xff, 0, 0};
+     make_bds(valid);
+@@ -145,14 +161,14 @@
+     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) < 0);
+     assert(gps_calls == 1);
+     fail_uart = 0;
+-    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 1);
++    assert(settled_inject(valid, sizeof valid, &(gps_context_t){0}) == 1);
+     /* A new transaction starts with cold start, then sends its first BDS frame. */
+     assert(gps_calls == 3 && gnss_vendor_inject_pending());
+     make_ack(1);
+     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 0);
+     assert(gps_calls == 3 && !gnss_vendor_inject_pending());
+     assert(agnss_huada_inject(&(agnss_source_t){oversized, sizeof oversized}, &(gps_context_t){0}) < 0);
+-    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 1);
++    assert(settled_inject(valid, sizeof valid, &(gps_context_t){0}) == 1);
+     make_ack(1);
+     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 0);
+     assert(gps_calls == 5);
+@@ -160,16 +176,31 @@
+ 
+     /* No ACK keeps the caller pending; NAK and timeout fail closed. */
+     make_bds(valid);tick=0;
+-    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 1);
++    assert(settled_inject(valid, sizeof valid, &(gps_context_t){0}) == 1);
+     assert(gnss_vendor_inject_pending());
+-    tick=1000;
++    tick+=1000;
+     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) < 0);
+     assert(!gnss_vendor_inject_pending());
+-    assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) == 1);
++    assert(settled_inject(valid, sizeof valid, &(gps_context_t){0}) == 1);
+     make_ack(0);
+     assert(agnss_huada_inject(&(agnss_source_t){valid, sizeof valid}, &(gps_context_t){0}) < 0);
+     assert(!gnss_vendor_inject_pending());
+ 
++    /* Reset after failure restarts cold settle, including tick wrap. */
++    tick=UINT32_MAX-100U;
++    assert(settled_inject(valid,sizeof valid,&(gps_context_t){0})==1);
++    make_ack(1);assert(agnss_huada_inject(&(agnss_source_t){valid,sizeof valid},&(gps_context_t){0})==0);
++    assert(agnss_huada_inject(NULL,&(gps_context_t){0})==0);
++    /* Metadata is obtained at actual TX, after the cold settle window. */
++    g.year=2026;g.month=10;g.day=8;g.second=1;
++    assert(agnss_huada_inject(&(agnss_source_t){valid,sizeof valid},&(gps_context_t){0})==1);
++    unsigned pending_calls=gps_calls;
++    tick+=199;g.second=2;
++    assert(agnss_huada_inject(&(agnss_source_t){valid,sizeof valid},&(gps_context_t){0})==1);
++    assert(gps_calls==pending_calls);
++    tick++;assert(agnss_huada_inject(&(agnss_source_t){valid,sizeof valid},&(gps_context_t){0})==1);
++    assert(gps_last[3]==0x11 && gps_last[15]==2);
++    huada_reset_stream();assert(!gnss_vendor_inject_pending());g.year=0;
+     /* Position rounding is away from zero; negative MSL altitude is signed. */
+     gps_context_t loc={0};loc.valid=true;loc.lat=-0.00000005;loc.lon=180;loc.altitude_m=-12.5f;
+     assert(build_location(&loc,gps_last)==25);
+--- before/tools/tests/test_release_identity_contract.py
++++ after/tools/tests/test_release_identity_contract.py
+@@ -10,12 +10,12 @@
+ 
+ contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+ 
+-stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.088", contract["firmware_version"]).group(1)
++stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.089", contract["firmware_version"]).group(1)
+ assert contract == {
+     "firmware_version_prefix": f"T360-A300_406_{stamp},V3.",
+-    "firmware_revision": 88,
+-    "firmware_version": f"T360-A300_406_{stamp},V3.088",
+-    "firmware_version_counter": 3088,
++    "firmware_revision": 89,
++    "firmware_version": f"T360-A300_406_{stamp},V3.089",
++    "firmware_version_counter": 3089,
+     "ota_device_model": "A300-406",
+     "jt808_terminal_model": "T360-A300",
+     "jt808_manufacturer_id": "70110",
+--- before/include/config.h
++++ after/include/config.h
+@@ -4,7 +4,7 @@
+ #include "n32l40x.h"
+ 
+ /* ── Firmware version ─────────────────────────────────────────────────────── */
+-#define FW_VERSION_STR          "T360-A300_406_20261007171447,V3.088"
++#define FW_VERSION_STR          "T360-A300_406_20261008153015,V3.089"
+ #define FW_OTA_MODEL_STR        "A300-406"
+ #define FW_JT808_MODEL_STR      "T360-A300"
+ #define FW_MANUFACTURER_ID_STR  "70110"
+--- before/include/build_version.h
++++ after/include/build_version.h
+@@ -2,9 +2,9 @@
+ #ifndef BUILD_VERSION_H
+ #define BUILD_VERSION_H
+ 
+-#define FW_BUILD_NUMBER  "202610071714"
+-#define FW_BUILD_DATE    "Oct 07 2026 - 17:14:47"
+-#define FW_FULL_VERSION  "T360-A300_406_20261007171447,V3.088"
+-#define FW_VERSION_COUNTER  3088UL
++#define FW_BUILD_NUMBER  "202610081530"
++#define FW_BUILD_DATE    "Oct 08 2026 - 15:30:15"
++#define FW_FULL_VERSION  "T360-A300_406_20261008153015,V3.089"
++#define FW_VERSION_COUNTER  3089UL
+ 
+ #endif /* BUILD_VERSION_H */
+--- before/release_identity.json
++++ after/release_identity.json
+@@ -1,8 +1,8 @@
+ {
+-  "firmware_version_prefix": "T360-A300_406_20261007171447,V3.",
+-  "firmware_revision": 88,
+-  "firmware_version": "T360-A300_406_20261007171447,V3.088",
+-  "firmware_version_counter": 3088,
++  "firmware_version_prefix": "T360-A300_406_20261008153015,V3.",
++  "firmware_revision": 89,
++  "firmware_version": "T360-A300_406_20261008153015,V3.089",
++  "firmware_version_counter": 3089,
+   "ota_device_model": "A300-406",
+   "jt808_terminal_model": "T360-A300",
+   "jt808_manufacturer_id": "70110"
+--- before/tools/release_guard.py
++++ after/tools/release_guard.py
+@@ -153,8 +153,8 @@
+ }
+ CANONICAL_IDENTITY_FILE_SHA256 = {
+     # Reviewed: V3.088/3088 identity; generated timestamps stay normalized.
+-    "include/config.h": "bc5a88a5359be2404081573c464554caa47e0f76e0bcc845823a281aad77dbbf",
+-    "include/build_version.h": "e09e5b679d4c125076fcad9c8b06dd839444cce696a420839e9cbf26ded2c25f",
++    "include/config.h": "47197614b585bb379684e4a4a5750bc3c86b6a3f27d22ed59a82676db9f45903",
++    "include/build_version.h": "16bb590f44c91c6e691ce2df5590df04f2f990eb18f784e49b14071e246008fa",
+     "include/f39_reply.h": "4519c084bcc677d23c02aa4ac509f2390527f16111139f011052017f08c615ed",
+     # Reviewed: all unfixed work-mode 0200 use event UTC; existing API/wire unchanged.
+     "include/jt808.h": "326707cc4584c282fc4589e915fd89ee36743b8bf5c1bc7e0fb35cdd6697da68",
+--- before/src/gps.c
++++ after/src/gps.c
+@@ -9,6 +9,7 @@
+ #include "n32l40x.h"
+ #include <string.h>
+ #include <math.h>
++#include <stddef.h>
+ 
+ #define NMEA_BUF_SIZE  128
+ #define NMEA_FIELD_MAX 24
+--- before/tools/tests/test_gps_tx_bounded.py
++++ after/tools/tests/test_gps_tx_bounded.py
+@@ -78,6 +78,11 @@
+ #include <string.h>
+ #include "n32l40x.h"
+ #include "gps.h"
++#include "flash_config.h"
++/* UART/ACK tests run with the optional report filter disabled. */
++device_config_t *cfg_get(void) { return NULL; }
++#include "i2c_accel.h"
++bool i2c_accel_read(accel_data_t *out) { (void)out; return false; }
+ 
+ volatile uint32_t g_tick_ms;
+ usart_module_t host_uart4;
+@@ -245,6 +250,7 @@
+             str(ROOT / "include"),
+             str(harness),
+             str(ROOT / "src" / "gps.c"),
++            str(ROOT / "src" / "gps_report_filter.c"),
+             "-Wl,--gc-sections",
+             "-lm",
+             "-o",

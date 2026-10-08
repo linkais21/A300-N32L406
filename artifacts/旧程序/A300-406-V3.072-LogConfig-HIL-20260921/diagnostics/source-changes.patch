@@ -1,0 +1,202 @@
+diff --git a/include/build_version.h b/include/build_version.h
+index 8ef30cf..d8ba008 100644
+--- a/include/build_version.h
++++ b/include/build_version.h
+@@ -2,9 +2,9 @@
+ #ifndef BUILD_VERSION_H
+ #define BUILD_VERSION_H
+ 
+-#define FW_BUILD_NUMBER  "202609202302"
+-#define FW_BUILD_DATE    "Sep 20 2026 - 23:02:01"
+-#define FW_FULL_VERSION  "T360-A300_406_20260920230201,V3.071"
+-#define FW_VERSION_COUNTER  3071UL
++#define FW_BUILD_NUMBER  "202609211631"
++#define FW_BUILD_DATE    "Sep 21 2026 - 16:31:25"
++#define FW_FULL_VERSION  "T360-A300_406_20260921163125,V3.072"
++#define FW_VERSION_COUNTER  3072UL
+ 
+ #endif /* BUILD_VERSION_H */
+diff --git a/include/config.h b/include/config.h
+index 00feb70..b75c9e4 100644
+--- a/include/config.h
++++ b/include/config.h
+@@ -4,7 +4,7 @@
+ #include "n32l40x.h"
+ 
+ /* ── Firmware version ─────────────────────────────────────────────────────── */
+-#define FW_VERSION_STR          "T360-A300_406_20260920230201,V3.071"
++#define FW_VERSION_STR          "T360-A300_406_20260921163125,V3.072"
+ #define FW_OTA_MODEL_STR        "A300-406"
+ #define FW_JT808_MODEL_STR      "T360-A300"
+ #define FW_MANUFACTURER_ID_STR  "70110"
+diff --git a/release_identity.json b/release_identity.json
+index 65e340e..0e5281a 100644
+--- a/release_identity.json
++++ b/release_identity.json
+@@ -1,8 +1,8 @@
+ {
+-  "firmware_version_prefix": "T360-A300_406_20260920230201,V3.",
+-  "firmware_revision": 71,
+-  "firmware_version": "T360-A300_406_20260920230201,V3.071",
+-  "firmware_version_counter": 3071,
++  "firmware_version_prefix": "T360-A300_406_20260921163125,V3.",
++  "firmware_revision": 72,
++  "firmware_version": "T360-A300_406_20260921163125,V3.072",
++  "firmware_version_counter": 3072,
+   "ota_device_model": "A300-406",
+   "jt808_terminal_model": "T360-A300",
+   "jt808_manufacturer_id": "70110"
+diff --git a/src/jt808.c b/src/jt808.c
+index 8314188..65aa0fe 100644
+--- a/src/jt808.c
++++ b/src/jt808.c
+@@ -299,7 +299,6 @@ static int send_frame_broadcast(frame_t *body, bool require_all)
+     if (jt808_channel_online(TCP_CH_MAIN)) {
+         attempted = true;
+         if (send_frame_channel_delivered(body, TCP_CH_MAIN) == 0)
+-        if (rc == 0)
+             delivered = true;
+         else
+             failed = true;
+@@ -307,7 +306,6 @@ static int send_frame_broadcast(frame_t *body, bool require_all)
+     if (jt808_channel_online(TCP_CH_BACKUP)) {
+         attempted = true;
+         if (send_frame_channel_delivered(body, TCP_CH_BACKUP) == 0)
+-        if (rc == 0)
+             delivered = true;
+         else
+             failed = true;
+diff --git a/src/main.c b/src/main.c
+index b361440..ae5d295 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -839,8 +839,8 @@ int main(void)
+     dbg_printf("[BOOT] ready\r\n");
+ 
+     /* ── 10. Main loop ───────────────────────────────────────────────────── */
++    /* One query round per boot; cfg_query owns the bounded in-round retries. */
+     bool cfg_query_started = false;
+-    uint32_t cfg_query_next_ms = 0U;
+     while (1) {
+         IWDG_ReloadKey();
+ 
+@@ -867,12 +867,11 @@ int main(void)
+         blind_zone_replay_process();
+         reset_diag_mark_phase(RESET_DIAG_PHASE_LOG_PLATFORM);
+         log_platform_process();
+-        if ((!cfg_query_started || (int32_t)(TICK_MS() - cfg_query_next_ms) >= 0) &&
++        if (!cfg_query_started &&
+             !cfg_query_is_busy() && ec800m_is_ready() && jt808_is_online() &&
+             !work_mode_sleep_is_in_stop1() && !fota_is_active() &&
+             cfg_query_start() == 0) {
+             cfg_query_started = true;
+-            cfg_query_next_ms = TICK_MS() + 60000U;
+         }
+         reset_diag_mark_phase(RESET_DIAG_PHASE_CONFIG);
+         cfg_query_process();
+diff --git a/tools/release_guard.py b/tools/release_guard.py
+index d039888..ae38650 100644
+--- a/tools/release_guard.py
++++ b/tools/release_guard.py
+@@ -143,8 +143,8 @@ TRIGRAPHS = {
+     "??!": "|", "??<": "{", "??>": "}", "??-": "~",
+ }
+ CANONICAL_CONSUMER_SHA256 = {
+-    # Reviewed: OTA ERROR permits config polling; identity initialization unchanged.
+-    "src/main.c": "23d778bff85cc6dae773751666afe39513aa886dfb362c443073c85715e5ce5c",
++    # Reviewed: query once per boot; identity initialization unchanged.
++    "src/main.c": "ed4fc666d3038807fa8157cf81bfa99795614f3b2124ae9a61f55cb59262e3c9",
+     "src/jt808.c": "d38583fc4d2e47eab4fe184b90a21205dc6e2606266a20e824bff69321871586",
+     "src/jt808_params.c": "2f4c5cefaa334a336896ec36cc7feaaa56ae1b56dcaef44e4b33a33008dc7a11",
+     "src/jt808_terminal_info.c": "0ce1a9cf82880062c0d84b88bc50ae047c59ec7f6e5e17ea59266b50a0499d49",
+@@ -152,9 +152,9 @@ CANONICAL_CONSUMER_SHA256 = {
+     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
+ }
+ CANONICAL_IDENTITY_FILE_SHA256 = {
+-    # Reviewed: V3.071 identity/counter only; generated timestamps stay normalized.
+-    "include/config.h": "65035af4d3c34932ded7df54c47c5cd558b7763eb80a60420f75ae97dd80c612",
+-    "include/build_version.h": "fa5217260129bb93b55ded2090be088888d04e459171fe17aa489492a13eadf5",
++    # Reviewed: V3.072 identity/counter only; generated timestamps stay normalized.
++    "include/config.h": "3912db4ef2959ba62453f01bd65f0cba79a283c53db907b0ddd8e61294fc734a",
++    "include/build_version.h": "00f9807fec14b81e05ba2ddb3a3a5d8652ff615e26c4ae8bd5f076be5ea7ad74",
+     "include/f39_reply.h": "4519c084bcc677d23c02aa4ac509f2390527f16111139f011052017f08c615ed",
+     # Reviewed: remove unused heartbeat getter declaration only; identity/wire unchanged.
+     "include/jt808.h": "d1f6f11e0fcfb1ee85062080501c1e8a3901f8d313ae96d0b206393ab694e71d",
+diff --git a/tools/tests/test_cfg_query_f39.py b/tools/tests/test_cfg_query_f39.py
+index 64be3c1..2883ce2 100644
+--- a/tools/tests/test_cfg_query_f39.py
++++ b/tools/tests/test_cfg_query_f39.py
+@@ -81,12 +81,51 @@ int main(void){
+  modem_ready=true;
+  assert(command("DUALSET,APN:AUTO*FREQ:20,120#")==0&&pdp_restarts==6&&modem_ready);
+  assert(command("hbt,120#")==0&&config.heartbeat_s==120&&modem_ready);
++ /* Sheet1 settings: real UDP reply -> Pass -> F39 -> persisted candidate. */
++ assert(command("PID,12345678902#")==0&&!strcmp(config.pid,"12345678902"));
++ assert(command("IP,primary.example,8888#")==0&&!strcmp(config.server_ip,"primary.example")&&config.server_port==8888);
++ assert(command("FIP,backup.example,9999#")==0&&!strcmp(config.backup_ip,"backup.example")&&config.backup_port==9999);
++ assert(command("FIP,0#")==0&&config.backup_ip[0]==0);
++ assert(command("MODEL,T360-A300#")==0&&!strcmp(config.terminal_model,"T360-A300"));
++ assert(command("SPEED,120#")==0&&config.speed_limit_kmh==120);
++ assert(command("APN,0#")==0&&config.autoapn_en);modem_ready=true;
++ assert(command("GPSDUP,0#")==0&&config.sleep_report_mode==1);
++ assert(command("GPSDUP,1#")==0&&config.sleep_report_mode==0);
++ assert(command("MLG,500#")==0&&config.mileage_m==50000U);
++ assert(command("MLG,3003#")==0&&config.mileage_m==300300U);
++ assert(command("CAR,18B12345#")==0&&!strcmp(config.plate_no,"\xe7\xb2\xa4" "B12345"));
++ for(unsigned mode=1;mode<=3;mode++){
++   char text[24];sprintf(text,"GPSBDS,%u#",mode);
++   assert(command(text)==0&&config.gpsbds_mode==mode);
++ }
++ assert(command("GMTSET,E0800#")==0&&config.gmt_sign==1&&config.gmt_hour==8);
++ assert(command("GMTSET,W0500#")==0&&config.gmt_sign==-1&&config.gmt_hour==5);
++ assert(command("VIBSENS,30#")==0&&config.vib_sens==30);
++ /* Invalid items never partially commit or send a success acknowledgement. */
++ const char *invalid[]={"PID,abc#","FREQ,0,180#","VIBSENS,51#",
++   "DUALSET,HBT:240*VIBSENS:51#","GPSBDS,4#","SPEED,201#"};
++ for(unsigned i=0;i<sizeof invalid/sizeof invalid[0];i++){
++   before=config;a=ack;unsigned saved=saves;
++   assert(command(invalid[i])==-1&&ack==a&&saves==saved&&!memcmp(&before,&config,sizeof config));
++ }
++ assert(command("RELAY,0#")==0&&!relay_state);
++ test_speed=10.0f;assert(command("RELAY,1#")==0&&relay_state);
++ assert(command("RELAY,0#")==0&&!relay_state);
++ test_speed=20.0f;a=ack;assert(command("RELAY,1#")==-1&&ack==a&&!relay_state);
++ /* RESET must confirm before the existing deferred reset runs. */
++ a=ack;assert(command("RESET#")==0&&ack==a+1&&system_resets==0);
++ g_tick_ms+=F39_RESET_DELAY_MS-1U;at_config_process();assert(system_resets==0);
++ g_tick_ms+=1U;at_config_process();assert(system_resets==1);
+  return 0;
+ }
+ '''
+ def main():
+     source=serial.HARNESS.replace('int main(void)', 'int serial_main(void)').replace(
+-        'g.hdop=1.2f;', 'g.hdop=1.2f; g.speed_kmh=30.0f;').replace(
++        'g.hdop=1.2f;', 'g.hdop=1.2f; g.speed_kmh=test_speed;').replace(
++        'static device_config_t config;',
++        'static float test_speed=30.0f; static bool relay_state;\nstatic device_config_t config;').replace(
++        'void relay_set(bool on) { (void)on; }',
++        'void relay_set(bool on) { relay_state=on; }').replace(
+         'void ec800m_restart_pdp(void) { }',
+         'static bool modem_ready=true; static unsigned pdp_restarts;\n'
+         'void ec800m_restart_pdp(void) { modem_ready=false; ++pdp_restarts; }')+MAIN
+diff --git a/tools/tests/test_release_identity_contract.py b/tools/tests/test_release_identity_contract.py
+index 698a344..e84d7f1 100644
+--- a/tools/tests/test_release_identity_contract.py
++++ b/tools/tests/test_release_identity_contract.py
+@@ -10,12 +10,12 @@ CONTRACT_PATH = ROOT / "release_identity.json"
+ 
+ contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+ 
+-stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.071", contract["firmware_version"]).group(1)
++stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.072", contract["firmware_version"]).group(1)
+ assert contract == {
+     "firmware_version_prefix": f"T360-A300_406_{stamp},V3.",
+-    "firmware_revision": 71,
+-    "firmware_version": f"T360-A300_406_{stamp},V3.071",
+-    "firmware_version_counter": 3071,
++    "firmware_revision": 72,
++    "firmware_version": f"T360-A300_406_{stamp},V3.072",
++    "firmware_version_counter": 3072,
+     "ota_device_model": "A300-406",
+     "jt808_terminal_model": "T360-A300",
+     "jt808_manufacturer_id": "70110",

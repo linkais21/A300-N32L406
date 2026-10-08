@@ -1,4 +1,7 @@
-"""Actual gps.c -> jt808.c wire time, including immutable blind-zone events."""
+"""No-fix 0200 event UTC advances; pending NOR records stay immutable.
+
+Sleep cadence's advancing event UTC is tested by test_sleep_location_reporting.
+"""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -28,12 +31,18 @@ int main(void) {
         assert(jt808_send_location_work_mode(0,false,i)==0);
         for(unsigned ch=0; ch<=3; ch+=3) {
             assert(msg(ch,&sn0,d,&n)==0x0200);
-            const uint8_t expected[]={0x26,0x09,0x20,0x13,0x48,
-                (uint8_t)(((i-1)<<4)|2)};
+            unsigned elapsed=47*60+52+i*10;
+            unsigned minute=elapsed/60, second=elapsed%60;
+            const uint8_t expected[]={0x26,0x09,0x20,0x13,
+                (uint8_t)((minute/10)*16+minute%10),
+                (uint8_t)((second/10)*16+second%10)};
             assert(memcmp(d+34,expected,6)==0);
             assert(!(d[19]&2)); /* position is historical, not a current fix */
         }
     }
+    /* Query reports still describe the original acquisition UTC. */
+    query(0,0x8201);
+    assert(msg(0,&sn0,d,&n)==0x0201 && d[37]==0x13 && d[38]==0x47 && d[39]==0x52);
     /* A blind-zone record keeps its event time while its append is retried. */
     open_ch[0]=open_ch[3]=false;
     append_result=BLIND_ZONE_BUSY;
@@ -44,7 +53,27 @@ int main(void) {
     assert(jt808_send_location_work_mode(0,false,4)==0);
     assert(memcmp(saved,appended.location,34)==0);
     assert(jt808_send_location_work_mode(0,false,5)==0);
-    assert(appended.location[27]==0x42);
+    assert(appended.location[26]==0x48 && appended.location[27]==0x42);
+    /* BCD local-time rollover crosses a date/year boundary correctly. */
+    open_ch[0]=open_ch[3]=true;
+    gps_apply_ntp_utc(2026,12,31,15,59,59);
+    assert(jt808_send_location_work_mode(0,true,6)==0);
+    assert(msg(0,&sn0,d,&n)==0x0200);
+    const uint8_t end_year[]={0x26,0x12,0x31,0x23,0x59,0x59};
+    assert(!memcmp(d+34,end_year,6));
+    g_tick_ms+=2000;
+    assert(jt808_send_location_work_mode(0,true,7)==0);
+    const uint8_t new_year[]={0x27,0x01,0x01,0,0,0x01};
+    for(unsigned ch=0;ch<=3;ch+=3) {
+        assert(msg(ch,&sn0,d,&n)==0x0200 && !memcmp(d+34,new_year,6));
+        assert(!(d[19]&2));
+    }
+    /* Unsigned tick wrap and leap-day rollover do not restart event UTC. */
+    g_tick_ms=UINT32_MAX-499U;
+    gps_apply_ntp_utc(2028,2,28,15,59,59); g_tick_ms+=1000;
+    assert(jt808_send_location_work_mode(0,false,8)==0);
+    const uint8_t leap_day[]={0x28,0x02,0x29,0,0,0};
+    assert(msg(0,&sn0,d,&n)==0x0200 && !memcmp(d+34,leap_day,6));
     return 0;
 }
 '''

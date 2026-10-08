@@ -1,0 +1,12 @@
+[
+  {
+    "name": "agnss_online",
+    "exit": 0,
+    "output": "AGNSS online: PASS\r\n"
+  },
+  {
+    "name": "agnss_vendor_stream",
+    "exit": 0,
+    "output": "test_agnss_vendor_stream: C harness PASS\r\ntest_agnss_vendor_stream: PASS\r\n"
+  }
+]

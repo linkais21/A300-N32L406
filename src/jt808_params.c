@@ -15,6 +15,9 @@
 /* Wire types belong to IDs, never to the received length. */
 typedef struct { uint16_t id, offset; uint8_t size, wire; } param_t;
 #define FIELD(id, field, wire) {id, offsetof(device_config_t, field), sizeof(((device_config_t *)0)->field), wire}
+/* Set-only compatibility entries still validate their four-byte wire type. */
+#define WIRE_COMPAT_DWORD 255U
+#define COMPAT(id) {id, 0, 0, WIRE_COMPAT_DWORD}
 static const param_t params[] = {
     FIELD(PARAM_HEARTBEAT_INTERVAL, heartbeat_s, 4),
     FIELD(PARAM_MAIN_SERVER, server_ip, 0),
@@ -25,6 +28,7 @@ static const param_t params[] = {
     FIELD(PARAM_REPORT_INTERVAL_NOACC, report_stopped_s, 4),
     FIELD(PARAM_REPORT_INTERVAL_DEFAULT, report_moving_s, 4),
     FIELD(PARAM_SPEED_LIMIT, speed_limit_kmh, 4),
+    FIELD(PARAM_SPEED_LIMIT_TIME, speed_limit_time_be, 4),
     FIELD(PARAM_MILEAGE, mileage_m, 4),
     FIELD(PARAM_PROVINCE, province_be, 2),
     FIELD(PARAM_CITY, city_be, 2),
@@ -35,8 +39,19 @@ static const param_t params[] = {
     FIELD(PARAM_SERVER_APN_USER, apn_user, 0),
     FIELD(PARAM_SERVER_APN_PASS, apn_pass, 0),
     FIELD(PARAM_PLATFORM_PHONE, phone, 0),
+    COMPAT(PARAM_TCP_RESP_TIMEOUT),
+    COMPAT(PARAM_TCP_RETRY_COUNT),
+    COMPAT(PARAM_UDP_RESP_TIMEOUT),
+    COMPAT(PARAM_REPORT_INTERVAL_DRIVER),
+    COMPAT(PARAM_REPORT_INTERVAL_ALARM),
+    COMPAT(PARAM_REPORT_DISTANCE_DEFAULT),
+    COMPAT(PARAM_REPORT_DISTANCE_DRIVER),
+    COMPAT(PARAM_REPORT_DISTANCE_ALARM),
+    COMPAT(PARAM_REPORT_CORNER),
+    COMPAT(PARAM_FENCE_RADIUS),
 };
 #define PARAM_COUNT (sizeof(params) / sizeof(params[0]))
+typedef char params_fit_seen_mask[(PARAM_COUNT <= 32U) ? 1 : -1];
 typedef char candidate_fits_workspace[(sizeof(device_config_t) <= SERVICE_WORKSPACE_CAPACITY) ? 1 : -1];
 
 static uint32_t read_be(const uint8_t *p, uint8_t n)
@@ -59,6 +74,7 @@ static bool apply_param(device_config_t *c, const param_t *p, const uint8_t *v, 
 {
     uint8_t *dst = (uint8_t *)c + p->offset;
     uint32_t value;
+    if (p->wire == WIRE_COMPAT_DWORD) return n == 4U;
     if (p->wire == 0U) {
         if (n >= p->size || memchr(v, 0, n) != NULL) return false;
         if ((p->id == PARAM_MAIN_SERVER || p->id == PARAM_PLATE) && n == 0U) return false;
@@ -91,6 +107,10 @@ static bool apply_param(device_config_t *c, const param_t *p, const uint8_t *v, 
         /* Same supported range as SPEED and overspeed_policy_step(). */
         if (value < 20U || value > 200U) return false;
         c->speed_limit_kmh = (uint16_t)value; break;
+    case PARAM_SPEED_LIMIT_TIME:
+        if (value > CFG_SPEED_LIMIT_TIME_MAX_S) return false;
+        memcpy(c->speed_limit_time_be, v, 4U);
+        c->speed_limit_time_valid = 1U; break;
     case PARAM_HEARTBEAT_INTERVAL:
         if (value == 0U || value > 3600U) return false;
         c->heartbeat_s = (uint16_t)value; break;
@@ -203,6 +223,7 @@ static uint8_t encode_value(const device_config_t *c, const param_t *p, uint8_t 
         memcpy(out, src, n); return n;
     }
     if (p->id == PARAM_REPORT_STRATEGY || p->id == PARAM_REPORT_SCHEME) value = 0U;
+    else if (p->id == PARAM_SPEED_LIMIT_TIME) value = cfg_speed_limit_time_s(c);
     else if (p->id == PARAM_MILEAGE) value = c->mileage_m / 100U;
     else if (p->id == PARAM_PLATE_COLOR) value = c->plate_color_valid == 1U ? c->plate_color : 1U;
     else if (p->wire == 2U) value = read_be(src, 2U);
@@ -230,6 +251,7 @@ void jt808_params_handle_query(const uint8_t *body, uint16_t len, uint16_t sn)
         uint8_t n;
         if (index == PARAM_COUNT || (seen & (1UL << index)) != 0U) continue;
         seen |= 1UL << index; p = &params[index];
+        if (p->wire == WIRE_COMPAT_DWORD) continue;
         if ((uint32_t)pos + 5U + p->size + p->wire > SERVICE_WORKSPACE_CAPACITY) {
             service_workspace_release(SERVICE_WORKSPACE_OWNER_PARAMS);
             jt808_send_general_resp(sn, request_id, 1U); return;

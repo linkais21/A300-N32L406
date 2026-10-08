@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "alerts": [
+    "LOW_HEADROOM",
+    "CONFIGURATION_CHANGED"
+  ],
+  "origin": 134242304,
+  "limit_bytes": 106496,
+  "used_bytes": 104544,
+  "map_span_bytes": 104544,
+  "remaining_bytes": 1952,
+  "warning_bytes": 4096,
+  "baseline_used_bytes": 105776,
+  "delta_bytes": -1232,
+  "baseline_comparable": false,
+  "configuration": {
+    "cflags": "-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -Os -finline-limit=256 -fno-inline-functions-called-once -g0 -Wall -Wextra -flto=1 -flto-partition=one -fstack-usage -ffunction-sections -fdata-sections -Iinclude -Ithird_party/micro-ecc -Isdk/Nations.N32L40x_Library.2.2.0/firmware/CMSIS/core -Isdk/Nations.N32L40x_Library.2.2.0/firmware/CMSIS/device -Isdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/inc -DUSE_STDPERIPH_DRIVER -DN32L40X -DSYSCLK_SRC=3 -DSYSCLK_FREQ=64000000 -DuECC_SUPPORTS_secp160r1=0 -DuECC_SUPPORTS_secp192r1=0 -DuECC_SUPPORTS_secp224r1=0 -DuECC_SUPPORTS_secp256k1=0 -DuECC_SUPPORTS_secp256r1=1 -DuECC_SUPPORT_COMPRESSED_POINT=0 -DuECC_PLATFORM=uECC_arch_other -std=c99",
+    "asflags": "-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -g0 -x assembler-with-cpp -Iinclude -Ithird_party/micro-ecc -Isdk/Nations.N32L40x_Library.2.2.0/firmware/CMSIS/core -Isdk/Nations.N32L40x_Library.2.2.0/firmware/CMSIS/device -Isdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/inc",
+    "ldflags": "-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -Os -finline-limit=256 -g0 -Tldscript/n32l406.ld -Wl,-Map=<output.map> -Wl,--gc-sections -Wl,--print-memory-usage -flto=1 -flto-partition=one -fstack-usage --specs=nano.specs -lc -lgcc -lm",
+    "sdk_cflags": "-Wno-sign-compare -Wno-unused-parameter",
+    "signature_cflags": "-fno-lto",
+    "sources": "src/main.c src/hw_init.c src/debug_uart.c src/syscalls.c src/ram_watermark.c src/ec800m.c src/ec800m_at_response.c src/agnss_stream_workspace.c src/service_workspace.c src/log_platform.c src/cfg_query.c src/gps.c src/gps_report_filter.c src/plate_encoding.c src/jt808.c src/motion_corner.c src/overspeed_policy.c src/jt808_session.c src/jt808_params.c src/jt808_terminal_info.c src/terminal_identity.c src/at_config.c src/production_test.c src/adc_monitor.c src/spi_flash.c src/crc32.c src/sha256.c src/ext_flash_store.c src/blind_zone.c src/blind_zone_replay.c src/accel_vibration_filter.c src/i2c_accel.c src/relay.c src/status_led.c src/flash_config.c src/fota_check_parser.c src/fota.c src/fota_checkpoint.c src/firmware_signature.c src/agnss_manager.c src/agnss_online.c src/huada_ack.c src/agnss_huada.c src/geofence.c src/mileage.c src/peripherals.c src/sms_command.c src/f39_command.c src/f39_config_adapter.c src/f39_reply.c src/sms_ingress.c src/power_mgr.c src/work_mode.c src/work_mode_sleep.c src/reset_diag.c src/tcp_manager.c third_party/micro-ecc/uECC.c sdk/Nations.N32L40x_Library.2.2.0/firmware/CMSIS/device/system_n32l40x.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_gpio.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_rcc.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_usart.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_spi.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_i2c.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_adc.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_dma.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_tim.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_pwr.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_flash.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_rtc.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_exti.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/n32l40x_iwdg.c sdk/Nations.N32L40x_Library.2.2.0/firmware/n32l40x_std_periph_driver/src/misc.c src/agnss_storage.c src/startup_n32l40x.s",
+    "compiler": "arm-none-eabi-gcc.exe (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) 14.3.1 20250623"
+  },
+  "configuration_sha256": "a55d106011824448c3a99977041db4f2753566e3db03e255609ac6b0ec896910",
+  "bin_sha256": "6be98d700e8c2a3ec6baac94b11a00c554e3b401d4fef99ae74b67ae57cce1b0",
+  "elf_sha256": "c0a96698d0adeb5bf0aae66fe7705b1ea0471d28290c1057acd84265aab5ec2d",
+  "map_sha256": "fa8aa42186956cfc4b5700e83650c9ff22a9e6ca2e6bfa758bc971d6af3e539c"
+}

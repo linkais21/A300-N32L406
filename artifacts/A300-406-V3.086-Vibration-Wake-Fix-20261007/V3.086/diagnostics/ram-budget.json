@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "status": "pass",
+  "standalone_stack_report_status": "incomplete",
+  "reviewed_execution_roots_status": "complete",
+  "elf_sha256": "16cb5eecc556e54620c94cecc15f68ba69d99e18a4241646e46fb19ab3273b5a",
+  "map_sha256": "1295aa2e4724fae2acfe6ca7bdf69bd32d179cefd6eb9e3690a33de48d0974d6",
+  "stack_evidence_sha256": "7d24827d1a65cff3f75ed4702f5158deaacccda351064bc8649f6a5b6b8ab694",
+  "static_sram": 16048,
+  "linker_alignment": 4,
+  "hard_heap_reservation": 1024,
+  "boot_main_stack": 2796,
+  "exception": {
+    "preemption_group": 2,
+    "normal_group_frames": [
+      16,
+      0,
+      20
+    ],
+    "hardfault_frame": 8,
+    "nmi_frame": 0,
+    "hardware_frame_each": 108,
+    "max_nested_entries": 5,
+    "software_frames": 44,
+    "exception_stack_bytes": 584
+  },
+  "runtime_gap": 4120,
+  "required_gap": 4096
+}

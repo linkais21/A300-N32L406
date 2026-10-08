@@ -80,11 +80,17 @@ bool jt808_get_logical_acc(void);
 int jt808_send_location(void);
 int jt808_send_location_to(uint8_t channel, const gps_data_t *snapshot);
 /* Returns 0 after main delivery or durable blind-zone storage; otherwise a
- * negative retryable result. Missing fixes use a retained/unfixed snapshot. */
+ * negative retryable result. Missing fixes use a retained/unfixed snapshot
+ * with advancing event UTC and the current-fix status bit cleared. */
 /* report_id is nonzero and stable across retries; a new/merged action gets a
  * new ID from work_mode_allocate_report_id(). No on-wire format change. */
 int jt808_send_location_work_mode(uint32_t alarm_bits,
                                   bool historical_position, uint32_t report_id);
+/* Mode-entry variant also logs wire fields for a live fix. All unfixed
+ * work-mode 0200 packets use event UTC; 0201 keeps acquisition UTC.
+ * Transport/storage completion and retry identity match the function above. */
+int jt808_send_location_work_mode_event(uint32_t alarm_bits,
+                                       bool historical_position, uint32_t report_id);
 bool jt808_location_snapshot_valid(const gps_data_t *gps, uint32_t now);
 int jt808_send_general_resp(uint16_t resp_sn, uint16_t resp_id, uint8_t result);
 int jt808_send_general_resp_to(uint8_t channel, uint16_t resp_sn,

@@ -24,8 +24,8 @@
       "sha256": "8108d2d8df864b64b275f04d6ba9b5b141a19fd8225605e1e7117bad63be39ac"
     },
     "App-V3064.map": {
-      "size": 110077,
-      "sha256": "fa5888384a22434ee129b97cb3136fbbb8e94bae7c655a19a475765ac019f8b7"
+      "size": 110046,
+      "sha256": "944247f33e31d93b5cb16074c58afffa5ef7468c3551a72671724a408ebaa457"
     },
     "Bootloader-V3064.bin": {
       "size": 22556,
@@ -232,8 +232,8 @@
       "sha256": "a787827e8fbef610dd9d2ec24ac149864e92578f9da602c1ef028aa2eee5e71e"
     },
     "validation/flash-capacity.json": {
-      "size": 4707,
-      "sha256": "651e0234114b6d4a567dd15214f27e162630247d19f72192fdce9559e3709d7c"
+      "size": 4677,
+      "sha256": "21bfcbd98a0568b076e7ffb7f5d346632269bff06b1d041aa0b639390f6bab5b"
     },
     "validation/flash_config_migration.log": {
       "size": 96,
@@ -344,8 +344,8 @@
       "sha256": "c275ef3e5b566a67ac142062a4be95abbbc4b215d85c9fd4b6f7c969611d2207"
     },
     "validation/lto_stack_guard.log": {
-      "size": 243,
-      "sha256": "58b5b1deeaac6d799bc40ad934c7a4dd5f4f1c31c7e52ddee53cf3603c4581c8"
+      "size": 240,
+      "sha256": "4db5eba460f3efa9082050b0879155c11459c40b496f9d9a1a1e4ab3be0fd380"
     },
     "validation/mileage_quantization.log": {
       "size": 63,
@@ -368,12 +368,12 @@
       "sha256": "280e4acc50c5dc80099da00cb465eeef539ea4c2911469215424ecc4a7f18bf3"
     },
     "validation/red-flash_config_v3.log": {
-      "size": 188,
-      "sha256": "634eb23da5a8bbad2109be3810779b9fe880028316121162126d47ff1e4c016b"
+      "size": 187,
+      "sha256": "f20f714e3cb9d6b664b5033cde89018cee1d341dc649ebecaa54d96a4cfee44f"
     },
     "validation/red-gps_report_filter.log": {
-      "size": 708,
-      "sha256": "7d4b389e47ef446e53a4bb435f33263b632b30a639d719eb4b460069fc52182a"
+      "size": 705,
+      "sha256": "c0bef69acd749f0efc3277c18d16d6d7d047e0dae3fda037b86cf7c9ce397274"
     },
     "validation/red-results.json": {
       "size": 252,
@@ -396,8 +396,8 @@
       "sha256": "c10a32b6ad1952bca97e69578de416d0063720a9501bd0693908ba5fbea7abda"
     },
     "validation/results.json": {
-      "size": 25221,
-      "sha256": "3e5726f5ee8b7ca202cad367bb8a14d70a651dd98189a2cfc3e08ded13b32e7c"
+      "size": 25218,
+      "sha256": "c9b9540e57c1aa4de06b071b42576eea9101aee8130f305a47e619de6793d217"
     },
     "validation/sleep_wake_timestamp_vibration_contract.log": {
       "size": 47,
@@ -408,12 +408,12 @@
       "sha256": "45f4b4fb74d285b65c1bc5ea905b8dbc899e5104a8b2d9b583f7ba4519ab5fdb"
     },
     "validation/stack-analysis.json": {
-      "size": 321448,
-      "sha256": "af188bde9b73be776a19d0edc19e898a85dd311713bc0657fcdbb7a9cf8059f2"
+      "size": 308668,
+      "sha256": "cb5bb42cb55f6e0595b383a6c0c49baa3c60f3882e3d1e1117cb33962cc97423"
     },
     "validation/stack-evidence.json": {
-      "size": 663,
-      "sha256": "410802092d5a460f31d156872c258c473a00a00ed0cb99a34df272e8af54739b"
+      "size": 644,
+      "sha256": "f7d8c5ee7759df91577aece6abf4576054f5c87c1052182a43a5e41ab5e8a402"
     },
     "validation/stack_conditional_transfers.log": {
       "size": 110,

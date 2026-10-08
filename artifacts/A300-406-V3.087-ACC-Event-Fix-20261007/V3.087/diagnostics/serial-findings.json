@@ -1,0 +1,70 @@
+{
+  "length": 1472339,
+  "sha256": "8551160727e30097e50dfc414e7917999adafe9557d4302f57a8bcc49cb373b4",
+  "lines": 35226,
+  "latest_boot_start_line": 34807,
+  "wake_events": [
+    {
+      "line": 34942,
+      "transition": "[WORK] transition SLEEP->REALTIME now=478 pin_high=0 acc_on=1 logical_acc=1 vib=0",
+      "logical_acc_applied": true,
+      "unfixed_fallback": true,
+      "send_ok_channels": [
+        0,
+        3
+      ]
+    },
+    {
+      "line": 34987,
+      "transition": "[WORK] transition SLEEP->REALTIME now=551 pin_high=1 acc_on=0 logical_acc=1 vib=1",
+      "logical_acc_applied": true,
+      "unfixed_fallback": true,
+      "send_ok_channels": [
+        0,
+        3
+      ]
+    },
+    {
+      "line": 35045,
+      "transition": "[WORK] transition SLEEP->REALTIME now=616 pin_high=0 acc_on=1 logical_acc=1 vib=0",
+      "logical_acc_applied": true,
+      "unfixed_fallback": true,
+      "send_ok_channels": [
+        0,
+        3
+      ]
+    },
+    {
+      "line": 35094,
+      "transition": "[WORK] transition SLEEP->REALTIME now=740 pin_high=0 acc_on=1 logical_acc=1 vib=0",
+      "logical_acc_applied": true,
+      "unfixed_fallback": true,
+      "send_ok_channels": [
+        0,
+        3
+      ]
+    },
+    {
+      "line": 35143,
+      "transition": "[WORK] transition SLEEP->REALTIME now=845 pin_high=0 acc_on=1 logical_acc=1 vib=0",
+      "logical_acc_applied": true,
+      "unfixed_fallback": true,
+      "send_ok_channels": [
+        0,
+        3
+      ]
+    },
+    {
+      "line": 35189,
+      "transition": "[WORK] transition SLEEP->REALTIME now=992 pin_high=0 acc_on=1 logical_acc=1 vib=0",
+      "logical_acc_applied": true,
+      "unfixed_fallback": true,
+      "send_ok_channels": [
+        0,
+        3
+      ]
+    }
+  ],
+  "payload_capture_available": false,
+  "per_line_timestamps_available": false
+}

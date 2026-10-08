@@ -1,0 +1,7 @@
+{
+  "baseline_main_sha256": "b74f037a52f840038bdec2561f6ccccd4669f364c9c7affa1be837dd26356700",
+  "reviewed_main_sha256": "dd665b55886334334a7190c7279e8cfddf2882fe8212ea1943a45a4aa35ce7fb",
+  "only_two_report_call_sites_changed": true,
+  "irq_priority_and_handlers_unchanged": true,
+  "guard_checks_and_budgets_unchanged": true
+}

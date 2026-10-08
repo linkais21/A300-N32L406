@@ -17,6 +17,7 @@ HARNESS=r'''
 #include "work_mode.h"
 #include "service_workspace.h"
 #include "config.h"
+#include "overspeed_policy.h"
 volatile uint32_t g_tick_ms;
 static device_config_t cfg, disk;
 static unsigned saves, effects, reconnects, acks, pdp_restarts;
@@ -48,6 +49,18 @@ jt808_terminal_info_result_t jt808_terminal_info_encode(uint8_t *p,uint16_t n,ui
 static uint16_t item(uint8_t *p,uint32_t id,uint32_t v,uint8_t n){p[0]=id>>24;p[1]=id>>16;p[2]=id>>8;p[3]=id;p[4]=n;for(unsigned i=0;i<n;++i)p[5+i]=(uint8_t)(v>>(8*(n-1-i)));return 5+n;}
 static void reject(const uint8_t *p,uint16_t n){device_config_t before=cfg;unsigned s=saves,e=effects;result=0;jt808_params_handle_set(p,n,9);assert(result!=0);assert(!memcmp(&cfg,&before,sizeof cfg));assert(saves==s&&effects==e);}
 int main(void){
+    /* Mandatory inactive platform parameters must ACK without side effects. */
+    const uint32_t compatible[]={2,3,4,0x22,0x28,0x2c,0x2e,0x2f,0x30,0x31};
+    uint8_t compat[128];compat[0]=10;uint16_t clen=1;
+    for(unsigned i=0;i<10;++i)clen+=item(compat+clen,compatible[i],UINT32_MAX-i,4);
+    device_config_t untouched=cfg;
+    jt808_params_handle_set(compat,clen,9);
+    assert(result==0&&!memcmp(&cfg,&untouched,sizeof cfg)&&saves==0&&effects==0);
+    jt808_params_handle_set(compat,clen,9);assert(result==0&&saves==0);
+    for(unsigned i=0;i<10;++i){
+        compat[0]=1;clen=1+item(compat+1,compatible[i],123,2);reject(compat,clen);assert(result==2);
+    }
+    compat[0]=2;clen=1+item(compat+1,2,1,4);clen+=item(compat+clen,2,2,4);reject(compat,clen);
     cfg.heartbeat_s=180;cfg.report_moving_s=30;cfg.report_stopped_s=60;
     cfg.server_port=8898;cfg.backup_port=7018;strcpy(cfg.server_ip,"old.example");
     strcpy(cfg.backup_ip,"backup.example");strcpy(cfg.backup_auth_code,"BACKUP-AUTH");
@@ -137,6 +150,50 @@ int main(void){
     fail_store=true;n=1+item(b+1,0x10,0x6e657477,4);old=cfg;
     jt808_params_handle_set(b,n,9);assert(result==1&&!memcmp(&old,&cfg,sizeof cfg)&&pdp_restarts==2);
     fail_store=false;n=1+item(b+1,0x10,0x61226263,4);reject(b,n);
+    /* Active and inactive IDs commit atomically in the same batch. */
+    b[0]=12;n=1+item(b+1,0x56,3,4);n+=item(b+n,1,121,4);
+    for(unsigned i=0;i<10;++i)n+=item(b+n,compatible[i],i,4);
+    jt808_params_handle_set(b,n,9);assert(result==0&&cfg.heartbeat_s==121);
+    overspeed_policy_t policy;overspeed_policy_init(&policy);
+    assert(!overspeed_policy_step(&policy,0,true,true,(float)cfg.speed_limit_kmh+10.0f,cfg.speed_limit_kmh,cfg_speed_limit_time_s(&cfg)));
+    assert(!overspeed_policy_step(&policy,2999,true,true,(float)cfg.speed_limit_kmh+10.0f,cfg.speed_limit_kmh,cfg_speed_limit_time_s(&cfg)));
+    assert(overspeed_policy_step(&policy,3000,true,true,(float)cfg.speed_limit_kmh+10.0f,cfg.speed_limit_kmh,cfg_speed_limit_time_s(&cfg)));
+    const uint8_t duration_query[]={1,0,0,0,0x56};
+    jt808_params_handle_query(duration_query,sizeof duration_query,9);
+    assert(response_len==12&&response[2]==1&&!memcmp(response+3,b+1,9));
+    cfg=disk;jt808_params_handle_query(duration_query,sizeof duration_query,9);
+    assert(!memcmp(response+3,b+1,9));
+    s=saves;jt808_params_handle_set(b,n,9);assert(result==0&&saves==s);
+    /* A trailing bad/unknown ID prevents the duration update too. */
+    b[0]=2;n=1+item(b+1,0x56,8,4);n+=item(b+n,0x31,1,2);reject(b,n);
+    n=1+item(b+1,0x56,8,4);n+=item(b+n,0xffff,1,4);reject(b,n);assert(result==3);
+    b[0]=1;n=1+item(b+1,0x56,8,4);fail_store=true;old=cfg;
+    jt808_params_handle_set(b,n,9);assert(result==1&&!memcmp(&cfg,&old,sizeof cfg));fail_store=false;
+    n=1+item(b+1,0x56,8,2);reject(b,n);
+    n=1+item(b+1,0x56,UINT32_MAX,4);reject(b,n);
+    n=1+item(b+1,0x56,UINT32_MAX/1000U,4);jt808_params_handle_set(b,n,9);assert(result==0);
+    n=1+item(b+1,0x56,0,4);jt808_params_handle_set(b,n,9);assert(result==0);
+    cfg=disk;jt808_params_handle_query(duration_query,sizeof duration_query,9);
+    assert(!memcmp(response+3,b+1,9));
+    /* One platform frame containing all 24 requested IDs. */
+    const uint32_t active[]={1,0x13,0x18,0x20,0x21,0x27,0x29,0x55,0x56,0x80,0x81,0x82,0x83,0x84};
+    const uint32_t values[]={121,0x74657374,9100,0,0,60,30,100,3,12345,44,300,0x41313233,2};
+    uint8_t all_query[97];all_query[0]=24;b[0]=24;n=1;
+    for(unsigned i=0;i<14;++i){
+        uint8_t width=(active[i]==0x81||active[i]==0x82)?2:(active[i]==0x84?1:4);
+        n+=item(b+n,active[i],values[i],width);
+        uint8_t encoded[9];item(encoded,active[i],0,4);memcpy(all_query+1+4*i,encoded,4);
+    }
+    unsigned active_bytes=n-1;
+    for(unsigned i=0;i<10;++i){
+        n+=item(b+n,compatible[i],UINT32_MAX-i,4);
+        uint8_t encoded[9];item(encoded,compatible[i],0,4);memcpy(all_query+1+4*(14+i),encoded,4);
+    }
+    jt808_params_handle_set(b,n,9);assert(result==0);
+    s=saves;e=effects;jt808_params_handle_set(b,n,9);assert(result==0&&saves==s&&effects==e);
+    jt808_params_handle_query(all_query,sizeof all_query,9);
+    assert(response[2]==14&&response_len==3+active_bytes);
+    assert(!memcmp(response+3,b+1,active_bytes));
     return 0;
 }
 '''
@@ -144,7 +201,7 @@ def main():
     with tempfile.TemporaryDirectory() as d:
         p=Path(d);(p/'n32l40x.h').write_text('#pragma once\n')
         (p/'h.c').write_text(HARNESS)
-        cmd=[os.environ.get('CC') or shutil.which('gcc'),'-std=c99','-Wall','-Wextra','-Werror','-I',str(p),'-I',str(ROOT/'include'),str(p/'h.c'),str(ROOT/'src/jt808_params.c'),str(ROOT/'src/service_workspace.c'),'-o',str(p/'h.exe')]
+        cmd=[os.environ.get('CC') or shutil.which('gcc'),'-std=c99','-Wall','-Wextra','-Werror','-I',str(p),'-I',str(ROOT/'include'),str(p/'h.c'),str(ROOT/'src/jt808_params.c'),str(ROOT/'src/service_workspace.c'),str(ROOT/'src/overspeed_policy.c'),'-o',str(p/'h.exe')]
         subprocess.run(cmd,check=True);subprocess.run([str(p/'h.exe')],check=True)
     print('test_jt808_params: PASS')
 if __name__=='__main__':main()

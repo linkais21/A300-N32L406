@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "elf_sha256": "b22f005515afad42b585482aad616c6dff690e2e3c10545b174be1ebd56ff2a9",
-  "map_sha256": "b3b299d68a212afbab2733cc3a26ac4d7449ab9d01963fa28ff06a993497f9c7",
+  "map_sha256": "9b802d4313774109d99aabdfc570b9c75bfff7ccdf7e58fc43cf426f5895104c",
   "reports": [
     {
       "path": "a300_firmware.elf.ltrans0.ltrans.su",

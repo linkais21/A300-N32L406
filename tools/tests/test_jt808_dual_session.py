@@ -528,6 +528,10 @@ def main():
 fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
 void ec800m_tcp_close(uint8_t ch) { open_ch[ch]=false; }
 void gps_get_unfixed_report(gps_data_t *out) { memset(out,0,sizeof(*out)); }
+bool gps_get_last_trusted_location(gps_data_t *out) {
+    if (!gps_get_last_trusted(out)) return false;
+    out->valid=false; return true;
+}
 bool gps_report_filter_motion_pending(uint32_t now) { (void)now; return false; }
 void gps_report_filter_motion_ack(void) {}
 bool at_config_execute_text_response(const uint8_t *text, uint16_t len,

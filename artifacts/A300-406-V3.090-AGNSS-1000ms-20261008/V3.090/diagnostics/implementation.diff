@@ -1,0 +1,139 @@
+diff --git a/D:/A300_406_tools/A300_406/outputs/release-v3090-agnss-delay-20261008/before/src/agnss_online.c b/D:/A300_406_tools/A300_406/A300-first/src/agnss_online.c
+index 981b961..bcf0011 100644
+--- a/D:/A300_406_tools/A300_406/outputs/release-v3090-agnss-delay-20261008/before/src/agnss_online.c
++++ b/D:/A300_406_tools/A300_406/A300-first/src/agnss_online.c
+@@ -12,7 +12,7 @@
+ #include <string.h>
+ 
+ enum { IDLE, OPENING, RECEIVING, VALIDATING, COLD_START, SENDING, WAIT_ACK, FAILED, COLD_SETTLE };
+-#define HUADA_COLD_SETTLE_MS 200U
++#define HUADA_COLD_SETTLE_MS 1000U
+ enum { LOCAL_TIME, LOCAL_POS, NETWORK_DATA };
+ static uint8_t s_phase;
+ static bool s_header, s_done, s_attempted, s_socket;
+
+diff --git a/D:/A300_406_tools/A300_406/outputs/release-v3090-agnss-delay-20261008/before/src/agnss_huada.c b/D:/A300_406_tools/A300_406/A300-first/src/agnss_huada.c
+index cb3d520..8795ba9 100644
+--- a/D:/A300_406_tools/A300_406/outputs/release-v3090-agnss-delay-20261008/before/src/agnss_huada.c
++++ b/D:/A300_406_tools/A300_406/A300-first/src/agnss_huada.c
+@@ -19,7 +19,7 @@ bool gnss_vendor_inject(gnss_type_t type, const uint8_t *data, uint16_t len)
+ bool gnss_vendor_inject_pending(void) { return false; }
+ #else
+ #define HUADA_STREAM_MAX 4096U
+-#define HUADA_COLD_SETTLE_MS 200U
++#define HUADA_COLD_SETTLE_MS 1000U
+ enum { HUADA_STAGE_TIME, HUADA_STAGE_POS, HUADA_STAGE_DATA, HUADA_STAGE_COLD_SETTLE };
+ static uint32_t s_stream_len;
+ static uint32_t s_cold_done_ms;
+
+diff --git a/D:/A300_406_tools/A300_406/outputs/release-v3090-agnss-delay-20261008/before/tools/tests/test_agnss_online.py b/D:/A300_406_tools/A300_406/A300-first/tools/tests/test_agnss_online.py
+index 6e0b9ba..2283985 100644
+--- a/D:/A300_406_tools/A300_406/outputs/release-v3090-agnss-delay-20261008/before/tools/tests/test_agnss_online.py
++++ b/D:/A300_406_tools/A300_406/A300-first/tools/tests/test_agnss_online.py
+@@ -65,7 +65,7 @@ tcp_state_t ec800m_tcp_state(uint8_t ch){assert(ch==2);return tcp;}
+ int gps_send_raw(const uint8_t *p,uint32_t n){
+     static const uint8_t cold[]={0xf1,0xd9,0x06,0x40,0x01,0x00,0x01,0x48,0x22};
+     if(n==sizeof cold) { assert(!memcmp(p,cold,sizeof cold)); tick+=7; cold_done=tick; }
+-    else { assert((n==28U && p[3]==0x11U) || (n==25U && p[3]==0x10U) || (n==100U && p[3]==0x33U)); if(n==100U) assert(!memcmp(p,packet,n)); assert((uint32_t)(tick-cold_done)>=200U); last_id=p[3]; }
++    else { assert((n==28U && p[3]==0x11U) || (n==25U && p[3]==0x10U) || (n==100U && p[3]==0x33U)); if(n==100U) assert(!memcmp(p,packet,n)); assert((uint32_t)(tick-cold_done)>=1000U); last_id=p[3]; }
+     uart++;return tx_error;
+ }
+ uint32_t gps_agnss_ack_sequence(void){return acks;}
+@@ -77,7 +77,7 @@ static void first_aid(void){
+     unsigned before=uart;
+     pump(3);assert(uart==before+1); /* cold TX consumes seven ms */
+     pump(10);assert(uart==before+1);
+-    tick+=199;pump(3);assert(uart==before+1);
++    tick+=999;pump(3);assert(uart==before+1);
+     tick++;pump(2);assert(uart==before+2);
+ }
+ int main(void){
+@@ -130,7 +130,7 @@ int main(void){
+     assert(strstr(trace_hex,"f1d9050002000b11"));
+     /* UTC is sampled after settling, never cached before the delay. */
+     start();agnss_online_rx(2,response,h+200);pump(3);before=uart;
+-    tick+=199;gps.second=1;pump(3);assert(uart==before);
++    tick+=999;gps.second=1;pump(3);assert(uart==before);
+     tick++;pump(2);ack[3]=0;sum(ack,10);trace_used=0;
+     acks++;pump(2);ack[3]=1;sum(ack,10);
+     assert(!memcmp(trace_hex,"f1d90b111400000012ea070a010c1e01",32));
+@@ -141,9 +141,9 @@ int main(void){
+     tick=UINT32_MAX-60101U;start();agnss_online_rx(2,response,h+200);first_aid();
+     agnss_online_reset();assert(!agnss_online_has_injected());
+     start();agnss_online_rx(2,response,h+200);pump(3);before=uart;
+-    enabled=false;pump(1);tick+=200;pump(3);assert(uart==before);enabled=true;
++    enabled=false;pump(1);tick+=1000;pump(3);assert(uart==before);enabled=true;
+     start();agnss_online_rx(2,response,h+200);pump(3);before=uart;
+-    agnss_online_rx(2,(const uint8_t*)"x",1);tick+=200;pump(3);assert(uart==before);
++    agnss_online_rx(2,(const uint8_t*)"x",1);tick+=1000;pump(3);assert(uart==before);
+     assert(strstr(last_log,"reason=late-data"));
+     /* The TAU804M is configured as BDS-only; a GPS AID-PEPH frame is rejected. */
+     { uint8_t gps_packet[73]={0xf1,0xd9,0x0b,0x32,0x41,0x00};
+
+diff --git a/D:/A300_406_tools/A300_406/outputs/release-v3090-agnss-delay-20261008/before/tools/tests/test_agnss_vendor_stream.py b/D:/A300_406_tools/A300_406/A300-first/tools/tests/test_agnss_vendor_stream.py
+index 9a87709..b008aeb 100644
+--- a/D:/A300_406_tools/A300_406/outputs/release-v3090-agnss-delay-20261008/before/tools/tests/test_agnss_vendor_stream.py
++++ b/D:/A300_406_tools/A300_406/A300-first/tools/tests/test_agnss_vendor_stream.py
+@@ -89,7 +89,7 @@ static device_config_t c = {"u", "p"};
+ int gps_send_raw(const uint8_t *p, uint32_t n) {
+     assert(n <= sizeof gps_last);
+     if(p[2]==6 && p[3]==0x40){tick+=7;cold_done=tick;}
+-    else assert((uint32_t)(tick-cold_done)>=200U);
++    else assert((uint32_t)(tick-cold_done)>=1000U);
+     memcpy(gps_last, p, n); gps_last_len = n;
+     ++gps_calls; gps_bytes += n; return fail_uart ? -1 : 0;
+ }
+@@ -132,7 +132,7 @@ static int settled_inject(const uint8_t *data,uint32_t len,const gps_context_t *
+     if(gps_calls==before+1 && gps_last[2]==6){
+         assert(result==1 && gnss_vendor_inject_pending());
+         for(unsigned i=0;i<10;i++)assert(agnss_huada_inject(&(agnss_source_t){data,len},ctx)==1);
+-        tick+=199;assert(agnss_huada_inject(&(agnss_source_t){data,len},ctx)==1);
++        tick+=999;assert(agnss_huada_inject(&(agnss_source_t){data,len},ctx)==1);
+         assert(gps_calls==before+1);
+         tick++;result=agnss_huada_inject(&(agnss_source_t){data,len},ctx);
+     }
+@@ -195,7 +195,7 @@ int main(void) {
+     g.year=2026;g.month=10;g.day=8;g.second=1;
+     assert(agnss_huada_inject(&(agnss_source_t){valid,sizeof valid},&(gps_context_t){0})==1);
+     unsigned pending_calls=gps_calls;
+-    tick+=199;g.second=2;
++    tick+=999;g.second=2;
+     assert(agnss_huada_inject(&(agnss_source_t){valid,sizeof valid},&(gps_context_t){0})==1);
+     assert(gps_calls==pending_calls);
+     tick++;assert(agnss_huada_inject(&(agnss_source_t){valid,sizeof valid},&(gps_context_t){0})==1);
+diff --git a/D:/A300_406_tools/A300_406/outputs/release-v3090-agnss-delay-20261008/before/tools/release_guard.py b/D:/A300_406_tools/A300_406/A300-first/tools/release_guard.py
+index eeca245..c9ab76f 100644
+--- a/D:/A300_406_tools/A300_406/outputs/release-v3090-agnss-delay-20261008/before/tools/release_guard.py
++++ b/D:/A300_406_tools/A300_406/A300-first/tools/release_guard.py
+@@ -153,8 +153,8 @@ CANONICAL_CONSUMER_SHA256 = {
+ }
+ CANONICAL_IDENTITY_FILE_SHA256 = {
+     # Reviewed: V3.088/3088 identity; generated timestamps stay normalized.
+-    "include/config.h": "47197614b585bb379684e4a4a5750bc3c86b6a3f27d22ed59a82676db9f45903",
+-    "include/build_version.h": "16bb590f44c91c6e691ce2df5590df04f2f990eb18f784e49b14071e246008fa",
++    "include/config.h": "af86814c96c391f69164a0212b814cef3024ede6371b124980e659b1d1ff8166",
++    "include/build_version.h": "60ae6f0542c3649e2394f6abc422120108aa75f0975f287aa3341eea52ecd4d3",
+     "include/f39_reply.h": "4519c084bcc677d23c02aa4ac509f2390527f16111139f011052017f08c615ed",
+     # Reviewed: all unfixed work-mode 0200 use event UTC; existing API/wire unchanged.
+     "include/jt808.h": "326707cc4584c282fc4589e915fd89ee36743b8bf5c1bc7e0fb35cdd6697da68",
+diff --git a/D:/A300_406_tools/A300_406/outputs/release-v3090-agnss-delay-20261008/before/tools/tests/test_release_identity_contract.py b/D:/A300_406_tools/A300_406/A300-first/tools/tests/test_release_identity_contract.py
+index 1c0534f..4b1dadc 100644
+--- a/D:/A300_406_tools/A300_406/outputs/release-v3090-agnss-delay-20261008/before/tools/tests/test_release_identity_contract.py
++++ b/D:/A300_406_tools/A300_406/A300-first/tools/tests/test_release_identity_contract.py
+@@ -10,12 +10,12 @@ CONTRACT_PATH = ROOT / "release_identity.json"
+ 
+ contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+ 
+-stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.089", contract["firmware_version"]).group(1)
++stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.090", contract["firmware_version"]).group(1)
+ assert contract == {
+     "firmware_version_prefix": f"T360-A300_406_{stamp},V3.",
+-    "firmware_revision": 89,
+-    "firmware_version": f"T360-A300_406_{stamp},V3.089",
+-    "firmware_version_counter": 3089,
++    "firmware_revision": 90,
++    "firmware_version": f"T360-A300_406_{stamp},V3.090",
++    "firmware_version_counter": 3090,
+     "ota_device_model": "A300-406",
+     "jt808_terminal_model": "T360-A300",
+     "jt808_manufacturer_id": "70110",

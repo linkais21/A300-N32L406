@@ -1,0 +1,36 @@
+{
+  "version": "T360-A300_406_20260923000659,V3.073",
+  "version_code": 3073,
+  "app_size": 104372,
+  "app_flash_origin": "0x08006000",
+  "app_flash_limit": 106496,
+  "app_flash_remaining": 2124,
+  "ota_format": "a300-header-v1",
+  "hardware": "N32L406CBL7",
+  "artifacts": {
+    "App-N32L406-V3.073.bin": {
+      "bytes": 104372,
+      "sha256": "6f461b4a108279ac1590a9834d67d5ae94fe5efd835f5ecd823216cc8c281458"
+    },
+    "App-N32L406-V3.073.hex": {
+      "bytes": 293647,
+      "sha256": "4d160034c5f041cff70f1ee5375a09b851255d205cf10756c81f8476e20bf420"
+    },
+    "Bootloader-N32L406-V3.073.bin": {
+      "bytes": 22556,
+      "sha256": "91a615b2db61c33153e6d5a1d48e6d9b6f2ff55d8e5c8a4c23425ce0100fff79"
+    },
+    "Bootloader-N32L406-V3.073.hex": {
+      "bytes": 40913,
+      "sha256": "de3ee4d78b7f8a09448e9793387c996932bf2ae12338c60060d664f47bcc56c6"
+    },
+    "Combined-N32L406-V3.073.bin": {
+      "bytes": 128948,
+      "sha256": "f95452f12ee9b9c63a86fa7ca5dd0b6fb86389dba3ff4b971225822a0327cbcf"
+    },
+    "A300-406-OTA-V3073.bin": {
+      "bytes": 104404,
+      "sha256": "4a13085cbcde067a75a7dc24faf176cd7668a94831736994dde0233e8ea6e012"
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "src/main.c": {
+    "before_sha256": "b74f037a52f840038bdec2561f6ccccd4669f364c9c7affa1be837dd26356700",
+    "after_sha256": "dd665b55886334334a7190c7279e8cfddf2882fe8212ea1943a45a4aa35ce7fb"
+  },
+  "src/jt808.c": {
+    "before_sha256": "b2431e2e022fb79c3ebf0050cf4efb6bdf28a0c74e85f57252637b35813e460c",
+    "after_sha256": "51f3cb7071dba49dfd064a30d2c7cbd95bc43ea7d6e56864752204b861e0e688"
+  },
+  "include/jt808.h": {
+    "before_sha256": "fd9782ef3b9c12206d8d2a889c0150827f740e56186b8da110146b2c3d2ef20d",
+    "after_sha256": "c9e188f8f2bb0842d1681d53f4ab13ef246668715bf1e5f15e81c52af9468029"
+  },
+  "tools/exception_stack_guard.py": {
+    "before_sha256": "bf40d83c48cb13c90f1416344742b8bcd0494aefd977318d4e8e7a434f84a8ec",
+    "after_sha256": "841540595eefc43373deff4f970b0bf86a25329901321b1af5c9847e851226a9"
+  },
+  "tools/release_guard.py": {
+    "before_sha256": "e6cc177300038773fea5285ce0169878ebf27c14ea76cf07ab2e6c0f223e3d89",
+    "after_sha256": "440c98af2a91af1b1f9856580ff63f860d9725f5ff6c30aff23dc0b1352085fd"
+  },
+  "release_identity.json": {
+    "before_sha256": "9875571c852537b6f330fed1f6b6798001eed394662afcbd59dc0c93039f62fd",
+    "after_sha256": "a78333bfce286acfc1bb7994e9ec7120c85d765360532b0d9445d3a48704150e"
+  },
+  "include/config.h": {
+    "before_sha256": "63debe17109c57cff3c8991d306752743c44d6896d29a42af16b1467ed7bb17e",
+    "after_sha256": "83839a0346308ddb214e3db3ae20483c12fd11b0a02df98838f0ccdefe2fe443"
+  },
+  "include/build_version.h": {
+    "before_sha256": "3acca2f4f2b08b7671f9b970b9f18a012355184d46df0fca1660395f98478f96",
+    "after_sha256": "03ab9c80baa1c82f07b31bd9abf69da0498eff3cade4e668b9b1e4f6e815eadc"
+  },
+  "scope": {
+    "behavior": "mode-entry events use advancing retained UTC when no live fix",
+    "hardware_changes": false,
+    "interrupt_priority_changes": false,
+    "flash_layout_changes": false,
+    "public_wire_format_changes": false,
+    "new_api": "jt808_send_location_work_mode_event",
+    "retry_id_and_durable_transaction_preserved": true,
+    "platform_filter_rule": "not verified; needs raw main-platform capture",
+    "hardware_status": "pending"
+  },
+  "test_fixture_migration": {
+    "reason": "old monotonic-civil-UTC assertion conflicts with existing correctable GPS/NTP event clock",
+    "production_gps_changed": false,
+    "reanchor_and_acquisition_separation_verified": true
+  }
+}

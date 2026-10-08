@@ -1,0 +1,113 @@
+--- before/src/main.c
++++ after/src/main.c
+@@ -378,7 +378,7 @@
+     s_acc_report_s = now_s;
+     dbg_printf("[ACC] report settled level=%u\r\n",
+                (unsigned)s_acc_report_pending);
+-    (void)jt808_send_location_work_mode(0U, false, work_mode_allocate_report_id());
++    (void)jt808_send_location_work_mode_event(0U, false, work_mode_allocate_report_id());
+ }
+ 
+ void work_mode_process(void)
+@@ -577,8 +577,11 @@
+                 acc_report_suppressed(action.acc_on, now_s)) {
+                 break;
+             }
+-            sent = jt808_send_location_work_mode(action.alarm_bits,
+-                                                 action.historical_position, action.report_id);
++            sent = action.type == WORK_ACTION_REPORT_ENTRY ?
++                   jt808_send_location_work_mode_event(action.alarm_bits,
++                       action.historical_position, action.report_id) :
++                   jt808_send_location_work_mode(action.alarm_bits,
++                       action.historical_position, action.report_id);
+             /* The sender supplies a retained or unfixed snapshot internally.
+              * Retry transport/storage failure, yielding this dispatcher pass. */
+             if (sent != 0) {
+--- before/src/jt808.c
++++ after/src/jt808.c
+@@ -903,8 +903,9 @@
+     return result;
+ }
+ 
+-int jt808_send_location_work_mode(uint32_t alarm_bits,
+-                                  bool historical_position, uint32_t report_id)
++static int send_location_work_mode(uint32_t alarm_bits,
++                                  bool historical_position, uint32_t report_id,
++                                  bool event_clock)
+ {
+     uint8_t body[JT808_LOCATION_ONLINE_MAX];
+     frame_t frame;
+@@ -930,8 +931,10 @@
+         /* GNSS is off in STOP1.  Use only a snapshot captured while a live
+          * fix was fresh; never encode the now-invalid live GPS object.
+          * Sleep cadence carries the advancing event clock with GPS_FIXED
+-         * cleared. Other no-fix reports retain the acquisition UTC. */
+-        bool retained = work_mode_state() == WORK_MODE_STATIONARY_SLEEP ?
++         * cleared. Mode-entry events use that clock too: acquisition UTC
++         * would precede already-sent sleep reports and hide the ACC change.
++         * Ordinary no-fix reports retain acquisition UTC. */
++        bool retained = event_clock || work_mode_state() == WORK_MODE_STATIONARY_SLEEP ?
+                         gps_get_last_trusted(&snapshot) :
+                         gps_get_last_trusted_location(&snapshot);
+         if (!retained) {
+@@ -945,7 +948,9 @@
+              * lose ACC state changes and the whole stationary reporting
+              * cadence until the receiver came back, so fall back to the
+              * retained fix and mark the report historical instead. */
+-            if (!gps_get_last_trusted_location(&snapshot)) {
++            bool retained = event_clock ? gps_get_last_trusted(&snapshot) :
++                                          gps_get_last_trusted_location(&snapshot);
++            if (!retained) {
+                 gps_get_unfixed_report(&snapshot);
+             }
+             historical_position = true;
+@@ -962,6 +967,16 @@
+             frame_bytes(&frame, body, length);
+             result = send_frame_broadcast(&frame);
+         } else frame_release();
++    }
++    if (event_clock) {
++        /* Inspect encoded wire fields, not the physical ACC pin or raw GPS.
++         * ts is the BCD local time in the actual 0200 body; tx is transport
++         * submission, not proof of platform ACK/display. No coordinates. */
++        dbg_printf("[808-EVENT] t=%lu acc=%u fix=%u ts=%02x%02x%02x%02x%02x%02x tx=%d\r\n",
++                   (unsigned long)TICK_MS(), (unsigned)(body[7] & 1U),
++                   (unsigned)((body[7] >> 1U) & 1U),
++                   (unsigned)body[22], (unsigned)body[23], (unsigned)body[24],
++                   (unsigned)body[25], (unsigned)body[26], (unsigned)body[27], result);
+     }
+     if (result != 0) {
+         /* Store the compact prefix of the exact work-mode snapshot, including
+@@ -987,6 +1002,18 @@
+         s_alarm_flags &= ~alarm_bits;
+     }
+     return result;
++}
++
++int jt808_send_location_work_mode(uint32_t alarm_bits,
++                                  bool historical_position, uint32_t report_id)
++{
++    return send_location_work_mode(alarm_bits, historical_position, report_id, false);
++}
++
++int jt808_send_location_work_mode_event(uint32_t alarm_bits,
++                                       bool historical_position, uint32_t report_id)
++{
++    return send_location_work_mode(alarm_bits, historical_position, report_id, true);
+ }
+ 
+ void jt808_set_terminal_profile(const char *model, const char *plate)
+--- before/include/jt808.h
++++ after/include/jt808.h
+@@ -85,6 +85,11 @@
+  * new ID from work_mode_allocate_report_id(). No on-wire format change. */
+ int jt808_send_location_work_mode(uint32_t alarm_bits,
+                                   bool historical_position, uint32_t report_id);
++/* Mode-entry/status events use current retained event UTC for an unfixed
++ * position; acquisition UTC remains unchanged for ordinary reports/queries.
++ * Transport/storage completion and retry identity match the function above. */
++int jt808_send_location_work_mode_event(uint32_t alarm_bits,
++                                       bool historical_position, uint32_t report_id);
+ bool jt808_location_snapshot_valid(const gps_data_t *gps, uint32_t now);
+ int jt808_send_general_resp(uint16_t resp_sn, uint16_t resp_id, uint8_t result);
+ int jt808_send_general_resp_to(uint8_t channel, uint16_t resp_sn,

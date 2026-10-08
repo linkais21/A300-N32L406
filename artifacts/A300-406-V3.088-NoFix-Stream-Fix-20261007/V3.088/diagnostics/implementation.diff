@@ -1,0 +1,273 @@
+--- before/include/build_version.h
++++ after/include/build_version.h
+@@ -2,9 +2,9 @@
+ #ifndef BUILD_VERSION_H
+ #define BUILD_VERSION_H
+ 
+-#define FW_BUILD_NUMBER  "202610071635"
+-#define FW_BUILD_DATE    "Oct 07 2026 - 16:35:24"
+-#define FW_FULL_VERSION  "T360-A300_406_20261007163524,V3.087"
+-#define FW_VERSION_COUNTER  3087UL
++#define FW_BUILD_NUMBER  "202610071714"
++#define FW_BUILD_DATE    "Oct 07 2026 - 17:14:47"
++#define FW_FULL_VERSION  "T360-A300_406_20261007171447,V3.088"
++#define FW_VERSION_COUNTER  3088UL
+ 
+ #endif /* BUILD_VERSION_H */
+--- before/include/config.h
++++ after/include/config.h
+@@ -4,7 +4,7 @@
+ #include "n32l40x.h"
+ 
+ /* ── Firmware version ─────────────────────────────────────────────────────── */
+-#define FW_VERSION_STR          "T360-A300_406_20261007163524,V3.087"
++#define FW_VERSION_STR          "T360-A300_406_20261007171447,V3.088"
+ #define FW_OTA_MODEL_STR        "A300-406"
+ #define FW_JT808_MODEL_STR      "T360-A300"
+ #define FW_MANUFACTURER_ID_STR  "70110"
+--- before/include/jt808.h
++++ after/include/jt808.h
+@@ -80,13 +80,14 @@
+ int jt808_send_location(void);
+ int jt808_send_location_to(uint8_t channel, const gps_data_t *snapshot);
+ /* Returns 0 after main delivery or durable blind-zone storage; otherwise a
+- * negative retryable result. Missing fixes use a retained/unfixed snapshot. */
++ * negative retryable result. Missing fixes use a retained/unfixed snapshot
++ * with advancing event UTC and the current-fix status bit cleared. */
+ /* report_id is nonzero and stable across retries; a new/merged action gets a
+  * new ID from work_mode_allocate_report_id(). No on-wire format change. */
+ int jt808_send_location_work_mode(uint32_t alarm_bits,
+                                   bool historical_position, uint32_t report_id);
+-/* Mode-entry/status events use current retained event UTC for an unfixed
+- * position; acquisition UTC remains unchanged for ordinary reports/queries.
++/* Mode-entry variant also logs wire fields for a live fix. All unfixed
++ * work-mode 0200 packets use event UTC; 0201 keeps acquisition UTC.
+  * Transport/storage completion and retry identity match the function above. */
+ int jt808_send_location_work_mode_event(uint32_t alarm_bits,
+                                        bool historical_position, uint32_t report_id);
+--- before/release_identity.json
++++ after/release_identity.json
+@@ -1,8 +1,8 @@
+ {
+-  "firmware_version_prefix": "T360-A300_406_20261007163524,V3.",
+-  "firmware_revision": 87,
+-  "firmware_version": "T360-A300_406_20261007163524,V3.087",
+-  "firmware_version_counter": 3087,
++  "firmware_version_prefix": "T360-A300_406_20261007171447,V3.",
++  "firmware_revision": 88,
++  "firmware_version": "T360-A300_406_20261007171447,V3.088",
++  "firmware_version_counter": 3088,
+   "ota_device_model": "A300-406",
+   "jt808_terminal_model": "T360-A300",
+   "jt808_manufacturer_id": "70110"
+--- before/src/jt808.c
++++ after/src/jt808.c
+@@ -905,7 +905,7 @@
+ 
+ static int send_location_work_mode(uint32_t alarm_bits,
+                                   bool historical_position, uint32_t report_id,
+-                                  bool event_clock)
++                                  bool trace_entry)
+ {
+     uint8_t body[JT808_LOCATION_ONLINE_MAX];
+     frame_t frame;
+@@ -930,14 +930,11 @@
+     if (historical_position) {
+         /* GNSS is off in STOP1.  Use only a snapshot captured while a live
+          * fix was fresh; never encode the now-invalid live GPS object.
+-         * Sleep cadence carries the advancing event clock with GPS_FIXED
+-         * cleared. Mode-entry events use that clock too: acquisition UTC
+-         * would precede already-sent sleep reports and hide the ACC change.
+-         * Ordinary no-fix reports retain acquisition UTC. */
+-        bool retained = event_clock || work_mode_state() == WORK_MODE_STATIONARY_SLEEP ?
+-                        gps_get_last_trusted(&snapshot) :
+-                        gps_get_last_trusted_location(&snapshot);
+-        if (!retained) {
++         * Every new work-mode 0200 carries the advancing event clock with
++         * GPS_FIXED cleared. Using acquisition UTC on a later periodic
++         * report would precede the entry packet. Queries retain acquisition
++         * UTC separately in send_location_only(). */
++        if (!gps_get_last_trusted(&snapshot)) {
+             gps_get_unfixed_report(&snapshot);
+         }
+     } else {
+@@ -948,9 +945,7 @@
+              * lose ACC state changes and the whole stationary reporting
+              * cadence until the receiver came back, so fall back to the
+              * retained fix and mark the report historical instead. */
+-            bool retained = event_clock ? gps_get_last_trusted(&snapshot) :
+-                                          gps_get_last_trusted_location(&snapshot);
+-            if (!retained) {
++            if (!gps_get_last_trusted(&snapshot)) {
+                 gps_get_unfixed_report(&snapshot);
+             }
+             historical_position = true;
+@@ -968,7 +963,7 @@
+             result = send_frame_broadcast(&frame);
+         } else frame_release();
+     }
+-    if (event_clock) {
++    if (trace_entry || historical_position) {
+         /* Inspect encoded wire fields, not the physical ACC pin or raw GPS.
+          * ts is the BCD local time in the actual 0200 body; tx is transport
+          * submission, not proof of platform ACK/display. No coordinates. */
+--- before/tools/release_guard.py
++++ after/tools/release_guard.py
+@@ -152,12 +152,12 @@
+     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
+ }
+ CANONICAL_IDENTITY_FILE_SHA256 = {
+-    # Reviewed: V3.087/3087 identity; generated timestamps stay normalized.
+-    "include/config.h": "07048a49d3cf9962182889820211eb71f519c87df9272c71d4a26eeb7b0a47e4",
+-    "include/build_version.h": "8c104206f47421fb9aa3192ba2af9a671b7f59f6dfe35edabd41c0a468f79d95",
++    # Reviewed: V3.088/3088 identity; generated timestamps stay normalized.
++    "include/config.h": "bc5a88a5359be2404081573c464554caa47e0f76e0bcc845823a281aad77dbbf",
++    "include/build_version.h": "e09e5b679d4c125076fcad9c8b06dd839444cce696a420839e9cbf26ded2c25f",
+     "include/f39_reply.h": "4519c084bcc677d23c02aa4ac509f2390527f16111139f011052017f08c615ed",
+-    # Reviewed: add mode-entry event-clock sender; existing wire format unchanged.
+-    "include/jt808.h": "1d955857ca7d85203ab24dc9d12fcef38685309c92e6f65d2d6bc2fed5582233",
++    # Reviewed: all unfixed work-mode 0200 use event UTC; existing API/wire unchanged.
++    "include/jt808.h": "326707cc4584c282fc4589e915fd89ee36743b8bf5c1bc7e0fb35cdd6697da68",
+     "include/jt808_terminal_info.h": "ed27611b540da8fe8ed50a3d349d52ada04f2e66aa62db8f3d6b85497c35d8df",
+ }
+ 
+--- before/tools/tests/test_jt808_nofix_clock.py
++++ after/tools/tests/test_jt808_nofix_clock.py
+@@ -1,4 +1,4 @@
+-"""No-fix acquisition UTC stays fixed; pending NOR records stay immutable.
++"""No-fix 0200 event UTC advances; pending NOR records stay immutable.
+ 
+ Sleep cadence's advancing event UTC is tested by test_sleep_location_reporting.
+ """
+@@ -31,11 +31,18 @@
+         assert(jt808_send_location_work_mode(0,false,i)==0);
+         for(unsigned ch=0; ch<=3; ch+=3) {
+             assert(msg(ch,&sn0,d,&n)==0x0200);
+-            const uint8_t expected[]={0x26,0x09,0x20,0x13,0x47,0x52};
++            unsigned elapsed=47*60+52+i*10;
++            unsigned minute=elapsed/60, second=elapsed%60;
++            const uint8_t expected[]={0x26,0x09,0x20,0x13,
++                (uint8_t)((minute/10)*16+minute%10),
++                (uint8_t)((second/10)*16+second%10)};
+             assert(memcmp(d+34,expected,6)==0);
+             assert(!(d[19]&2)); /* position is historical, not a current fix */
+         }
+     }
++    /* Query reports still describe the original acquisition UTC. */
++    query(0,0x8201);
++    assert(msg(0,&sn0,d,&n)==0x0201 && d[37]==0x13 && d[38]==0x47 && d[39]==0x52);
+     /* A blind-zone record keeps its event time while its append is retried. */
+     open_ch[0]=open_ch[3]=false;
+     append_result=BLIND_ZONE_BUSY;
+@@ -46,7 +53,27 @@
+     assert(jt808_send_location_work_mode(0,false,4)==0);
+     assert(memcmp(saved,appended.location,34)==0);
+     assert(jt808_send_location_work_mode(0,false,5)==0);
+-    assert(appended.location[27]==0x52);
++    assert(appended.location[26]==0x48 && appended.location[27]==0x42);
++    /* BCD local-time rollover crosses a date/year boundary correctly. */
++    open_ch[0]=open_ch[3]=true;
++    gps_apply_ntp_utc(2026,12,31,15,59,59);
++    assert(jt808_send_location_work_mode(0,true,6)==0);
++    assert(msg(0,&sn0,d,&n)==0x0200);
++    const uint8_t end_year[]={0x26,0x12,0x31,0x23,0x59,0x59};
++    assert(!memcmp(d+34,end_year,6));
++    g_tick_ms+=2000;
++    assert(jt808_send_location_work_mode(0,true,7)==0);
++    const uint8_t new_year[]={0x27,0x01,0x01,0,0,0x01};
++    for(unsigned ch=0;ch<=3;ch+=3) {
++        assert(msg(ch,&sn0,d,&n)==0x0200 && !memcmp(d+34,new_year,6));
++        assert(!(d[19]&2));
++    }
++    /* Unsigned tick wrap and leap-day rollover do not restart event UTC. */
++    g_tick_ms=UINT32_MAX-499U;
++    gps_apply_ntp_utc(2028,2,28,15,59,59); g_tick_ms+=1000;
++    assert(jt808_send_location_work_mode(0,false,8)==0);
++    const uint8_t leap_day[]={0x28,0x02,0x29,0,0,0};
++    assert(msg(0,&sn0,d,&n)==0x0200 && !memcmp(d+34,leap_day,6));
+     return 0;
+ }
+ '''
+--- before/tools/tests/test_release_identity_contract.py
++++ after/tools/tests/test_release_identity_contract.py
+@@ -10,12 +10,12 @@
+ 
+ contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+ 
+-stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.087", contract["firmware_version"]).group(1)
++stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.088", contract["firmware_version"]).group(1)
+ assert contract == {
+     "firmware_version_prefix": f"T360-A300_406_{stamp},V3.",
+-    "firmware_revision": 87,
+-    "firmware_version": f"T360-A300_406_{stamp},V3.087",
+-    "firmware_version_counter": 3087,
++    "firmware_revision": 88,
++    "firmware_version": f"T360-A300_406_{stamp},V3.088",
++    "firmware_version_counter": 3088,
+     "ota_device_model": "A300-406",
+     "jt808_terminal_model": "T360-A300",
+     "jt808_manufacturer_id": "70110",
+--- before/tools/tests/test_sleep_location_reporting.py
++++ after/tools/tests/test_sleep_location_reporting.py
+@@ -89,10 +89,10 @@
+     freq("GPSDUP,0#"); before=sends[0]; step(1260); assert(sends[0]==before);
+     freq("FREQ,30,120#"); step(1379); assert(sends[0]==before);
+     step(1380); assert(sends[0]==before+1); check_report(8,23,0);
+-    /* No-fix outside sleep keeps acquisition UTC, including 0201 queries. */
++    /* New 0200 events advance UTC; 0201 keeps location acquisition UTC. */
+     gps_data_t location; assert(gps_get_last_trusted_location(&location));
+     assert(location.hour==0 && location.minute==0 && location.second==0);
+-    assert(jt808_send_location_work_mode(0,false,998)==0); check_report(8,0,0);
++    assert(jt808_send_location_work_mode(0,false,998)==0); check_report(8,23,0);
+     query(0,0x8201); assert(msg(0,&sn,d,&n)==0x0201 && d[37]==0x08 && d[38]==0);
+     /* A pending NOR record keeps the same event timestamp across retries. */
+     open_ch[0]=open_ch[3]=false; append_result=BLIND_ZONE_BUSY;
+--- before/tools/tests/test_wake_entry_event_clock.py
++++ after/tools/tests/test_wake_entry_event_clock.py
+@@ -91,9 +91,18 @@
+     assert(sends[0]==before+1 && sends[3]>=sends[0]);
+     unsigned repeat_count=sends[0]; uint32_t now=g_tick_ms;
+     step(now+1,!strcmp(argv[1],"acc"),false,false); assert(sends[0]==repeat_count);
+-    /* Ordinary no-fix and 0201 queries retain acquisition UTC. */
++    /* Second, third and fourth scheduled packets must continue event UTC;
++     * the mode-entry-only fix otherwise returns to old acquisition time. */
++    unsigned wake_s=now/1000U;
++    for(unsigned i=1;i<=3;++i) {
++        unsigned expected_s=wake_s+30*i;
++        step(expected_s*1000U,!strcmp(argv[1],"acc"),false,false);
++        assert(sends[0]==repeat_count+i);
++        check_clock(expected_s/60U,expected_s%60U);
++    }
++    /* New no-fix 0200 events advance; 0201 keeps location acquisition UTC. */
+     assert(jt808_send_location_work_mode(0,false,900)==0);
+-    assert(msg(0,&sn,d,&n)==0x0200 && d[37]==0x08 && d[38]==0 && d[39]==0);
++    check_clock((wake_s+90)/60U,(wake_s+90)%60U);
+     query(0,0x8201); assert(msg(0,&sn,d,&n)==0x0201 && d[38]==0 && d[39]==0);
+     /* Offline event transaction keeps its original timestamp and ACC during retry. */
+     open_ch[0]=open_ch[3]=false; append_result=BLIND_ZONE_BUSY;
+@@ -108,8 +117,8 @@
+     assert(sent==0 && !memcmp(saved,appended.location,34));
+     /* A fresh fix is still reported with real current-fix status. */
+     open_ch[0]=open_ch[3]=true;
+-    static const char *gga="GNGGA,000700.000,1000.0000,N,02000.0000,E,1,08,0.9,1.0,M,0.0,M,,";
+-    static const char *rmc="GNRMC,000700.000,A,1000.0000,N,02000.0000,E,0.0,0.0,071026,,,A";
++    static const char *gga="GNGGA,000900.000,1000.0000,N,02000.0000,E,1,08,0.9,1.0,M,0.0,M,,";
++    static const char *rmc="GNRMC,000900.000,A,1000.0000,N,02000.0000,E,0.0,0.0,071026,,,A";
+     feed_sentence(gga); gps_process(); feed_sentence(rmc); gps_process();
+     before=sends[0]; in.now_ms=g_tick_ms; in.now_s=g_tick_ms/1000;
+     in.acc_high=true; in.gps_valid=true;
+--- before/tools/tests/test_work_mode_jt808_contract.py
++++ after/tools/tests/test_work_mode_jt808_contract.py
+@@ -77,10 +77,10 @@
+ # it may not fall back to the compact blind-zone payload.
+ require("send_location_work_mode(alarm_bits, historical_position, report_id, false)" in
+         function_body("jt808_send_location_work_mode"),
+-        "ordinary report must preserve acquisition clock policy")
++        "ordinary report must use the shared encoder without forced entry tracing")
+ require("send_location_work_mode(alarm_bits, historical_position, report_id, true)" in
+         function_body("jt808_send_location_work_mode_event"),
+-        "mode-entry report must use event clock policy")
++        "mode-entry report must use the shared encoder with entry tracing")
+ wrapper = function_body("send_location_work_mode")
+ require(re.search(
+     r"encode_location_online\s*\(\s*&snapshot\s*,\s*body\s*,\s*alarm_bits\s*,"

@@ -44,7 +44,7 @@ def function_body(source: str, name: str) -> str:
 
 
 def main() -> None:
-    sender = function_body(JT808, "jt808_send_location_work_mode")
+    sender = function_body(JT808, "send_location_work_mode")
     require(sender.count("gps_get_unfixed_report(&snapshot)") == 2,
             "historical and live missing-fix paths must still produce a report")
     require("return JT808_SEND_NO_POSITION" not in sender,

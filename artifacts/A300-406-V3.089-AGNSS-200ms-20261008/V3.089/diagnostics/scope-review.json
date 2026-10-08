@@ -1,0 +1,34 @@
+{
+  "review": "scoped self-review",
+  "changes": [
+    "src/agnss_online.c",
+    "src/agnss_huada.c",
+    "tools/tests/test_agnss_online.py",
+    "tools/tests/test_agnss_vendor_stream.py",
+    "tools/tests/test_release_identity_contract.py",
+    "include/config.h",
+    "include/build_version.h",
+    "release_identity.json",
+    "tools/release_guard.py",
+    "src/gps.c",
+    "tools/tests/test_gps_tx_bounded.py"
+  ],
+  "requirements": [
+    "200 ms measured after cold UART TX completion",
+    "online and cache wait without blocking",
+    "UTC sampled at actual AID TX",
+    "existing ACK/deadline and failure behavior retained",
+    "pending prevents storage offset advancement during settle",
+    "existing diagnostic stage numbers retained"
+  ],
+  "reviewed_callers": [
+    "agnss_manager.c",
+    "gps_send_raw",
+    "huada_ack.c"
+  ],
+  "host_harness_fix": "GPS UART/ACK harness links real report filter with disabled configuration",
+  "explicit_header_fix": "gps.c includes stddef.h for offsetof; no behavior change",
+  "protocol_payload_changed": false,
+  "flash_layout_changed": false,
+  "hardware_status": "pending user flashing and ACK/NAK comparison"
+}

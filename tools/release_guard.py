@@ -133,7 +133,7 @@ CANONICAL_MACRO_DEFINITIONS = {
     "FW_VERSION_STR": re.compile(rf'"{re.escape(TARGET_VERSION)}"'),
     "MSG_QUERY_TERMINAL_INFO": re.compile(r"0[xX]8107(?:[uUlL]*)"),
     "F39_IMEI_MAX_LENGTH": re.compile(r"15(?:[uU])?"),
-    "WORK_MODE_DEFAULT_STOPPED_REPORT_S": re.compile(r"180(?:[uU])?"),
+    "WORK_MODE_DEFAULT_STOPPED_REPORT_S": re.compile(r"300(?:[uU])?"),
     "TICK_MS": re.compile(r"\(\s*g_tick_ms\s*\)"),
 }
 C_IDENTIFIER = r"(?:[^\W\d]|\\(?:u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}))(?:\w|\\(?:u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}))*"
@@ -152,12 +152,12 @@ CANONICAL_CONSUMER_SHA256 = {
     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
 }
 CANONICAL_IDENTITY_FILE_SHA256 = {
-    # Reviewed: V3.084/3084 identity; generated timestamps stay normalized.
-    "include/config.h": "829cd4a132923ecc8092fd179803c6378432a39ebdea731314acececa5ad3900",
-    "include/build_version.h": "7388459fa5b86fe9ac0c22ea3aba1e3b2c81e6dd62116e976c3b19517f259455",
+    # Reviewed: V3.091/3091 identity; generated timestamps stay normalized.
+    "include/config.h": "81b1eb504eef0bb31e50c1f41208d318d71dd06160c0c32f58f199b7d9339703",
+    "include/build_version.h": "b5317d0cd57e006de5b4ef4e3d1a470d2581a9caa07247d9b70f6a83fdf0115d",
     "include/f39_reply.h": "4519c084bcc677d23c02aa4ac509f2390527f16111139f011052017f08c615ed",
-    # Reviewed: remove unused heartbeat getter declaration only; identity/wire unchanged.
-    "include/jt808.h": "86a37c1e7c89ac947083f88d475ab5caf5ba41a4ef7300ee06b7824f62fb174d",
+    # Reviewed: all unfixed work-mode 0200 use event UTC; existing API/wire unchanged.
+    "include/jt808.h": "326707cc4584c282fc4589e915fd89ee36743b8bf5c1bc7e0fb35cdd6697da68",
     "include/jt808_terminal_info.h": "ed27611b540da8fe8ed50a3d349d52ada04f2e66aa62db8f3d6b85497c35d8df",
 }
 

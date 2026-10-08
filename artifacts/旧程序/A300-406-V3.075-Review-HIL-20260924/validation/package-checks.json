@@ -1,0 +1,9 @@
+{
+  "vectors": true,
+  "hex_checksum_address_and_payload": true,
+  "combined_offsets": true,
+  "factory_marker": true,
+  "ota_header_crc_payload": true,
+  "identity": true,
+  "source_changes_only_identity": true
+}

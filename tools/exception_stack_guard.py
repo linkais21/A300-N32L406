@@ -16,7 +16,9 @@ REVIEWED_FILES = {
     "Makefile": "63a13599e2f0dc3620792adf281cd30a8fe88a620f9e72d9b9dcdd5e2ba61212",
     # UART5 RX DMA request selection moved after channel init; NVIC policy is unchanged.
     "src/hw_init.c": "9f59e802fa52405e197c3970f2bda677ee630498196ed9ad97f6c58cd278a99b",
-    "src/main.c": "b74f037a52f840038bdec2561f6ccccd4669f364c9c7affa1be837dd26356700",
+    # Reviewed 2026-10-08: foreground report/0x0056 calls only; handlers,
+    # NVIC priorities, HardFault recovery and boot_init unchanged. See IRQ review.
+    "src/main.c": "ec26f9e7d6bc6d2518b475ad990f40f7baa117dd196610a2b3ec028256eae369",
     "src/work_mode_sleep.c": "d06e52cf291215ddd1932f3df79135d84f6a5aec2991e4a993285a30fb2bcafe",
     "src/startup_n32l40x.s": "37acc056a5dcc630e520d7d97987e369e281c477e373ce2f706abdfab85fe84f",
     "sdk/Nations.N32L40x_Library.2.2.0/firmware/CMSIS/device/n32l40x.h":

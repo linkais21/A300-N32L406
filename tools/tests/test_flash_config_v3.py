@@ -212,6 +212,8 @@ static void test_power_cut_never_loads_mixed_candidate(void)
     new_cfg.city_be[0] = 1U; new_cfg.city_be[1] = 44U;
     new_cfg.plate_color = 2U; new_cfg.plate_color_valid = 1U;
     new_cfg.mileage_m = 1234500U;
+    new_cfg.speed_limit_time_be[3] = 3U;
+    new_cfg.speed_limit_time_valid = 1U;
     set_text(new_cfg.plate_no, sizeof new_cfg.plate_no, "A12345");
     int successful_operations;
     int cut;
@@ -373,6 +375,24 @@ static void test_vibration_migration_power_cuts(void)
     }
 }
 
+static void test_speed_duration_persistence(void)
+{
+    memset(flash_image, 0xFF, sizeof(flash_image));
+    restart_without_fault();
+    assert(sizeof(device_config_t)==788U);
+    assert(offsetof(device_config_t,pid)==684U);
+    assert(offsetof(device_config_t,device_api_key)==756U);
+    assert(cfg_speed_limit_time_s(cfg_get())==10U);
+    for(unsigned duration=0;duration<=3;duration+=3){
+        device_config_t next=*cfg_get();
+        next.speed_limit_time_valid=1U;
+        next.speed_limit_time_be[3]=(uint8_t)duration;
+        assert(cfg_store_candidate(&next));restart_without_fault();
+        assert(cfg_speed_limit_time_s(cfg_get())==duration);
+        assert(operation_count==0);
+    }
+}
+
 int main(void)
 {
     assert(CFG_VERSION == 4U);
@@ -384,6 +404,7 @@ int main(void)
     test_vibration_migration_power_cuts();
     test_default_persistence_failure_is_logged();
     test_independent_auth_codes();
+    test_speed_duration_persistence();
     test_power_cut_never_loads_mixed_candidate();
     test_mileage_updates_are_deferred();
     test_corner_switch_survives_restart();

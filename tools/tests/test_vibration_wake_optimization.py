@@ -102,7 +102,7 @@ static void slow_cooperative_loop_uses_observed_sample_ratio(void)
     assert(work_mode_state() == WORK_MODE_REALTIME);
 }
 
-static void third_consecutive_miss_requires_a_new_six_seconds(void)
+static void over_one_second_quiet_requires_a_new_six_seconds(void)
 {
     uint32_t t;
     enter_stationary();
@@ -110,10 +110,13 @@ static void third_consecutive_miss_requires_a_new_six_seconds(void)
     step_ms(300400U, false);
     step_ms(300600U, false);
     step_ms(300800U, false);
-    for (t = 301000U; t < 307000U; t += 200U)
+    step_ms(301000U, false);
+    step_ms(301200U, false);
+    step_ms(301400U, false);
+    for (t = 301600U; t < 307600U; t += 200U)
         step_ms(t, true);
     assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
-    step_ms(307000U, true);
+    step_ms(307600U, true);
     assert(work_mode_state() == WORK_MODE_REALTIME);
 }
 
@@ -174,8 +177,8 @@ int main(int argc, char **argv)
         scheduler_jitter_uses_elapsed_time();
     else if (strcmp(argv[1], "slow_loop") == 0)
         slow_cooperative_loop_uses_observed_sample_ratio();
-    else if (strcmp(argv[1], "third_miss") == 0)
-        third_consecutive_miss_requires_a_new_six_seconds();
+    else if (strcmp(argv[1], "quiet_gap") == 0)
+        over_one_second_quiet_requires_a_new_six_seconds();
     else if (strcmp(argv[1], "sparse_long") == 0)
         sparse_hits_do_not_accumulate_across_windows();
     else if (strcmp(argv[1], "one_entry") == 0)
@@ -230,8 +233,8 @@ class VibrationPolicyTests(unittest.TestCase):
     def test_03_confirmation_uses_elapsed_time_under_scheduler_jitter(self) -> None:
         self.run_case("jitter")
 
-    def test_04_third_consecutive_miss_resets_the_episode(self) -> None:
-        self.run_case("third_miss")
+    def test_04_over_one_second_quiet_resets_the_episode(self) -> None:
+        self.run_case("quiet_gap")
 
     def test_03b_slow_loop_uses_observed_sample_ratio(self) -> None:
         self.run_case("slow_loop")

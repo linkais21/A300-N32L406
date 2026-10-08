@@ -123,6 +123,7 @@ bool ec800m_tcp_send_was_ambiguous(void) { return false; }
 void ec800m_tcp_send_clear_ambiguous(void) {}
 bool hw_acc_is_on(void) { return false; }
 bool gps_get_last_trusted(gps_data_t *out) { (void)out; return false; }
+bool gps_get_last_trusted_location(gps_data_t *out) { (void)out; return false; }
 void log_platform_on_first_online(void) {}
 void log_platform_on_blind_zone_uploaded(void) {}
 jt808_terminal_info_result_t jt808_terminal_info_encode(

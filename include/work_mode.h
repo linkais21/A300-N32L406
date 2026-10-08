@@ -31,7 +31,7 @@ typedef struct {
 } work_mode_input_t;
 
 #define WORK_MODE_ACC_DEBOUNCE_MS 500U
-#define WORK_MODE_DEFAULT_STOPPED_REPORT_S 180U
+#define WORK_MODE_DEFAULT_STOPPED_REPORT_S 300U
 
 /* Supply the raw PA12 sample and millisecond timestamp before work_mode_step.
  * Host callers that only have second resolution may omit this call. */

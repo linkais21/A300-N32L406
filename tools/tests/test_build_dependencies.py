@@ -68,8 +68,9 @@ class DependencyTests(unittest.TestCase):
             run()
             self.assertTrue(all(a != b for a, b in zip(before[:-1], times()[:-1])))
             self.assertEqual(before[-1], times()[-1])
+            # Each probe must change the effective flags; the production default is -g3.
             for flags in ("EXTRA_CFLAGS=-DBUILD01_PROBE=1", "EXTRA_CFLAGS=",
-                          "DEBUG_FLAGS=-g3", "SDK_CFLAGS=-Wno-unused-parameter",
+                          "DEBUG_FLAGS=-g1", "SDK_CFLAGS=-Wno-unused-parameter",
                           "SIGNATURE_CFLAGS=-fno-lto -g1",
                           "ASFLAGS=-mcpu=cortex-m4 -mthumb -x assembler-with-cpp -Iinclude",
                           "LDFLAGS=-nostdlib", "EXTRA_CFLAGS="):

@@ -38,6 +38,7 @@ static uint8_t response[600],packet[100],ack[10];
 static uint8_t last_id;
 static void sum(uint8_t *p,unsigned n);
 static int tx_error;
+static uint32_t cold_done;
 static char request[256];
 static char last_log[192];
 static char trace_hex[1100];
@@ -63,8 +64,8 @@ void ec800m_tcp_close(uint8_t ch){assert(ch==2);closes++;tcp=TCP_STATE_CLOSED;}
 tcp_state_t ec800m_tcp_state(uint8_t ch){assert(ch==2);return tcp;}
 int gps_send_raw(const uint8_t *p,uint32_t n){
     static const uint8_t cold[]={0xf1,0xd9,0x06,0x40,0x01,0x00,0x01,0x48,0x22};
-    if(n==sizeof cold) assert(!memcmp(p,cold,sizeof cold));
-    else { assert((n==28U && p[3]==0x11U) || (n==25U && p[3]==0x10U) || (n==100U && p[3]==0x33U)); if(n==100U) assert(!memcmp(p,packet,n)); last_id=p[3]; }
+    if(n==sizeof cold) { assert(!memcmp(p,cold,sizeof cold)); tick+=7; cold_done=tick; }
+    else { assert((n==28U && p[3]==0x11U) || (n==25U && p[3]==0x10U) || (n==100U && p[3]==0x33U)); if(n==100U) assert(!memcmp(p,packet,n)); assert((uint32_t)(tick-cold_done)>=1000U); last_id=p[3]; }
     uart++;return tx_error;
 }
 uint32_t gps_agnss_ack_sequence(void){return acks;}
@@ -72,6 +73,13 @@ bool gps_agnss_take_ack(uint32_t *seq,uint8_t *p){if(*seq==acks)return false;*se
 static void sum(uint8_t *p,unsigned n){uint8_t a=0,b=0;for(unsigned i=2;i<n-2;i++){a+=p[i];b+=a;}p[n-2]=a;p[n-1]=b;}
 static void start(void){agnss_online_reset();cfg.agps_en=1;tick+=60001;fix=ota=false;ready=enabled=true;tx_error=0;gps=(gps_data_t){.lat=22.5,.lon=113.9,.altitude_m=12.5f,.year=2026,.month=10,.day=1,.hour=12,.minute=30,.second=0,.valid=true};assert(agnss_online_process(GNSS_TYPE_TAU804M));tcp=TCP_STATE_OPEN;assert(agnss_online_process(GNSS_TYPE_TAU804M));assert(strstr(request,"GET /download/ephemeris/HD_BDS.hdb HTTP/1.1\r\n"));}
 static void pump(unsigned n){while(n--)agnss_online_process(GNSS_TYPE_TAU804M);}
+static void first_aid(void){
+    unsigned before=uart;
+    pump(3);assert(uart==before+1); /* cold TX consumes seven ms */
+    pump(10);assert(uart==before+1);
+    tick+=999;pump(3);assert(uart==before+1);
+    tick++;pump(2);assert(uart==before+2);
+}
 int main(void){
     memcpy(packet,"\xf1\xd9\x0b\x33\x5c\x00",6);sum(packet,100);
     memcpy(ack,"\xf1\xd9\x05\x01\x02\x00\x0b\x33",8);sum(ack,10);
@@ -81,7 +89,7 @@ int main(void){
     for(unsigned split=1;split<h+200;split++){
         start();unsigned before=uart;
         agnss_online_rx(2,response,split);agnss_online_rx(2,response+split,h+200-split);
-        pump(5);assert(uart==before+2);pump(4);assert(uart==before+2);
+        first_aid();assert(uart==before+2);pump(4);assert(uart==before+2);
         acks++;pump(1);pump(1);assert(uart==before+3);
         acks++;pump(2);assert(uart==before+4);
         acks++;pump(2);assert(uart==before+5);
@@ -89,11 +97,11 @@ int main(void){
         assert(agnss_online_has_injected());
     }
     assert(strstr(last_log,"result=1")&&strstr(last_log,"http=200 rx=200/200 tx=4 ack=4 seen=4"));
-    start();agnss_online_rx(2,response,h+200);pump(5);unsigned before=uart;
+    start();agnss_online_rx(2,response,h+200);first_aid();unsigned before=uart;
     tick+=1000;pump(3);assert(!agnss_online_has_injected()&&uart==before);
     assert(strstr(last_log,"reason=ack-timeout")&&strstr(last_log,"tx=1 ack=0 seen=0"));
     acks++;pump(3);assert(uart==before); /* late ACK does not restart */
-    start();agnss_online_rx(2,response,h+200);pump(5);ota=true;pump(1);
+    start();agnss_online_rx(2,response,h+200);first_aid();ota=true;pump(1);
     assert(tcp==TCP_STATE_CLOSED&&!agnss_online_has_injected());ota=false;
     start();agnss_online_rx(2,response,h+199);tick+=30000;pump(1);
     assert(tcp==TCP_STATE_CLOSED&&!agnss_online_has_injected());
@@ -112,7 +120,7 @@ int main(void){
     start();tx_error=-1;agnss_online_rx(2,response,h+200);pump(6);assert(!agnss_online_has_injected());
     assert(strstr(last_log,"reason=cold-start")&&strstr(last_log,"tx=0 ack=0 seen=0"));
     start();agnss_online_rx(2,response,h+200);agnss_online_rx(2,(const uint8_t*)"x",1);before=uart;pump(6);assert(uart==before);
-    start();agnss_online_rx(2,response,h+200);pump(5);ack[3]=0;sum(ack,10);
+    start();agnss_online_rx(2,response,h+200);first_aid();ack[3]=0;sum(ack,10);
     trace_used=timing_lines=tx_lines=rx_lines=0;
     pump(1);assert(trace_used==0 && timing_lines==0 && tx_lines==0 && rx_lines==0);
     acks++;pump(3);assert(!agnss_online_has_injected());ack[3]=1;sum(ack,10);
@@ -120,6 +128,23 @@ int main(void){
     assert(timing_lines==1 && tx_lines==1 && rx_lines==1);
     assert(trace_used==76 && !memcmp(trace_hex,"f1d90b111400000012ea070a010c1e00",32));
     assert(strstr(trace_hex,"f1d9050002000b11"));
+    /* UTC is sampled after settling, never cached before the delay. */
+    start();agnss_online_rx(2,response,h+200);pump(3);before=uart;
+    tick+=999;gps.second=1;pump(3);assert(uart==before);
+    tick++;pump(2);ack[3]=0;sum(ack,10);trace_used=0;
+    acks++;pump(2);ack[3]=1;sum(ack,10);
+    assert(!memcmp(trace_hex,"f1d90b111400000012ea070a010c1e01",32));
+    /* The overall deadline still applies during the settle window. */
+    start();agnss_online_rx(2,response,h+200);pump(3);before=uart;
+    tick+=30000;pump(2);assert(uart==before && strstr(last_log,"reason=deadline"));
+    /* Cold settle survives tick wrap; cancellation and late input stop TX. */
+    tick=UINT32_MAX-60101U;start();agnss_online_rx(2,response,h+200);first_aid();
+    agnss_online_reset();assert(!agnss_online_has_injected());
+    start();agnss_online_rx(2,response,h+200);pump(3);before=uart;
+    enabled=false;pump(1);tick+=1000;pump(3);assert(uart==before);enabled=true;
+    start();agnss_online_rx(2,response,h+200);pump(3);before=uart;
+    agnss_online_rx(2,(const uint8_t*)"x",1);tick+=1000;pump(3);assert(uart==before);
+    assert(strstr(last_log,"reason=late-data"));
     /* The TAU804M is configured as BDS-only; a GPS AID-PEPH frame is rejected. */
     { uint8_t gps_packet[73]={0xf1,0xd9,0x0b,0x32,0x41,0x00};
       uint8_t gps_response[160];
@@ -130,7 +155,7 @@ int main(void){
       start();agnss_online_rx(2,gps_response,(uint16_t)(gh+sizeof gps_packet));pump(3);
       assert(!agnss_online_has_injected());
     }
-    start();agnss_online_rx(2,response,h+200);pump(5);enabled=false;pump(1);assert(tcp==TCP_STATE_CLOSED);enabled=true;
+    start();agnss_online_rx(2,response,h+200);first_aid();enabled=false;pump(1);assert(tcp==TCP_STATE_CLOSED);enabled=true;
     agnss_online_reset();fix=true;assert(agnss_online_process(GNSS_TYPE_TAU804M));fix=false;
     memset(cfg.agps_ip,'a',sizeof cfg.agps_ip);before=opens;pump(1);assert(opens==before);cfg.agps_ip[0]=0;
     agnss_online_reset();cfg.agps_en=0;before=opens;pump(10);assert(opens==before);

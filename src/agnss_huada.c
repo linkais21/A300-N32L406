@@ -19,8 +19,10 @@ bool gnss_vendor_inject(gnss_type_t type, const uint8_t *data, uint16_t len)
 bool gnss_vendor_inject_pending(void) { return false; }
 #else
 #define HUADA_STREAM_MAX 4096U
-enum { HUADA_STAGE_TIME, HUADA_STAGE_POS, HUADA_STAGE_DATA };
+#define HUADA_COLD_SETTLE_MS 1000U
+enum { HUADA_STAGE_TIME, HUADA_STAGE_POS, HUADA_STAGE_DATA, HUADA_STAGE_COLD_SETTLE };
 static uint32_t s_stream_len;
+static uint32_t s_cold_done_ms;
 static bool s_stream_started;
 static bool s_chunk_active;
 static bool s_frame_active;
@@ -39,7 +41,7 @@ static void huada_reset_stream(void)
     huada_ack_cancel(&s_ack);
     s_stream_len=0;s_stream_started=false;s_chunk_active=false;
     s_frame_active=false;s_frame_len=0;s_stage=HUADA_STAGE_TIME;
-    s_ack_waiting=false;s_failed=false;s_ack_sequence=0;
+    s_ack_waiting=false;s_failed=false;s_ack_sequence=0;s_cold_done_ms=0;
     agnss_stream_workspace_release(AGNSS_STREAM_OWNER_HUADA);
 }
 
@@ -142,8 +144,14 @@ int agnss_huada_inject(const agnss_source_t *src, const gps_context_t *ctx)
         static const uint8_t cold_start[] = {0xF1,0xD9,0x06,0x40,0x01,0x00,0x01,0x48,0x22};
         if (gps_send_raw(cold_start,sizeof cold_start) != 0) { huada_reset_stream(); return -1; }
         s_stream_started=true; s_stream_len=0;
+        /* Start the settle window after the last cold-start byte is sent. */
+        s_cold_done_ms=TICK_MS();s_stage=HUADA_STAGE_COLD_SETTLE;
     }
     if (s_failed) { huada_reset_stream(); return -1; }
+    if (s_stage == HUADA_STAGE_COLD_SETTLE) {
+        if ((uint32_t)(TICK_MS()-s_cold_done_ms) < HUADA_COLD_SETTLE_MS) return 1;
+        s_stage=HUADA_STAGE_TIME;
+    }
     if (s_ack_waiting) {
         int p=poll_ack();
         if (p) return p;
@@ -210,6 +218,7 @@ bool gnss_vendor_inject(gnss_type_t type, const uint8_t *data, uint16_t len)
 
 bool gnss_vendor_inject_pending(void)
 {
-    return s_ack_waiting || s_frame_active;
+    return (s_stream_started && s_stage == HUADA_STAGE_COLD_SETTLE) ||
+           s_ack_waiting || s_frame_active;
 }
 #endif

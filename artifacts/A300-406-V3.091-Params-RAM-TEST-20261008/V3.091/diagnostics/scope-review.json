@@ -1,0 +1,11 @@
+{
+  "status": "scoped_self_review_complete",
+  "reviewed_main_functions_unchanged": true,
+  "main_irq_fingerprint_updated_after_review": true,
+  "required_runtime_gap_unchanged": 4096,
+  "hard_heap_reservation_unchanged": 1024,
+  "unknown_reachable_call_and_changed_vector_rejections_retained": true,
+  "identity_change_only": "V3.090/3090 -> V3.091/3091",
+  "test_fixture_repairs_only": true,
+  "hardware_acceptance": "pending on exact packaged image"
+}

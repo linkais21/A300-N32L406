@@ -24,7 +24,7 @@ class BuildRecoveryTests(unittest.TestCase):
                     (work / "include").mkdir()
                     shutil.copy2(ROOT / "include/build_version.h", work / "include/build_version.h")
                     shutil.copy2(ROOT / "Makefile", work / "Makefile")
-                    for name in ("flash_capacity_guard.py", "flash_capacity_baseline.json", "map_ram_guard.py", "stack_usage_guard.py"):
+                    for name in ("flash_capacity_guard.py", "flash_capacity_baseline.json", "map_ram_guard.py", "exception_stack_guard.py", "stack_usage_guard.py"):
                         shutil.copy2(ROOT / "tools" / name, work / "tools" / name)
                     shutil.copy2(ROOT / "ldscript/n32l406.ld", work / "ldscript/n32l406.ld")
                     source = work / "fixture.c"

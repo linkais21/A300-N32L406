@@ -19,29 +19,54 @@ int main(void)
     overspeed_policy_t policy;
 
     overspeed_policy_init(&policy);
-    assert(!overspeed_policy_step(&policy, 0U, true, true, 120.0f, 120U));
-    assert(!overspeed_policy_step(&policy, 1U, true, true, 120.1f, 120U));
-    assert(!overspeed_policy_step(&policy, 10000U, true, true, 120.1f, 120U));
-    assert(overspeed_policy_step(&policy, 10001U, true, true, 120.1f, 120U));
-    assert(!overspeed_policy_step(&policy, 600000U, true, true, 180.0f, 120U));
+    assert(!overspeed_policy_step(&policy, 0U, true, true, 120.0f, 120U, 10U));
+    assert(!overspeed_policy_step(&policy, 1U, true, true, 120.1f, 120U, 10U));
+    assert(!overspeed_policy_step(&policy, 10000U, true, true, 120.1f, 120U, 10U));
+    assert(overspeed_policy_step(&policy, 10001U, true, true, 120.1f, 120U, 10U));
+    assert(!overspeed_policy_step(&policy, 600000U, true, true, 180.0f, 120U, 10U));
 
-    assert(!overspeed_policy_step(&policy, 601000U, true, true, 100.0f, 120U));
-    assert(!overspeed_policy_step(&policy, 602000U, true, true, 130.0f, 120U));
-    assert(overspeed_policy_step(&policy, 612000U, true, true, 130.0f, 120U));
+    assert(!overspeed_policy_step(&policy, 601000U, true, true, 100.0f, 120U, 10U));
+    assert(!overspeed_policy_step(&policy, 602000U, true, true, 130.0f, 120U, 10U));
+    assert(overspeed_policy_step(&policy, 612000U, true, true, 130.0f, 120U, 10U));
 
-    assert(!overspeed_policy_step(&policy, 613000U, true, true, 100.0f, 120U));
-    assert(!overspeed_policy_step(&policy, 614000U, false, true, 180.0f, 120U));
-    assert(!overspeed_policy_step(&policy, 624000U, true, true, 180.0f, 120U));
-    assert(!overspeed_policy_step(&policy, 634000U, true, true, 180.0f, 120U));
-    assert(overspeed_policy_step(&policy, 912000U, true, true, 180.0f, 120U));
-
-    overspeed_policy_init(&policy);
-    assert(!overspeed_policy_step(&policy, UINT32_MAX - 5000U, true, true, 121.0f, 120U));
-    assert(overspeed_policy_step(&policy, 4999U, true, true, 121.0f, 120U));
+    assert(!overspeed_policy_step(&policy, 613000U, true, true, 100.0f, 120U, 10U));
+    assert(!overspeed_policy_step(&policy, 614000U, false, true, 180.0f, 120U, 10U));
+    assert(!overspeed_policy_step(&policy, 624000U, true, true, 180.0f, 120U, 10U));
+    assert(!overspeed_policy_step(&policy, 634000U, true, true, 180.0f, 120U, 10U));
+    assert(overspeed_policy_step(&policy, 912000U, true, true, 180.0f, 120U, 10U));
 
     overspeed_policy_init(&policy);
-    assert(!overspeed_policy_step(&policy, 0U, true, false, 150.0f, 120U));
-    assert(!overspeed_policy_step(&policy, 10000U, true, true, 150.0f, 0U));
+    assert(!overspeed_policy_step(&policy, UINT32_MAX - 5000U, true, true, 121.0f, 120U, 10U));
+    assert(overspeed_policy_step(&policy, 4999U, true, true, 121.0f, 120U, 10U));
+
+    overspeed_policy_init(&policy);
+    assert(!overspeed_policy_step(&policy, 0U, true, false, 150.0f, 120U, 10U));
+    assert(!overspeed_policy_step(&policy, 10000U, true, true, 150.0f, 0U, 10U));
+    /* A configured three-second duration takes effect at the boundary. */
+    overspeed_policy_init(&policy);
+    assert(!overspeed_policy_step(&policy, 100U, true, true, 130.0f, 120U, 3U));
+    assert(!overspeed_policy_step(&policy, 3099U, true, true, 130.0f, 120U, 3U));
+    assert(overspeed_policy_step(&policy, 3100U, true, true, 130.0f, 120U, 3U));
+    assert(!overspeed_policy_step(&policy, 5000U, true, true, 130.0f, 120U, 3U));
+    /* Explicit zero is immediate, including the first valid sample. */
+    overspeed_policy_init(&policy);
+    assert(overspeed_policy_step(&policy, 100U, true, true, 130.0f, 120U, 0U));
+    /* Longer duration, invalid fix reset and tick wrap. */
+    overspeed_policy_init(&policy);
+    assert(!overspeed_policy_step(&policy, 0U, true, true, 130.0f, 120U, 30U));
+    assert(!overspeed_policy_step(&policy, 10000U, true, false, 130.0f, 120U, 30U));
+    assert(!overspeed_policy_step(&policy, 20000U, true, true, 130.0f, 120U, 30U));
+    assert(!overspeed_policy_step(&policy, 49999U, true, true, 130.0f, 120U, 30U));
+    assert(overspeed_policy_step(&policy, 50000U, true, true, 130.0f, 120U, 30U));
+    overspeed_policy_init(&policy);
+    assert(!overspeed_policy_step(&policy, UINT32_MAX-999U, true, true, 130.0f, 120U, 3U));
+    assert(!overspeed_policy_step(&policy, 1999U, true, true, 130.0f, 120U, 3U));
+    assert(overspeed_policy_step(&policy, 2000U, true, true, 130.0f, 120U, 3U));
+    overspeed_policy_init(&policy);
+    assert(!overspeed_policy_step(&policy, 0U, true, true, 130.0f, 120U, UINT32_MAX/1000U));
+    assert(overspeed_policy_step(&policy, (UINT32_MAX/1000U)*1000U, true, true, 130.0f, 120U, UINT32_MAX/1000U));
+    overspeed_policy_init(&policy);
+    assert(!overspeed_policy_step(&policy, 0U, true, true, 130.0f, 120U, UINT32_MAX));
     return 0;
 }
 '''
@@ -57,6 +82,7 @@ def main():
     required = (
         "overspeed_policy_step(",
         "cfg_get()->speed_limit_kmh",
+        "cfg_speed_limit_time_s(cfg_get())",
         "jt808_trigger_alarm(ALM_OVERSPEED)",
         "work_mode_notify_alarm(ALM_OVERSPEED)",
     )

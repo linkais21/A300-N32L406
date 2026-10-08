@@ -1,0 +1,11 @@
+{
+  "file": "A300-406-OTA-V3071.bin",
+  "deviceModel": "A300-406",
+  "versionCode": 3071,
+  "versionName": "T360-A300_406_20260920230201,V3.071",
+  "sha256": "feaac8be9fa291c5f966a283856c50a4008d1d80d0e40e1c443090db190f8729",
+  "size": 105196,
+  "signing": "platform-detached",
+  "active": false,
+  "mandatory": false
+}

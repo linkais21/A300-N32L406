@@ -277,7 +277,8 @@ static void scan_alarms(void)
         if (overspeed_policy_step(&s_overspeed_policy, now_ms,
                                   work_mode_state() == WORK_MODE_REALTIME,
                                   fresh_fix, speed_gps->speed_kmh,
-                                  cfg_get()->speed_limit_kmh)) {
+                                  cfg_get()->speed_limit_kmh,
+                                  cfg_speed_limit_time_s(cfg_get()))) {
             dbg_printf("[ALARM] overspeed speed_x10=%u limit=%u\r\n",
                        (unsigned)(speed_gps->speed_kmh * 10.0f),
                        (unsigned)cfg_get()->speed_limit_kmh);
@@ -378,7 +379,7 @@ static void acc_report_settle(uint32_t now_s)
     s_acc_report_s = now_s;
     dbg_printf("[ACC] report settled level=%u\r\n",
                (unsigned)s_acc_report_pending);
-    (void)jt808_send_location_work_mode(0U, false, work_mode_allocate_report_id());
+    (void)jt808_send_location_work_mode_event(0U, false, work_mode_allocate_report_id());
 }
 
 void work_mode_process(void)
@@ -577,8 +578,11 @@ void work_mode_process(void)
                 acc_report_suppressed(action.acc_on, now_s)) {
                 break;
             }
-            sent = jt808_send_location_work_mode(action.alarm_bits,
-                                                 action.historical_position, action.report_id);
+            sent = action.type == WORK_ACTION_REPORT_ENTRY ?
+                   jt808_send_location_work_mode_event(action.alarm_bits,
+                       action.historical_position, action.report_id) :
+                   jt808_send_location_work_mode(action.alarm_bits,
+                       action.historical_position, action.report_id);
             /* The sender supplies a retained or unfixed snapshot internally.
              * Retry transport/storage failure, yielding this dispatcher pass. */
             if (sent != 0) {

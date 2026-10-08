@@ -75,7 +75,13 @@ require(re.search(
 
 # The work-mode wrapper must keep the existing complete online extension path;
 # it may not fall back to the compact blind-zone payload.
-wrapper = function_body("jt808_send_location_work_mode")
+require("send_location_work_mode(alarm_bits, historical_position, report_id, false)" in
+        function_body("jt808_send_location_work_mode"),
+        "ordinary report must use the shared encoder without forced entry tracing")
+require("send_location_work_mode(alarm_bits, historical_position, report_id, true)" in
+        function_body("jt808_send_location_work_mode_event"),
+        "mode-entry report must use the shared encoder with entry tracing")
+wrapper = function_body("send_location_work_mode")
 require(re.search(
     r"encode_location_online\s*\(\s*&snapshot\s*,\s*body\s*,\s*alarm_bits\s*,"
     r"\s*historical_position\s*\)", wrapper) is not None,

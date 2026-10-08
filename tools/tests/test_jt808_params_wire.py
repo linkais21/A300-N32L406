@@ -44,6 +44,22 @@ int main(void) {
         inject(ch,0x8106,location_query,sizeof location_query);
         assert(msg(ch,&sn,decoded,&len)==0x0104&&decoded[14]==4);
         assert(!memcmp(decoded+15,location+1,sizeof location-1));
+        /* All requested IDs may arrive together on either authenticated channel. */
+        const uint8_t compatibility[]={11,
+            0,0,0,0x56,4,0,0,0,3,
+            0,0,0,2,4,0,0,0,10,0,0,0,3,4,0,0,0,3,
+            0,0,0,4,4,0,0,0,10,0,0,0,0x22,4,0,0,0,60,
+            0,0,0,0x28,4,0,0,0,60,0,0,0,0x2c,4,0,0,0,100,
+            0,0,0,0x2e,4,0,0,0,100,0,0,0,0x2f,4,0,0,0,100,
+            0,0,0,0x30,4,0,0,0,30,0,0,0,0x31,4,0,0,0,100};
+        unsigned inactive_other=ch==0?3:0, inactive_sends=sends[inactive_other];
+        inject(ch,0x8103,compatibility,sizeof compatibility);
+        assert(msg(ch,&sn,decoded,&len)==1&&decoded[16]==0);
+        assert(sends[inactive_other]==inactive_sends&&cfg_speed_limit_time_s(&cfg)==3U);
+        const uint8_t duration_query[]={1,0,0,0,0x56};
+        inject(ch,0x8106,duration_query,sizeof duration_query);
+        assert(msg(ch,&sn,decoded,&len)==0x0104&&decoded[14]==1);
+        assert(!memcmp(decoded+15,compatibility+1,9));
         const uint8_t speed[]={1,0,0,0,0x55,4,0,0,0,100};
         inject(ch,0x8103,speed,sizeof speed);
         assert(msg(ch,&sn,decoded,&len)==1&&decoded[16]==0&&cfg.speed_limit_kmh==100);
@@ -63,7 +79,7 @@ int main(void) {
         assert(!memcmp(decoded+20,(uint8_t[]){0,0,0,120},4));
         assert(!memcmp(decoded+29,set+sizeof(set)-8,8));
         inject(ch,0x8104,NULL,0);assert(msg(ch,&sn,decoded,&len)==0x0104);
-        assert(decoded[14]==18);
+        assert(decoded[14]==19);
         assert(jt808_send_register_to(ch)==0);assert(msg(ch,&sn,decoded,&len)==0x0100);
         assert(!memcmp(decoded+12,(uint8_t[]){0,44,1,44},4));assert(decoded[48]==2);
         assert(!memcmp(decoded+49,set+sizeof(set)-8,8));

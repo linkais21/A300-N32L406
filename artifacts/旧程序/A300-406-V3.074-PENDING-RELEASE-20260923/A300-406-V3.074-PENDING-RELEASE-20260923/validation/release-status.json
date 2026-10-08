@@ -1,0 +1,5 @@
+{
+  "formal_release_allowed": false,
+  "release_gate_exit": 2,
+  "blocking_reason": "whole-program stack/heap/IRQ evidence incomplete"
+}

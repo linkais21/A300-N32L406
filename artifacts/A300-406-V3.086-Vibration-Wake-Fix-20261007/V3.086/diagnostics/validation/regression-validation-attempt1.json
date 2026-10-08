@@ -1,0 +1,295 @@
+{
+  "recorded_utc": "2026-10-07T07:59:55.261071+00:00",
+  "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+  "make": "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+  "results": [
+    {
+      "name": "test_vibration_confirmation_boundary",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_vibration_confirmation_boundary.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.68,
+      "log": "test_vibration_confirmation_boundary.log",
+      "output_sha256": "6de4bd52b4b69d140450dbe25dc639c2678cef1fb0016a8fcc1215d48732f9f9"
+    },
+    {
+      "name": "test_vibration_wake_optimization",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_vibration_wake_optimization.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.73,
+      "log": "test_vibration_wake_optimization.log",
+      "output_sha256": "9d4ffbc307313a6ed52c0704f824bb1fac4cb3a821edf8e09f9d35af0740340c"
+    },
+    {
+      "name": "test_work_mode_policy",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_work_mode_policy.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.64,
+      "log": "test_work_mode_policy.log",
+      "output_sha256": "36b6cea054ebbe5454f1855270e6a193c1e7d08bc9106f62ee4b2586978d744c"
+    },
+    {
+      "name": "test_accel_vibration_filter",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_accel_vibration_filter.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.75,
+      "log": "test_accel_vibration_filter.log",
+      "output_sha256": "ef60093898457ebcba290491f3c63afca172541be11a9b96fada10ef367a88ef"
+    },
+    {
+      "name": "test_i2c_accel_vibration_adapter",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_i2c_accel_vibration_adapter.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.04,
+      "log": "test_i2c_accel_vibration_adapter.log",
+      "output_sha256": "910fe836e0abf64c693b75996fb8d52c9d52c7e54a423b098fa4e6aa7997fe0b"
+    },
+    {
+      "name": "test_i2c_accel_vibration_filter",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_i2c_accel_vibration_filter.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.04,
+      "log": "test_i2c_accel_vibration_filter.log",
+      "output_sha256": "7f41e58e9d7419a99b2046543b122ce38382a3e62e88b071ad42327f4db23e28"
+    },
+    {
+      "name": "test_vibration_sensitivity",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_vibration_sensitivity.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.47,
+      "log": "test_vibration_sensitivity.log",
+      "output_sha256": "78653680003726503f35ae296caf476fea657897b718333087988036872c5564"
+    },
+    {
+      "name": "test_sleep_wake_timestamp_vibration_contract",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_sleep_wake_timestamp_vibration_contract.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.04,
+      "log": "test_sleep_wake_timestamp_vibration_contract.log",
+      "output_sha256": "2bfdebacd855eeeb20b089d3dcef4e3aed6e2c8928be08cb7ed9753548408fec"
+    },
+    {
+      "name": "test_work_mode_contract",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_work_mode_contract.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.05,
+      "log": "test_work_mode_contract.log",
+      "output_sha256": "6437c6929988ce7d0ecfe63d69e1011b76c9177389add589d7c31f325b6d261a"
+    },
+    {
+      "name": "test_work_mode_jt808_contract",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_work_mode_jt808_contract.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.04,
+      "log": "test_work_mode_jt808_contract.log",
+      "output_sha256": "b4396d4ab362c28536c6b54e3ee36e2beecc31fd7351cdc08abac123430d79a7"
+    },
+    {
+      "name": "test_acc_stop1_contract",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_acc_stop1_contract.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.05,
+      "log": "test_acc_stop1_contract.log",
+      "output_sha256": "0a9997dd2c2b18118fb2f4bff4d039f9085455065e49b42746d68b36087024d1"
+    },
+    {
+      "name": "test_shallow_sleep_contract",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_shallow_sleep_contract.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.48,
+      "log": "test_shallow_sleep_contract.log",
+      "output_sha256": "cb134f5558a90090b1c414166d4fe881f70aa3265a0cace6d671531fa51f848c"
+    },
+    {
+      "name": "test_sleep_location_reporting",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_sleep_location_reporting.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 1.69,
+      "log": "test_sleep_location_reporting.log",
+      "output_sha256": "b376a9dd60f96916be68a5911a31d85e960aec8671b2322ba2259aa5368a2888"
+    },
+    {
+      "name": "test_jt808_dual_session",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_jt808_dual_session.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 1.06,
+      "log": "test_jt808_dual_session.log",
+      "output_sha256": "e69411afb5ecce8a155e01277ff621940e03257daa629ea51f9d4ef27e0413db"
+    },
+    {
+      "name": "test_jt808_nofix_clock",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_jt808_nofix_clock.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 1.12,
+      "log": "test_jt808_nofix_clock.log",
+      "output_sha256": "1533433426b906be3d8eae6a19df21c9b83191d5906ef139436b5f8310f148d8"
+    },
+    {
+      "name": "test_feature_guards",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_feature_guards.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.15,
+      "log": "test_feature_guards.log",
+      "output_sha256": "5746eb09ec6e171cb12aea68ca41aa60bfa588f5c250aec3b0c0c95b3f0e4a92"
+    },
+    {
+      "name": "test_release_identity_contract",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_release_identity_contract.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.11,
+      "log": "test_release_identity_contract.log",
+      "output_sha256": "bf751884e4769a9a7f09b7b20ba32d4d2340686e45751d6f5fe4c3acbccd16d6"
+    },
+    {
+      "name": "test_build_version_refresh",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_build_version_refresh.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 1.14,
+      "log": "test_build_version_refresh.log",
+      "output_sha256": "026398eceb0281f4342fe6727b8c24fd4b111ed8514776b87bfa5e6fba3c05fc"
+    },
+    {
+      "name": "test_release_make_selection",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_release_make_selection.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.08,
+      "log": "test_release_make_selection.log",
+      "output_sha256": "430d79b4cb56acb689c9eb7c85e5a01944e6bcc07bf88134761601254a16fce2"
+    },
+    {
+      "name": "test_dev_release_manifest",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_dev_release_manifest.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.19,
+      "log": "test_dev_release_manifest.log",
+      "output_sha256": "a47cc322e4ae436cc5cfabd6ae93c1bfe5ce097d6ef08d418958f6552c97c9ce"
+    },
+    {
+      "name": "test_a300_ota_image",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_a300_ota_image.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.24,
+      "log": "test_a300_ota_image.log",
+      "output_sha256": "9c49b7a70f52c66c72ced223bc92f115682df973782a34ca25e51bf0ea90af98"
+    },
+    {
+      "name": "test_fota_package",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_fota_package.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.06,
+      "log": "test_fota_package.log",
+      "output_sha256": "370d3e41bfa64a4c5e02738fecee27d5547157ac5bfa354d0c8459223e92ba8a"
+    },
+    {
+      "name": "test_image_manifest",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_image_manifest.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.07,
+      "log": "test_image_manifest.log",
+      "output_sha256": "691661003e79048743ae9c0612f774225a4417c8e43a2cb6fc51b26988d14023"
+    },
+    {
+      "name": "test_dev_signed_package",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_dev_signed_package.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 1.33,
+      "log": "test_dev_signed_package.log",
+      "output_sha256": "bf9386e0abb3a08863bba9d0d14e22b8fb4fd3cfd6f674f0fa80a8fb576ddd3e"
+    },
+    {
+      "name": "test_blind_zone_store",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_blind_zone_store.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 14.53,
+      "log": "test_blind_zone_store.log",
+      "output_sha256": "675ca95e66bb4e768ff9517e951e462506b89b42e7a116a0b352378d0811d301"
+    },
+    {
+      "name": "test_blind_zone_replay",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_blind_zone_replay.py"
+      ],
+      "exit_code": 1,
+      "duration_seconds": 1.0,
+      "log": "test_blind_zone_replay.log",
+      "output_sha256": "335f0601991d3455324f640639fcfec4389460f0ca219578cdef4bc57277d8f8"
+    }
+  ],
+  "complete": false,
+  "all_passed": false
+}

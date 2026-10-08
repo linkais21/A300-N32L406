@@ -75,6 +75,10 @@ void IWDG_ReloadKey(void){}
 void delay_ms(uint32_t ms){g_tick_ms+=ms;}
 int dbg_printf(const char *fmt,...){(void)fmt;return 0;}
 
+/* This parser fixture has no stationary filter; keep trusted snapshots raw.
+ * The production filter has its own regression scripts. */
+bool gps_report_filter_copy(const gps_data_t *raw,gps_data_t *out,uint32_t now){(void)now;*out=*raw;return false;}
+
 static void feed(const char *s){while(*s)gps_rx_isr((uint8_t)*s++);}
 
 int main(void){

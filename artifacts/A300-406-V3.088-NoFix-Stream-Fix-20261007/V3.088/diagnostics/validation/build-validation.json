@@ -1,0 +1,24 @@
+{
+  "recorded_utc": "2026-10-07T09:15:29.910500+00:00",
+  "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+  "make": "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+  "results": [
+    {
+      "name": "release-build",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/build_dev_release.py",
+        "--output",
+        "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.088-NoFix-Stream-Fix-20261007",
+        "--version-counter",
+        "3088"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 46.24,
+      "log": "release-build.log",
+      "output_sha256": "047cfb3b73b014f7390086b7b76a73652db841594857f086e223a9a867d082db"
+    }
+  ],
+  "complete": true,
+  "all_passed": true
+}

@@ -241,7 +241,7 @@ static void test_pa12_alternating_noise_never_commits(void)
     (void)drain(discarded, ARRAY_LEN(discarded));
 }
 
-static void test_vibration_misses_do_not_count_and_third_resets(void)
+static void test_vibration_misses_do_not_count_and_long_gap_resets(void)
 {
     work_mode_action_t discarded[12];
 
@@ -252,6 +252,11 @@ static void test_vibration_misses_do_not_count_and_third_resets(void)
     step_ms(600U, false, false);
     assert(work_mode_vibration_hits() == 1U);
     step_ms(800U, false, false);
+    assert(work_mode_vibration_hits() == 1U);
+    step_ms(1000U, false, false);
+    step_ms(1200U, false, false);
+    assert(work_mode_vibration_hits() == 1U);
+    step_ms(1400U, false, false);
     assert(work_mode_vibration_hits() == 0U);
     assert(work_mode_state() == WORK_MODE_STATIONARY_SLEEP);
     (void)drain(discarded, ARRAY_LEN(discarded));
@@ -334,10 +339,14 @@ static void test_zero_stopped_interval_uses_default_sleep_report_period(void)
     step(179U, false, false, 0U, false);
     assert_actions((const work_mode_action_type_t[]){}, 0U);
     step(180U, false, false, 0U, false);
-    assert_actions(expected, ARRAY_LEN(expected));
-    step(359U, false, false, 0U, false);
     assert_actions((const work_mode_action_type_t[]){}, 0U);
-    step(360U, false, false, 0U, false);
+    step(299U, false, false, 0U, false);
+    assert_actions((const work_mode_action_type_t[]){}, 0U);
+    step(300U, false, false, 0U, false);
+    assert_actions(expected, ARRAY_LEN(expected));
+    step(599U, false, false, 0U, false);
+    assert_actions((const work_mode_action_type_t[]){}, 0U);
+    step(600U, false, false, 0U, false);
     assert_actions(expected, ARRAY_LEN(expected));
 }
 
@@ -744,7 +753,7 @@ int main(void)
     test_thirty_consecutive_200ms_hits_confirm_six_seconds();
     test_pa12_requires_500ms_continuous_stability_both_directions();
     test_pa12_alternating_noise_never_commits();
-    test_vibration_misses_do_not_count_and_third_resets();
+    test_vibration_misses_do_not_count_and_long_gap_resets();
     test_sparse_vibration_spikes_do_not_enter_realtime();
     test_two_vibration_misses_preserve_but_do_not_shorten_confirmation();
     test_acc_falling_edge_precedes_same_step_vibration();

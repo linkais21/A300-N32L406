@@ -8,6 +8,13 @@
 #include "at_config.h"
 #ifndef HOST_REAL_GPS
 void gps_get_unfixed_report(gps_data_t *out) { memset(out, 0, sizeof(*out)); }
+/* Unit fixtures have no separate event/acquisition clock. Real-GPS tests
+ * link gps.c and verify the distinction on the encoded wire. */
+bool gps_get_last_trusted_location(gps_data_t *out) {
+    if (!gps_get_last_trusted(out)) return false;
+    out->valid = false;
+    return true;
+}
 #endif
 fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
 bool gps_report_filter_motion_pending(uint32_t now) { (void)now; return false; }

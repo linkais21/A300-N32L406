@@ -1,9 +1,0 @@
-{
-  "release_gate": "INCOMPLETE_FOR_HIL",
-  "release_guard": "PASS",
-  "flash_guard": "PASS_WITH_LOW_HEADROOM_ALERT",
-  "ram_guard": "FAILED",
-  "stack_guard": "INCOMPLETE",
-  "reason": "Current src/hw_init.c IRQ policy change has no proven whole-program stack/heap bound; do not use for fleet deployment.",
-  "post_upgrade_online_acceptance": "Required: wait for BOOT trial, 4G registration, JT808 online, HEALTH F=0, then confirm ACTIVE."
-}

@@ -1,0 +1,16 @@
+[
+  {
+    "name": "agnss_online",
+    "pre_fix_rejected": true,
+    "test_sha256": "753919e33d651f7389c8b5a73ccff73fc5781792922bb041c4b69d956423d77d",
+    "baseline_source_sha256": "5286f12c6d1bece1404ac652fc4d703a9437c53b77f23412bcfd42a286030719",
+    "error": "dout(output),contextlib.redirect_stderr(output):getattr(m,entry)()\n                                                                               ~~~~~~~~~~~~~~~~^^\n  File \"D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_agnss_online.py\", line 171, in test_online\n    subprocess.run([str(exe)], check=True, timeout=20)\n    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Python314\\Lib\\subprocess.py\", line 577, in run\n    raise CalledProcessError(retcode, process.args,\n                             output=stdout, stderr=stderr)\nsubprocess.CalledProcessError: Command '['<USERPROFILE>\\\\AppData\\\\Local\\\\Temp\\\\agnss_online_dj96i624\\\\test.exe']' returned non-zero exit status 3.\n"
+  },
+  {
+    "name": "agnss_vendor_stream",
+    "pre_fix_rejected": true,
+    "test_sha256": "c7b53e1da38488392884b9017d4653f9d3596e1f59ce5b5ec5b20621123a183b",
+    "baseline_source_sha256": "e65a5c834e2699f8e68860e6526d3fe5e3875a16689049a45496c08997acb9da",
+    "error": " call last):\n  File \"D:\\A300_406_tools\\A300_406\\outputs\\release-v3089-agnss-delay-20261008\\run_red_final.py\", line 17, in <module>\n    with contextlib.redirect_stdout(output),contextlib.redirect_stderr(output):getattr(m,entry)()\n                                                                               ~~~~~~~~~~~~~~~~^^\n  File \"D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_agnss_vendor_stream.py\", line 245, in test_c_harness\n    raise AssertionError(\"C harness failed (exit %d):\\n%s\" % (run.returncode, run.stderr))\nAssertionError: C harness failed (exit 3):\nAssertion failed: (uint32_t)(tick-cold_done)>=200U, file <USERPROFILE>\\AppData\\Local\\Temp\\tmpso5yjleg\\harness.c, line 22\n\n"
+  }
+]

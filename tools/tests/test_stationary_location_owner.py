@@ -49,7 +49,7 @@ def test_stationary_work_mode_disables_legacy_location_timer():
 
 def test_work_mode_report_synchronizes_legacy_location_timer():
     """A work-mode 0200 cannot leave the legacy timer immediately due."""
-    wrapper = function_body("jt808_send_location_work_mode")
+    wrapper = function_body("send_location_work_mode")
     assert re.search(
         r"result\s*=\s*send_frame_broadcast\s*\(\s*&frame\s*\)\s*;"
         r"[\s\S]*?result\s*==\s*0[\s\S]*?s_last_location_ms\s*=\s*TICK_MS\s*\(\s*\)",

@@ -47,6 +47,10 @@ def main():
         rejects(lambda: assess_exception_stack(elf, analysis, profile, root),
                 "changed Bootloader jump contract was accepted")
     with patch.dict(exception_stack_guard.REVIEWED_FILES,
+                    {"src/main.c": "0" * 64}):
+        rejects(lambda: assess_exception_stack(elf, analysis, profile, root),
+                "changed main.c IRQ review was accepted")
+    with patch.dict(exception_stack_guard.REVIEWED_FILES,
                     {"src/hw_init.c": "0" * 64}):
         rejects(lambda: assess_exception_stack(elf, analysis, profile, root),
                 "changed IRQ priority policy was accepted")

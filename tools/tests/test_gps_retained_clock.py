@@ -11,8 +11,8 @@ CASES = r'''
     }
     assert(out.hour==5 && out.minute==48 && out.second==22);
     assert(out.lat==49.0 && out.lon==12.0);
-    /* A delayed GNSS timestamp must refresh position without rewinding the
-     * awake clock, so a following no-fix report does not return to startup. */
+    /* A validated live measurement corrects civil UTC in either direction.
+     * Its age, not read time, anchors subsequent event-clock advancement. */
     gps_data_t delayed = *gps_get_data();
     delayed.lat=50.0; delayed.lon=13.0;
     delayed.year=2026; delayed.month=9; delayed.day=24;
@@ -21,21 +21,21 @@ CASES = r'''
     assert(gps_capture_last_trusted_snapshot(&delayed));
     assert(gps_get_last_trusted(&out));
     assert(out.lat==50.0 && out.lon==13.0);
-    assert(out.hour==5 && out.minute==48 && out.second==22);
+    assert(out.day==24 && out.hour==12 && out.minute==35 && out.second==20);
     assert(!gps_is_valid());
     /* Repeated reports and GPS on/off do not restart or double the clock. */
-    assert(gps_get_last_trusted(&out) && out.second==22);
+    assert(gps_get_last_trusted(&out) && out.second==20);
     gps_enable(false);
     g_tick_ms += 10000;
-    assert(gps_get_last_trusted(&out) && out.second==32);
+    assert(gps_get_last_trusted(&out) && out.second==30);
     gps_enable(true);
     g_tick_ms += 9900; /* enable(true) spent 100 ms awake */
-    assert(gps_get_last_trusted(&out) && out.second==42);
+    assert(gps_get_last_trusted(&out) && out.second==40);
     /* STOP1: SysTick freezes, RTC adds just the stopped interval. */
     g_tick_ms += 500;
     gps_advance_last_trusted_seconds(15);
     g_tick_ms += 500;
-    assert(gps_get_last_trusted(&out) && out.second==58);
+    assert(gps_get_last_trusted(&out) && out.second==56);
     /* Unsigned tick wrap and leap-day rollover. */
     g_tick_ms = UINT32_MAX-499U;
     gps_apply_ntp_utc(2028, 2, 28, 23, 59, 59);
@@ -46,7 +46,7 @@ CASES = r'''
     g_tick_ms += 2000U;
     assert(gps_get_last_trusted(&out));
     assert(out.year==2029 && out.month==1 && out.day==1 && out.second==1);
-    /* A new valid fix updates position; older fixes cannot rewind time. */
+    /* Re-reading the same fresh measurement must not restart its clock. */
     selected.year=2029; selected.month=1; selected.day=1;
     selected.hour=0; selected.minute=0; selected.second=5;
     selected.last_update_ms=g_tick_ms;

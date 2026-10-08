@@ -1,0 +1,7 @@
+{
+  "command": [
+    "python",
+    "tools/tests/test_wake_entry_event_clock.py"
+  ],
+  "exit_code": 1
+}

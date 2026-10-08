@@ -11,7 +11,8 @@
 #include "a300_format.h"
 #include <string.h>
 
-enum { IDLE, OPENING, RECEIVING, VALIDATING, COLD_START, SENDING, WAIT_ACK, FAILED };
+enum { IDLE, OPENING, RECEIVING, VALIDATING, COLD_START, SENDING, WAIT_ACK, FAILED, COLD_SETTLE };
+#define HUADA_COLD_SETTLE_MS 1000U
 enum { LOCAL_TIME, LOCAL_POS, NETWORK_DATA };
 static uint8_t s_phase;
 static bool s_header, s_done, s_attempted, s_socket;
@@ -153,7 +154,7 @@ void agnss_online_rx(uint8_t ch,const uint8_t *data,uint16_t n)
 {
     uint8_t *b;
     if(ch!=EC800M_CH_AGPS || !data || !n)return;
-    if(s_phase==VALIDATING || s_phase==SENDING || s_phase==WAIT_ACK){s_reason="late-data";s_phase=FAILED;return;}
+    if(s_phase==VALIDATING || s_phase==COLD_START || s_phase==COLD_SETTLE || s_phase==SENDING || s_phase==WAIT_ACK){s_reason="late-data";s_phase=FAILED;return;}
     if(s_phase!=RECEIVING)return;
     b=buffer();
     if(!b || n>AGNSS_STREAM_WORKSPACE_CAPACITY-s_used){s_reason="rx-overflow";s_phase=FAILED;return;}
@@ -293,9 +294,15 @@ bool agnss_online_process(gnss_type_t type)
         s_offset+=(uint16_t)n;
         if(s_offset==s_expected){s_offset=0;s_phase=COLD_START;}
     } else if (s_phase==COLD_START) {
-        s_trace_cold_ms=now;
         if(!send_cold_start())fail("cold-start");
-        else s_phase=SENDING;
+        else {
+            /* gps_send_raw returns after UART TX completes; do not count TX time. */
+            s_trace_cold_ms=TICK_MS();
+            s_phase=COLD_SETTLE;
+        }
+    } else if(s_phase==COLD_SETTLE) {
+        /* Nonblocking: the main loop continues servicing modem/GNSS/watchdog. */
+        if((uint32_t)(now-s_trace_cold_ms)>=HUADA_COLD_SETTLE_MS) s_phase=SENDING;
     } else if(s_phase==SENDING) {
         const uint8_t *b;
         uint16_t frame;

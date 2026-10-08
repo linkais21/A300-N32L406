@@ -1,0 +1,24 @@
+{
+  "recorded_utc": "2026-10-08T07:28:20.045756+00:00",
+  "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+  "make": "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+  "results": [
+    {
+      "name": "release-build",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/build_dev_release.py",
+        "--output",
+        "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.089-AGNSS-200ms-20261008",
+        "--version-counter",
+        "3089"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 45.4,
+      "log": "release-build.log",
+      "output_sha256": "349823f0b467307e311cd125ce026f6bfd845c30b4eca4c01eb9365866c7f15e"
+    }
+  ],
+  "complete": true,
+  "all_passed": true
+}

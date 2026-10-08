@@ -1,0 +1,86 @@
+{
+  "recorded_utc": "2026-10-07T08:38:44.912301+00:00",
+  "cwd": "D:\\A300_406_tools\\A300_406\\A300-first",
+  "make": "D:\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+  "results": [
+    {
+      "name": "test_wake_entry_event_clock",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_wake_entry_event_clock.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 1.23,
+      "log": "test_wake_entry_event_clock.log",
+      "output_sha256": "ed4d42739ae6a40b3a25440f2f7add0da8e32fd01d4d06ceac590dc5bf43dde5"
+    },
+    {
+      "name": "test_acc_bounce_hardening",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_acc_bounce_hardening.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.05,
+      "log": "test_acc_bounce_hardening.log",
+      "output_sha256": "721d3f729cc38665ab72e68126d9cb3fc4a82d1fe56aab06de52b4d127409a08"
+    },
+    {
+      "name": "test_location_retry_backoff",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_location_retry_backoff.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.04,
+      "log": "test_location_retry_backoff.log",
+      "output_sha256": "de1f060f7acb521763f40c44d4811a746b9de2b257b4708e17d21c2d53ff550f"
+    },
+    {
+      "name": "test_stationary_location_owner",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_stationary_location_owner.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.04,
+      "log": "test_stationary_location_owner.log",
+      "output_sha256": "a93ce47d2ec85e24d767dcd4810d12e43131413f41429ead3d5cd7ded3c29f8d"
+    },
+    {
+      "name": "test_gps_ntp_apply",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_gps_ntp_apply.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.62,
+      "log": "test_gps_ntp_apply.log",
+      "output_sha256": "1f411f2bdad6d7605d3470c272fa8f8099681c06dce9154cf51ccadbc06c4a91"
+    },
+    {
+      "name": "test_gps_retained_clock",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_gps_retained_clock.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.64,
+      "log": "test_gps_retained_clock.log",
+      "output_sha256": "1f411f2bdad6d7605d3470c272fa8f8099681c06dce9154cf51ccadbc06c4a91"
+    },
+    {
+      "name": "test_gps_report_wire",
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/tests/test_gps_report_wire.py"
+      ],
+      "exit_code": 1,
+      "duration_seconds": 1.04,
+      "log": "test_gps_report_wire.log",
+      "output_sha256": "cdfedd30c3a73b835b6815c810caafb067eb6830ebac2e123b61346cb03c19f7"
+    }
+  ],
+  "complete": false,
+  "all_passed": false
+}

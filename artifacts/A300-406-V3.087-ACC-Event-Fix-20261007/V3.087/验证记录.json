@@ -1,0 +1,83 @@
+{
+  "recorded_utc": "2026-10-07T08:42:09.227947+00:00",
+  "firmware_version": "T360-A300_406_20261007163524,V3.087",
+  "version_counter": 3087,
+  "status": "package-verified-hardware-pending",
+  "device_flashed": false,
+  "checks": [
+    "App/Boot HEX addresses, checksums and BIN consistency",
+    "Combined HEX/BIN and factory marker",
+    "App/Boot vectors and memory boundaries",
+    "OTA header/version/model/length/CRC32 and body identity",
+    "release gates and generated manifest",
+    "source stability and prior V3.086 ZIP preserved"
+  ],
+  "artifacts": {
+    "App-N32L406CBL7.bin": {
+      "size": 105240,
+      "sha256": "242a16d4ec9ee3a57511855157026460fa410b5195dc3d91fd5c4d7686268a62"
+    },
+    "Bootloader-N32L406CBL7.bin": {
+      "size": 22556,
+      "sha256": "99c1b857695c504b88f16024cd7e5d474916b8cfb8e72ac4334e1d8c10fa86da"
+    },
+    "Combined-N32L406CBL7.bin": {
+      "size": 129816,
+      "sha256": "60305b72b4e3f11f2320f39d7cd68a2a16b88b54f1ab34d0e362123c814644bf"
+    },
+    "Combined-N32L406CBL7.hex": {
+      "size": 365182,
+      "sha256": "0b4cb10702b11be9b086955b80a6fbfb04604fae2e813ad4821097262db24210"
+    },
+    "A300-406-OTA-V3087.bin": {
+      "size": 105272,
+      "sha256": "3815e8fa76d13e79b81c46b3d6f770b5331aab4cfafd9f7a3eb96f1501e68874"
+    }
+  },
+  "app_flash_used": 105240,
+  "app_flash_remaining": 1256,
+  "ram_budget": {
+    "schema_version": 1,
+    "status": "pass",
+    "standalone_stack_report_status": "incomplete",
+    "reviewed_execution_roots_status": "complete",
+    "elf_sha256": "42d3f236515aebd1a5b2a439ba3053c969cbad061071aaabefdab412de5de1ff",
+    "map_sha256": "db2d08153176fcec792d230fe287462238aab8f005ba2892183725de84aa3f3e",
+    "stack_evidence_sha256": "6389dff4405c2ee4501f3c96b48f81fd5beebe4bd857a0a0cbf9f52af6d49328",
+    "static_sram": 16048,
+    "linker_alignment": 4,
+    "hard_heap_reservation": 1024,
+    "boot_main_stack": 2796,
+    "exception": {
+      "preemption_group": 2,
+      "normal_group_frames": [
+        16,
+        0,
+        20
+      ],
+      "hardfault_frame": 8,
+      "nmi_frame": 0,
+      "hardware_frame_each": 108,
+      "max_nested_entries": 5,
+      "software_frames": 44,
+      "exception_stack_bytes": 584
+    },
+    "runtime_gap": 4120,
+    "required_gap": 4096
+  },
+  "boot_runtime_stack_audited": false,
+  "old_package_preserved_sha256": {
+    "A300-406-V3.086-Vibration-Wake-Fix-20261007.zip": "b5bf6f65b9792b45b504fbcdc9489878eb47827ed009093bb722ccd986219cf7"
+  },
+  "combined_hex_command": [
+    "D:\\A300_406_tools\\A300_406\\A300-first\\.toolchain\\bin\\arm-none-eabi-objcopy.exe",
+    "-I",
+    "binary",
+    "-O",
+    "ihex",
+    "--change-addresses",
+    "0x08000000",
+    "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.087-ACC-Event-Fix-20261007\\V3.087\\Combined-N32L406CBL7.bin",
+    "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.087-ACC-Event-Fix-20261007\\V3.087\\Combined-N32L406CBL7.hex"
+  ]
+}

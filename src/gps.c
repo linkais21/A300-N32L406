@@ -9,6 +9,7 @@
 #include "n32l40x.h"
 #include <string.h>
 #include <math.h>
+#include <stddef.h>
 
 #define NMEA_BUF_SIZE  128
 #define NMEA_FIELD_MAX 24
