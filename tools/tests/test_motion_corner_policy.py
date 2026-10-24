@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 HARNESS = r'''
 #include <assert.h>
+#include <stddef.h>
 #include <math.h>
 #include "motion_corner.h"
 

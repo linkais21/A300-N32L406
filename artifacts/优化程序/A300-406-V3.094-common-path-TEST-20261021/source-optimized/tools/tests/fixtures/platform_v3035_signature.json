@@ -1,0 +1,8 @@
+{
+  "source": "Live OTA check response on 2026-09-12; public signing metadata only",
+  "versionCode": 3035,
+  "size": 105808,
+  "sha256": "ce6a29646f875b5e0249f73d7ff5cf1459700b476ee602d8574622f0ce8c4139",
+  "signature": "e17b4dfbd88c18f6e7f62653221b1cba3571879cbee21716b0005a9bc58d6c30953ae945160a30208449a6871ba8a2335cd44fd56c9dec699125f7cd1401aec7",
+  "signingKeyId": 1
+}

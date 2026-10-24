@@ -23,7 +23,7 @@ int main(void) {
     auth_resp(0,sn0,0); auth_resp(3,sn3,0);
     /* Retain an invented test fix; live GNSS remains invalid throughout. */
     gps_data_t fix={0}; fix.valid=true; fix.fix_quality=1;
-    fix.lat=10; fix.lon=20; fix.year=2026; fix.month=9; fix.day=20;
+    fix.lat_e7=100000000; fix.lon_e7=200000000; fix.year=2026; fix.month=9; fix.day=20;
     fix.hour=5; fix.minute=47; fix.second=52; fix.last_update_ms=g_tick_ms;
     assert(gps_capture_last_trusted_snapshot(&fix));
     for(unsigned i=1; i<=3; ++i) {
@@ -42,7 +42,7 @@ int main(void) {
     }
     /* Query reports still describe the original acquisition UTC. */
     query(0,0x8201);
-    assert(msg(0,&sn0,d,&n)==0x0201 && d[37]==0x13 && d[38]==0x47 && d[39]==0x52);
+    assert(msg(0,&sn0,d,&n)==0x0201 && d[39]==0x13 && d[40]==0x47 && d[41]==0x52);
     /* A blind-zone record keeps its event time while its append is retried. */
     open_ch[0]=open_ch[3]=false;
     append_result=BLIND_ZONE_BUSY;

@@ -46,6 +46,7 @@
 /* Alarms */
 #define PARAM_SPEED_LIMIT          0x0055  /* uint32, km/h */
 #define PARAM_SPEED_LIMIT_TIME     0x0056  /* DWORD, seconds: 0..UINT32_MAX/1000 */
+#define PARAM_SPEED_WARNING_DELTA  0x005B  /* WORD, 0.1 km/h below speed limit */
 #define PARAM_CONT_DRIVE_TIME      0x0057  /* uint32, minutes */
 #define PARAM_DRIVE_DAY_TIME       0x0058  /* uint32, minutes */
 #define PARAM_MIN_REST_TIME        0x0059  /* uint32, minutes */

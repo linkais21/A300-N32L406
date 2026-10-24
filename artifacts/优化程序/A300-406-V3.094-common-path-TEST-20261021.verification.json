@@ -1,0 +1,31 @@
+{
+  "archive_sha256": "5e8976baf7ae414fe3cb5ce5c8c7a84d76f36ef0df1c81ff99dc193bab3259ce",
+  "archive_crc_ok": true,
+  "source_rebuild_bin_identical": true,
+  "bin_sha256": "f250984af81fa31a2efb80c22c3b08f1cad79c586553884137e74b3e6ec73caa",
+  "commands": [
+    {
+      "command": [
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+        "-j4",
+        "all",
+        "-o",
+        "include/build_version.h",
+        "BUILD=build-common-final",
+        "TOOLCHAIN_DIR=D:/ProjectTools/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\tools\\w64devkit\\w64devkit\\bin\\mingw32-make.exe",
+        "release-gate",
+        "-o",
+        "include/build_version.h",
+        "BUILD=build-common-final",
+        "TOOLCHAIN_DIR=D:/ProjectTools/A300_Tools/toolchains/arm-gnu-toolchain-14.3.rel1/bin"
+      ],
+      "exit_code": 0
+    }
+  ]
+}

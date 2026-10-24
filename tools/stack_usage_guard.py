@@ -154,7 +154,9 @@ def reviewed_startup_evidence(elf_path: Path) -> dict:
         "ADC_IRQHandler": (2, "575fc8fa9e92ffe7d57a6aef6f1168f39da04f07d6bcd5b5e17883bff7b33165"),
         "__libc_init_array": (72, "cfb531f04870922d1408b2ea7bebde176fc38df8b4ed9240dde330e3f77a2a5d"),
         "frame_dummy": (36, "64f1a264e15c340add93e4e359bb9148541c33c8d414d354eef94efa6abaadf3"),
-        "register_tm_clones": (36, "fed0b3c07108990514f33afe004f478eb29c14257e7ef9bcd6f65d6e7ca5e05c"),
+        # Re-reviewed 2026-10-21: identical instructions; only the two equal
+        # SRAM clone-table literals move with the expanded .data section.
+        "register_tm_clones": (36, "d830de5efddbe2a1e897cf035cd1176cf9bbc5767f32d6ec4eb8a499bdc611cd"),
     }
     labels = {"CopyDataInit": 0x04, "LoopCopyDataInit": 0x0c,
               "FillZerobss": 0x1a, "LoopFillZerobss": 0x20}

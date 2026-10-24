@@ -79,6 +79,8 @@ void ec800m_power_off(void);
 void ec800m_reset(void);
 /* Rebuild PDP context 1 using the current persisted APN configuration. */
 void ec800m_restart_pdp(void);
+/* No platform channel opens while READY: false rebuilds PDP, true resets. */
+void ec800m_link_stalled(bool power_cycle);
 
 /* TCP */
 int  ec800m_tcp_open(uint8_t ch, const char *ip, uint16_t port);

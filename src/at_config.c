@@ -104,7 +104,8 @@ F39_BINDING_VIS void f39_production_jt808_auth_reset(uint8_t channel_mask, void 
 F39_BINDING_VIS void f39_production_modem_pdp_restart(void *context) { (void)context; tcp_manager_reconnect(); ec800m_restart_pdp(); }
 F39_BINDING_VIS void f39_production_gnss_set_mode(gnss_type_t type, uint8_t mode, void *context)
 {
-    static const char *const commands[] = { NULL, "$PCAS04,1*18\r\n", "$PCAS04,2*1B\r\n", "$PCAS04,7*1E\r\n" };
+    /* Spec: 1=GPS, 2=BDS, 3=GPS+BDS (CASIC PCAS04 bitmask 1|2). */
+    static const char *const commands[] = { NULL, "$PCAS04,1*18\r\n", "$PCAS04,2*1B\r\n", "$PCAS04,3*1A\r\n" };
     (void)context; gnss_vendor_set_type(type);
     if (mode >= 1U && mode <= 3U) gps_send_cmd(commands[mode]);
 }
@@ -249,6 +250,24 @@ static bool console_u16(const char *text, uint16_t *out)
     return true;
 }
 
+/* Fixed-point console formatting; the firmware links no double printf. */
+static void print_e7(const char *label, int32_t value_e7)
+{
+    uint32_t magnitude = value_e7 < 0 ? 0U - (uint32_t)value_e7 : (uint32_t)value_e7;
+    /* 1e-6 degrees, truncated like the former %.6f of a 1e-7 value. */
+    dbg_printf("%s=%s%u.%06u", label, value_e7 < 0 ? "-" : "",
+               (unsigned)(magnitude / 10000000U),
+               (unsigned)(magnitude % 10000000U / 10U));
+}
+
+static void print_tenths(const char *label, float value)
+{
+    int32_t tenths = (int32_t)(value * 10.0f + (value < 0.0f ? -0.5f : 0.5f));
+    uint32_t magnitude = tenths < 0 ? 0U - (uint32_t)tenths : (uint32_t)tenths;
+    dbg_printf(",%s=%s%u.%u", label, tenths < 0 ? "-" : "",
+               (unsigned)(magnitude / 10U), (unsigned)(magnitude % 10U));
+}
+
 static void handle_cmd(char *line)
 {
     char *cmd = NULL;
@@ -275,19 +294,24 @@ static void handle_cmd(char *line)
         char imei[16] = {0};
         ec800m_get_imei(imei, sizeof(imei));
         const gps_data_t *g = gps_get_data();
-        dbg_printf("IMEI=%s,CSQ=%d,GPS=%s,LAT=%.6f,LON=%.6f\r\n",
-                   imei, ec800m_get_csq(),
-                   g->valid ? "FIX" : "NOFIX",
-                   g->lat, g->lon);
+        dbg_printf("IMEI=%s,CSQ=%d,GPS=%s,", imei, ec800m_get_csq(),
+                   g->valid ? "FIX" : "NOFIX");
+        print_e7("LAT", g->lat_e7);
+        print_e7(",LON", g->lon_e7);
+        dbg_printf("\r\n");
         return;
     }
     /* ── POSITION ─────────────────────────────────────────────────────────── */
     if (strcmp(cmd, "POSITION") == 0) {
         const gps_data_t *g = gps_get_data();
-        if (g->valid)
-            dbg_printf("LAT=%.6f,LON=%.6f,SPD=%.1f,HDG=%.1f,ALT=%.1f\r\n",
-                       g->lat, g->lon, g->speed_kmh, g->heading, g->altitude_m);
-        else
+        if (g->valid) {
+            print_e7("LAT", g->lat_e7);
+            print_e7(",LON", g->lon_e7);
+            print_tenths("SPD", g->speed_kmh);
+            print_tenths("HDG", g->heading);
+            print_tenths("ALT", g->altitude_m);
+            dbg_printf("\r\n");
+        } else
             dbg_printf("NO FIX\r\n");
         return;
     }

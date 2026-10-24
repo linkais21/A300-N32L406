@@ -36,7 +36,7 @@ int main(void){
     for(unsigned i=0;i<12288;i++)assert(flash[0x11000+i]==255);
     fota_on_http_header("HTTP/1.1 206 Partial Content\r\nContent-Length: 8904\r\nContent-Range: bytes 4096-12999/13000\r\nETag: v7\r\n\r\n");
     memset(data,0xa5,sizeof data);fota_on_chunk(data,5000,4096);
-    assert(fota_checkpoint_load(checkpoint_url,13000,&loaded) && loaded.offset==8192);
+    flash_owner=EXT_FLASH_OWNER_OTA;assert(fota_checkpoint_load(checkpoint_url,13000,&loaded) && loaded.offset==8192);flash_owner=0;
     for(size_t i=0;i+14<=sizeof flash;i++)if(!memcmp(flash+i,"task-token-123",14))token_in_flash=true;
     assert(!strstr(loaded.url,"token=") && !token_in_flash);
     assert(loaded.running_crc==crc32_update(0,data,4096));
@@ -50,7 +50,7 @@ int main(void){
     fota_on_http_header("HTTP/1.1 200 OK\r\nContent-Length: 13000\r\nETag: v7\r\n\r\n");
     fota_on_chunk(data,1,0);assert(fota_get_progress()==8192);
     pump(1);assert(closes==before+1 && erases==1 && erased[0]>=0x102000);
-    assert(fota_checkpoint_load(checkpoint_url,13000,&loaded) && loaded.offset==0);
+    flash_owner=EXT_FLASH_OWNER_OTA;assert(fota_checkpoint_load(checkpoint_url,13000,&loaded) && loaded.offset==0);flash_owner=0;
     assert(flash[0x10000]==0x5a);
     /* Simulate reboot while previously committed prefix has only begun cleanup. */
     pump(1);assert(flash[0x10000]==255 && flash[0x11000]==0xa5);

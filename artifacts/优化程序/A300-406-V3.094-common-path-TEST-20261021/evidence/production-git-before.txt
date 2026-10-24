@@ -1,0 +1,62 @@
+ M Makefile
+ M include/build_version.h
+ M include/config.h
+ M include/flash_config.h
+ M include/jt808.h
+ M include/jt808_params.h
+ M include/overspeed_policy.h
+ M release_identity.json
+ M src/ec800m.c
+ M src/gps.c
+ M src/jt808.c
+ M src/jt808_params.c
+ M src/main.c
+ M src/mileage.c
+ M src/work_mode_sleep.c
+ M tools/exception_stack_guard.py
+ M tools/release_guard.py
+ M tools/stack_usage_guard.py
+ M tools/tests/test_blind_zone_replay.py
+ M tools/tests/test_ec800m_stalled_tick.py
+ M tools/tests/test_ec800m_udp_transaction.py
+ M tools/tests/test_flash_config_v3.py
+ M tools/tests/test_gps_report_wire.py
+ M tools/tests/test_jt808_nofix_clock.py
+ M tools/tests/test_jt808_params.py
+ M tools/tests/test_jt808_params_wire.py
+ M tools/tests/test_mileage_persistence.py
+ M tools/tests/test_nmea_replay.py
+ M tools/tests/test_overspeed_policy.py
+ M tools/tests/test_release_identity_contract.py
+ M tools/tests/test_sleep_location_reporting.py
+ M tools/tests/test_wake_entry_event_clock.py
+?? artifacts/A300-406-V3.092-Stationary-Mileage-TEST-20261012.zip
+?? artifacts/A300-406-V3.092-Stationary-Mileage-TEST-20261012.zip.sha256
+?? artifacts/A300-406-V3.092-Stationary-Mileage-TEST-20261012/
+?? artifacts/A300-406-V3.093-005B-SpeedWarning-TEST-20261015.zip
+?? artifacts/A300-406-V3.093-005B-SpeedWarning-TEST-20261015.zip.sha256
+?? artifacts/A300-406-V3.093-005B-SpeedWarning-TEST-20261015/
+?? artifacts/A300-406-V3.094-Clock-Mileage-TEST-20261021/
+?? "artifacts/\344\274\230\345\214\226\347\250\213\345\272\217/"
+?? docs/clock-mileage-repair-and-port-assessment-20261021.md
+?? docs/full-firmware-audit-20261021.md
+?? docs/jt808-005b-speed-warning-20261015.md
+?? docs/stationary-mileage-20261012.md
+?? docs/superpowers/plans/2026-10-12-v3092-stationary-mileage-test-package.md
+?? docs/superpowers/plans/2026-10-15-v3093-005b-test-package.md
+?? docs/superpowers/plans/2026-10-21-clock-mileage-port-assessment.md
+?? docs/superpowers/plans/2026-10-21-full-firmware-audit.md
+?? docs/superpowers/plans/2026-10-21-v3094-delivery.md
+?? docs/v3092-stationary-mileage-test-delivery-20261012.md
+?? docs/v3093-005b-speed-warning-test-delivery-20261015.md
+?? include/civil_date.h
+?? include/rtc_lsi_calibration.h
+?? src/rtc_lsi_calibration.c
+?? tools/tests/test_gps_date_coherence.py
+?? tools/tests/test_hardfault_frame.py
+?? tools/tests/test_jt808_protocol_edges.py
+?? tools/tests/test_ntp_sleep_clock.py
+?? tools/tests/test_rtc_lsi_calibration.py
+?? tools/tests/test_sleep_monotonic_wrap.py
+?? tools/tests/test_stationary_mileage.py
+?? tools/tests/test_tcp_long_offline.py

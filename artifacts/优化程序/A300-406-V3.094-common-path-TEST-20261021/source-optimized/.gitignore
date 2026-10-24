@@ -1,0 +1,56 @@
+# Build outputs
+build/
+dist/
+.keys/
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+*.su
+
+# IDE and editor files
+.vscode/
+.idea/
+*.code-workspace
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Debug files
+*.log
+*.dmp
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Build scripts (keep the source ones)
+build_all.ps1
+
+# Compiled firmware (keep sources, exclude binaries)
+*.axf
+*.d
+
+# Local portable host toolchain (downloaded outside the source release)
+tools/w64devkit/
+tools/w64devkit-*.7z.exe
+.toolchain/
+
+# HIL/bench build output bundles (regenerated per run, not source)
+output/
+
+# Isolated diagnostic and experimental build outputs
+/build-*/

@@ -131,7 +131,7 @@ int main(void) {
     feed("13800000002", "RELAY,0#");
     sms_ingress_process(); sms_ingress_process();
     assert(sent_count == 2 && !strcmp(sent_to[0], "13800000001") && !strcmp(sent_to[1], "13800000002"));
-    assert(strstr(sent_text[0], "IP=Success!") && strstr(sent_text[1], "RELAY,0=Success!"));
+    assert(strstr(sent_text[0], "IP,one.example,9001=Success!") && strstr(sent_text[1], "RELAY,0=Success!"));
     assert(saves == 1 && !strcmp(config.server_ip, "one.example") && config.server_port == 9001);
 
     order_len=0; callbacks=0;

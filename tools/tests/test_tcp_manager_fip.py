@@ -51,6 +51,8 @@ int ec800m_tcp_open(uint8_t channel, const char *ip, uint16_t port)
     return 0;
 }
 void ec800m_tcp_close(uint8_t channel) { (void)channel; ++close_calls; }
+static unsigned pdp_restarts, modem_resets;
+void ec800m_link_stalled(bool power_cycle) { if (power_cycle) ++modem_resets; else ++pdp_restarts; }
 tcp_state_t ec800m_tcp_state(uint8_t channel)
 { return channel_state[channel]; }
 void ec800m_get_imei(char *buf, uint8_t size) { snprintf(buf,size,"%s",stub_imei); }

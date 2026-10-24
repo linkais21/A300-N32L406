@@ -90,7 +90,7 @@ int main(void){
     assert(!g->valid);
     gps_process();
     assert(g->valid && g->hour==12U && g->minute==35U && g->second==19U);
-    assert(fabs(g->lat-48.1173)<0.000001 && fabs(g->lon-11.5166666667)<0.000001);
+    assert(g->lat_e7==481173000 && g->lon_e7==115166666); /* truncated e7 */
     assert(fabsf(g->speed_kmh-41.4848f)<0.001f);
     gps_process();
     assert(g->second==20U && g->fix_quality==1U && g->satellites==8U);
@@ -99,13 +99,16 @@ int main(void){
         /* TAU804M documented GGA: geoid separation is legitimately empty. */
         uint32_t previous_update=g->last_update_ms;
         g_tick_ms+=100U;
+        /* A complete RMC supplies the date for this new navigation epoch. */
+        feed("$GPRMC,082006,A,3852.9276,N,11527.4283,E,0.0,0.0,230394,,,A*78\r\n");
+        gps_process();
         feed("$GPGGA,082006.000,3852.9276,N,11527.4283,E,1,08,1.0,20.6,M,,,,0000*35\r\n");
         gps_process();
         assert(g->last_update_ms!=previous_update);
         assert(g->valid && g->hour==8U && g->minute==20U && g->second==6U);
         assert(g->fix_quality==1U && g->satellites==8U);
-        assert(fabs(g->lat-38.8821266667)<0.000001);
-        assert(fabs(g->lon-115.4571383333)<0.000001);
+        assert(g->lat_e7==388821266);
+        assert(g->lon_e7==1154571383);
         assert(fabsf(g->altitude_m-20.6f)<0.01f);
         assert(fabsf(g->geoid_sep_m)<0.001f);
     }
@@ -126,8 +129,8 @@ int main(void){
     feed("$GPGGA,123520,4807.038,N,01131.000,E,0,08,0.9,545.4,M,46.9,M,,*4C\r\n");
     gps_process();
     diag=gps_get_diag();
-    assert(diag->sentences==7U);
-    assert(diag->parsed==3U && diag->gga==3U && diag->rmc==3U);
+    assert(diag->sentences==8U);
+    assert(diag->parsed==4U && diag->gga==3U && diag->rmc==4U);
     assert(diag->checksum_fail==1U && diag->format_fail==2U);
     assert(diag->no_fix==1U && diag->drop==0U);
     assert(diag->rx_bytes>0U);
@@ -139,31 +142,31 @@ int main(void){
         gps_process();
         /* TAU804M may emit five decimal minute digits; longitude then has 10 digits. */
         assert(diag->parsed==previous_parsed+2U);
-        assert(fabs(g->lat-48.1173)<0.000001 && fabs(g->lon-11.5166666667)<0.000001);
+        assert(g->lat_e7==481173000 && g->lon_e7==115166666); /* truncated e7 */
     }
     {
         uint32_t previous_parsed=diag->parsed;
         uint32_t previous_format_fail=diag->format_fail;
         /* Zhongkewei GPS+BDS: GN talker, five decimal minute digits. */
-        feed("$GNGGA,060210.000,3112.34567,N,12134.56789,E,1,12,0.8,35.0,M,-1.2,M,,*66\r\n");
-        gps_process();
         feed("$GNRMC,060210.000,A,3112.34567,N,12134.56789,E,0.00,0.00,300426,,,A,V*0E\r\n");
         gps_process();
-        /* Huada BDS: BD talker, five decimal minute digits. */
-        feed("$BDGGA,025551.000,3112.34567,N,12134.56789,E,1,14,0.74,48.4,M,-1.2,M,,*59\r\n");
+        feed("$GNGGA,060210.000,3112.34567,N,12134.56789,E,1,12,0.8,35.0,M,-1.2,M,,*66\r\n");
         gps_process();
+        /* Huada BDS: BD talker, five decimal minute digits. */
         feed("$BDRMC,025551.000,A,3112.34567,N,12134.56789,E,0.10,15.0,300426,,,A,V*07\r\n");
         gps_process();
-        /* Huada BDS RTK: GB talker, seven decimal minute digits. */
-        feed("$GBGGA,055535.000,3112.3456789,N,12134.5678912,E,1,13,0.90,45.064,M,-1.170,M,,*5F\r\n");
+        feed("$BDGGA,025551.000,3112.34567,N,12134.56789,E,1,14,0.74,48.4,M,-1.2,M,,*59\r\n");
         gps_process();
+        /* Huada BDS RTK: GB talker, seven decimal minute digits. */
         feed("$GBRMC,055535.000,A,3112.3456789,N,12134.5678912,E,0.05,12.0,300426,,,A,V*00\r\n");
+        gps_process();
+        feed("$GBGGA,055535.000,3112.3456789,N,12134.5678912,E,1,13,0.90,45.064,M,-1.170,M,,*5F\r\n");
         gps_process();
         assert(diag->parsed==previous_parsed+6U);
         assert(diag->format_fail==previous_format_fail);
         assert(g->year==2026U && g->month==4U && g->day==30U);
-        assert(fabs(g->lat-31.205761315)<0.00000001);
-        assert(fabs(g->lon-121.57613152)<0.00000001);
+        assert(g->lat_e7==312057613); /* 7-digit minutes: 31 deg + 12.3456789/60 */
+        assert(g->lon_e7==1215761315);
     }
     {
         uint32_t previous_parsed=diag->parsed;

@@ -36,11 +36,18 @@ int main(void) {
 
     def test_math_candidate_leaves_state_machine_and_persistence_unchanged(self):
         source = (ROOT/'src/mileage.c').read_text(encoding='utf-8')
+        # The float experiment is now integrated as local_distance_m(); the
+        # old haversine overlay must refuse the source rather than patch it.
         for name in ['float','bounded']:
-            candidate = trial.math_source(source,name)
-            self.assertEqual(candidate.split('void mileage_update(void)',1)[1],source.split('void mileage_update(void)',1)[1])
-            if name == 'float':
-                self.assertTrue(candidate!=source, 'float experiment must replace the integrated bounded function')
+            with self.assertRaises(ValueError):
+                trial.math_source(source,name)
+        # The integrated distance is the only math above mileage_update and
+        # production mileage keeps no binary64 code at all.
+        head, body = source.split('\nvoid mileage_update(void)',1)
+        self.assertEqual(head.count('static float local_distance_m('),1)
+        self.assertNotIn('haversine_m', source)
+        self.assertNotRegex(source, r'\bdouble\b')
+        self.assertIn('local_distance_m(s_last_lat_e7, s_last_lon_e7, g->lat_e7, g->lon_e7)', body)
 
     def test_log_change_is_limited_to_reviewed_call_names(self):
         for name,literals in trial.LOG_CALLS.items():

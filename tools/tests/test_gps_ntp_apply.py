@@ -114,7 +114,9 @@ int main(void){
     gps_process();
     assert(gps_get_last_trusted(&out));
     {
-        double lat0 = out.lat, lon0 = out.lon;
+        int32_t lat0 = out.lat_e7, lon0 = out.lon_e7;
+        /* 4807.038N 01131.000E parsed exactly into 1e-7 degrees. */
+        assert(lat0 == 481173000 && lon0 == 115166666); /* truncated */
         float speed0 = out.speed_kmh, heading0 = out.heading, alt0 = out.altitude_m;
         uint8_t fixq0 = out.fix_quality, sats0 = out.satellites;
 
@@ -133,7 +135,7 @@ int main(void){
         assert(out.hour==2U && out.minute==15U && out.second==30U);
         gps_apply_ntp_utc(2026U, 9U, 24U, 2U, 15U, 30U);
         assert(gps_get_last_trusted(&out) && out.second==30U);
-        assert(fabs(out.lat-lat0)<0.0000001 && fabs(out.lon-lon0)<0.0000001);
+        assert(out.lat_e7==lat0 && out.lon_e7==lon0);
         assert(fabsf(out.speed_kmh-speed0)<0.001f);
         assert(fabsf(out.heading-heading0)<0.001f);
         assert(fabsf(out.altitude_m-alt0)<0.001f);
@@ -154,13 +156,13 @@ int main(void){
     gps_data_t selected = *gps_get_data();
     selected.year=2026; selected.month=9; selected.day=24;
     selected.hour=2; selected.minute=15; selected.second=35;
-    selected.lat=10.0; selected.lon=20.0; selected.speed_kmh=0; selected.heading=0;
+    selected.lat_e7=100000000; selected.lon_e7=200000000; selected.speed_kmh=0; selected.heading=0;
     selected.valid=true; selected.fix_quality=1; selected.last_update_ms=g_tick_ms;
     assert(!gps_capture_last_trusted_snapshot(NULL));
     assert(gps_capture_last_trusted_snapshot(&selected));
     assert(gps_get_last_trusted(&out));
-    assert(out.lat==10.0 && out.lon==20.0 && out.speed_kmh==0);
-    assert(gps_get_data()->lat != 10.0);
+    assert(out.lat_e7==100000000 && out.lon_e7==200000000 && out.speed_kmh==0);
+    assert(gps_get_data()->lat_e7 != 100000000);
 
     /* Every fresh live fix must replace the retained point without waiting
      * for a later GPS-off transition. A subsequent no-fix report then keeps
@@ -170,10 +172,10 @@ int main(void){
     feed_sentence("GPGGA,123521,4900.000,N,01200.000,E,1,08,0.9,545.4,M,46.9,M,,");
     gps_process();
     assert(gps_get_last_trusted(&out));
-    assert(fabs(out.lat-(49.0+0.0/60.0))<0.0000001);
-    assert(fabs(out.lon-(12.0+0.0/60.0))<0.0000001);
+    assert(out.lat_e7==490000000);
+    assert(out.lon_e7==120000000);
     gps_get_unfixed_report(&out);
-    assert(out.lat==0.0 && out.lon==0.0);
+    assert(out.lat_e7==0 && out.lon_e7==0);
     puts("test_gps_ntp_apply: C harness PASS");
     return 0;
 }

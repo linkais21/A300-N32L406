@@ -1,4 +1,5 @@
 #include "work_mode_sleep.h"
+#include "rtc_lsi_calibration.h"
 #include "work_mode.h"
 #include "hw_init.h"
 #include "ec800m.h"
@@ -40,7 +41,8 @@
 static volatile work_sleep_wake_t s_wake;
 static bool s_ready;
 static bool s_in_stop1;
-static volatile uint32_t s_sleep_seconds;
+static volatile uint32_t s_elapsed_seconds;
+static uint32_t s_awake_anchor_ms;
 static uint32_t s_rtc_start_sod;
 static bool s_accel_level_wake_latched;
 /* PA12 level captured when the ACC wake was raised, so the filter does not
@@ -294,15 +296,12 @@ void work_mode_sleep_init(void)
     RCC_ConfigRtcClk(RCC_RTCCLK_SRC_LSI);
     RCC_EnableRtcClk(ENABLE);
     RTC_StructInit(&rtc);
-    /* RTC_StructInit() defaults (AsynchPrediv=0x7F, SynchPrediv=0xFF, /32768)
-     * are calibrated for a 32.768kHz LSE crystal. This board has no LSE and
-     * clocks the RTC from LSI (~41.8kHz per vendor N32L40x RTC/Alarm example),
-     * so the LSE-tuned divisor makes the RTC run ~22% fast. Use the vendor's
-     * own LSI-calibrated predivider (/128/331, ~41828Hz) instead so RTC
-     * seconds track real time; this fixes the multi-minute STOP1 timestamp
-     * overshoot instead of just masking it periodically. */
-    rtc.RTC_AsynchPrediv = 0x7F;
-    rtc.RTC_SynchPrediv = 0x14A;
+    /* Retain the old nominal divider only when measurement fails. Never
+     * calibrate every device using the error observed on one field unit. */
+    uint32_t lsi_hz = rtc_lsi_measure_hz();
+    rtc.RTC_AsynchPrediv = lsi_hz != 0U ? 31U : 127U;
+    rtc.RTC_SynchPrediv = lsi_hz != 0U ? (lsi_hz + 16U) / 32U - 1U : 330U;
+    dbg_printf("[RTC] lsi_hz=%lu ok=%u\r\n", (unsigned long)lsi_hz, lsi_hz != 0U);
     (void)RTC_Init(&rtc);
     setup_wake_exti(EXTI_LINE12, GPIOA_PORT_SOURCE, GPIO_PIN_SOURCE12,
                     EXTI_Trigger_Rising_Falling, EXTI15_10_IRQn);
@@ -324,7 +323,8 @@ void work_mode_sleep_init(void)
     rtc_alarm_clear();
     s_wake = WORK_SLEEP_WAKE_NONE;
     s_in_stop1 = false;
-    s_sleep_seconds = 0U;
+    s_elapsed_seconds = 0U;
+    s_awake_anchor_ms = 0U;
     s_last_admission_log_ms = 0U;
     s_systick_ctrl = 0U;
     s_stop1_log_active = false;
@@ -363,7 +363,12 @@ work_sleep_wake_t work_mode_sleep_take_wake(void)
 bool work_mode_sleep_is_in_stop1(void) { return s_in_stop1; }
 uint32_t work_mode_sleep_monotonic_s(void)
 {
-    return (TICK_MS() / 1000U) + s_sleep_seconds;
+    /* Advance by elapsed ticks, retaining fractional seconds across calls and
+     * uint32 tick wrap. Called each main-loop pass; STOP1 adds RTC seconds. */
+    uint32_t whole_s = (uint32_t)(TICK_MS() - s_awake_anchor_ms) / 1000U;
+    s_awake_anchor_ms += whole_s * 1000U;
+    s_elapsed_seconds += whole_s;
+    return s_elapsed_seconds;
 }
 
 void work_mode_sleep_shallow(void)
@@ -527,7 +532,7 @@ void work_mode_sleep_process(uint32_t next_service_ms, work_sleep_wake_t pending
                        (unsigned long)elapsed_seconds);
         }
         if (elapsed_seconds != 0U) {
-            s_sleep_seconds += elapsed_seconds;
+            s_elapsed_seconds += elapsed_seconds;
             gps_advance_last_trusted_seconds(elapsed_seconds);
             /* One line per 15 s slice buried the interesting events in the
              * field capture.  The retained snapshot only advances its clock
@@ -544,8 +549,8 @@ void work_mode_sleep_process(uint32_t next_service_ms, work_sleep_wake_t pending
                                (unsigned)historical.valid,
                                (unsigned)historical.fix_quality,
                                (unsigned)historical.satellites,
-                               (long)(historical.lat * 10000000.0),
-                               (long)(historical.lon * 10000000.0),
+                               (long)historical.lat_e7,
+                               (long)historical.lon_e7,
                                (unsigned)historical.year,
                                (unsigned)historical.month,
                                (unsigned)historical.day,

@@ -1,0 +1,501 @@
+{
+  "results": [
+    {
+      "test": "test_stationary_mileage.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_stationary_mileage.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.695,
+      "skip_reported": false
+    },
+    {
+      "test": "test_gps_report_filter.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_gps_report_filter.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.65,
+      "skip_reported": false
+    },
+    {
+      "test": "test_gps_report_wire.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_gps_report_wire.py"
+      ],
+      "exit_code": 0,
+      "seconds": 1.243,
+      "skip_reported": false
+    },
+    {
+      "test": "test_mileage_persistence.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_mileage_persistence.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.57,
+      "skip_reported": false
+    },
+    {
+      "test": "test_mileage_quantization.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_mileage_quantization.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.524,
+      "skip_reported": false
+    },
+    {
+      "test": "test_adc_power_loss_mileage.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_adc_power_loss_mileage.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.562,
+      "skip_reported": false
+    },
+    {
+      "test": "test_feature_guards.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_feature_guards.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.147,
+      "skip_reported": false
+    },
+    {
+      "test": "test_flash_config_v3.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_flash_config_v3.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.771,
+      "skip_reported": false
+    },
+    {
+      "test": "test_flash_config_migration.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_flash_config_migration.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.725,
+      "skip_reported": false
+    },
+    {
+      "test": "test_blind_zone_store.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_blind_zone_store.py"
+      ],
+      "exit_code": 0,
+      "seconds": 14.341,
+      "skip_reported": false
+    },
+    {
+      "test": "test_blind_zone_replay.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_blind_zone_replay.py"
+      ],
+      "exit_code": 0,
+      "seconds": 2.152,
+      "skip_reported": false
+    },
+    {
+      "test": "test_ext_flash_store_host.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_ext_flash_store_host.py"
+      ],
+      "exit_code": 0,
+      "seconds": 2.2,
+      "skip_reported": false
+    },
+    {
+      "test": "test_ext_flash_layout.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_ext_flash_layout.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.913,
+      "skip_reported": false
+    },
+    {
+      "test": "test_a300_ota_image.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_a300_ota_image.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.252,
+      "skip_reported": false
+    },
+    {
+      "test": "test_fota_package.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_fota_package.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.064,
+      "skip_reported": false
+    },
+    {
+      "test": "test_dev_signed_package.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_dev_signed_package.py"
+      ],
+      "exit_code": 0,
+      "seconds": 1.254,
+      "skip_reported": false
+    },
+    {
+      "test": "test_firmware_signature.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_firmware_signature.py"
+      ],
+      "exit_code": 0,
+      "seconds": 6.623,
+      "skip_reported": false
+    },
+    {
+      "test": "test_platform_trust_anchor.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_platform_trust_anchor.py"
+      ],
+      "exit_code": 0,
+      "seconds": 3.394,
+      "skip_reported": false
+    },
+    {
+      "test": "test_fota_platform_flow.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_fota_platform_flow.py"
+      ],
+      "exit_code": 0,
+      "seconds": 8.294,
+      "skip_reported": false
+    },
+    {
+      "test": "test_fota_resume.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_fota_resume.py"
+      ],
+      "exit_code": 0,
+      "seconds": 1.778,
+      "skip_reported": false
+    },
+    {
+      "test": "test_fota_if_range_restart.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_fota_if_range_restart.py"
+      ],
+      "exit_code": 0,
+      "seconds": 1.754,
+      "skip_reported": false
+    },
+    {
+      "test": "test_fota_checkpoint_powercut.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_fota_checkpoint_powercut.py"
+      ],
+      "exit_code": 0,
+      "seconds": 2.324,
+      "skip_reported": false
+    },
+    {
+      "test": "test_fota_verify_scan.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_fota_verify_scan.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.791,
+      "skip_reported": false
+    },
+    {
+      "test": "test_fota_success_report.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_fota_success_report.py"
+      ],
+      "exit_code": 0,
+      "seconds": 1.763,
+      "skip_reported": false
+    },
+    {
+      "test": "test_fota_check_parser.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_fota_check_parser.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.578,
+      "skip_reported": false
+    },
+    {
+      "test": "test_bootloader_powercut.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_bootloader_powercut.py"
+      ],
+      "exit_code": 0,
+      "seconds": 37.546,
+      "skip_reported": false
+    },
+    {
+      "test": "test_boot_install_powercut_c.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_boot_install_powercut_c.py"
+      ],
+      "exit_code": 0,
+      "seconds": 5.459,
+      "skip_reported": false
+    },
+    {
+      "test": "test_bootloader_lkg_powercut_c.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_bootloader_lkg_powercut_c.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.983,
+      "skip_reported": false
+    },
+    {
+      "test": "test_boot_resume_integrity.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_boot_resume_integrity.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.642,
+      "skip_reported": false
+    },
+    {
+      "test": "test_bootloader_factory_init.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_bootloader_factory_init.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.65,
+      "skip_reported": false
+    },
+    {
+      "test": "test_bootloader_bcr_failclosed.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_bootloader_bcr_failclosed.py"
+      ],
+      "exit_code": 0,
+      "seconds": 1.239,
+      "skip_reported": false
+    },
+    {
+      "test": "test_bootloader_invalid_vector_recovery.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_bootloader_invalid_vector_recovery.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.617,
+      "skip_reported": false
+    },
+    {
+      "test": "test_factory_init_artifact.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_factory_init_artifact.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.093,
+      "skip_reported": false
+    },
+    {
+      "test": "test_bootloader_artifacts.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_bootloader_artifacts.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.041,
+      "skip_reported": false
+    },
+    {
+      "test": "test_flash_combined_script.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_flash_combined_script.py"
+      ],
+      "exit_code": 0,
+      "seconds": 1.243,
+      "skip_reported": false
+    },
+    {
+      "test": "test_internal_flash_layout.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_internal_flash_layout.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.583,
+      "skip_reported": false
+    },
+    {
+      "test": "test_release_identity_contract.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_release_identity_contract.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.103,
+      "skip_reported": false
+    },
+    {
+      "test": "test_dev_release_manifest.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_dev_release_manifest.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.178,
+      "skip_reported": false
+    },
+    {
+      "test": "test_release_make_selection.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_release_make_selection.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.073,
+      "skip_reported": false
+    },
+    {
+      "test": "test_ram_release_budget.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_ram_release_budget.py",
+        "build"
+      ],
+      "exit_code": 0,
+      "seconds": 5.527,
+      "skip_reported": false
+    },
+    {
+      "test": "test_flash_capacity_guard.py",
+      "command": [
+        "python",
+        "-X",
+        "utf8",
+        "tools/tests/test_flash_capacity_guard.py"
+      ],
+      "exit_code": 0,
+      "seconds": 9.215,
+      "skip_reported": false
+    }
+  ],
+  "passed": 41,
+  "failed": 0,
+  "selected_total": 41,
+  "initial_runner_issue": "RAM regression invocation omitted its required build argument; corrected and rerun. Initial failure preserved."
+}

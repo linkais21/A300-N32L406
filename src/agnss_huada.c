@@ -62,13 +62,11 @@ static uint32_t pack(uint8_t *out, const uint8_t *cmd, uint16_t cmd_len)
 
 static uint16_t build_location(const gps_context_t *g, uint8_t f[32])
 {
-    if (!g || !g->valid || !(g->lat>=-90.0 && g->lat<=90.0 &&
-        g->lon>=-180.0 && g->lon<=180.0 && g->altitude_m>=-21474834.0f &&
+    if (!g || !g->valid || !gps_coord_in_range(g) || !(g->altitude_m>=-21474834.0f &&
         g->altitude_m<=21474834.0f)) return 0;
     uint8_t c[21]={0};
-    double y=g->lat*1e7,x=g->lon*1e7;
-    int32_t lat=(int32_t)(y+(y<0?-0.5:0.5));
-    int32_t lon=(int32_t)(x+(x<0?-0.5:0.5));
+    int32_t lat=g->lat_e7;
+    int32_t lon=g->lon_e7;
     uint32_t alt=(uint32_t)(int32_t)(g->altitude_m*100.0f);
     c[2]=0x0B;c[3]=0x10;c[4]=1;
     for(int i=0;i<4;i++){c[5+i]=(uint8_t)(lat>>(8*i));c[9+i]=(uint8_t)(lon>>(8*i));c[13+i]=(uint8_t)(alt>>(8*i));}

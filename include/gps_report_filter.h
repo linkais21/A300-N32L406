@@ -57,6 +57,10 @@ void gps_report_filter_process(uint32_t now_ms);
 /* Main-loop event expires after 15 s; acknowledge only after live send success. */
 bool gps_report_filter_motion_pending(uint32_t now_ms);
 void gps_report_filter_motion_ack(void);
+/* True when receiver heading may be trusted as vehicle course: the sensor is
+ * moving, or GNSS quality is good. False for a quiet sensor on a weak fix,
+ * where parked multipath produces random courses at a few km/h. */
+bool gps_report_filter_heading_trusted(void);
 /* LIVE data selection only: copies raw to out, substitutes lat/lon/speed/course
  * only when locked and evidence is fresh. Returns whether substitution occurred.
  * NULL -> false; raw == out -> false without mutation. Other input stays intact.

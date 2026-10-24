@@ -288,7 +288,11 @@ static f39_result_t query(const f39_request_t *r, f39_platform_t *p,
     case F39_OPERATION_SPEED:
         return query_unsigned(out, name, c->speed_limit_kmh);
     case F39_OPERATION_APN:
-        return query_text(out, name, c->autoapn_en ? "AUTO" : c->apn, CFG_APN_LEN);
+        if (c->autoapn_en) return query_text(out, name, "AUTO", CFG_APN_LEN);
+        /* Spec: APN,cmiot,,=Success!; credentials are never echoed by a query. */
+        reply_clear(out);
+        return reply_append(out, "APN,%.*s,,=Success!\r\n", (int)CFG_APN_LEN, c->apn) ?
+               F39_RESULT_OK : failure(out, name, "reply-too-long");
     case F39_OPERATION_GPSDUP:
         return query_unsigned(out, name, c->sleep_report_mode ? 0UL : 1UL);
     case F39_OPERATION_MLG:
@@ -391,9 +395,19 @@ f39_result_t f39_execute_deferred(const f39_request_t *request,
     if (reason != NULL) return failure(reply, name, reason);
     /* Formatting must happen after the configuration transaction frame has
      * returned, especially FKEY's query/stdio path. */
-    if (request->operation == F39_OPERATION_FKEY)
-        return query(request, platform, reply);
-    return success(reply,name);
+    if (request->operation == F39_OPERATION_APN ||
+        request->operation == F39_OPERATION_DUALSET) {
+        /* Spec sheet1: APN and DUALSET confirm by echoing the arguments as
+         * sent (e.g. APN,cmiot,user,password=Success!). */
+        uint16_t from = (uint16_t)(request->args[0].offset - 1U);
+        reply_clear(reply);
+        return reply_append(reply, "%s%.*s=Success!\r\n", name,
+                            (int)(request->raw_len - from), &request->raw[from]) ?
+               F39_RESULT_OK : failure(reply, name, "reply-too-long");
+    }
+    /* Every other setting confirms with the stored value, exactly as its
+     * query reports it (e.g. HBT,120=Success!). */
+    return query(request, platform, reply);
 }
 
 f39_result_t f39_execute(const f39_request_t *request,

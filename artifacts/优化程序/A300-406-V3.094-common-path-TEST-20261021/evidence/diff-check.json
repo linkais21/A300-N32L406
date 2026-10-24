@@ -1,0 +1,20 @@
+[
+  {
+    "path": "src/at_config.c",
+    "exit_code": 1,
+    "no_whitespace_findings": true,
+    "note": "--no-index may return 1 for differing files; --check output is empty."
+  },
+  {
+    "path": "src/ec800m.c",
+    "exit_code": 1,
+    "no_whitespace_findings": true,
+    "note": "--no-index may return 1 for differing files; --check output is empty."
+  },
+  {
+    "path": "src/f39_reply.c",
+    "exit_code": 1,
+    "no_whitespace_findings": true,
+    "note": "--no-index may return 1 for differing files; --check output is empty."
+  }
+]

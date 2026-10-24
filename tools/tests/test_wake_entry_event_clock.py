@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
         return 0;
     }
     gps_data_t fix={0}; fix.valid=true; fix.fix_quality=1;
-    fix.lat=10; fix.lon=20; fix.year=2026; fix.month=10; fix.day=7;
+    fix.lat_e7=100000000; fix.lon_e7=200000000; fix.year=2026; fix.month=10; fix.day=7;
     assert(gps_capture_last_trusted_snapshot(&fix));
     work_mode_config_t c={30,300,600,300,6};
     work_mode_init(&c,0,false); dispatch();
@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
     /* New no-fix 0200 events advance; 0201 keeps location acquisition UTC. */
     assert(jt808_send_location_work_mode(0,false,900)==0);
     check_clock((wake_s+90)/60U,(wake_s+90)%60U);
-    query(0,0x8201); assert(msg(0,&sn,d,&n)==0x0201 && d[38]==0 && d[39]==0);
+    query(0,0x8201); assert(msg(0,&sn,d,&n)==0x0201 && d[40]==0 && d[41]==0);
     /* Offline event transaction keeps its original timestamp and ACC during retry. */
     open_ch[0]=open_ch[3]=false; append_result=BLIND_ZONE_BUSY;
     work_mode_action_t action={0}; action.type=WORK_ACTION_REPORT_ENTRY;

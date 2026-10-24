@@ -214,6 +214,8 @@ static void test_power_cut_never_loads_mixed_candidate(void)
     new_cfg.mileage_m = 1234500U;
     new_cfg.speed_limit_time_be[3] = 3U;
     new_cfg.speed_limit_time_valid = 1U;
+    new_cfg.speed_warning_delta_be[1] = 100U;
+    new_cfg.speed_warning_valid = 1U;
     set_text(new_cfg.plate_no, sizeof new_cfg.plate_no, "A12345");
     int successful_operations;
     int cut;
@@ -230,6 +232,9 @@ static void test_power_cut_never_loads_mixed_candidate(void)
     assert(cfg_store_candidate(&new_cfg));
     successful_operations = operation_count;
     assert(successful_operations >= 3);
+    restart_without_fault();
+    assert(cfg_get()->speed_warning_valid == 1U);
+    assert(cfg_speed_warning_delta_x10(cfg_get()) == 100U);
 
     for (cut = 1; cut <= successful_operations; ++cut) {
         int is_old;
@@ -393,6 +398,29 @@ static void test_speed_duration_persistence(void)
     }
 }
 
+static void test_speed_warning_persistence(void)
+{
+    memset(flash_image, 0xFF, sizeof(flash_image));
+    restart_without_fault();
+    assert(cfg_get()->speed_warning_valid == 0U);
+    assert(cfg_speed_warning_delta_x10(cfg_get()) == 0U);
+    assert(offsetof(device_config_t,speed_warning_delta_be)+3U ==
+           offsetof(device_config_t,speed_limit_time_be));
+    const uint16_t values[]={0U,100U,65535U};
+    for(unsigned i=0;i<3U;++i){
+        device_config_t next=*cfg_get();
+        next.speed_warning_valid=1U;
+        next.speed_warning_delta_be[0]=(uint8_t)(values[i]>>8);
+        next.speed_warning_delta_be[1]=(uint8_t)values[i];
+        assert(cfg_store_candidate(&next));restart_without_fault();
+        assert(cfg_get()->speed_warning_valid==1U);
+        assert(cfg_speed_warning_delta_x10(cfg_get())==values[i]);
+        assert(operation_count==0);
+    }
+    device_config_t legacy=*cfg_get();legacy.speed_warning_valid=0xffU;
+    assert(cfg_speed_warning_delta_x10(&legacy)==0U);
+}
+
 int main(void)
 {
     assert(CFG_VERSION == 4U);
@@ -405,6 +433,7 @@ int main(void)
     test_default_persistence_failure_is_logged();
     test_independent_auth_codes();
     test_speed_duration_persistence();
+    test_speed_warning_persistence();
     test_power_cut_never_loads_mixed_candidate();
     test_mileage_updates_are_deferred();
     test_corner_switch_survives_restart();

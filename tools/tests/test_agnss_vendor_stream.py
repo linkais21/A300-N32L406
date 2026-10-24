@@ -16,19 +16,8 @@ def _write_harness_headers(directory):
 typedef enum { GNSS_TYPE_UNKNOWN=0, GNSS_TYPE_TAU804M=1, GNSS_TYPE_ATGM332D_F7N=2 } gnss_type_t;
 #endif
 """,
-        "gps.h": """#ifndef GPS_H
-#define GPS_H
-#include <stdint.h>
-#include <stdbool.h>
-typedef struct { double lat, lon; float altitude_m; uint16_t year; uint8_t month, day, hour, minute, second; bool valid; } gps_data_t;
-typedef gps_data_t gps_context_t;
-int gps_send_raw(const uint8_t *, uint32_t);
-const gps_data_t *gps_get_data(void);
-void gps_get_unfixed_report(gps_data_t *);
-uint32_t gps_agnss_ack_sequence(void);
-bool gps_agnss_take_ack(uint32_t *, uint8_t[10]);
-#endif
-""",
+        # Mirror the production fixed-point struct and range helpers exactly.
+        "gps.h": (ROOT / "include" / "gps.h").read_text(encoding="utf-8"),
         "config.h": """#ifndef CONFIG_H
 #define CONFIG_H
 #include <stdint.h>
@@ -202,13 +191,16 @@ int main(void) {
     assert(gps_last[3]==0x11 && gps_last[15]==2);
     huada_reset_stream();assert(!gnss_vendor_inject_pending());g.year=0;
     /* Position rounding is away from zero; negative MSL altitude is signed. */
-    gps_context_t loc={0};loc.valid=true;loc.lat=-0.00000005;loc.lon=180;loc.altitude_m=-12.5f;
+    gps_context_t loc={0};loc.valid=true;loc.lat_e7=-1;loc.lon_e7=1800000000;loc.altitude_m=-12.5f;
     assert(build_location(&loc,gps_last)==25);
     assert(gps_last[7]==0xff && gps_last[8]==0xff && gps_last[9]==0xff && gps_last[10]==0xff);
+    assert(gps_last[11]==0x00 && gps_last[12]==0xd2 && gps_last[13]==0x49 && gps_last[14]==0x6b);
     assert(gps_last[15]==0x1e && gps_last[16]==0xfb && gps_last[17]==0xff && gps_last[18]==0xff);
-    loc.lat=91;unsigned before=gps_calls;assert(build_location(&loc,gps_last)==0 && gps_calls==before);
-    loc.lat=NAN;assert(build_location(&loc,gps_last)==0 && gps_calls==before);
-    loc.lat=0;loc.altitude_m=21474836.0f;assert(build_location(&loc,gps_last)==0 && gps_calls==before);
+    loc.lat_e7=910000000;unsigned before=gps_calls;assert(build_location(&loc,gps_last)==0 && gps_calls==before);
+    loc.lat_e7=0;loc.lon_e7=-1810000000;assert(build_location(&loc,gps_last)==0 && gps_calls==before);
+    loc.lon_e7=INT32_MIN;assert(build_location(&loc,gps_last)==0 && gps_calls==before);
+    loc.lon_e7=0;
+    loc.lat_e7=0;loc.altitude_m=21474836.0f;assert(build_location(&loc,gps_last)==0 && gps_calls==before);
 
     return 0;
 }

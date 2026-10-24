@@ -1,0 +1,8 @@
+{
+  "files_checked": 45200,
+  "changed": [
+    "tools/tests/test_work_mode_jt808_contract.py"
+  ],
+  "compiled_inputs_and_default_build_unchanged": true,
+  "note": "One existing test assertion was concurrently updated outside this task. This task wrote only the isolated artifact directory and analysis-results."
+}

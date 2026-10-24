@@ -1,0 +1,26 @@
+[
+  {
+    "test": "test_work_mode_jt808_contract",
+    "exit_code": 0,
+    "seconds": 0.0,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_params_wire",
+    "exit_code": 0,
+    "seconds": 1.5,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_text_command",
+    "exit_code": 0,
+    "seconds": 1.1,
+    "skip": false
+  },
+  {
+    "test": "test_release_identity_contract",
+    "exit_code": 0,
+    "seconds": 0.1,
+    "skip": false
+  }
+]

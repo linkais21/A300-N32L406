@@ -1,0 +1,70 @@
+{
+  "version": "T360-A300_406_20261012100702,V3.092",
+  "version_counter": 3092,
+  "mcu": "N32L406CBL7",
+  "source_package": "artifacts\\A300-406-V3.092-Stationary-Mileage-TEST-20261012\\V3.092",
+  "source_files_checked": 70,
+  "sources": {
+    "Bootloader-N32L406CBL7.bin": {
+      "bytes": 22556,
+      "sha256": "14b27b5e86db54bb0b8d7c653551d8e3e8d5a47ded1bb0b76d5d59617f41eaf8"
+    },
+    "App-N32L406CBL7.bin": {
+      "bytes": 105564,
+      "sha256": "c42f926d9f82a79c377afc02023ddbfd774a5916615bce9402fe0f02e1e5a77a"
+    },
+    "Combined-N32L406CBL7.bin": {
+      "bytes": 130140,
+      "sha256": "a399a1c5c540cc053c48338893b10be36731e0dbadcdf6d549d32179155ce118"
+    }
+  },
+  "load_address": "0x8000000",
+  "app_address": "0x8006000",
+  "last_address": "0x801fc5b",
+  "combined_bytes": 130140,
+  "boot_vectors": {
+    "msp": "0x20006000",
+    "reset": "0x8003405"
+  },
+  "app_vectors": {
+    "msp": "0x20006000",
+    "reset": "0x801ca5d"
+  },
+  "factory_init_offset": "0x5800",
+  "factory_init_record": [
+    1229867334,
+    1,
+    28,
+    1,
+    15,
+    2937699498,
+    1380274500,
+    4294967295
+  ],
+  "recombined_equals_original": true,
+  "source_and_generated_hex_roundtrip": "passed",
+  "objcopy_sha256": "6d06124f6cd61f762ff89f43db812f6265fe91305f09e798f19260dfe63db029",
+  "objcopy_arguments": [
+    "-I",
+    "binary",
+    "-O",
+    "ihex",
+    "--change-addresses",
+    "0x8000000",
+    "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.092-Stationary-Mileage-TEST-20261012\\V3.092\\Factory-Programming-V3.092-20261014\\A300-406-V3.092-Factory-Bootloader-App.bin",
+    "D:\\A300_406_tools\\A300_406\\A300-first\\artifacts\\A300-406-V3.092-Stationary-Mileage-TEST-20261012\\V3.092\\Factory-Programming-V3.092-20261014\\A300-406-V3.092-Factory-Bootloader-App.hex"
+  ],
+  "programming_dryrun": {
+    "exit_code": 0,
+    "output": [
+      "[PRODUCTION] VALIDATE",
+      "[PRODUCTION] ERASE",
+      "[PRODUCTION] WRITE_VERIFY",
+      "[PRODUCTION] RESET",
+      "[PRODUCTION] SELFTEST"
+    ]
+  },
+  "release_approved": false,
+  "matching_image_hil": "pending",
+  "hardware_flashed": false
+}

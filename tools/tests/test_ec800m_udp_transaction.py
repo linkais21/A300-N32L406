@@ -16,7 +16,8 @@ static uint32_t tick;
 enum {TCP_STATE_CLOSED,TCP_STATE_OPENING,TCP_STATE_OPEN,TCP_STATE_ERROR};
 static struct {int state;} s_tcp[4];
 static uint32_t s_tcp_generation[4];
-static uint8_t s_tcp_qird_pending_mask;
+static uint8_t s_tcp_qird_pending_mask, s_failed_open_close_mask;
+static uint32_t s_failed_open_close_generation[4];
 enum {AT_OWNER_NONE,AT_OWNER_TCP};static int s_at_owner;
 static bool ready=true,tx_ok=true,read_ok=true;
 static char last_command[160]; static unsigned sends,reads;
@@ -80,7 +81,9 @@ def main():
     a=c.index('int ec800m_udp_send_once(')
     code=c[a:c.index('void ec800m_tcp_close(',a)]
     with tempfile.TemporaryDirectory() as td:
-        p=Path(td);(p/'h.c').write_text(PRE+state+code+POST)
+        a=c.index('typedef struct { uint32_t tick, spins; } wait_tick_guard_t;')
+        waits=c[a:c.index('/*',a)]
+        p=Path(td);(p/'h.c').write_text(PRE+waits+state+code+POST)
         subprocess.run([shutil.which('gcc'),'-std=c99','-Wall','-Wextra',
                         str(p/'h.c'),'-o',str(p/'h.exe')],check=True)
         subprocess.run([str(p/'h.exe')],check=True,timeout=10)

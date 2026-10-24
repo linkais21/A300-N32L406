@@ -1,0 +1,279 @@
+--- before/include/build_version.h
++++ after/include/build_version.h
+@@ -2,9 +2,9 @@
+ #ifndef BUILD_VERSION_H
+ #define BUILD_VERSION_H
+ 
+-#define FW_BUILD_NUMBER  "202610211010"
+-#define FW_BUILD_DATE    "Oct 21 2026 - 10:10:55"
+-#define FW_FULL_VERSION  "T360-A300_406_20261021101055,V3.094"
+-#define FW_VERSION_COUNTER  3094UL
++#define FW_BUILD_NUMBER  "202610220855"
++#define FW_BUILD_DATE    "Oct 22 2026 - 08:55:10"
++#define FW_FULL_VERSION  "T360-A300_406_20261022085510,V3.095"
++#define FW_VERSION_COUNTER  3095UL
+ 
+ #endif /* BUILD_VERSION_H */
+--- before/include/config.h
++++ after/include/config.h
+@@ -4,7 +4,7 @@
+ #include "n32l40x.h"
+ 
+ /* ── Firmware version ─────────────────────────────────────────────────────── */
+-#define FW_VERSION_STR          "T360-A300_406_20261021101055,V3.094"
++#define FW_VERSION_STR          "T360-A300_406_20261022085510,V3.095"
+ #define FW_OTA_MODEL_STR        "A300-406"
+ #define FW_JT808_MODEL_STR      "T360-A300"
+ #define FW_MANUFACTURER_ID_STR  "70110"
+--- before/release_identity.json
++++ after/release_identity.json
+@@ -1,8 +1,8 @@
+ {
+-  "firmware_version_prefix": "T360-A300_406_20261021101055,V3.",
+-  "firmware_revision": 94,
+-  "firmware_version": "T360-A300_406_20261021101055,V3.094",
+-  "firmware_version_counter": 3094,
++  "firmware_version_prefix": "T360-A300_406_20261022085510,V3.",
++  "firmware_revision": 95,
++  "firmware_version": "T360-A300_406_20261022085510,V3.095",
++  "firmware_version_counter": 3095,
+   "ota_device_model": "A300-406",
+   "jt808_terminal_model": "T360-A300",
+   "jt808_manufacturer_id": "70110"
+--- before/src/mileage.c
++++ after/src/mileage.c
+@@ -33,6 +33,10 @@
+ static double s_last_lon  = 0.0;
+ static float  s_last_hdg  = 0.0f;
+ static bool   s_has_first = false;
++/* Earned travel only: keep across stops, never add rejected drift/jumps.
++ * RAM-only remainder preserves the stored metre/JT808/Flash format. A reset
++ * can discard at most 999 mm here; whole-metre persistence is unchanged. */
++static uint16_t s_remainder_mm;
+ #define MILEAGE_PERSIST_INTERVAL_MS (600000UL)
+ #define MILEAGE_RETRY_BACKOFF_MS    (30000UL)
+ static bool s_persist_schedule_armed;
+@@ -132,10 +136,14 @@
+     if (c->stopdrift_en && g->speed_kmh < 2.0f && dist_mm < threshold_mm)
+         return;
+     if (dist_mm > 500U && dist_mm < 1000000U) {
+-        uint32_t delta_m = dist_mm / 1000U;
+-        cfg_add_mileage(delta_m);
+-        DBG_PRINTF_VERBOSE("[MILE] +%um total=%um\r\n",
+-                   (unsigned)delta_m, (unsigned)c->mileage_m);
++        uint32_t earned_mm = dist_mm + s_remainder_mm;
++        uint32_t delta_m = earned_mm / 1000U;
++        s_remainder_mm = (uint16_t)(earned_mm % 1000U);
++        if (delta_m != 0U) {
++            cfg_add_mileage(delta_m);
++            DBG_PRINTF_VERBOSE("[MILE] +%um total=%um\r\n",
++                       (unsigned)delta_m, (unsigned)c->mileage_m);
++        }
+     }
+ 
+     s_last_lat = g->lat;
+--- before/tools/release_guard.py
++++ after/tools/release_guard.py
+@@ -152,9 +152,9 @@
+     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
+ }
+ CANONICAL_IDENTITY_FILE_SHA256 = {
+-    # Reviewed: V3.094/3094 identity; generated timestamps stay normalized.
+-    "include/config.h": "8a57b952aa357ee3cee18c9d9a9ad702f934ba66461937e2471f4fdc5426b634",
+-    "include/build_version.h": "69e158dc5f16c631e330302ab428f2d2a4aa89434b9e8a24480aee29268af5a4",
++    # Reviewed: V3.095/3095 identity; generated timestamps stay normalized.
++    "include/config.h": "d6ec88a9e50441d8725d45f9918ae76d0be0f751089443b252c45c2f8c407ea3",
++    "include/build_version.h": "799e423e34db297aab8bacd6988fb210dae3a0a1632c52be70fee402109544b0",
+     "include/f39_reply.h": "4519c084bcc677d23c02aa4ac509f2390527f16111139f011052017f08c615ed",
+     # Reviewed 2026-10-15: add only the standard bit13 warning flag; identity APIs unchanged.
+     "include/jt808.h": "1494cc4f7ae752fa097954673638c6a9e93bd0f05e618ac145bc1852a044c122",
+--- before/tools/tests/test_mileage_quantization.py
++++ after/tools/tests/test_mileage_quantization.py
+@@ -28,7 +28,7 @@
+ #include <assert.h>
+ static void check(double d, unsigned en, unsigned raw, float speed,
+                   unsigned delta, unsigned calls, int advance) {
+-    s_has_first=false; added_calls=0;
++    s_has_first=false; s_remainder_mm=0; added_calls=0;
+     memset(&config,0,sizeof config); memset(&gps,0,sizeof gps);
+     config.stopdrift_en=en; config.stopdrift_thr=raw;
+     gps.valid=true; gps.speed_kmh=speed;
+@@ -42,7 +42,7 @@
+ }
+ int main(void) {
+     check(0.5004,0,50,0,0,0,1);
+-    check(0.5006,0,50,0,0,1,1);
++    check(0.5006,0,50,0,0,0,1);
+     check(0.9996,0,50,0,1,1,1);
+     check(999.9994,0,50,0,999,1,1);
+     check(999.9996,0,50,0,0,0,1);
+--- before/tools/tests/test_motion_corner_policy.py
++++ after/tools/tests/test_motion_corner_policy.py
+@@ -10,6 +10,7 @@
+ 
+ HARNESS = r'''
+ #include <assert.h>
++#include <stddef.h>
+ #include <math.h>
+ #include "motion_corner.h"
+ 
+--- before/tools/tests/test_release_identity_contract.py
++++ after/tools/tests/test_release_identity_contract.py
+@@ -10,12 +10,12 @@
+ 
+ contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+ 
+-stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.094", contract["firmware_version"]).group(1)
++stamp = re.fullmatch(r"T360-A300_406_(\d{14}),V3\.095", contract["firmware_version"]).group(1)
+ assert contract == {
+     "firmware_version_prefix": f"T360-A300_406_{stamp},V3.",
+-    "firmware_revision": 94,
+-    "firmware_version": f"T360-A300_406_{stamp},V3.094",
+-    "firmware_version_counter": 3094,
++    "firmware_revision": 95,
++    "firmware_version": f"T360-A300_406_{stamp},V3.095",
++    "firmware_version_counter": 3095,
+     "ota_device_model": "A300-406",
+     "jt808_terminal_model": "T360-A300",
+     "jt808_manufacturer_id": "70110",
+--- /dev/null
++++ after/tools/tests/test_mileage_fractional.py
+@@ -0,0 +1,138 @@
++"""Real-C odometer: retain accepted millimetres without crediting rejected fixes."""
++from pathlib import Path
++import os
++import shutil
++import subprocess
++import tempfile
++
++from test_mileage_persistence import HEADERS
++
++ROOT = Path(__file__).resolve().parents[2]
++HARNESS = r'''
++#include <assert.h>
++#include <math.h>
++#include <stdio.h>
++#include <string.h>
++#include "gps.h"
++#include "flash_config.h"
++static gps_data_t gps;
++static device_config_t config;
++static bool locked, dirty;
++static unsigned adds;
++const gps_data_t *gps_get_data(void) { return &gps; }
++device_config_t *cfg_get(void) { return &config; }
++void cfg_add_mileage(uint32_t metres) {
++    assert(metres != 0U);
++    config.mileage_m += metres; dirty = true; ++adds;
++}
++bool cfg_mileage_dirty(void) { return dirty; }
++bool cfg_flush_mileage(void) { dirty = false; return true; }
++uint32_t cfg_persist_generation(void) { return 0U; }
++uint32_t test_tick_ms(void) { return 0U; }
++int dbg_printf(const char *format, ...) { (void)format; return 0; }
++bool gps_report_filter_copy(const gps_data_t *raw, gps_data_t *out, uint32_t now) {
++    (void)now; *out = *raw; return locked;
++}
++#include "mileage_under_test.c"
++static void at(double metres) {
++    gps.valid = true;
++    gps.lat = metres / 6371000.0 * (180.0 / M_PI);
++    gps.lon = 0.0;
++    gps.speed_kmh = 38.88f;
++    mileage_update();
++}
++int main(int argc, char **argv) {
++    assert(argc == 2);
++    at(0.0);
++    if (!strcmp(argv[1], "route")) {
++        for (unsigned i = 1; i <= 1000; ++i) {
++            at(10.8 * i);
++            unsigned once = config.mileage_m, calls = adds;
++            mileage_update(); mileage_update();
++            assert(config.mileage_m == once && adds == calls);
++        }
++        printf("1000 x 10.8 m: expected=10800 actual=%u m\n", config.mileage_m);
++        fflush(stdout);
++        assert(config.mileage_m == 10800U);
++    } else if (!strcmp(argv[1], "submetre")) {
++        for (unsigned i = 1; i <= 1000; ++i) at(0.6 * i);
++        assert(config.mileage_m == 600U && adds == 600U);
++    } else if (!strcmp(argv[1], "mixed")) {
++        double position = 0;
++        for (unsigned i = 0; i < 1000; ++i) {
++            position += i % 2 ? 7.125 : 12.875;
++            at(position);
++        }
++        assert(config.mileage_m == 10000U);
++    } else if (!strcmp(argv[1], "invalid")) {
++        at(0.6);
++        assert(config.mileage_m == 0U && !dirty);
++        gps.valid = false; gps.lat = 1.0; mileage_update();
++        gps.valid = true; gps.lat = NAN; mileage_update();
++        assert(config.mileage_m == 0U && !dirty);
++        at(1.2);
++        assert(config.mileage_m == 1U);
++    } else if (!strcmp(argv[1], "stationary")) {
++        at(0.6);
++        locked = true;
++        for (unsigned i = 0; i < 100; ++i) at(i % 2 ? 500 : 1500);
++        assert(config.mileage_m == 0U && !dirty && adds == 0U);
++        locked = false;
++        at(1500); /* First released fix only seeds a baseline. */
++        assert(config.mileage_m == 0U);
++        at(1500.6);
++        assert(config.mileage_m == 1U); /* Prior earned fraction survives. */
++    } else if (!strcmp(argv[1], "rejected")) {
++        at(0.6);
++        at(1500.6); /* Existing >=1 km jump rejection, with baseline advance. */
++        assert(config.mileage_m == 0U && !dirty);
++        at(1501.2);
++        assert(config.mileage_m == 1U);
++        at(1501.45); /* Existing <=0.5 m rejection must not earn fractions. */
++        at(1502.05);
++        assert(config.mileage_m == 1U);
++        at(1502.65);
++        assert(config.mileage_m == 2U);
++    } else if (!strcmp(argv[1], "drift")) {
++        at(0.6);
++        config.stopdrift_en = 1; config.stopdrift_thr = 50;
++        gps.lat = 1.2 / 6371000.0 * (180.0 / M_PI);
++        gps.speed_kmh = 0.5f; mileage_update();
++        assert(config.mileage_m == 0U && !dirty);
++        gps.speed_kmh = 10; mileage_update();
++        assert(config.mileage_m == 1U);
++    } else if (!strcmp(argv[1], "restart")) {
++        config.mileage_m = 123456U;
++        at(0.6); /* Fresh process: no carried fractions from previous boot. */
++        assert(config.mileage_m == 123456U && !dirty);
++        at(1.2);
++        assert(config.mileage_m == 123457U);
++    } else { assert(0); }
++    printf("%s: PASS\n", argv[1]);
++    return 0;
++}
++'''
++
++
++def main():
++    cc = os.environ.get("CC") or shutil.which("gcc")
++    if not cc:
++        raise RuntimeError("Host GCC is required")
++    headers = dict(HEADERS)
++    headers["gps_report_filter.h"] = '#include "gps.h"\n#include <stdint.h>\nbool gps_report_filter_copy(const gps_data_t *, gps_data_t *, uint32_t);\n'
++    with tempfile.TemporaryDirectory(prefix="mileage_fractional_") as tmp:
++        folder = Path(tmp)
++        for name, content in headers.items():
++            (folder / name).write_text(content, encoding="ascii")
++        (folder / "mileage_under_test.c").write_bytes((ROOT / "src/mileage.c").read_bytes())
++        (folder / "test.c").write_text(HARNESS, encoding="ascii")
++        exe = folder / "test.exe"
++        subprocess.run([cc, "-std=c99", "-Os", "-Wall", "-Wextra", "-Werror",
++                        "-fsanitize=undefined", "-fsanitize-undefined-trap-on-error",
++                        "-I", str(folder), str(folder / "test.c"), "-lm", "-o", str(exe)], check=True)
++        for case in ["route", "submetre", "mixed", "invalid", "stationary", "rejected", "drift", "restart"]:
++            subprocess.run([str(exe), case], check=True)
++
++
++if __name__ == "__main__":
++    main()

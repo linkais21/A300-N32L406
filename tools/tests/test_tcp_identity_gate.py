@@ -68,6 +68,7 @@ bool ec800m_identity_ready(void) { return identity_ready; }
 int ec800m_tcp_open(uint8_t ch, const char *ip, uint16_t port)
 { (void)ch; (void)ip; (void)port; ++opens; return 0; }
 void ec800m_tcp_close(uint8_t ch) { (void)ch; ++closes; }
+void ec800m_link_stalled(bool power_cycle) { (void)power_cycle; }
 tcp_state_t ec800m_tcp_state(uint8_t ch) { (void)ch; return modem_tcp_state; }
 void ec800m_get_imei(char *buf, uint8_t size)
 { if (size) { strncpy(buf, "123456789012345", size - 1U); buf[size - 1U] = '\0'; } }

@@ -1,0 +1,26 @@
+[
+  {
+    "test": "test_mileage_quantization.py",
+    "exit_code": 0
+  },
+  {
+    "test": "test_mileage_persistence.py",
+    "exit_code": 0
+  },
+  {
+    "test": "test_stationary_mileage.py",
+    "exit_code": 0
+  },
+  {
+    "test": "test_gps_report_filter.py",
+    "exit_code": 0
+  },
+  {
+    "test": "test_gps_report_wire.py",
+    "exit_code": 0
+  },
+  {
+    "test": "test_adc_power_loss_mileage.py",
+    "exit_code": 0
+  }
+]

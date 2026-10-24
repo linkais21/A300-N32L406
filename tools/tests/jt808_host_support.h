@@ -18,6 +18,7 @@ bool gps_get_last_trusted_location(gps_data_t *out) {
 #endif
 fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
 bool gps_report_filter_motion_pending(uint32_t now) { (void)now; return false; }
+bool gps_report_filter_heading_trusted(void) { return true; }
 void gps_report_filter_motion_ack(void) {}
 void ec800m_tcp_close(uint8_t ch) { (void)ch; }
 #ifndef HOST_REAL_AT_CONFIG

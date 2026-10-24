@@ -233,7 +233,7 @@ int main(void) {
     assert(jt808_online_mask()==0x09U);
 
     /* Live 0x0200 uses the complete 67-byte A300 extension profile. */
-    gps.lat=31.2057615;gps.lon=121.57613125;gps.altitude_m=78.5f;
+    gps.lat_e7=312057615;gps.lon_e7=1215761313;gps.altitude_m=78.5f;
     gps.speed_kmh=25.7f;gps.heading=15.0f;gps.fix_quality=1U;gps.satellites=9U;
     gps.hdop=1.3f;gps.year=2026U;gps.month=9U;gps.day=1U;
     gps.hour=8U;gps.minute=2U;gps.second=17U;gps.valid=true;gps.last_update_ms=g_tick_ms;
@@ -246,7 +246,7 @@ int main(void) {
     assert(append_calls==1U);
     blind_zone_record_t first=appended;
     assert(first.location[3]==ALM_OVERSPEED);
-    gps.lat+=0.01; ++g_tick_ms; gps.last_update_ms=g_tick_ms;
+    gps.lat_e7+=100000; ++g_tick_ms; gps.last_update_ms=g_tick_ms;
     append_result=BLIND_ZONE_PENDING;
     assert(jt808_send_location_work_mode(ALM_OVERSPEED,false,1U)!=0);
     assert(memcmp(&first,&appended,sizeof(first))==0);
@@ -297,7 +297,7 @@ int main(void) {
     assert(append_calls==saved_calls+2U);
     assert((appended.location[7]&2U)==0U); /* retained fix is not live */
     trusted_available=false;
-    gps.valid=true;gps.lat-=0.01;
+    gps.valid=true;gps.lat_e7-=100000;
     assert(jt808_send_location()==0); /* ordinary report has nonzero ID */
     append_result=BLIND_ZONE_BUSY;
     open_ch[0]=open_ch[3]=true;
@@ -379,7 +379,10 @@ int main(void) {
         assert(body[p++]==0x00U && body[p++]==41U && body[p++]==0U);
         assert(body[p++]==0xE3U && body[p++]==0x0AU);
         assert(body[p++]==0x01U && body[p++]==0xF4U); /* latitude tail 500 */
-        assert(body[p++]==0x00U && body[p++]==0xFAU); /* longitude tail 250 */
+        /* Base wire is |e7|/10 truncated: 31.205761, 121.576131 deg. */
+        assert(memcmp(body+8U,(uint8_t[]){0x01U,0xDCU,0x29U,0x81U},4U)==0);
+        assert(memcmp(body+12U,(uint8_t[]){0x07U,0x3FU,0x1AU,0xC3U},4U)==0);
+        assert(body[p++]==0x01U && body[p++]==0x2CU); /* longitude tail 300: last e7 digit x100 */
         assert(body[p++]==0x01U && body[p++]==0xF4U); /* altitude tail 500 */
         assert(body[p++]==1U && body[p++]==9U);
         assert(body[p++]==0x00U && body[p++]==13U);
@@ -533,6 +536,7 @@ bool gps_get_last_trusted_location(gps_data_t *out) {
     out->valid=false; return true;
 }
 bool gps_report_filter_motion_pending(uint32_t now) { (void)now; return false; }
+bool gps_report_filter_heading_trusted(void) { return true; }
 void gps_report_filter_motion_ack(void) {}
 bool at_config_execute_text_response(const uint8_t *text, uint16_t len,
     at_config_text_ack_fn ack, at_config_text_reply_fn reply, void *ctx)

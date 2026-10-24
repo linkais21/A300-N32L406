@@ -46,21 +46,21 @@ bool cfg_flush_mileage(void)
 uint32_t test_tick_ms(void) { return now_ms; }
 int dbg_printf(const char *fmt, ...) { (void)fmt; return 0; }
 
-static void point(double lat, double lon)
+static void point(int32_t lat_e7, int32_t lon_e7)
 {
     gps.valid = true;
-    gps.lat = lat;
-    gps.lon = lon;
+    gps.lat_e7 = lat_e7;
+    gps.lon_e7 = lon_e7;
     gps.speed_kmh = 20.0f;
 }
 
 int main(void)
 {
-    point(0.0, 0.0);
+    point(0, 0);
     mileage_update();
     mileage_update();
     assert(config.mileage_m == 0U);
-    point(0.001, 0.0);
+    point(10000, 0);
     mileage_update();
     {
         uint32_t once = config.mileage_m;
@@ -76,7 +76,7 @@ int main(void)
     mileage_persist_process(600000U);
     assert(flush_count == 1U && !dirty);
 
-    point(0.002, 0.0);
+    point(20000, 0);
     mileage_update();
     mileage_persist_process(600001U);
     assert(flush_count == 1U && dirty);
@@ -86,7 +86,7 @@ int main(void)
      * flag. The persisted epoch must invalidate the old 10-minute deadline. */
     dirty = false;
     ++persist_generation;
-    point(0.003, 0.0);
+    point(30000, 0);
     mileage_update();
     mileage_persist_process(1200001U);
     assert(flush_count == 1U && dirty);
@@ -95,7 +95,7 @@ int main(void)
     mileage_persist_process(1800001U);
     assert(flush_count == 2U && !dirty);
 
-    point(0.004, 0.0);
+    point(40000, 0);
     mileage_update();
     flush_ok = false;
     mileage_persist_process(1800002U);
@@ -123,15 +123,17 @@ int main(void)
 
 
 HEADERS = {
-    "config.h": "#ifndef CONFIG_H\n#define CONFIG_H\n#define ADC_CAR_CH 0\n#define ADC_BAT_CH 1\n#endif\n",
-    "gps.h": r'''#ifndef GPS_H
-#define GPS_H
-#include <stdbool.h>
-typedef struct { bool valid; double lat, lon; float heading, speed_kmh; } gps_data_t;
-const gps_data_t *gps_get_data(void);
-#endif
+    # Persistence/math fixtures have no stationary evidence; integration is
+    # exercised with the real filter in test_stationary_mileage.py.
+    "gps_report_filter.h": r'''#include "gps.h"
+#include <stdint.h>
+static inline bool gps_report_filter_copy(const gps_data_t *raw,
+                                         gps_data_t *out, uint32_t now)
+{ (void)now; *out = *raw; return false; }
 ''',
-    "flash_config.h": r'''#ifndef FLASH_CONFIG_H
+    "config.h": "#ifndef CONFIG_H\n#define CONFIG_H\n#define ADC_CAR_CH 0\n#define ADC_BAT_CH 1\n#endif\n",
+    # Production fixed-point struct and coordinate helpers.
+    "gps.h": (ROOT / "include" / "gps.h").read_text(encoding="utf-8"),    "flash_config.h": r'''#ifndef FLASH_CONFIG_H
 #define FLASH_CONFIG_H
 #include <stdint.h>
 #include <stdbool.h>

@@ -50,12 +50,39 @@ int main(void) {
                 values[i] = (i & 1u) ? 1800000000 : -1800000000;
             longitude = true;
         }
+        /* Original binary64 mean in degrees; output is now rounded 1e-7 deg,
+         * so the circular error must be at most half an e7 unit. */
         double expected = original_mean(values, longitude);
-        double actual = trimmed_mean(values);
-        double error = fabs(actual - expected);
+        int32_t actual = trimmed_mean(values);
+        double error = fabs((double)actual / 10000000.0 - expected);
         if (longitude && error > 180.0) error = fabs(error - 360.0);
-        assert(error < 1e-12);
-        assert(fabs(actual) <= (longitude ? 180.0 : 90.0));
+        assert(error <= 0.5e-7 + 1e-12);
+        assert(llabs((long long)actual) <= (longitude ? 1800000000LL : 900000000LL));
+        /* Exact integer oracle: nearest e7 of the trimmed mean, ties of thirds
+         * cannot occur, sign-symmetric for southern/western hemispheres. */
+        {
+            int64_t origin = values[0], sum = origin, low = origin, high = origin;
+            for (unsigned i = 1; i < 5; ++i) {
+                int64_t v = values[i];
+                if (longitude) {
+                    if (v - origin > 1800000000LL) v -= 3600000000LL;
+                    else if (v - origin < -1800000000LL) v += 3600000000LL;
+                }
+                sum += v; if (v < low) low = v; if (v > high) high = v;
+            }
+            sum -= low + high;
+            int64_t q = sum / 3, r = sum % 3;
+            if (r == 2) ++q; else if (r == -2) --q;
+            if (longitude) {
+                if (q > 1800000000LL) q -= 3600000000LL;
+                else if (q < -1800000000LL) q += 3600000000LL;
+            }
+            if (actual != (int32_t)q)
+                printf("trimmed_mean mismatch trial=%u lon=%d v=%ld,%ld,%ld,%ld,%ld exp=%lld act=%ld\n",
+                       trial, (int)longitude, (long)values[0], (long)values[1], (long)values[2],
+                       (long)values[3], (long)values[4], (long long)q, (long)actual);
+            assert(actual == (int32_t)q);
+        }
         s_report.accel_count = (uint8_t)(1 + trial % 5);
         for (unsigned i = 0; i < s_report.accel_count; ++i)
             for (unsigned axis = 0; axis < 3; ++axis)

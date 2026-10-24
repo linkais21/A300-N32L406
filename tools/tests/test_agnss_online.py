@@ -13,7 +13,8 @@ def test_online():
         headers = {
             'config.h': '#include <stdint.h>\nextern uint32_t tick;\n#define TICK_MS() tick\n',
             'flash_config.h': 'typedef struct {unsigned char agps_en;char agps_ip[64];unsigned short agps_port;} device_config_t;\ndevice_config_t *cfg_get(void);\n',
-            'gps.h': '#include <stdint.h>\n#include <stdbool.h>\ntypedef struct { double lat,lon; float altitude_m; uint16_t year; uint8_t month,day,hour,minute,second; bool valid; } gps_data_t; typedef gps_data_t gps_context_t;\nbool gps_is_valid(void);bool gps_is_enabled(void);int gps_send_raw(const uint8_t*,uint32_t);uint32_t gps_agnss_ack_sequence(void);bool gps_agnss_take_ack(uint32_t*,uint8_t*);const gps_data_t *gps_get_data(void);void gps_get_unfixed_report(gps_data_t*);\n',
+            # Production fixed-point struct and gps_coord_in_range().
+            'gps.h': (ROOT / 'include' / 'gps.h').read_text(encoding='utf-8'),
             'debug_uart.h': 'void dbg_printf(const char*,...);void dbg_putchar(char);\n',
         }
         for name, text in headers.items():
@@ -69,9 +70,9 @@ int gps_send_raw(const uint8_t *p,uint32_t n){
     uart++;return tx_error;
 }
 uint32_t gps_agnss_ack_sequence(void){return acks;}
-bool gps_agnss_take_ack(uint32_t *seq,uint8_t *p){if(*seq==acks)return false;*seq=acks;memcpy(p,ack,10);p[7]=last_id;sum(p,10);return true;}
+bool gps_agnss_take_ack(uint32_t *seq,uint8_t p[10]){if(*seq==acks)return false;*seq=acks;memcpy(p,ack,10);p[7]=last_id;sum(p,10);return true;}
 static void sum(uint8_t *p,unsigned n){uint8_t a=0,b=0;for(unsigned i=2;i<n-2;i++){a+=p[i];b+=a;}p[n-2]=a;p[n-1]=b;}
-static void start(void){agnss_online_reset();cfg.agps_en=1;tick+=60001;fix=ota=false;ready=enabled=true;tx_error=0;gps=(gps_data_t){.lat=22.5,.lon=113.9,.altitude_m=12.5f,.year=2026,.month=10,.day=1,.hour=12,.minute=30,.second=0,.valid=true};assert(agnss_online_process(GNSS_TYPE_TAU804M));tcp=TCP_STATE_OPEN;assert(agnss_online_process(GNSS_TYPE_TAU804M));assert(strstr(request,"GET /download/ephemeris/HD_BDS.hdb HTTP/1.1\r\n"));}
+static void start(void){agnss_online_reset();cfg.agps_en=1;tick+=60001;fix=ota=false;ready=enabled=true;tx_error=0;gps=(gps_data_t){.lat_e7=225000000,.lon_e7=1139000000,.altitude_m=12.5f,.year=2026,.month=10,.day=1,.hour=12,.minute=30,.second=0,.valid=true};assert(agnss_online_process(GNSS_TYPE_TAU804M));tcp=TCP_STATE_OPEN;assert(agnss_online_process(GNSS_TYPE_TAU804M));assert(strstr(request,"GET /download/ephemeris/HD_BDS.hdb HTTP/1.1\r\n"));}
 static void pump(unsigned n){while(n--)agnss_online_process(GNSS_TYPE_TAU804M);}
 static void first_aid(void){
     unsigned before=uart;

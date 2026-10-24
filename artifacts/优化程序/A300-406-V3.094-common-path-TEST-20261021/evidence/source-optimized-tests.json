@@ -1,0 +1,470 @@
+[
+  {
+    "test": "test_at_config_handoff",
+    "exit_code": 0,
+    "seconds": 3.1,
+    "skip": false
+  },
+  {
+    "test": "test_at_config_serial_f39",
+    "exit_code": 0,
+    "seconds": 1.2,
+    "skip": false
+  },
+  {
+    "test": "test_boot_install_powercut_c",
+    "exit_code": 0,
+    "seconds": 5.6,
+    "skip": false
+  },
+  {
+    "test": "test_boot_install_progress",
+    "exit_code": 0,
+    "seconds": 0.7,
+    "skip": false
+  },
+  {
+    "test": "test_boot_resume_integrity",
+    "exit_code": 0,
+    "seconds": 0.7,
+    "skip": false
+  },
+  {
+    "test": "test_bootloader_bcr_failclosed",
+    "exit_code": 0,
+    "seconds": 1.3,
+    "skip": false
+  },
+  {
+    "test": "test_bootloader_factory_init",
+    "exit_code": 0,
+    "seconds": 0.7,
+    "skip": false
+  },
+  {
+    "test": "test_bootloader_invalid_vector_recovery",
+    "exit_code": 0,
+    "seconds": 0.6,
+    "skip": false
+  },
+  {
+    "test": "test_bootloader_legacy_recovery",
+    "exit_code": 0,
+    "seconds": 0.9,
+    "skip": false
+  },
+  {
+    "test": "test_bootloader_lkg_powercut_c",
+    "exit_code": 0,
+    "seconds": 1.1,
+    "skip": false
+  },
+  {
+    "test": "test_bootloader_platform_contract",
+    "exit_code": 0,
+    "seconds": 0.7,
+    "skip": false
+  },
+  {
+    "test": "test_bootloader_powercut",
+    "exit_code": 0,
+    "seconds": 37.2,
+    "skip": false
+  },
+  {
+    "test": "test_cfg_query_boot_schedule",
+    "exit_code": 0,
+    "seconds": 0.5,
+    "skip": false
+  },
+  {
+    "test": "test_cfg_query_contract",
+    "exit_code": 0,
+    "seconds": 0.0,
+    "skip": false
+  },
+  {
+    "test": "test_cfg_query_f39",
+    "exit_code": 0,
+    "seconds": 1.5,
+    "skip": false
+  },
+  {
+    "test": "test_cfg_query_lifetime",
+    "exit_code": 0,
+    "seconds": 0.8,
+    "skip": false
+  },
+  {
+    "test": "test_cfg_query_pass",
+    "exit_code": 0,
+    "seconds": 0.8,
+    "skip": false
+  },
+  {
+    "test": "test_compact_format",
+    "exit_code": 0,
+    "seconds": 0.5,
+    "skip": false
+  },
+  {
+    "test": "test_console_numeric",
+    "exit_code": 0,
+    "seconds": 1.3,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_dma_remap_order",
+    "exit_code": 0,
+    "seconds": 0.0,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_dma_wrap",
+    "exit_code": 0,
+    "seconds": 0.9,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_health_observability",
+    "exit_code": 0,
+    "seconds": 0.0,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_identity_recovery",
+    "exit_code": 0,
+    "seconds": 0.8,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_netreg_freshness",
+    "exit_code": 0,
+    "seconds": 0.0,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_netreg_transaction",
+    "exit_code": 0,
+    "seconds": 0.6,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_ntp_sync",
+    "exit_code": 0,
+    "seconds": 0.9,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_qisend",
+    "exit_code": 0,
+    "seconds": 0.0,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_send_recovery",
+    "exit_code": 0,
+    "seconds": 0.0,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_stack_reentry",
+    "exit_code": 0,
+    "seconds": 2.9,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_stalled_tick",
+    "exit_code": 0,
+    "seconds": 1.1,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_udp_async_contract",
+    "exit_code": 0,
+    "seconds": 0.0,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_udp_transaction",
+    "exit_code": 0,
+    "seconds": 0.5,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_udp_wire",
+    "exit_code": 0,
+    "seconds": 1.1,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_urc_demux",
+    "exit_code": 0,
+    "seconds": 1.1,
+    "skip": false
+  },
+  {
+    "test": "test_ec800m_wait_service",
+    "exit_code": 0,
+    "seconds": 0.9,
+    "skip": false
+  },
+  {
+    "test": "test_ext_flash_layout",
+    "exit_code": 0,
+    "seconds": 1.0,
+    "skip": false
+  },
+  {
+    "test": "test_f39_actions",
+    "exit_code": 0,
+    "seconds": 1.1,
+    "skip": false
+  },
+  {
+    "test": "test_f39_config",
+    "exit_code": 0,
+    "seconds": 0.9,
+    "skip": false
+  },
+  {
+    "test": "test_f39_dualset",
+    "exit_code": 0,
+    "seconds": 0.8,
+    "skip": false
+  },
+  {
+    "test": "test_f39_end_to_end",
+    "exit_code": 0,
+    "seconds": 5.9,
+    "skip": false
+  },
+  {
+    "test": "test_f39_parser",
+    "exit_code": 0,
+    "seconds": 0.6,
+    "skip": false
+  },
+  {
+    "test": "test_f39_query_equivalence",
+    "exit_code": 0,
+    "seconds": 1.0,
+    "skip": false
+  },
+  {
+    "test": "test_feature_guards",
+    "exit_code": 0,
+    "seconds": 0.2,
+    "skip": false
+  },
+  {
+    "test": "test_firmware_signature",
+    "exit_code": 0,
+    "seconds": 6.9,
+    "skip": false
+  },
+  {
+    "test": "test_fota_active",
+    "exit_code": 0,
+    "seconds": 0.5,
+    "skip": false
+  },
+  {
+    "test": "test_fota_check_parser",
+    "exit_code": 0,
+    "seconds": 0.6,
+    "skip": false
+  },
+  {
+    "test": "test_fota_checkpoint_powercut",
+    "exit_code": 0,
+    "seconds": 2.3,
+    "skip": false
+  },
+  {
+    "test": "test_fota_diagnostics",
+    "exit_code": 0,
+    "seconds": 0.0,
+    "skip": false
+  },
+  {
+    "test": "test_fota_if_range_restart",
+    "exit_code": 0,
+    "seconds": 1.7,
+    "skip": false
+  },
+  {
+    "test": "test_fota_key_config",
+    "exit_code": 0,
+    "seconds": 0.8,
+    "skip": false
+  },
+  {
+    "test": "test_fota_modem_handoff",
+    "exit_code": 0,
+    "seconds": 2.1,
+    "skip": false
+  },
+  {
+    "test": "test_fota_modem_imei",
+    "exit_code": 0,
+    "seconds": 1.8,
+    "skip": false
+  },
+  {
+    "test": "test_fota_no_api_key_contract",
+    "exit_code": 0,
+    "seconds": 0.0,
+    "skip": false
+  },
+  {
+    "test": "test_fota_package",
+    "exit_code": 0,
+    "seconds": 0.1,
+    "skip": false
+  },
+  {
+    "test": "test_fota_platform_flow",
+    "exit_code": 0,
+    "seconds": 8.6,
+    "skip": false
+  },
+  {
+    "test": "test_fota_progress_display",
+    "exit_code": 0,
+    "seconds": 1.7,
+    "skip": false
+  },
+  {
+    "test": "test_fota_resume",
+    "exit_code": 0,
+    "seconds": 1.9,
+    "skip": false
+  },
+  {
+    "test": "test_fota_stack_guard",
+    "exit_code": 0,
+    "seconds": 0.0,
+    "skip": false
+  },
+  {
+    "test": "test_fota_success_report",
+    "exit_code": 0,
+    "seconds": 1.9,
+    "skip": false
+  },
+  {
+    "test": "test_fota_verify_scan",
+    "exit_code": 0,
+    "seconds": 0.8,
+    "skip": false
+  },
+  {
+    "test": "test_heap_bounds",
+    "exit_code": 0,
+    "seconds": 0.6,
+    "skip": false
+  },
+  {
+    "test": "test_internal_flash_layout",
+    "exit_code": 0,
+    "seconds": 0.6,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_boot_terminal_info",
+    "exit_code": 0,
+    "seconds": 1.0,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_broadcast_result",
+    "exit_code": 0,
+    "seconds": 0.5,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_dual_session",
+    "exit_code": 0,
+    "seconds": 1.0,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_first_location",
+    "exit_code": 0,
+    "seconds": 1.0,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_nofix_clock",
+    "exit_code": 0,
+    "seconds": 1.2,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_params",
+    "exit_code": 0,
+    "seconds": 0.8,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_params_wire",
+    "exit_code": 0,
+    "seconds": 1.3,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_protocol_edges",
+    "exit_code": 0,
+    "seconds": 1.0,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_registration_tx",
+    "exit_code": 0,
+    "seconds": 0.0,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_send_failure_contract",
+    "exit_code": 0,
+    "seconds": 0.0,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_session",
+    "exit_code": 0,
+    "seconds": 0.6,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_session_send_failure",
+    "exit_code": 0,
+    "seconds": 0.6,
+    "skip": false
+  },
+  {
+    "test": "test_jt808_text_command",
+    "exit_code": 0,
+    "seconds": 1.0,
+    "skip": false
+  },
+  {
+    "test": "test_platform_trust_anchor",
+    "exit_code": 0,
+    "seconds": 3.5,
+    "skip": false
+  },
+  {
+    "test": "test_release_identity_contract",
+    "exit_code": 0,
+    "seconds": 0.1,
+    "skip": false
+  },
+  {
+    "test": "test_work_mode_jt808_contract",
+    "exit_code": 0,
+    "seconds": 0.1,
+    "skip": false
+  }
+]

@@ -230,14 +230,12 @@ static bool build_local_aid(void)
     if (s_local_stage==LOCAL_POS) {
         const gps_data_t *g=gps_get_data();
         int32_t lat,lon,alt;
-        double scaled;
-        if (!g || !g->valid || g->lat < -90.0 || g->lat > 90.0 ||
-            g->lon < -180.0 || g->lon > 180.0 || g->altitude_m < -1000.0f ||
+        float scaled;
+        if (!g || !g->valid || !gps_coord_in_range(g) || g->altitude_m < -1000.0f ||
             g->altitude_m > 100000.0f) { s_local_stage=NETWORK_DATA; return false; }
         uint8_t pos[17]={0};
-        scaled=g->lat*10000000.0; lat=(int32_t)(scaled+(scaled>=0.0?0.5:-0.5));
-        scaled=g->lon*10000000.0; lon=(int32_t)(scaled+(scaled>=0.0?0.5:-0.5));
-        scaled=(double)g->altitude_m*100.0; alt=(int32_t)(scaled+(scaled>=0.0?0.5:-0.5));
+        lat=g->lat_e7; lon=g->lon_e7;
+        scaled=g->altitude_m*100.0f; alt=(int32_t)(scaled+(scaled>=0.0f?0.5f:-0.5f));
         pos[0]=1U;
         for(uint8_t i=0;i<4;i++){pos[1+i]=(uint8_t)((uint32_t)lat>>(8U*i));pos[5+i]=(uint8_t)((uint32_t)lon>>(8U*i));pos[9+i]=(uint8_t)((uint32_t)alt>>(8U*i));}
         s_local_len=build_local_frame(0x10,pos,sizeof pos);

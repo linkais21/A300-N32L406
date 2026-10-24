@@ -112,7 +112,10 @@ typedef struct {
     /* Former reserved[0]: 0 legacy, 1 sensitivity-default migration applied.
      * Persist with the value in the same CRC/commit protected A/B record. */
     uint8_t  vib_default_migrated;
-    uint8_t  _reserved[19];
+    uint8_t  _reserved[16];
+    /* Former reserved bytes: WORD in 0.1 km/h. Legacy configs stay disabled. */
+    uint8_t  speed_warning_delta_be[2];
+    uint8_t  speed_warning_valid;
     /* Former reserved tail: preserve all deployed offsets and slot lengths.
      * Valid distinguishes legacy zero-filled bytes (10 s) from explicit 0 s. */
     uint8_t  speed_limit_time_be[4];
@@ -137,6 +140,13 @@ typedef struct {
 
 #define CFG_SPEED_LIMIT_TIME_DEFAULT_S 10U
 #define CFG_SPEED_LIMIT_TIME_MAX_S (UINT32_MAX / 1000U)
+
+static inline uint16_t cfg_speed_warning_delta_x10(const device_config_t *c)
+{
+    return c->speed_warning_valid == 1U ?
+           (uint16_t)(((uint16_t)c->speed_warning_delta_be[0] << 8) |
+                      c->speed_warning_delta_be[1]) : 0U;
+}
 
 static inline uint32_t cfg_speed_limit_time_s(const device_config_t *c)
 {

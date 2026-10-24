@@ -85,6 +85,12 @@ static bool s_deferred_urc_processing;
 /* AT command send/wait */
 #define AT_RESP_MAX  512
 static char    s_at_resp[AT_RESP_MAX];
+/* During a TCP QIRD pass the published payload lives in the top of s_at_resp
+ * and AT responses are confined below it. A JT808 reply sent from inside the
+ * receive callback (QISEND -> "SEND OK") then cannot overwrite the frames
+ * that follow in the same chunk. No extra RAM. */
+#define QIRD_PAYLOAD_BASE  (AT_RESP_MAX - EC800M_QIRD_CHUNK - 1U)
+typedef char qird_payload_fits[(QIRD_PAYLOAD_BASE >= 128U) ? 1 : -1];
 static volatile bool s_at_done = false;
 #ifdef A300_FIRMWARE_IMAGE
 static bool s_at_tx_ok;
@@ -211,6 +217,10 @@ static int s_reg_status = -1;
 static uint32_t s_last_diag_ms;
 static uint16_t s_send_fail_streak;
 static bool s_pdp_profile_applied;
+/* Consecutive PDP attempts abandoned back to NETREG. A wrong APN or a wedged
+ * data stack otherwise loops NETREG<->PDP forever without a module reset. */
+static uint8_t s_pdp_giveups;
+#define EC800M_PDP_GIVEUP_RESET 4U
 static bool s_pdp_deactivate_required;
 #define EC800M_DIAG_INTERVAL_MS 10000U
 #define EC800M_IDENTITY_MAX_ATTEMPTS 3U
@@ -653,7 +663,9 @@ static bool udp_note_line(const char *line)
 static bool at_send_wait_owned(const char *cmd, const char *expect,
                                uint32_t timeout_ms)
 {
-    memset(s_at_resp, 0, sizeof(s_at_resp));
+    const uint16_t resp_cap = s_qird_pass_active ?
+        (uint16_t)QIRD_PAYLOAD_BASE : (uint16_t)AT_RESP_MAX;
+    memset(s_at_resp, 0, resp_cap);
     s_at_resp_len = 0;
 #ifdef A300_FIRMWARE_IMAGE
     s_at_tx_ok = false;
@@ -690,7 +702,7 @@ static bool at_send_wait_owned(const char *cmd, const char *expect,
             bool cmt_byte = s_cmt_line_active || s_cmt_body_pending;
             if (s_line_len == 0U)
                 s_at_resp_line_start = resp_pos;
-            if (!cmt_byte && resp_pos < AT_RESP_MAX - 1)
+            if (!cmt_byte && resp_pos < resp_cap - 1U)
                 s_at_resp[resp_pos++] = (char)c;
             s_at_resp_pos_ref = &resp_pos;
             process_rx_byte((char)c);
@@ -953,9 +965,13 @@ static bool qird_collect_payload(uint8_t channel, uint16_t requested,
     qird_phase_t phase = QIRD_PHASE_HEADER;
     bool complete = false;
     bool failed = false;
+    /* TCP passes publish above QIRD_PAYLOAD_BASE; the UDP path copies at once. */
+    char *const body = s_qird_pass_active ? s_at_resp + QIRD_PAYLOAD_BASE : s_at_resp;
+    const uint16_t body_cap = s_qird_pass_active ?
+        (uint16_t)(AT_RESP_MAX - QIRD_PAYLOAD_BASE) : (uint16_t)(AT_RESP_MAX - 1U);
 
     if (payload == NULL || payload_length == NULL || diag == NULL ||
-        requested == 0U || requested + 32U >= AT_RESP_MAX ||
+        requested == 0U || requested + 32U >= AT_RESP_MAX || requested > body_cap ||
         !at_owner_acquire(AT_OWNER_BLOCKING)) return false;
 
     *payload = NULL;
@@ -995,13 +1011,12 @@ static bool qird_collect_payload(uint8_t channel, uint16_t requested,
             dbg_putchar((char)byte);
 #endif
             if (phase == QIRD_PHASE_BODY) {
-                if (body_length >= declared_length ||
-                    body_length >= AT_RESP_MAX - 1U) {
+                if (body_length >= declared_length || body_length >= body_cap) {
                     diag->stage = EC800M_QIRD_STAGE_PAYLOAD;
                     failed = true;
                     break;
                 }
-                s_at_resp[body_length++] = (char)byte;
+                body[body_length++] = (char)byte;
                 if (body_length == declared_length) {
                     s_at_resp_len = body_length;
                     phase = QIRD_PHASE_RESULT;
@@ -1075,7 +1090,7 @@ done:
     at_owner_release(AT_OWNER_BLOCKING);
     process_deferred_urc_one();
     if (complete) {
-        *payload = (const uint8_t *)s_at_resp;
+        *payload = (const uint8_t *)body;
         *payload_length = body_length;
     }
     return complete;
@@ -1265,7 +1280,13 @@ void ec800m_power_on(void)
     GPIO_ResetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);
     delay_ms(750);
     GPIO_SetBits(EC800M_PWRKEY_PORT, EC800M_PWRKEY_PIN);
-    delay_ms(10000);  /* UART ready ≥10s after PWRKEY release per datasheet Fig.12 */
+    /* Feed the watchdog through the UART-ready wait instead of one 10 s
+     * busy delay. */
+    for (uint8_t second = 0U; second < 10U; ++second) {
+        IWDG_ReloadKey();
+        delay_ms(1000);
+    }
+    (void)0;  /* UART ready ≥10s after PWRKEY release per datasheet Fig.12 */
 }
 
 void ec800m_power_off(void)
@@ -1280,8 +1301,14 @@ void ec800m_reset(void)
 {
     if (s_sms_tx_state != SMS_TX_IDLE) { s_sms_tx_state = SMS_TX_IDLE; s_sms_prompt = false; s_at_owner = AT_OWNER_NONE; sms_send_complete(false); }
     ec800m_power_off();
-    delay_ms(1000);
+    /* A hung module ignores AT+QPOWD, and a PWRKEY pulse to a module that is
+     * still on switches it off. Remove VBAT (PA15) so power_on() always starts
+     * from a known-off module. Needs HIL confirmation of the PA15 rail. */
+    GPIO_ResetBits(EC800M_POWER_EN_PORT, EC800M_POWER_EN_PIN);
+    IWDG_ReloadKey();
+    delay_ms(1500);
     ec800m_power_on();
+    s_pdp_giveups = 0U;
     s_state = EC800M_STATE_BOOTING;
     s_state_enter_ms = TICK_MS();
     s_init_step = 0;
@@ -1437,6 +1464,19 @@ static void state_machine_netreg(void)
     }
 }
 
+/* Return to NETREG after a bounded PDP attempt; reset the module once the
+ * cycle has failed EC800M_PDP_GIVEUP_RESET times in a row. */
+static void pdp_give_up(void)
+{
+    if (++s_pdp_giveups >= EC800M_PDP_GIVEUP_RESET) {
+        dbg_printf("[4G] PDP failed %u times -> reset\r\n", (unsigned)s_pdp_giveups);
+        ec800m_reset();
+        return;
+    }
+    s_state = EC800M_STATE_NETWORK_REG;
+    s_state_enter_ms = TICK_MS();
+}
+
 static void state_machine_pdp(void)
 {
     const device_config_t *config = cfg_get();
@@ -1448,10 +1488,7 @@ static void state_machine_pdp(void)
     if (s_pdp_deactivate_required) {
         if (!at_send_wait("AT+QIDEACT=1", "OK", 10000)) {
             s_failure = EC800M_FAILURE_PDP_ACTIVATE;
-            if (TICK_MS() - s_state_enter_ms > 30000U) {
-                s_state = EC800M_STATE_NETWORK_REG;
-                s_state_enter_ms = TICK_MS();
-            }
+            if (TICK_MS() - s_state_enter_ms > 30000U) pdp_give_up();
             return;
         }
         s_pdp_deactivate_required = false;
@@ -1473,10 +1510,7 @@ static void state_machine_pdp(void)
         if (command_length < 0 || (size_t)command_length >= sizeof command ||
             !at_send_wait(command, "OK", 5000)) {
             s_failure = EC800M_FAILURE_PDP_ACTIVATE;
-            if (TICK_MS() - s_state_enter_ms > 30000U) {
-                s_state = EC800M_STATE_NETWORK_REG;
-                s_state_enter_ms = TICK_MS();
-            }
+            if (TICK_MS() - s_state_enter_ms > 30000U) pdp_give_up();
             return;
         }
         s_pdp_profile_applied = true;
@@ -1487,13 +1521,13 @@ static void state_machine_pdp(void)
     if (!activate_ok) s_failure = EC800M_FAILURE_PDP_ACTIVATE;
     if (at_send_wait("AT+QIACT?", "+QIACT:", 3000)) {
         s_failure = EC800M_FAILURE_NONE;
+        s_pdp_giveups = 0U;
         s_state = EC800M_STATE_READY;
         s_state_enter_ms = TICK_MS();
         dbg_printf("[4G] ready\r\n");
     } else if (TICK_MS() - s_state_enter_ms > 30000) {
         s_failure = EC800M_FAILURE_PDP_QUERY;
-        s_state = EC800M_STATE_NETWORK_REG;
-        s_state_enter_ms = TICK_MS();
+        pdp_give_up();
     } else if (activate_ok) {
         s_failure = EC800M_FAILURE_PDP_QUERY;
     }
@@ -1647,6 +1681,20 @@ static void qntp_time_to_utc(unsigned year, unsigned month, unsigned day,
     out->minute = (uint8_t)minute;
     out->second = (uint8_t)second;
     out->valid = true;
+}
+
+/* tcp_manager reports that no platform channel can open while the modem
+ * claims READY. Escalate: rebuild PDP first, then power-cycle the module. */
+void ec800m_link_stalled(bool power_cycle)
+{
+    if (s_state != EC800M_STATE_READY) return;
+    if (power_cycle) {
+        dbg_printf("[4G] link stalled -> reset\r\n");
+        ec800m_reset();
+    } else {
+        dbg_printf("[4G] link stalled -> PDP restart\r\n");
+        ec800m_restart_pdp();
+    }
 }
 
 void ec800m_restart_pdp(void)
@@ -1997,11 +2045,23 @@ int ec800m_udp_txn(const char *ip, uint16_t port,
 {
     int result = ec800m_udp_txn_start(ip, port, tx, tx_len, rx, rx_cap, timeout_ms);
     if (result != 0) return result;
+    wait_tick_guard_t guard = {TICK_MS(), 0U};
     do {
         IWDG_ReloadKey();
         ec800m_wait_service_hook();
         drain_rx();
         ec800m_udp_txn_process();
+        if (udp_txn_active() && !wait_tick_alive(&guard)) {
+            /* Send a real close attempt, then finish without a tick deadline.
+             * The failed-close queue reconciles an unacknowledged socket. */
+            s_udp.result = -1;
+            if (s_udp.state != UDP_TXN_WAIT_CLOSE) {
+                s_udp.state = UDP_TXN_CLOSE_CMD;
+                ec800m_udp_txn_process();
+            }
+            s_udp.cmd_error = true;
+            ec800m_udp_txn_process();
+        }
         result = ec800m_udp_txn_result();
     } while (result == -2);
     return result;
@@ -2096,6 +2156,10 @@ void ec800m_udp_txn_process(void)
             if (!s_udp.cmd_ok) s_udp.result = -1;
             ++s_tcp_generation[ch]; s_tcp[ch].state = TCP_STATE_CLOSED;
             s_tcp_qird_pending_mask &= (uint8_t)~(1U << ch);
+            if (!s_udp.cmd_ok) {
+                s_failed_open_close_generation[ch] = s_tcp_generation[ch];
+                s_failed_open_close_mask |= (uint8_t)(1U << ch);
+            }
             at_owner_release(AT_OWNER_TCP); s_udp.state = UDP_TXN_DONE;
         }
         break;

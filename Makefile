@@ -88,6 +88,7 @@ C_SRCS := \
     src/power_mgr.c      \
     src/work_mode.c      \
     src/work_mode_sleep.c \
+    src/rtc_lsi_calibration.c \
     src/reset_diag.c     \
     src/tcp_manager.c    \
     third_party/micro-ecc/uECC.c \
@@ -157,6 +158,10 @@ CFLAGS := $(CPU) $(SIZE_FLAGS) $(STACK_AUDIT_FLAGS) $(DEBUG_FLAGS) -Wall -Wextra
            $(EXTRA_CFLAGS)
 
 # Keep vendor SPL sources unchanged; suppress only their two known diagnostics.
+# ARM GCC 14.3.1 audit: measured size settings for the repaired image.
+# Retain safety checks and diagnostics; remeasure capacity/stack on compiler changes.
+CFLAGS += -fno-caller-saves -fno-schedule-insns2
+
 SDK_CFLAGS := -Wno-sign-compare -Wno-unused-parameter
 SIGNATURE_CFLAGS := -fno-lto
 

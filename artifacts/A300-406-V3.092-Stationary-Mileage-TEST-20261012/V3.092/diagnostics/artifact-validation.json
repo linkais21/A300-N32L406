@@ -1,0 +1,30 @@
+{
+  "status": "passed",
+  "hex_roundtrip": {
+    "App-N32L406CBL7.hex": {
+      "origin": "0x8006000",
+      "bytes": 105564,
+      "sha256": "fe3bcf9e3e860f60b326f8d8e4a2a5b644b8158583d2c3f7f311c14481b958cc"
+    },
+    "Bootloader-N32L406CBL7.hex": {
+      "origin": "0x8000000",
+      "bytes": 22556,
+      "sha256": "542ae3e024d801377b42d552dc97627192734a8a38b0f15bf24a8ec4cc984c10"
+    },
+    "Combined-N32L406CBL7.hex": {
+      "origin": "0x8000000",
+      "bytes": 130140,
+      "sha256": "3b42af469ad23d9b7b8057478a689ec72e721ac1de622376a7b061a1c4e47e1d"
+    }
+  },
+  "ota_version_counter": 3092,
+  "ota_product_id": "0x41333030",
+  "app_bytes": 105564,
+  "bootloader_bytes": 22556,
+  "combined_bytes": 130140,
+  "app_payload_equal_in_ota_and_combined": true,
+  "vectors_and_factory_init_record": "passed",
+  "ota_crc": "0xc14af6b7",
+  "app_sha256": "c42f926d9f82a79c377afc02023ddbfd774a5916615bce9402fe0f02e1e5a77a",
+  "ota_sha256": "1132f027ce25abeb015572766fadfa55361fc319d8304ae65b4b9a8f01c28d74"
+}

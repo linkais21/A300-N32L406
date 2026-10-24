@@ -15,6 +15,7 @@ def main():
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#include <math.h>
 #include "debug_uart.h"
 static char out[256];static unsigned pos;
 int USART_GetFlagStatus(int a,int b){(void)a;(void)b;return 1;}
@@ -40,8 +41,12 @@ int main(void){
         int m=snprintf(ref,sizeof ref,"%u|%010u|%12u|%08x|%12x",random,random,random,random,random);
         assert(n==m&&!strcmp(out,ref));
     }
-    pos=0;n=dbg_printf("%.0f|%.3f|%u",1234567890.0,0.125,UINT_MAX);
-    assert(!strcmp(out,"1234567890|0.125|4294967295")&&n==(int)strlen(out));
+    /* %f is single precision since the soft-double removal: use a value that
+     * binary32 holds exactly (2^24) instead of 1234567890.0. */
+    pos=0;n=dbg_printf("%.0f|%.3f|%u",16777216.0,0.125,UINT_MAX);
+    assert(!strcmp(out,"16777216|0.125|4294967295")&&n==(int)strlen(out));
+    pos=0;n=dbg_printf("%f",(double)NAN);
+    assert(!strcmp(out,"nan")&&n==3);
     return 0;
 }
 ''',encoding='ascii')

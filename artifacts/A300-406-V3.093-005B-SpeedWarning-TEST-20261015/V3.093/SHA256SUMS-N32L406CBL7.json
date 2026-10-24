@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "signing": "platform-detached",
+  "ota_format": "a300-header-v1",
+  "mcu": "N32L406CBL7",
+  "memory": {
+    "boot": [
+      134217728,
+      134242304
+    ],
+    "app": [
+      134242304,
+      134348800
+    ]
+  },
+  "version_counter": 3093,
+  "toolchain": "arm-none-eabi-gcc.exe (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) 14.3.1 20250623",
+  "git_revision": "7bb2b470e2611ddd34c1c77f1890ba5ca2f070f8",
+  "git_dirty": true,
+  "app_vectors": {
+    "msp": 536895488,
+    "reset": 134335437
+  },
+  "artifacts": {
+    "app_bin": {
+      "path": "App-N32L406CBL7.bin",
+      "size": 105936,
+      "sha256": "33be3cf94d120f212dcf39eb846eb6f314472e9cfe1678e80714553cb75c5f4a"
+    },
+    "app_elf": {
+      "path": "App-N32L406CBL7.elf",
+      "size": 1478720,
+      "sha256": "ff055cab293e07d328f3f2825ae309c75d852dec8c4044ba15cbcfaee4989f66"
+    },
+    "app_hex": {
+      "path": "App-N32L406CBL7.hex",
+      "size": 298013,
+      "sha256": "ddafa07792f3d6e83cfd32bafc42526446a01b5b4f82893392f9814a24fa77cc"
+    },
+    "app_map": {
+      "path": "App-N32L406CBL7.map",
+      "size": 657876,
+      "sha256": "605862da6d56fe6dbe0adfa8a22ae6ee9d46af9731ebd390bebc38eee89ee4fd"
+    },
+    "bootloader_bin": {
+      "path": "Bootloader-N32L406CBL7.bin",
+      "size": 22556,
+      "sha256": "21e7888cf5650f18ed88e69df559bff8282051afb8ce53b2501b82f1889d8830"
+    },
+    "bootloader_elf": {
+      "path": "Bootloader-N32L406CBL7.elf",
+      "size": 32788,
+      "sha256": "33d5e96e9458282e33d91351ae5bb72fe83a4902a277989f2a29a48fea7d975b"
+    },
+    "bootloader_hex": {
+      "path": "Bootloader-N32L406CBL7.hex",
+      "size": 63493,
+      "sha256": "3d863af4939516ab2b6df738bfb61499e5bc5ca2f63a25472ab5dfe7a0fa8631"
+    },
+    "bootloader_map": {
+      "path": "Bootloader-N32L406CBL7.map",
+      "size": 63590,
+      "sha256": "62314bb355fd3beaa68e99d56cad78910f7f641cd1adfc2ec76614e873b7b4a7"
+    },
+    "combined_bin": {
+      "path": "Combined-N32L406CBL7.bin",
+      "size": 130512,
+      "sha256": "ba25a421aa3ea1df5106476b777d28cbc96edf4c92f29d0ab5896c5eda3a35a3"
+    },
+    "flash_capacity": {
+      "path": "flash-capacity.json",
+      "size": 4869,
+      "sha256": "436876edc1ac4fc6e6d0f1e7af7fb005d0a7aeac6e5955862e878e042dedebc6"
+    },
+    "ota_upload_bin": {
+      "path": "A300-406-OTA-V3093.bin",
+      "size": 105968,
+      "sha256": "c42d50f16f0830e2fb8e876e69c7b6dc3d1f9d17f63e5edd536b6b86c3a73237"
+    },
+    "combined_hex": {
+      "path": "Combined-N32L406CBL7.hex",
+      "size": 367133,
+      "sha256": "fc5dcca12b8325f185d7ca84d7396f435dfffde83e5aebeb275b7f3092a71fb0"
+    }
+  },
+  "hex_generation": "binary-derived; preserves alignment/reserved gap bytes"
+}

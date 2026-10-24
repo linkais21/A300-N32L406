@@ -1,0 +1,13 @@
+{
+  "changed_from_audit": [
+    "include/build_version.h",
+    "include/config.h",
+    "release_identity.json",
+    "tools/release_guard.py",
+    "tools/tests/test_release_identity_contract.py",
+    "tools/tests/test_work_mode_jt808_contract.py"
+  ],
+  "business_sources_unchanged": true,
+  "old_packages_unchanged": 17,
+  "review": "Version and reviewed identity fingerprints only; updated stale source-contract signature without changing assertions on other behavior."
+}

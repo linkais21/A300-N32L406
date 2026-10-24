@@ -1,0 +1,55 @@
+{
+  "verified_at_utc": "2026-10-15T08:35:37.384838+00:00",
+  "version": "T360-A300_406_20261015162913,V3.093",
+  "hex": {
+    "app": {
+      "records": 6625,
+      "origin": "0x8006000",
+      "binary_bytes": 105936,
+      "binary_sha256": "33be3cf94d120f212dcf39eb846eb6f314472e9cfe1678e80714553cb75c5f4a",
+      "entry": "0x801cbcc",
+      "roundtrip": "pass"
+    },
+    "bootloader": {
+      "records": 1413,
+      "origin": "0x8000000",
+      "binary_bytes": 22556,
+      "binary_sha256": "21e7888cf5650f18ed88e69df559bff8282051afb8ce53b2501b82f1889d8830",
+      "entry": "0x8003404",
+      "roundtrip": "pass"
+    },
+    "combined": {
+      "records": 8161,
+      "origin": "0x8000000",
+      "binary_bytes": 130512,
+      "binary_sha256": "ba25a421aa3ea1df5106476b777d28cbc96edf4c92f29d0ab5896c5eda3a35a3",
+      "entry": "0x8003404",
+      "roundtrip": "pass"
+    }
+  },
+  "app_vectors": [
+    536895488,
+    134335437
+  ],
+  "factory_init_record": [
+    1229867334,
+    1,
+    28,
+    1,
+    15,
+    2937699498,
+    1380274500,
+    4294967295
+  ],
+  "combined_app_matches": true,
+  "ota_payload_matches": true,
+  "ota_crc_valid": true,
+  "ota_version_counter": 3093,
+  "ota_product_id": "0x41333030",
+  "app_combined_embed_same_version": true,
+  "bootloader_version_counter": 3093,
+  "bootloader_counter_instruction_matches_bin": true,
+  "release_manifest": "pass",
+  "signing": "platform-detached; upload file is unsigned transport image",
+  "hardware_hil": "pending"
+}

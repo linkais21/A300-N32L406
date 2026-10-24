@@ -87,7 +87,7 @@ int main(void) {
         at_config_process();
         assert(inject_at == -1);
         assert(config.vib_sens == 20);
-        assert(strstr(console, "VIBSENS=Success!") != NULL);
+        assert(strstr(console, "VIBSENS,20=Success!") != NULL);
     }
 
     /* Empty lines, maximum capacity and existing truncation stay bounded. */

@@ -1,0 +1,62 @@
+{
+  "equal": true,
+  "corpus_sha256": "bb9b85d6725207960d7cdce1e576e60afc908f136c2c134c178eba057bed8aca",
+  "results": [
+    {
+      "tree": "source-baseline",
+      "exit_code": 0,
+      "command": [
+        "C:\\Users\\86166\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.EXE",
+        "-std=c99",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-ffunction-sections",
+        "-I",
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\A300-first\\artifacts\\\u4f18\u5316\u7a0b\u5e8f\\A300-406-V3.094-common-path-TEST-20261021\\source-baseline\\include",
+        "C:\\Users\\86166\\AppData\\Local\\Temp\\a300_equivalence_8vi2srmx\\source-baseline.c",
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\A300-first\\artifacts\\\u4f18\u5316\u7a0b\u5e8f\\A300-406-V3.094-common-path-TEST-20261021\\source-baseline\\src\\plate_encoding.c",
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\A300-first\\artifacts\\\u4f18\u5316\u7a0b\u5e8f\\A300-406-V3.094-common-path-TEST-20261021\\source-baseline\\src\\f39_command.c",
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\A300-first\\artifacts\\\u4f18\u5316\u7a0b\u5e8f\\A300-406-V3.094-common-path-TEST-20261021\\source-baseline\\src\\f39_config_adapter.c",
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\A300-first\\artifacts\\\u4f18\u5316\u7a0b\u5e8f\\A300-406-V3.094-common-path-TEST-20261021\\source-baseline\\src\\f39_reply.c",
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\A300-first\\artifacts\\\u4f18\u5316\u7a0b\u5e8f\\A300-406-V3.094-common-path-TEST-20261021\\source-baseline\\src\\terminal_identity.c",
+        "-Wl,--gc-sections",
+        "-o",
+        "C:\\Users\\86166\\AppData\\Local\\Temp\\a300_equivalence_8vi2srmx\\source-baseline.exe"
+      ],
+      "cases": 6244,
+      "executions": 12488,
+      "stdout_sha256": "23101683e16523728df14b4f33721250ec1d828b41c68719a44667d9374ab95c",
+      "stderr": "cases=6244, including persistence success/failure\r\n"
+    },
+    {
+      "tree": "source-optimized",
+      "exit_code": 0,
+      "command": [
+        "C:\\Users\\86166\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.EXE",
+        "-std=c99",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-ffunction-sections",
+        "-I",
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\A300-first\\artifacts\\\u4f18\u5316\u7a0b\u5e8f\\A300-406-V3.094-common-path-TEST-20261021\\source-optimized\\include",
+        "C:\\Users\\86166\\AppData\\Local\\Temp\\a300_equivalence_8vi2srmx\\source-optimized.c",
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\A300-first\\artifacts\\\u4f18\u5316\u7a0b\u5e8f\\A300-406-V3.094-common-path-TEST-20261021\\source-optimized\\src\\plate_encoding.c",
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\A300-first\\artifacts\\\u4f18\u5316\u7a0b\u5e8f\\A300-406-V3.094-common-path-TEST-20261021\\source-optimized\\src\\f39_command.c",
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\A300-first\\artifacts\\\u4f18\u5316\u7a0b\u5e8f\\A300-406-V3.094-common-path-TEST-20261021\\source-optimized\\src\\f39_config_adapter.c",
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\A300-first\\artifacts\\\u4f18\u5316\u7a0b\u5e8f\\A300-406-V3.094-common-path-TEST-20261021\\source-optimized\\src\\f39_reply.c",
+        "D:\\ProjectTools\\A300_406_tools\\A300_406\\A300-first\\artifacts\\\u4f18\u5316\u7a0b\u5e8f\\A300-406-V3.094-common-path-TEST-20261021\\source-optimized\\src\\terminal_identity.c",
+        "-Wl,--gc-sections",
+        "-o",
+        "C:\\Users\\86166\\AppData\\Local\\Temp\\a300_equivalence_8vi2srmx\\source-optimized.exe"
+      ],
+      "cases": 6244,
+      "executions": 12488,
+      "stdout_sha256": "23101683e16523728df14b4f33721250ec1d828b41c68719a44667d9374ab95c",
+      "stderr": "cases=6244, including persistence success/failure\r\n"
+    }
+  ]
+}

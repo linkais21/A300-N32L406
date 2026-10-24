@@ -1,0 +1,67 @@
+
+D:\ProjectTools\A300_406_tools\A300_406\A300-first\artifacts\A300-406-V3.094-Clock-Mileage-TEST-20261021\V3.094\Bootloader-N32L406CBL7.elf:     file format elf32-littlearm
+
+
+Disassembly of section .text:
+
+08000008 <main>:
+ 8000008:	b508      	push	{r3, lr}
+ 800000a:	f001 fbb9 	bl	8001780 <boot_platform_init>
+ 800000e:	b920      	cbnz	r0, 800001a <main+0x12>
+ 8000010:	f001 fe62 	bl	8001cd8 <boot_recovery_step>
+ 8000014:	f001 fe57 	bl	8001cc6 <boot_watchdog_feed>
+ 8000018:	e7fa      	b.n	8000010 <main+0x8>
+ 800001a:	f640 4116 	movw	r1, #3094	@ 0xc16
+ 800001e:	4822      	ldr	r0, [pc, #136]	@ (80000a8 <main+0xa0>)
+ 8000020:	f001 ff88 	bl	8001f34 <boot_startup_status>
+ 8000024:	f001 fa5a 	bl	80014dc <factory_init_request>
+ 8000028:	f001 fa5c 	bl	80014e4 <factory_init_apply>
+ 800002c:	1c83      	adds	r3, r0, #2
+ 800002e:	d115      	bne.n	800005c <main+0x54>
+ 8000030:	481e      	ldr	r0, [pc, #120]	@ (80000ac <main+0xa4>)
+ 8000032:	f001 fe6f 	bl	8001d14 <boot_app_vectors_valid>
+ 8000036:	b138      	cbz	r0, 8000048 <main+0x40>
+ 8000038:	481d      	ldr	r0, [pc, #116]	@ (80000b0 <main+0xa8>)
+ 800003a:	f04f 31ff 	mov.w	r1, #4294967295
+ 800003e:	f001 ff79 	bl	8001f34 <boot_startup_status>
+ 8000042:	481a      	ldr	r0, [pc, #104]	@ (80000ac <main+0xa4>)
+ 8000044:	f001 fe84 	bl	8001d50 <boot_jump_to>
+ 8000048:	481a      	ldr	r0, [pc, #104]	@ (80000b4 <main+0xac>)
+ 800004a:	f04f 31ff 	mov.w	r1, #4294967295
+ 800004e:	f001 ff71 	bl	8001f34 <boot_startup_status>
+ 8000052:	f001 fe41 	bl	8001cd8 <boot_recovery_step>
+ 8000056:	f001 fe36 	bl	8001cc6 <boot_watchdog_feed>
+ 800005a:	e7fa      	b.n	8000052 <main+0x4a>
+ 800005c:	2800      	cmp	r0, #0
+ 800005e:	dbf3      	blt.n	8000048 <main+0x40>
+ 8000060:	2100      	movs	r1, #0
+ 8000062:	4815      	ldr	r0, [pc, #84]	@ (80000b8 <main+0xb0>)
+ 8000064:	f001 ff66 	bl	8001f34 <boot_startup_status>
+ 8000068:	f001 fe30 	bl	8001ccc <boot_reset_was_fault_or_watchdog>
+ 800006c:	f000 f95a 	bl	8000324 <bcr_note_trial_reset>
+ 8000070:	b948      	cbnz	r0, 8000086 <main+0x7e>
+ 8000072:	4812      	ldr	r0, [pc, #72]	@ (80000bc <main+0xb4>)
+ 8000074:	f04f 31ff 	mov.w	r1, #4294967295
+ 8000078:	f001 ff5c 	bl	8001f34 <boot_startup_status>
+ 800007c:	f001 fe2c 	bl	8001cd8 <boot_recovery_step>
+ 8000080:	f001 fe21 	bl	8001cc6 <boot_watchdog_feed>
+ 8000084:	e7fa      	b.n	800007c <main+0x74>
+ 8000086:	2100      	movs	r1, #0
+ 8000088:	480d      	ldr	r0, [pc, #52]	@ (80000c0 <main+0xb8>)
+ 800008a:	f001 ff53 	bl	8001f34 <boot_startup_status>
+ 800008e:	f001 f845 	bl	800111c <bootloader_select_image>
+ 8000092:	480c      	ldr	r0, [pc, #48]	@ (80000c4 <main+0xbc>)
+ 8000094:	f04f 31ff 	mov.w	r1, #4294967295
+ 8000098:	f001 ff4c 	bl	8001f34 <boot_startup_status>
+ 800009c:	f001 fe1c 	bl	8001cd8 <boot_recovery_step>
+ 80000a0:	f001 fe11 	bl	8001cc6 <boot_watchdog_feed>
+ 80000a4:	e7fa      	b.n	800009c <main+0x94>
+ 80000a6:	bf00      	nop
+ 80000a8:	08003674 	.word	0x08003674
+ 80000ac:	08006000 	.word	0x08006000
+ 80000b0:	0800367a 	.word	0x0800367a
+ 80000b4:	0800368e 	.word	0x0800368e
+ 80000b8:	0800369c 	.word	0x0800369c
+ 80000bc:	080036aa 	.word	0x080036aa
+ 80000c0:	080036bd 	.word	0x080036bd
+ 80000c4:	080036c4 	.word	0x080036c4

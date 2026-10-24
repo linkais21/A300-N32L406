@@ -274,11 +274,30 @@ static bool send_request(void)
     return true;
 }
 
+/* The external-flash owner is held only around flash I/O, never across main
+ * loop iterations: blind-zone appends and parameter saves must keep working
+ * while OTA waits on the network. Returns true when this call took the lock
+ * and must release it; *ok reports whether the lock is available at all. */
+static bool ota_lock(bool *ok)
+{
+    if(s_ota_lock){*ok=true;return false;}
+    *ok=ext_flash_try_lock_now(EXT_FLASH_OWNER_OTA);
+    s_ota_lock=*ok;
+    return *ok;
+}
+static void ota_unlock(bool taken)
+{
+    if(taken && s_ota_lock){ext_flash_unlock(EXT_FLASH_OWNER_OTA);s_ota_lock=false;}
+}
+
 static bool checkpoint_load(void)
 {
-    fota_checkpoint_t c;char checkpoint_url[128];
-    if (!s_ota_lock || !checkpoint_url_from_download_url(s_url,checkpoint_url) ||
-        !fota_checkpoint_load(checkpoint_url,s_expected,&c)) return false;
+    fota_checkpoint_t c;char checkpoint_url[128];bool ok,taken,loaded;
+    if (!s_workspace_lock || !checkpoint_url_from_download_url(s_url,checkpoint_url)) return false;
+    taken=ota_lock(&ok);
+    loaded=ok && fota_checkpoint_load(checkpoint_url,s_expected,&c);
+    ota_unlock(taken);
+    if (!loaded) return false;
     /* Offset zero retains no candidate bytes, so a newly learned response
      * ETag may safely be discarded when retrying before the first boundary. */
     if ((c.offset && s_etag[0] && strcmp(c.etag,s_etag)!=0) || (s_version && c.version!=s_version)) return false;
@@ -297,8 +316,12 @@ static bool checkpoint_save(void)
         strcpy(c.url,s_url);c.offset=0U;c.running_crc=0xFFFFFFFFUL;
     } else if(!checkpoint_url_from_download_url(s_url,c.url))return false;
     memcpy(c.etag,s_etag,sizeof c.etag);
-    if(!s_ota_lock)return false;
-    IWDG_ReloadKey();committed=fota_checkpoint_commit(&c);IWDG_ReloadKey();
+    if(!s_workspace_lock)return false;
+    {
+        bool ok,taken=ota_lock(&ok);
+        IWDG_ReloadKey();committed=ok && fota_checkpoint_commit(&c);IWDG_ReloadKey();
+        ota_unlock(taken);
+    }
     return committed;
 }
 
@@ -663,12 +686,24 @@ void fota_on_http_header(const char *header)
     s_header_done=true;s_http_error=FOTA_HTTP_OK;
 }
 
+static void fota_write_chunk(const uint8_t *data, uint16_t len, uint32_t offset);
+
 void fota_on_chunk(const uint8_t *data, uint16_t len, uint32_t offset)
 {
-    if(data && len && s_ota_lock && s_state==FOTA_STATE_VERIFYING) {s_http_error=FOTA_HTTP_INVALID;return;}
-    if (s_state!=FOTA_STATE_DOWNLOADING || !data || !len || !s_ota_lock ||
+    bool ok,taken;
+    if(data && len && s_workspace_lock && s_state==FOTA_STATE_VERIFYING) {s_http_error=FOTA_HTTP_INVALID;return;}
+    if (s_state!=FOTA_STATE_DOWNLOADING || !data || !len || !s_workspace_lock ||
         !s_header_done || s_restart_zero || s_http_error!=FOTA_HTTP_OK) return;
     if (offset>s_received || offset>s_expected || len>s_expected-offset) { s_http_error=FOTA_HTTP_INVALID; return; }
+    /* Flash busy: drop this connection and resume from the checkpoint. */
+    taken=ota_lock(&ok);
+    if(!ok){s_http_error=FOTA_HTTP_TRANSPORT;return;}
+    fota_write_chunk(data,len,offset);
+    ota_unlock(taken);
+}
+
+static void fota_write_chunk(const uint8_t *data, uint16_t len, uint32_t offset)
+{
     if (offset<s_received) {
         uint8_t old[128]; uint32_t pos=0; while(pos<len){uint16_t n=(uint16_t)((len-pos)>sizeof old?sizeof old:(len-pos)); if(!ext_flash_read(EXT_FLASH_OWNER_OTA,FOTA_FLASH_ADDR+offset+pos,old,n)||memcmp(old,data+pos,n)!=0){s_http_error=FOTA_HTTP_INVALID;return;} pos+=n;}
         return;
@@ -731,8 +766,7 @@ int fota_start_request(const fota_request_t *req)
     if (!s_workspace_lock && !service_workspace_try_acquire(SERVICE_WORKSPACE_OWNER_OTA)) return -1;
     s_workspace_lock=true;
     if(!from_check && !ec800m_ota_channel_prepare()){release_resources();return -1;}
-    if (!s_ota_lock && !ext_flash_try_lock_now(EXT_FLASH_OWNER_OTA)) { release_resources();return -1; }
-    s_ota_lock=true;s_operation=FOTA_OP_DOWNLOAD;s_attempts=0;s_retry_due=TICK_MS();
+    s_operation=FOTA_OP_DOWNLOAD;s_attempts=0;s_retry_due=TICK_MS();
     s_authorization_committed=false;
     if(!from_check){s_check_armed=false;s_next_check=TICK_MS()+FOTA_CHECK_INTERVAL_MS;}
     if (!checkpoint_load()) {
@@ -799,6 +833,8 @@ static void begin_check(void)
             return;
         }
     }
+    /* BCR and checkpoint state are read; the network phase holds no flash lock. */
+    ota_unlock(true);
     size_t length=strlen(base_path);if(length && base_path[length-1]=='/')base_path[--length]=0;
     n=snprintf(s_path,sizeof s_path,"%s/api/device/updates/check?deviceId=%s&deviceModel=A300-406&currentVersionCode=%lu",
                base_path,encoded,(unsigned long)FW_VERSION_COUNTER);
@@ -809,6 +845,9 @@ static void begin_check(void)
     dbg_printf("[FOTA] check begin host=%s port=%u path=%s version=%lu\r\n",
                s_host,(unsigned)s_port,s_path,(unsigned long)FW_VERSION_COUNTER);
 }
+
+static void fota_verify_step(uint32_t now);
+static void fota_ready_step(uint32_t now);
 
 void fota_process(void)
 {
@@ -836,10 +875,12 @@ void fota_process(void)
                        (unsigned long)s_erase_offset,(unsigned long)s_erase_end);
         }
         if (s_erase_offset<s_erase_end) {
-            bool erased;
+            bool erased,ok,taken=ota_lock(&ok);
+            if(!ok)return; /* another owner is mid-operation; retry next pass */
             IWDG_ReloadKey();
             erased=ext_flash_erase(EXT_FLASH_OWNER_OTA,FOTA_FLASH_ADDR+s_erase_offset,FLASH_SECTOR_SIZE);
             IWDG_ReloadKey();
+            ota_unlock(taken);
             if(!erased){fail_download();return;}
             s_erase_offset+=FLASH_SECTOR_SIZE; return;
         }
@@ -897,6 +938,18 @@ void fota_process(void)
        (due(now,s_deadline) || ec800m_tcp_state(FOTA_TCP_CH)==TCP_STATE_CLOSED ||
         ec800m_tcp_state(FOTA_TCP_CH)==TCP_STATE_ERROR)) {transport_failure();return;}
     if (s_state==FOTA_STATE_VERIFYING) {
+        bool ok,taken=ota_lock(&ok);
+        if(!ok)return; /* retry next pass */
+        fota_verify_step(now);
+        ota_unlock(taken);
+        return;
+    }
+    if(s_state==FOTA_STATE_READY) fota_ready_step(now);
+}
+
+static void fota_verify_step(uint32_t now)
+{
+    {
         fota_package_header_t m;fota_authorization_t authorization;
         if (s_received!=s_expected || s_received<sizeof m ||
             !ext_flash_read(EXT_FLASH_OWNER_OTA,FOTA_FLASH_ADDR,&m,sizeof m) ||
@@ -934,7 +987,11 @@ void fota_process(void)
         s_deadline=now+FOTA_STATUS_WINDOW_MS;s_retry_due=now;
         return;
     }
-    if(s_state==FOTA_STATE_READY) {
+}
+
+static void fota_ready_step(uint32_t now)
+{
+    {
         char token[32];
         if(s_body_complete || !download_token_from_url(s_url,token) || due(now,s_deadline)) {
             fota_apply();return;

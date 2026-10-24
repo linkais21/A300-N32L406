@@ -58,36 +58,60 @@ static int print_int(long v, unsigned base)
     return n + print_uint(magnitude, base);
 }
 
-/* print a double with `prec` decimal places */
-static int print_float(double f, int prec)
+/* Print `prec` decimal places. Callers pass float values promoted by the
+ * varargs ABI; the arithmetic stays in single precision so no soft-double
+ * helper is linked. Coordinates are formatted from their 1e-7 integers. */
+static int print_float(float f, int prec)
 {
     int n = 0;
     if (f != f) { dbg_puts("nan"); return 3; }    /* NaN check */
     if (prec < 0) prec = 6;
 
-    if (f < 0) { dbg_putchar('-'); n++; f = -f; }
+    if (f < 0.0f) { dbg_putchar('-'); n++; f = -f; }
 
     /* rounding */
-    double round = 0.5;
-    for (int i = 0; i < prec; i++) round /= 10.0;
+    float round = 0.5f;
+    for (int i = 0; i < prec; i++) round /= 10.0f;
     f += round;
 
     unsigned long ipart = (unsigned long)f;
-    double frac = f - (double)ipart;
+    float frac = f - (float)ipart;
 
     n += print_uint(ipart, 10);
 
     if (prec > 0) {
         dbg_putchar('.'); n++;
         for (int i = 0; i < prec; i++) {
-            frac *= 10.0;
+            frac *= 10.0f;
             int digit = (int)frac;
+            if (digit > 9) digit = 9;
             dbg_putchar((char)('0' + digit));
-            frac -= digit;
+            frac -= (float)digit;
             n++;
         }
     }
     return n;
+}
+
+/* Narrow a promoted double argument to float without soft-double code:
+ * IEEE binary64 -> binary32 by bit manipulation (truncating mantissa). */
+static float vararg_float(uint64_t bits)
+{
+    uint32_t sign = (uint32_t)(bits >> 32) & 0x80000000U;
+    int32_t exponent = (int32_t)((bits >> 52) & 0x7FFU);
+    uint32_t mantissa = (uint32_t)(bits >> 29) & 0x007FFFFFU;
+    uint32_t out;
+    float f;
+    if (exponent == 0x7FF) out = sign | 0x7F800000U | (mantissa ? 0x400000U : 0U);
+    else if (exponent == 0) out = sign;
+    else {
+        exponent += 127 - 1023;
+        if (exponent >= 0xFF) out = sign | 0x7F800000U;
+        else if (exponent <= 0) out = sign;
+        else out = sign | ((uint32_t)exponent << 23) | mantissa;
+    }
+    memcpy(&f, &out, sizeof f);
+    return f;
 }
 
 /* PLACEHOLDER_PRINTF */
@@ -129,7 +153,7 @@ int dbg_printf(const char *fmt, ...)
         case 'x':
         case 'X': count += print_uint_width(va_arg(ap, unsigned), 16, width, zero_pad); break;
         case 'f':
-        case 'F': count += print_float(va_arg(ap, double), prec); break;
+        case 'F': count += print_float(vararg_float(va_arg(ap, uint64_t)), prec); break;
         case 's': {
             const char *s = va_arg(ap, const char *);
             if (!s) s = "(null)";

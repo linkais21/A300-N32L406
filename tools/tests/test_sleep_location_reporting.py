@@ -69,7 +69,7 @@ int main(void) {
     open_ch[0]=open_ch[3]=true; jt808_init(&terminal); jt808_process();
     for(unsigned ch=0;ch<=3;ch+=3) { msg(ch,&sn,d,&n); auth_resp(ch,sn,0); }
     gps_data_t fix={0}; fix.valid=true; fix.fix_quality=1;
-    fix.lat=10; fix.lon=20; fix.year=2026; fix.month=10; fix.day=5;
+    fix.lat_e7=100000000; fix.lon_e7=200000000; fix.year=2026; fix.month=10; fix.day=5;
     fix.hour=0; fix.last_update_ms=0;
     assert(gps_capture_last_trusted_snapshot(&fix));
     work_mode_init(NULL,0,true); dispatch();
@@ -93,10 +93,19 @@ int main(void) {
     gps_data_t location; assert(gps_get_last_trusted_location(&location));
     assert(location.hour==0 && location.minute==0 && location.second==0);
     assert(jt808_send_location_work_mode(0,false,998)==0); check_report(8,23,0);
-    query(0,0x8201); assert(msg(0,&sn,d,&n)==0x0201 && d[37]==0x08 && d[38]==0);
+    query(0,0x8201); assert(msg(0,&sn,d,&n)==0x0201 && d[39]==0x08 && d[40]==0);
     /* A pending NOR record keeps the same event timestamp across retries. */
     open_ch[0]=open_ch[3]=false; append_result=BLIND_ZONE_BUSY;
     assert(jt808_send_location_work_mode(0,true,999)==-2);
+    assert(appended.length == 34U);
+    unsigned tail=28U;
+    while(tail<appended.length) {
+        assert(tail+2U<=appended.length);
+        tail+=2U+appended.location[tail+1U];
+        assert(tail<=appended.length);
+    }
+    assert(tail==appended.length);
+    assert(appended.location[28]==1 && appended.location[29]==4);
     uint8_t saved[34]; memcpy(saved,appended.location,34);
     g_tick_ms+=20000; append_result=BLIND_ZONE_OK;
     assert(jt808_send_location_work_mode(0,true,999)==0);

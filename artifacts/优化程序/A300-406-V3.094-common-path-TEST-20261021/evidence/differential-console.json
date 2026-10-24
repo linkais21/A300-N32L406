@@ -1,0 +1,20 @@
+{
+  "equal": true,
+  "corpus_sha256": "65bf242425d9fb58a45e88e270fc493f2a8d8ce07b6773b55554d8ceffdd1d69",
+  "results": [
+    {
+      "tree": "source-baseline",
+      "exit_code": 0,
+      "cases": 2208,
+      "executions": 4416,
+      "sha256": "bdf19ac672228fdcfee5f77628f50dc5025bc81a0e287e4b0302cd1d391e6107"
+    },
+    {
+      "tree": "source-optimized",
+      "exit_code": 0,
+      "cases": 2208,
+      "executions": 4416,
+      "sha256": "bdf19ac672228fdcfee5f77628f50dc5025bc81a0e287e4b0302cd1d391e6107"
+    }
+  ]
+}

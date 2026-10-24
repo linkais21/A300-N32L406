@@ -1,0 +1,11 @@
+{
+  "initial_passed": 76,
+  "initial_failed": 1,
+  "first_failure": "test_motion_corner_policy.py",
+  "reason": "Host harness uses NULL without stddef.h; compilation failed before assertions.",
+  "fix": "Added stddef.h to harness only; no production/behavior/assertion changes.",
+  "rerun_exit_code": 0,
+  "final_passed": 77,
+  "final_failed": 0,
+  "unchanged_production_build": true
+}

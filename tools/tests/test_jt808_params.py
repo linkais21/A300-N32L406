@@ -50,14 +50,14 @@ static uint16_t item(uint8_t *p,uint32_t id,uint32_t v,uint8_t n){p[0]=id>>24;p[
 static void reject(const uint8_t *p,uint16_t n){device_config_t before=cfg;unsigned s=saves,e=effects;result=0;jt808_params_handle_set(p,n,9);assert(result!=0);assert(!memcmp(&cfg,&before,sizeof cfg));assert(saves==s&&effects==e);}
 int main(void){
     /* Mandatory inactive platform parameters must ACK without side effects. */
-    const uint32_t compatible[]={2,3,4,0x22,0x28,0x2c,0x2e,0x2f,0x30,0x31};
-    uint8_t compat[128];compat[0]=10;uint16_t clen=1;
-    for(unsigned i=0;i<10;++i)clen+=item(compat+clen,compatible[i],UINT32_MAX-i,4);
+    const uint32_t compatible[]={2,3,4,0x22,0x28,0x2c,0x2e,0x2f,0x31};
+    uint8_t compat[128];compat[0]=9;uint16_t clen=1;
+    for(unsigned i=0;i<9;++i)clen+=item(compat+clen,compatible[i],UINT32_MAX-i,4);
     device_config_t untouched=cfg;
     jt808_params_handle_set(compat,clen,9);
     assert(result==0&&!memcmp(&cfg,&untouched,sizeof cfg)&&saves==0&&effects==0);
     jt808_params_handle_set(compat,clen,9);assert(result==0&&saves==0);
-    for(unsigned i=0;i<10;++i){
+    for(unsigned i=0;i<9;++i){
         compat[0]=1;clen=1+item(compat+1,compatible[i],123,2);reject(compat,clen);assert(result==2);
     }
     compat[0]=2;clen=1+item(compat+1,2,1,4);clen+=item(compat+clen,2,2,4);reject(compat,clen);
@@ -151,8 +151,8 @@ int main(void){
     jt808_params_handle_set(b,n,9);assert(result==1&&!memcmp(&old,&cfg,sizeof cfg)&&pdp_restarts==2);
     fail_store=false;n=1+item(b+1,0x10,0x61226263,4);reject(b,n);
     /* Active and inactive IDs commit atomically in the same batch. */
-    b[0]=12;n=1+item(b+1,0x56,3,4);n+=item(b+n,1,121,4);
-    for(unsigned i=0;i<10;++i)n+=item(b+n,compatible[i],i,4);
+    b[0]=11;n=1+item(b+1,0x56,3,4);n+=item(b+n,1,121,4);
+    for(unsigned i=0;i<9;++i)n+=item(b+n,compatible[i],i,4);
     jt808_params_handle_set(b,n,9);assert(result==0&&cfg.heartbeat_s==121);
     overspeed_policy_t policy;overspeed_policy_init(&policy);
     assert(!overspeed_policy_step(&policy,0,true,true,(float)cfg.speed_limit_kmh+10.0f,cfg.speed_limit_kmh,cfg_speed_limit_time_s(&cfg)));
@@ -176,24 +176,73 @@ int main(void){
     cfg=disk;jt808_params_handle_query(duration_query,sizeof duration_query,9);
     assert(!memcmp(response+3,b+1,9));
     /* One platform frame containing all 24 requested IDs. */
-    const uint32_t active[]={1,0x13,0x18,0x20,0x21,0x27,0x29,0x55,0x56,0x80,0x81,0x82,0x83,0x84};
-    const uint32_t values[]={121,0x74657374,9100,0,0,60,30,100,3,12345,44,300,0x41313233,2};
+    const uint32_t active[]={1,0x13,0x18,0x20,0x21,0x27,0x29,0x30,0x55,0x56,0x80,0x81,0x82,0x83,0x84};
+    const uint32_t values[]={121,0x74657374,9100,0,0,60,30,30,100,3,12345,44,300,0x41313233,2};
     uint8_t all_query[97];all_query[0]=24;b[0]=24;n=1;
-    for(unsigned i=0;i<14;++i){
+    for(unsigned i=0;i<15;++i){
         uint8_t width=(active[i]==0x81||active[i]==0x82)?2:(active[i]==0x84?1:4);
         n+=item(b+n,active[i],values[i],width);
         uint8_t encoded[9];item(encoded,active[i],0,4);memcpy(all_query+1+4*i,encoded,4);
     }
     unsigned active_bytes=n-1;
-    for(unsigned i=0;i<10;++i){
+    for(unsigned i=0;i<9;++i){
         n+=item(b+n,compatible[i],UINT32_MAX-i,4);
-        uint8_t encoded[9];item(encoded,compatible[i],0,4);memcpy(all_query+1+4*(14+i),encoded,4);
+        uint8_t encoded[9];item(encoded,compatible[i],0,4);memcpy(all_query+1+4*(15+i),encoded,4);
     }
     jt808_params_handle_set(b,n,9);assert(result==0);
     s=saves;e=effects;jt808_params_handle_set(b,n,9);assert(result==0&&saves==s&&effects==e);
     jt808_params_handle_query(all_query,sizeof all_query,9);
-    assert(response[2]==14&&response_len==3+active_bytes);
+    assert(response[2]==15&&response_len==3+active_bytes);
     assert(!memcmp(response+3,b+1,active_bytes));
+    /* 0x005B is a WORD in 0.1 km/h, committed and queried transactionally. */
+    const uint8_t warning_query[]={1,0,0,0,0x5b};
+    for(unsigned value=0;value<=65535U;value+=65535U){
+        b[0]=1;n=1+item(b+1,0x5b,value,2);
+        unsigned before_reconnects=reconnects;
+        jt808_params_handle_set(b,n,9);assert(result==0);
+        assert(reconnects==before_reconnects);
+        jt808_params_handle_query(warning_query,sizeof warning_query,0x1234);
+        assert(response_len==10&&response[2]==1&&!memcmp(response+3,b+1,7));
+        cfg=disk;jt808_params_handle_query(warning_query,sizeof warning_query,9);
+        assert(!memcmp(response+3,b+1,7));
+        s=saves;e=effects;jt808_params_handle_set(b,n,9);
+        assert(result==0&&saves==s&&effects==e);
+    }
+    b[0]=1;n=1+item(b+1,0x5b,100,4);reject(b,n);assert(result==2);
+    n=1+item(b+1,0x5b,1,1);reject(b,n);assert(result==2);
+    b[0]=2;n=1+item(b+1,0x5b,100,2);n+=item(b+n,0x5b,101,2);reject(b,n);
+    n=1+item(b+1,0x5b,100,2);n+=item(b+n,0x31,1,2);reject(b,n);
+    n=1+item(b+1,0x5b,100,2);n+=item(b+n,0xffff,1,4);reject(b,n);assert(result==3);
+    b[0]=1;n=1+item(b+1,0x5b,100,2);
+    for(unsigned cut=0;cut<n;++cut)reject(b,cut);
+    b[n]=0;reject(b,n+1);
+    fail_store=true;old=cfg;s=saves;e=effects;
+    jt808_params_handle_set(b,n,9);
+    assert(result==1&&saves==s+1&&effects==e&&!memcmp(&cfg,&old,sizeof cfg));
+    fail_store=false;
+    assert(service_workspace_try_acquire(SERVICE_WORKSPACE_OWNER_OTA));
+    reject(b,n);assert(result==1);service_workspace_release(SERVICE_WORKSPACE_OWNER_OTA);
+    /* All original IDs plus the new WORD can be set in a single transaction. */
+    b[0]=25;n=1+item(b+1,0x5b,100,2);
+    for(unsigned i=0;i<15;++i){
+        uint8_t width=(active[i]==0x81||active[i]==0x82)?2:(active[i]==0x84?1:4);
+        n+=item(b+n,active[i],values[i],width);
+    }
+    for(unsigned i=0;i<9;++i)n+=item(b+n,compatible[i],i,4);
+    jt808_params_handle_set(b,n,9);assert(result==0);
+    jt808_params_handle_query(warning_query,sizeof warning_query,9);
+    assert(response_len==10&&!memcmp(response+3,b+1,7));
+    /* 0x0030 corner angle is applied and persisted (1..180 deg). */
+    {
+        uint8_t corner[16];unsigned s0=saves;
+        corner[0]=1;uint16_t n30=(uint16_t)(1+item(corner+1,0x30,45,4));
+        jt808_params_handle_set(corner,n30,9);
+        assert(result==0 && cfg.anglerep_angle==45 && disk.anglerep_angle==45 && saves==s0+1);
+        corner[0]=1;n30=(uint16_t)(1+item(corner+1,0x30,0,4));reject(corner,n30);
+        corner[0]=1;n30=(uint16_t)(1+item(corner+1,0x30,181,4));reject(corner,n30);
+        corner[0]=1;n30=(uint16_t)(1+item(corner+1,0x30,30,2));reject(corner,n30);
+        assert(cfg.anglerep_angle==45);
+    }
     return 0;
 }
 '''

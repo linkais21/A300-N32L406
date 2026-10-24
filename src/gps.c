@@ -1,4 +1,5 @@
 #include "gps.h"
+#include "civil_date.h"
 #include "gps_report_filter.h"
 #include "config.h"
 #include "hw_init.h"
@@ -16,16 +17,19 @@
 
 static char      s_nmea_slots[2][NMEA_BUF_SIZE];
 static volatile uint8_t s_nmea_pos;
-static volatile uint8_t s_nmea_head;
-static volatile uint8_t s_nmea_tail;
-static volatile uint8_t s_nmea_count;
+/* Two-slot queue. Only the UART4 ISR advances s_nmea_in and only the main
+ * loop advances s_nmea_out, so neither side read-modify-writes a counter the
+ * other also writes. The slot index is the counter's low bit. */
+static volatile uint8_t s_nmea_in;
+static volatile uint8_t s_nmea_out;
+#define NMEA_QUEUED() ((uint8_t)(s_nmea_in - s_nmea_out))
 enum { NMEA_DROP_NONE, NMEA_DROP_QUEUE, NMEA_DROP_LENGTH };
 static volatile uint8_t s_nmea_drop;
 static gps_data_t s_gps = {0};
 static bool s_enabled = true;
 bool gps_is_enabled(void) { return s_enabled; }
 /* Compact STOP1 snapshot.  Keep the retained copy below 32 bytes; the full
- * gps_data_t contains doubles/floats and would exhaust the SRAM guard. */
+ * gps_data_t carries floats and timestamps and would exhaust the SRAM guard. */
 typedef struct __attribute__((packed)) {
     int32_t lat_e7;
     int32_t lon_e7;
@@ -83,6 +87,7 @@ void gps_trusted_store_process(void) {
 }
 static volatile gps_diag_t s_diag;
 static uint32_t s_gga_ms;
+static uint32_t s_rmc_tod;
 static uint32_t s_trace_started;
 static uint8_t s_trace_remaining;
 
@@ -123,7 +128,7 @@ static uint8_t nmea_split(char *sentence, char **fields, uint8_t max_fields)
 }
 
 /* ── NMEA degree/minute → decimal degrees ────────────────────────────────── */
-static bool parse_decimal(const char *s, double *out)
+static bool parse_decimal(const char *s, float *out)
 {
     uint32_t whole = 0U, fraction = 0U, divisor = 1U;
     uint8_t digits = 0U;
@@ -151,7 +156,7 @@ static bool parse_decimal(const char *s, double *out)
         ++digits; ++s;
     }
     if (digits == 0U || (dot && divisor == 1U)) return false;
-    *out = (double)whole + (double)fraction / (double)divisor;
+    *out = (float)whole + (float)fraction / (float)divisor;
     if (negative) *out = -*out;
     return true;
 }
@@ -190,21 +195,44 @@ static bool parse_six_digits(const char *s, uint8_t *a, uint8_t *b, uint8_t *c)
     return true;
 }
 
-static bool nmea_to_deg(const char *s, double *out)
+/* "dddmm.mmmmm" -> 1e-7 degrees, integer only. Minutes keep seven fraction
+ * digits; the result truncates, so |e7|/10 equals the former truncated
+ * 1e-6 wire value. */
+static bool nmea_to_deg(const char *s, int32_t *out)
 {
-    double raw, minutes;
-    uint16_t degrees;
-    if (!parse_decimal(s, &raw) || raw < 0.0) return false;
-    degrees = (uint16_t)(raw / 100.0);
-    minutes = raw - (double)degrees * 100.0;
-    if (minutes >= 60.0) return false;
-    *out = (double)degrees + minutes / 60.0;
+    uint32_t whole = 0U, fraction = 0U, scale = 10000000U;
+    uint8_t digits = 0U, fraction_digits = 0U;
+    bool dot = false;
+    if (s == NULL || *s == '\0') return false;
+    if (*s == '+') { ++s; if (*s == '\0') return false; }
+    for (; *s != '\0'; ++s) {
+        uint8_t digit;
+        if (*s == '.') {
+            if (dot) return false;
+            dot = true;
+            continue;
+        }
+        if (*s < '0' || *s > '9') return false;
+        digit = (uint8_t)(*s - '0');
+        if (!dot) {
+            if (whole > 18059U) return false; /* beyond 180 deg 59 min */
+            whole = whole * 10U + digit;
+        } else {
+            if (++fraction_digits > 9U) return false;
+            if (scale > 1U) { scale /= 10U; fraction += digit * scale; }
+        }
+        ++digits;
+    }
+    if (digits == 0U || (dot && fraction_digits == 0U) ||
+        whole > 18059U || whole % 100U >= 60U) return false;
+    *out = (int32_t)((whole / 100U) * 10000000U +
+                     ((whole % 100U) * 10000000U + fraction) / 60U);
     return true;
 }
 
 /* GGA and RMC share the same four coordinate/hemisphere fields. Keep one
  * implementation of conversion, validation and sign handling. */
-static __attribute__((noinline)) bool nmea_coordinates(char **f, double *lat, double *lon)
+static __attribute__((noinline)) bool nmea_coordinates(char **f, int32_t *lat, int32_t *lon)
 {
     if (!nmea_to_deg(f[0], lat) || !nmea_to_deg(f[2], lon) ||
         (f[1][0] != 'N' && f[1][0] != 'S') || f[1][1] != '\0' ||
@@ -233,6 +261,11 @@ static bool nmea_checksum_ok(const char *sentence)
            calc == (uint8_t)((high << 4) | low);
 }
 
+static bool calendar_valid(uint16_t year, uint8_t month, uint8_t day)
+{
+    return year >= 2000U && day != 0U && day <= civil_month_days(year, month);
+}
+
 /* ── Parse GGA ────────────────────────────────────────────────────────────── */
 static nmea_parse_result_t parse_gga(char *s)
 {
@@ -242,7 +275,8 @@ static nmea_parse_result_t parse_gga(char *s)
     if (n < 10) return NMEA_PARSE_FORMAT;
 
     uint8_t quality, satellites, hour, minute, second;
-    double lat, lon, hdop, altitude, geoid = 0.0;
+    int32_t lat, lon;
+    float hdop, altitude, geoid = 0.0f;
     if (!parse_uint8(f[6], 8U, &quality)) return NMEA_PARSE_FORMAT;
     if (quality == 0U) {
         s_gps.fix_quality = 0U;
@@ -258,10 +292,21 @@ static nmea_parse_result_t parse_gga(char *s)
         hour > 23U || minute > 59U || second > 59U) return NMEA_PARSE_FORMAT;
     s_gps.fix_quality = quality; s_gps.satellites = satellites;
     s_gga_ms = TICK_MS();
-    s_gps.hdop = (float)hdop; s_gps.altitude_m = (float)altitude;
-    s_gps.geoid_sep_m = (float)geoid;
-    s_gps.lat = lat;
-    s_gps.lon = lon;
+    /* GGA has no date or speed/course. Never certify a new position using an
+     * expired RMC or combine the next day's GGA with yesterday's RMC date.
+     * Repeated GGA must compare with the original RMC time, not the last GGA. */
+    uint32_t tod = (uint32_t)hour * 3600U + (uint32_t)minute * 60U + second;
+    uint32_t rmc_tod = s_rmc_tod;
+    if (!calendar_valid(s_gps.year, s_gps.month, s_gps.day) ||
+        (uint32_t)(TICK_MS() - s_gps.heading_update_ms) > 3000U ||
+        (uint32_t)(tod - rmc_tod + 2U) > 4U) {
+        s_gps.valid = false;
+        return NMEA_PARSE_NO_FIX;
+    }
+    s_gps.hdop = hdop; s_gps.altitude_m = altitude;
+    s_gps.geoid_sep_m = geoid;
+    s_gps.lat_e7 = lat;
+    s_gps.lon_e7 = lon;
     s_gps.hour = hour; s_gps.minute = minute; s_gps.second = second;
 
     s_gps.valid          = true;
@@ -283,21 +328,23 @@ static nmea_parse_result_t parse_rmc(char *s)
     if (f[2][0] != 'A' || f[2][1] != '\0') return NMEA_PARSE_FORMAT;
 
     uint8_t hour, minute, second, day, month, year;
-    double lat, lon, knots = 0.0, heading = 0.0;
+    int32_t lat, lon;
+    float knots = 0.0f, heading = 0.0f;
     if (!parse_six_digits(f[1], &hour, &minute, &second) ||
         !nmea_coordinates(f + 3, &lat, &lon) ||
         (f[7][0] != '\0' && !parse_decimal(f[7], &knots)) ||
         (f[8][0] != '\0' && !parse_decimal(f[8], &heading)) ||
         !parse_six_digits(f[9], &day, &month, &year) ||
         hour > 23U || minute > 59U || second > 59U ||
-        day == 0U || day > 31U || month == 0U || month > 12U ||
-        knots < 0.0 || heading < 0.0 || heading >= 360.0) return NMEA_PARSE_FORMAT;
+        !calendar_valid((uint16_t)(2000U + year), month, day) ||
+        knots < 0.0f || heading < 0.0f || heading >= 360.0f) return NMEA_PARSE_FORMAT;
     s_gps.hour = hour; s_gps.minute = minute; s_gps.second = second;
-    s_gps.lat = lat;
-    s_gps.lon = lon;
-    s_gps.speed_kmh = (float)(knots * 1.852);
-    s_gps.heading = (float)heading;
+    s_gps.lat_e7 = lat;
+    s_gps.lon_e7 = lon;
+    s_gps.speed_kmh = knots * 1.852f;
+    s_gps.heading = heading;
     s_gps.day = day; s_gps.month = month; s_gps.year = (uint16_t)(2000U + year);
+    s_rmc_tod = (uint32_t)hour * 3600U + (uint32_t)minute * 60U + second;
 
     s_gps.valid          = true;
     s_gps.last_update_ms = TICK_MS();
@@ -487,18 +534,17 @@ void gps_rx_isr(uint8_t byte)
     ++s_diag.rx_bytes;
     if (byte == '$') {
         s_nmea_pos = 0;
-        s_nmea_drop = s_nmea_count >= 2U ? NMEA_DROP_QUEUE : NMEA_DROP_NONE;
+        s_nmea_drop = NMEA_QUEUED() >= 2U ? NMEA_DROP_QUEUE : NMEA_DROP_NONE;
     }
     if (!s_nmea_drop && s_nmea_pos < NMEA_BUF_SIZE - 1U) {
-        s_nmea_slots[s_nmea_tail][s_nmea_pos++] = (char)byte;
+        s_nmea_slots[s_nmea_in & 1U][s_nmea_pos++] = (char)byte;
     } else if (!s_nmea_drop) {
         s_nmea_drop = NMEA_DROP_LENGTH;
     }
     if (byte == '\n') {
-        if (!s_nmea_drop && s_nmea_pos > 4U && s_nmea_count < 2U) {
-            s_nmea_slots[s_nmea_tail][s_nmea_pos] = '\0';
-            s_nmea_tail ^= 1U;
-            ++s_nmea_count;
+        if (!s_nmea_drop && s_nmea_pos > 4U && NMEA_QUEUED() < 2U) {
+            s_nmea_slots[s_nmea_in & 1U][s_nmea_pos] = '\0';
+            ++s_nmea_in;
         } else if (s_nmea_drop) {
             ++s_diag.drop;
             if (s_nmea_drop == NMEA_DROP_QUEUE) ++s_diag.drop_queue;
@@ -555,9 +601,8 @@ void gps_init(void)
     memset((void *)&s_diag, 0, sizeof(s_diag));
     s_trace_remaining = 0U;
     s_nmea_pos = 0U;
-    s_nmea_head = 0U;
-    s_nmea_tail = 0U;
-    s_nmea_count = 0U;
+    s_nmea_in = 0U;
+    s_nmea_out = 0U;
     s_nmea_drop = false;
     /* TAU804M: retain GGA/RMC and enable GSV at 1 Hz for RF quality. */
     delay_ms(500);
@@ -599,11 +644,9 @@ static void retained_clock_advance_awake(void)
 void gps_process(void)
 {
     retained_clock_advance_awake();
-    if (s_nmea_count != 0U) {
-        uint8_t slot = s_nmea_head;
-        dispatch_nmea(s_nmea_slots[slot]);
-        s_nmea_head ^= 1U;
-        --s_nmea_count;
+    if (NMEA_QUEUED() != 0U) {
+        dispatch_nmea(s_nmea_slots[s_nmea_out & 1U]);
+        ++s_nmea_out;
         if (s_gps.valid && s_gps.fix_quality != 0U) {
             gps_data_t selected;
             /* History must retain the same live selection used on the wire,
@@ -632,11 +675,9 @@ bool gps_capture_last_trusted_snapshot(const gps_data_t *snapshot)
     if (snapshot == NULL) return false;
     if (!snapshot->valid || snapshot->fix_quality == 0U ||
         (uint32_t)(now - snapshot->last_update_ms) > 5000U ||
-        fabs(snapshot->lat) > 90.0 ||
-        fabs(snapshot->lon) > 180.0 ||
-        (snapshot->lat == 0.0 && snapshot->lon == 0.0) ||
-        snapshot->year < 2000U || snapshot->month < 1U || snapshot->month > 12U ||
-        snapshot->day < 1U || snapshot->day > 31U || snapshot->hour > 23U ||
+        !gps_coord_in_range(snapshot) ||
+        (snapshot->lat_e7 == 0 && snapshot->lon_e7 == 0) ||
+        !calendar_valid(snapshot->year, snapshot->month, snapshot->day) || snapshot->hour > 23U ||
         snapshot->minute > 59U || snapshot->second > 59U) {
         return false;
     }
@@ -644,8 +685,8 @@ bool gps_capture_last_trusted_snapshot(const gps_data_t *snapshot)
      * fast SysTick/RTC. A monotonic max of civil UTC accumulated oscillator
      * error indefinitely. last_update_ms preserves this measurement's age;
      * rereading the same snapshot must not restart its clock at `now`. */
-    s_last_trusted.lat_e7 = (int32_t)(snapshot->lat * 10000000.0);
-    s_last_trusted.lon_e7 = (int32_t)(snapshot->lon * 10000000.0);
+    s_last_trusted.lat_e7 = snapshot->lat_e7;
+    s_last_trusted.lon_e7 = snapshot->lon_e7;
     s_last_trusted.speed_x10 = snapshot->speed_kmh <= 0.0f ? 0U :
         snapshot->speed_kmh >= 6553.5f ? 65535U : (uint16_t)(snapshot->speed_kmh * 10.0f);
     s_last_trusted.heading_deg = snapshot->heading >= 359.0f ? 359U :
@@ -671,8 +712,8 @@ bool gps_get_last_trusted(gps_data_t *out)
     if (out == NULL || !s_last_trusted_valid) return false;
     retained_clock_advance_awake();
     memset(out, 0, sizeof(*out));
-    out->lat = (double)s_last_trusted.lat_e7 / 10000000.0;
-    out->lon = (double)s_last_trusted.lon_e7 / 10000000.0;
+    out->lat_e7 = s_last_trusted.lat_e7;
+    out->lon_e7 = s_last_trusted.lon_e7;
     out->speed_kmh = (float)s_last_trusted.speed_x10 / 10.0f;
     out->heading = (float)s_last_trusted.heading_deg;
     out->altitude_m = (float)s_last_trusted.altitude_m;
@@ -708,12 +749,9 @@ bool gps_get_last_trusted_location(gps_data_t *out)
 
 void gps_advance_last_trusted_seconds(uint32_t elapsed_seconds)
 {
-    static const uint8_t days_in_month[13] =
-        { 0U, 31U, 28U, 31U, 30U, 31U, 30U, 31U, 31U, 30U, 31U, 30U, 31U };
     uint32_t day_seconds;
     uint32_t total;
     uint8_t dim;
-    bool leap;
 
     if (s_last_trusted.year < 2000U || elapsed_seconds == 0U)
         return;
@@ -726,11 +764,7 @@ void gps_advance_last_trusted_seconds(uint32_t elapsed_seconds)
     s_last_trusted.second = (uint8_t)(total % 60U);
     while (total >= 86400U) {
         total -= 86400U;
-        leap = (s_last_trusted.year % 4U == 0U &&
-                s_last_trusted.year % 100U != 0U) ||
-               (s_last_trusted.year % 400U == 0U);
-        dim = s_last_trusted.month == 2U && leap ? 29U :
-              days_in_month[s_last_trusted.month];
+        dim = civil_month_days(s_last_trusted.year, s_last_trusted.month);
         if (++s_last_trusted.day > dim) {
             s_last_trusted.day = 1U;
             if (++s_last_trusted.month > 12U) {
@@ -744,8 +778,8 @@ void gps_advance_last_trusted_seconds(uint32_t elapsed_seconds)
 void gps_apply_ntp_utc(uint16_t year, uint8_t month, uint8_t day,
                        uint8_t hour, uint8_t minute, uint8_t second)
 {
-    if (year < 2000U || month < 1U || month > 12U ||
-        day < 1U || day > 31U || hour > 23U || minute > 59U || second > 59U)
+    if (!calendar_valid(year, month, day) ||
+        hour > 23U || minute > 59U || second > 59U)
         return;
     /* UTC is correctable in both directions. Monotonic scheduling uses tick /
      * RTC counters, not civil time. This must not alter acquisition UTC. */

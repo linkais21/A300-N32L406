@@ -13,13 +13,20 @@ REVIEWED_FILES = {
         "fe21e64634680e8ede994a209456802beb2b9ed6a633ed3c6d94df2e5adc7400",
     "bootloader/src/startup_n32l40x.s":
         "e188bc2ac29608538f4ec8dd9170a8fe2f8275d32604aef07918da170b88ab0b",
-    "Makefile": "63a13599e2f0dc3620792adf281cd30a8fe88a620f9e72d9b9dcdd5e2ba61212",
+    "Makefile": "d81bbf7a09571b9c9f83b67cd646ea28b9ca2e5b2263e20b5f33c440f02f7edd",
     # UART5 RX DMA request selection moved after channel init; NVIC policy is unchanged.
     "src/hw_init.c": "9f59e802fa52405e197c3970f2bda677ee630498196ed9ad97f6c58cd278a99b",
-    # Reviewed 2026-10-08: foreground report/0x0056 calls only; handlers,
-    # NVIC priorities, HardFault recovery and boot_init unchanged. See IRQ review.
-    "src/main.c": "ec26f9e7d6bc6d2518b475ad990f40f7baa117dd196610a2b3ec028256eae369",
-    "src/work_mode_sleep.c": "d06e52cf291215ddd1932f3df79135d84f6a5aec2991e4a993285a30fb2bcafe",
+    # Reviewed 2026-10-21: local boot descriptor and bounded HardFault frame
+    # validation/EXC_RETURN forwarding. NVIC/FPU policy and normal IRQs unchanged;
+    # final ELF stack frames are measured, not assumed from the old image.
+    # Reviewed 2026-10-24: GPS-INTEGRITY log prints lat_e7/lon_e7 directly
+    # (fixed-point coordinates). No handler, NVIC or FPU change.
+    "src/main.c": "1b844411fb6435b19d8e4ea2da8af6a6c654df583e0ee8d5616768fd556f88d0",
+    # Reviewed 2026-10-21: NTP clock/RTC divider/monotonic foreground changes;
+    # handlers, NVIC priorities and FPU policy unchanged. TIM9 uses no IRQ.
+    "src/rtc_lsi_calibration.c": "d16e46eef6a87483a683a8a45d72aca193c2ede0eeff863af2c11c97eb6da0b0",
+    # Reviewed 2026-10-24: STOP1 historical log prints lat_e7/lon_e7 only.
+    "src/work_mode_sleep.c": "80e73b3fe1d925b4e37fdfc498b5353bb19dec5798ffc8a3643b6d3f5ee2d461",
     "src/startup_n32l40x.s": "37acc056a5dcc630e520d7d97987e369e281c477e373ce2f706abdfab85fe84f",
     "sdk/Nations.N32L40x_Library.2.2.0/firmware/CMSIS/device/n32l40x.h":
         "56886cd610301b9b37c5b2e1d0bbc71b3c0a805297ddf0c2d34f445e0bafb0cb",
@@ -83,6 +90,10 @@ def assess_exception_stack(elf_path: Path, analysis: dict, profile: dict,
                           {"a300_snprintf", "a300_vsnprintf"}.issubset(linked_names) and
                           not {"snprintf", "vsnprintf", "_printf_i", "_printf_common",
                                "_svfiprintf_r", "_svfprintf_r"}.intersection(linked_names))
+        # Fixed-point coordinates link no soft-double helper at all; then
+        # there is no interior dmul call left to prove.
+        no_soft_double = not any(name.startswith("__aeabi_d") or name.endswith("df3")
+                                 for name in linked_names)
         names = {name: [item for item in symbols.iter_symbols() if item.name == name]
                  for name in (*set(VECTORS.values()), "Default_Handler")}
         if any(len(items) != 1 for items in names.values()):
@@ -109,7 +120,7 @@ def assess_exception_stack(elf_path: Path, analysis: dict, profile: dict,
         raise ValueError("missing reviewed execution root")
     nano_proof_count = len(analysis.get("reviewed_nano_printf_evidence", {}))
     if ((nano_proof_count != 6 and not (nano_proof_count == 0 and compact_format)) or
-            len(analysis.get("reviewed_dmul_internal_evidence", {})) != 1 or
+            len(analysis.get("reviewed_dmul_internal_evidence", {})) != (0 if no_soft_double else 1) or
             len(analysis.get("reviewed_startup_evidence", {}).get("frames", {})) != 8):
         raise ValueError("missing final-link library/startup proof")
     group_frames = [max(analysis["roots"][name]["known_frame_sum"] for name in names)

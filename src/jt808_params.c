@@ -29,6 +29,7 @@ static const param_t params[] = {
     FIELD(PARAM_REPORT_INTERVAL_DEFAULT, report_moving_s, 4),
     FIELD(PARAM_SPEED_LIMIT, speed_limit_kmh, 4),
     FIELD(PARAM_SPEED_LIMIT_TIME, speed_limit_time_be, 4),
+    FIELD(PARAM_SPEED_WARNING_DELTA, speed_warning_delta_be, 2),
     FIELD(PARAM_MILEAGE, mileage_m, 4),
     FIELD(PARAM_PROVINCE, province_be, 2),
     FIELD(PARAM_CITY, city_be, 2),
@@ -47,7 +48,7 @@ static const param_t params[] = {
     COMPAT(PARAM_REPORT_DISTANCE_DEFAULT),
     COMPAT(PARAM_REPORT_DISTANCE_DRIVER),
     COMPAT(PARAM_REPORT_DISTANCE_ALARM),
-    COMPAT(PARAM_REPORT_CORNER),
+    FIELD(PARAM_REPORT_CORNER, anglerep_angle, 4),
     COMPAT(PARAM_FENCE_RADIUS),
 };
 #define PARAM_COUNT (sizeof(params) / sizeof(params[0]))
@@ -111,6 +112,13 @@ static bool apply_param(device_config_t *c, const param_t *p, const uint8_t *v, 
         if (value > CFG_SPEED_LIMIT_TIME_MAX_S) return false;
         memcpy(c->speed_limit_time_be, v, 4U);
         c->speed_limit_time_valid = 1U; break;
+    case PARAM_SPEED_WARNING_DELTA:
+        memcpy(c->speed_warning_delta_be, v, 2U);
+        c->speed_warning_valid = 1U; break;
+    case PARAM_REPORT_CORNER:
+        /* Same 1..180 deg range the corner detector accepts. */
+        if (value == 0U || value > 180U) return false;
+        c->anglerep_angle = (uint8_t)value; break;
     case PARAM_HEARTBEAT_INTERVAL:
         if (value == 0U || value > 3600U) return false;
         c->heartbeat_s = (uint16_t)value; break;
@@ -224,8 +232,10 @@ static uint8_t encode_value(const device_config_t *c, const param_t *p, uint8_t 
     }
     if (p->id == PARAM_REPORT_STRATEGY || p->id == PARAM_REPORT_SCHEME) value = 0U;
     else if (p->id == PARAM_SPEED_LIMIT_TIME) value = cfg_speed_limit_time_s(c);
+    else if (p->id == PARAM_SPEED_WARNING_DELTA) value = cfg_speed_warning_delta_x10(c);
     else if (p->id == PARAM_MILEAGE) value = c->mileage_m / 100U;
     else if (p->id == PARAM_PLATE_COLOR) value = c->plate_color_valid == 1U ? c->plate_color : 1U;
+    else if (p->id == PARAM_REPORT_CORNER) value = c->anglerep_angle;
     else if (p->wire == 2U) value = read_be(src, 2U);
     else { uint16_t v; memcpy(&v, src, sizeof v); value = v; }
     write_be(out, value, p->wire); return p->wire;

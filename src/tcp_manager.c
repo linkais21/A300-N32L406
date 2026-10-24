@@ -9,14 +9,18 @@
 
 /*
  * Dual-server mode: both main and backup connect independently.
- * Each channel retries with exponential backoff on its own.
- * send_frame() in jt808.c broadcasts to all open channels.
+ * Each channel retries with exponential backoff on its own; JT808 sessions
+ * send on their own channel.
  */
 
 #define BACKOFF_INIT_MS   5000
 #define BACKOFF_MAX_MS    120000
 #define CONNECT_TIMEOUT_MS 15000
-#define MAX_FAILS          5
+/* Consecutive connect failures, with no channel coming online, before the
+ * modem link is rebuilt (PDP) and then power-cycled. Counted across both
+ * channels because a dead modem fails every channel the same way. */
+#define LINK_STALL_PDP_FAILS   6U
+#define LINK_STALL_RESET_FAILS 12U
 
 typedef enum {
     CS_WAIT_MODEM = 0,
@@ -38,6 +42,7 @@ typedef struct {
 static ch_ctx_t s_ch[2];   /* [0]=main  [1]=backup */
 static bool s_boot_summary_logged;
 static uint8_t s_reconnect_pending;
+static uint8_t s_link_fails;
 
 static bool decimal_length_valid(const char *value, size_t first, size_t second)
 {
@@ -137,18 +142,24 @@ static void ch_start_connect(ch_ctx_t *c)
     c->state_ms = TICK_MS();
 }
 
-static void ch_on_fail(ch_ctx_t *c)
+static void ch_on_fail(ch_ctx_t *c, bool connect_failed)
 {
     ec800m_tcp_close(c->ch);
-    c->fails++;
+    if (c->fails < UINT8_MAX) c->fails++;
     dbg_printf("[TCP] ch%u fail #%u backoff %ums\r\n",
                c->ch, c->fails, (unsigned)c->backoff_ms);
-    if (c->fails >= MAX_FAILS) {
-        /* after too many failures, keep retrying at max interval */
-        c->fails = 0;
-    }
     c->state    = CS_BACKOFF;
     c->state_ms = TICK_MS();
+    if (!connect_failed) return;
+    /* A READY modem whose sockets never open is not recovered by retrying
+     * QIOPEN: rebuild PDP once, then power-cycle the module. */
+    ++s_link_fails;
+    if (s_link_fails == LINK_STALL_PDP_FAILS) {
+        ec800m_link_stalled(false);
+    } else if (s_link_fails >= LINK_STALL_RESET_FAILS) {
+        s_link_fails = 0U;
+        ec800m_link_stalled(true);
+    }
 }
 
 static void ch_process(ch_ctx_t *c)
@@ -178,9 +189,10 @@ static void ch_process(ch_ctx_t *c)
             c->state_ms   = TICK_MS();
             c->backoff_ms = BACKOFF_INIT_MS;
             c->fails      = 0;
+            s_link_fails  = 0U;
         } else if (st == TCP_STATE_ERROR ||
                    TICK_MS() - c->state_ms > CONNECT_TIMEOUT_MS) {
-            ch_on_fail(c);
+            ch_on_fail(c, true);
         }
         break;
     }
@@ -189,7 +201,7 @@ static void ch_process(ch_ctx_t *c)
         tcp_state_t st = ec800m_tcp_state(c->ch);
         if (st != TCP_STATE_OPEN) {
             dbg_printf("[TCP] ch%u dropped\r\n", c->ch);
-            ch_on_fail(c);
+            ch_on_fail(c, false);
         }
         break;
     }
@@ -212,6 +224,7 @@ void tcp_manager_init(void)
 {
     s_boot_summary_logged = false;
     s_reconnect_pending = false;
+    s_link_fails = 0U;
     ch_init(&s_ch[0], TCP_CH_MAIN);
     ch_init(&s_ch[1], TCP_CH_BACKUP);
 }

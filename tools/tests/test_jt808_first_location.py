@@ -35,7 +35,7 @@ int main(void) {
     assert(sends[0]==before0 && sends[3]==before3);
 
     gps.valid=true;gps.fix_quality=1U;gps.last_update_ms=g_tick_ms;
-    gps.lat=22.543096;gps.lon=114.057865;gps.altitude_m=12.0f;
+    gps.lat_e7=225430960;gps.lon_e7=1140578650;gps.altitude_m=12.0f;
     gps.speed_kmh=35.0f;gps.heading=91.0f;gps.satellites=12U;
     gps.year=2026U;gps.month=8U;gps.day=31U;
     gps.hour=18U;gps.minute=3U;gps.second=4U;

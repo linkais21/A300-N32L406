@@ -30,7 +30,7 @@ int main(void){
         assert(!resets && flash[0x10000]==0x5a);
         if(partial){assert(fota_get_state()==FOTA_STATE_ERROR);continue;}
         assert(fota_get_state()==FOTA_STATE_PREPARING);
-        assert(fota_checkpoint_load(url,8193,&loaded));
+        flash_owner=EXT_FLASH_OWNER_OTA;assert(fota_checkpoint_load(url,8193,&loaded));flash_owner=0;
         assert(loaded.offset==0U && loaded.running_crc==0xffffffffU && !strcmp(loaded.etag,"new"));
         /* Reset after zero commit, before old prefix erase. */
         fota_cancel();fota_init();assert(fota_start_request(&req)==0);start_download();

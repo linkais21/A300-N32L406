@@ -1,0 +1,9 @@
+{
+  "initial_passed": 75,
+  "initial_failed": 1,
+  "cause": "Stale source-match contract omitted fifth mileage argument.",
+  "changed": "tools/tests/test_work_mode_jt808_contract.py",
+  "production_sources_changed": false,
+  "rerun_exit_code": 0,
+  "final_passed": 76
+}

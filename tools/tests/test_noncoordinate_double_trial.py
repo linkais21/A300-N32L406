@@ -10,23 +10,51 @@ import noncoordinate_double_trial as trial
 from test_f39_actions import find_compiler
 
 
+# Original binary64 encoder (pre-fixed-point src/jt808.c), kept as the oracle.
+REFERENCE = r'''static uint16_t baseline(float altitude)
+{
+    double scaled = fabs((double)altitude) * 1000.0;
+    if (!(scaled < 4294967296.0)) return 0U;
+    return (uint16_t)(((uint32_t)scaled) % 1000U);
+}
+'''
+
+# Naive single-precision rewrite: negative control that must be detected.
+FLOAT_CONTROL = r'''static uint16_t floating(float altitude)
+{
+    float scaled = fabsf(altitude) * 1000.0f;
+    if (!(scaled < 4294967296.0f)) return 0U;
+    return (uint16_t)(((uint32_t)scaled) % 1000U);
+}
+'''
+
+
 class AltitudeContract(unittest.TestCase):
     def test_binary32_replay(self):
-        original = (trial.ROOT / 'src/jt808.c').read_text(encoding='utf-8')
-        baseline = trial.altitude_function(original).replace('altitude_extension_tail', 'baseline')
-        exact = trial.altitude_function(trial.transform(original, 'altitude_exact')).replace('altitude_extension_tail', 'candidate')
-        floating = trial.altitude_function(trial.transform(original, 'altitude_float')).replace('altitude_extension_tail', 'floating')
+        production_source = (trial.ROOT / 'src/jt808.c').read_text(encoding='utf-8')
+        # The binary64 contract is now a fixed oracle: production no longer
+        # links soft-double, so the original encoder is kept in this test.
+        baseline = REFERENCE
+        exact = trial.EXACT.replace('altitude_extension_tail', 'candidate')
+        floating = FLOAT_CONTROL
+        production = trial.altitude_function(production_source).replace(
+            'altitude_extension_tail', 'production')
         harness = r'''
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
 #include <assert.h>
 #include <stdio.h>
-''' + baseline + exact + floating + r'''
-static unsigned count, different;
+''' + baseline + exact + floating + production + r'''
+static unsigned count, different, production_different;
 static void check(uint32_t bits) {
  float a; memcpy(&a,&bits,4);
  assert(baseline(a)==candidate(a));
+ if(baseline(a)!=production(a) && production_different<4)
+   printf("production_difference bits=0x%08x altitude=%.9g contract=%u production=%u\n",
+          (unsigned)bits,(double)a,(unsigned)baseline(a),(unsigned)production(a));
+ fflush(stdout);
+ production_different += baseline(a)!=production(a);
  if(baseline(a)!=floating(a) && different<4)
    printf("float_difference bits=0x%08x altitude=%.9g baseline=%u float=%u\n",
           (unsigned)bits,(double)a,(unsigned)baseline(a),(unsigned)floating(a));
@@ -47,7 +75,11 @@ int main(void) {
    check(bits);check(bits+1);if(bits)check(bits-1);
  }
  assert(different>0); /* negative control must detect unsafe float rounding */
- printf("altitude samples=%u exact_mismatches=0 float_mismatches=%u\n",count,different);
+ printf("altitude samples=%u exact_mismatches=0 float_mismatches=%u production_mismatches=%u\n",
+        count,different,production_different);
+ fflush(stdout);
+ /* Production must keep the exact floor(|alt|*1000)%1000 wire contract. */
+ assert(production_different==0);
  return 0;
 }
 '''

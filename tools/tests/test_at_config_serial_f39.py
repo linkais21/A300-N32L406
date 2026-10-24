@@ -143,16 +143,15 @@ int main(void) {
     assert(!at_config_execute_sms("10000", (const uint8_t *)"RELAYTEST,LOW#", 14U));
     assert(production_calls == 1U); /* no remote factory dispatch */
 
-    /* A setter takes effect and is acknowledged on the console. Setters reply
-       with the bare root ("VIBSENS=Success!"), matching every other setter in
-       f39_reply.c's success() path rather than echoing the argument. */
+    /* A setter takes effect and is acknowledged with the stored value, as in
+       the command spec (VIBSENS,30# -> VIBSENS,30=Success!). */
     line("VIBSENS,20#");
-    assert(strstr(console, "VIBSENS=Success!") != 0);
+    assert(strstr(console, "VIBSENS,20=Success!") != 0);
     assert(config.vib_sens == 20 && saves == 1);
 
     /* The framing '#' is optional over serial. */
     line("VIBSENS,40");
-    assert(strstr(console, "VIBSENS=Success!") != 0);
+    assert(strstr(console, "VIBSENS,40=Success!") != 0);
     assert(config.vib_sens == 40);
 
     /* A query reports the stored value without writing anything. */
@@ -172,7 +171,7 @@ int main(void) {
 
     /* Other command groups reach the console too. */
     line("FREQ,60,300#");
-    assert(strstr(console, "FREQ=Success!") != 0);
+    assert(strstr(console, "FREQ,60,300=Success!") != 0);
     assert(config.report_moving_s == 60 && config.report_stopped_s == 300);
     assert(refreshed_at_s == 1234U);
 
@@ -190,23 +189,25 @@ int main(void) {
     }
 
     line("APN,CMIOT,,#");
-    assert(strstr(console, "APN=Success!") != NULL);
+    assert(strstr(console, "APN,CMIOT,,=Success!") != NULL);
     assert(!config.autoapn_en && strcmp(config.apn, "CMIOT") == 0);
     line("APN#");
-    assert(strstr(console, "APN,CMIOT=Success!") != NULL);
+    assert(strstr(console, "APN,CMIOT,,=Success!") != NULL);
     if (getenv("A300_V150_WIRE")) {
         FILE *f = fopen(getenv("A300_V150_WIRE"), "a");
         assert(f != NULL); fputs(console, f); fclose(f);
     }
     line("APN,CMIOT,user,#");
-    assert(strstr(console, "APN=Success!") != NULL);
+    assert(strstr(console, "APN,CMIOT,user,=Success!") != NULL);
+    console_len = 0U; console[0] = 0;
     line("APN#");
-    assert(strstr(console, "APN,CMIOT=Success!") != NULL);
-    assert(strstr(console, "user") == NULL);
+    assert(strstr(console, "APN,CMIOT,,=Success!") != NULL);
+    assert(strstr(console, "user") == NULL); /* a query never echoes credentials */
     line("APN,CMIOT,,secret#");
-    assert(strstr(console, "APN=Success!") != NULL);
+    assert(strstr(console, "APN,CMIOT,,secret=Success!") != NULL);
+    console_len = 0U; console[0] = 0;
     line("APN#");
-    assert(strstr(console, "APN,CMIOT=Success!") != NULL);
+    assert(strstr(console, "APN,CMIOT,,=Success!") != NULL);
     assert(strstr(console, "secret") == NULL);
     saves = 0U;
     line("APN,,,#");
@@ -220,7 +221,7 @@ int main(void) {
     persist_ok = true;
 
     line("APN,AUTO,,#");
-    assert(strstr(console, "APN=Success!") != NULL && config.autoapn_en);
+    assert(strstr(console, "APN,AUTO,,=Success!") != NULL && config.autoapn_en);
     assert(!config.apn[0] && !config.apn_user[0] && !config.apn_pass[0]);
     line("APN#");
     assert(strstr(console, "APN,AUTO=Success!") != NULL);
@@ -230,9 +231,11 @@ int main(void) {
     line("APN,AUTO,,secret#");
     assert(strstr(console, "Success!") == NULL && saves == 0U);
     line("APN,0,,#");
-    assert(strstr(console, "APN=Success!") != NULL && config.autoapn_en);
+    assert(strstr(console, "APN,0,,=Success!") != NULL && config.autoapn_en);
+    line("APN,0#");
+    assert(strstr(console, "APN,0=Success!") != NULL && config.autoapn_en);
     line("APN,CMIOT,,#");
-    assert(strstr(console, "APN=Success!") != NULL && !config.autoapn_en);
+    assert(strstr(console, "APN,CMIOT,,=Success!") != NULL && !config.autoapn_en);
 
     /* PID echoes the full 11-digit device id, as over SMS. */
     line("PID#");

@@ -143,8 +143,8 @@ TRIGRAPHS = {
     "??!": "|", "??<": "{", "??>": "}", "??-": "~",
 }
 CANONICAL_CONSUMER_SHA256 = {
-    # Reviewed: stack-split boot_init; identity initialization remains unchanged.
-    "src/main.c": "c9239822ad6a20b0046c004cd90ebf8316f7dac631e6a48885a7126fef15100d",
+    # Reviewed 2026-10-21: boot-only terminal descriptor is local; all identity fields and synchronous jt808_init copy are unchanged.
+    "src/main.c": "2f24985cd86b214c46e6fbb264846b9752858451901e41611d75dc9f02ba2fb4",
     "src/jt808.c": "d38583fc4d2e47eab4fe184b90a21205dc6e2606266a20e824bff69321871586",
     "src/jt808_params.c": "2f4c5cefaa334a336896ec36cc7feaaa56ae1b56dcaef44e4b33a33008dc7a11",
     "src/jt808_terminal_info.c": "0ce1a9cf82880062c0d84b88bc50ae047c59ec7f6e5e17ea59266b50a0499d49",
@@ -152,12 +152,12 @@ CANONICAL_CONSUMER_SHA256 = {
     "src/f39_reply.c": "19e1722a06a1a1c78e38ab9ec0902ee5b7821d6e0d6cdf93035cd6c5758bc3ce",
 }
 CANONICAL_IDENTITY_FILE_SHA256 = {
-    # Reviewed: V3.091/3091 identity; generated timestamps stay normalized.
-    "include/config.h": "81b1eb504eef0bb31e50c1f41208d318d71dd06160c0c32f58f199b7d9339703",
-    "include/build_version.h": "b5317d0cd57e006de5b4ef4e3d1a470d2581a9caa07247d9b70f6a83fdf0115d",
-    "include/f39_reply.h": "4519c084bcc677d23c02aa4ac509f2390527f16111139f011052017f08c615ed",
-    # Reviewed: all unfixed work-mode 0200 use event UTC; existing API/wire unchanged.
-    "include/jt808.h": "326707cc4584c282fc4589e915fd89ee36743b8bf5c1bc7e0fb35cdd6697da68",
+    # Reviewed: V3.097/3097 identity; generated timestamps stay normalized.
+    "include/config.h": "848b86d4ac37ffc7011c36cc7c53e268ed5dab96d0971f72e9361d53cd4ce667",
+    "include/build_version.h": "7e414ec2e2919da1b85268ee47cc949333003fa6579703ce96aefe15b24ce15d",
+    "include/f39_reply.h": "85908d7923cc73575d16f419ebf354cb37088745dab72768d7a0fa54b98999e9",
+    # Reviewed 2026-10-15: add only the standard bit13 warning flag; identity APIs unchanged.
+    "include/jt808.h": "1494cc4f7ae752fa097954673638c6a9e93bd0f05e618ac145bc1852a044c122",
     "include/jt808_terminal_info.h": "ed27611b540da8fe8ed50a3d349d52ada04f2e66aa62db8f3d6b85497c35d8df",
 }
 

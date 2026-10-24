@@ -1,10 +1,12 @@
 #include "jt808.h"
+#include "overspeed_policy.h"
 #include "plate_encoding.h"
 #include "jt808_params.h"
 #include "geofence.h"
 #include "ec800m.h"
 #include "gps.h"
 #include "gps_report_filter.h"
+#include "civil_date.h"
 #include "adc_monitor.h"
 #include "config.h"
 #include "hw_init.h"
@@ -139,7 +141,7 @@ static bool s_corner_append_pending;
 static blind_zone_record_t s_corner_pending_record;
 static motion_corner_candidate_t s_corner_pending_candidate;
 static gps_data_t s_corner_snapshots[MOTION_CORNER_CANDIDATE_CAPACITY];
-static uint32_t s_corner_snapshot_ms[MOTION_CORNER_CANDIDATE_CAPACITY];
+static uint32_t s_corner_mileage_m[MOTION_CORNER_CANDIDATE_CAPACITY];
 static uint32_t s_corner_last_heading_ms;
 
 #if defined(__GNUC__)
@@ -592,7 +594,6 @@ bool jt808_get_logical_acc(void)
     return hw_acc_is_on();
 }
 
-static uint8_t jt808_days_in_month(uint16_t year, uint8_t month);
 
 bool jt808_location_snapshot_valid(const gps_data_t *gps, uint32_t now)
 {
@@ -601,7 +602,7 @@ bool jt808_location_snapshot_valid(const gps_data_t *gps, uint32_t now)
         gps->year < 2000U || gps->month < 1U || gps->month > 12U ||
         gps->hour > 23U || gps->minute > 59U || gps->second > 59U)
         return false;
-    return gps->day >= 1U && gps->day <= jt808_days_in_month(gps->year, gps->month);
+    return gps->day >= 1U && gps->day <= civil_month_days(gps->year, gps->month);
 }
 
 void jt808_reset_endpoint_auth(uint8_t channel_mask)
@@ -616,16 +617,6 @@ void jt808_reset_endpoint_auth(uint8_t channel_mask)
         memset(&s_pending_auth[1], 0, sizeof(s_pending_auth[1]));
         jt808_session_init(&s_sessions[1], TCP_CH_BACKUP);
     }
-}
-
-/* Share the date calculation across validation and timezone rollover. */
-static __attribute__((noinline)) uint8_t jt808_days_in_month(uint16_t year, uint8_t month)
-{
-    static const uint8_t days[13] =
-        { 0U,31U,28U,31U,30U,31U,30U,31U,31U,30U,31U,30U,31U };
-    bool leap = (year % 4U == 0U && year % 100U != 0U) ||
-                (year % 400U == 0U);
-    return month == 2U && leap ? 29U : days[month];
 }
 
 static void jt808_apply_timezone(const gps_data_t *gps,
@@ -664,12 +655,12 @@ static void jt808_apply_timezone(const gps_data_t *gps,
                 *month = 12U;
                 --*year;
             }
-            *day = jt808_days_in_month(*year, *month);
+            *day = civil_month_days(*year, *month);
         }
     }
     while (local_minutes >= 24 * 60) {
         local_minutes -= 24 * 60;
-        if (*day < jt808_days_in_month(*year, *month)) {
+        if (*day < civil_month_days(*year, *month)) {
             ++*day;
         } else {
             *day = 1U;
@@ -692,20 +683,33 @@ static uint16_t encode_location_base(const gps_data_t *g, uint8_t *body,
                                      bool historical_position)
 {
     uint32_t status = 0;
+    const device_config_t *config = cfg_get();
+
+    /* A sustained warning must survive successful sends, then clear when
+     * the condition ends. Never derive a new warning from retained fixes. */
+    alm &= ~ALM_OVERSPEED_WARNING;
+    if (overspeed_warning_active(config->speed_warning_valid == 1U,
+                                 work_mode_state() == WORK_MODE_REALTIME,
+                                 !historical_position &&
+                                 jt808_location_snapshot_valid(g, TICK_MS()),
+                                 g->speed_kmh, config->speed_limit_kmh,
+                                 cfg_speed_warning_delta_x10(config)))
+        alm |= ALM_OVERSPEED_WARNING;
 
     /* PA12 M_ACC_IN is inverted by Q9: low collector means external ACC ON. */
     if (acc_on)
         status |= LOC_FLAG_ACC_ON;
     /* 808-2013: bit2=1表示西经(默认东经不置位), bit3=1表示南纬(默认北纬不置位) */
-    if (g->lon < 0) status |= LOC_FLAG_WEST_LON;
-    if (g->lat < 0) status |= LOC_FLAG_SOUTH_LAT;
+    if (g->lon_e7 < 0) status |= LOC_FLAG_WEST_LON;
+    if (g->lat_e7 < 0) status |= LOC_FLAG_SOUTH_LAT;
     if (g->fix_quality > 0) {
         status |= LOC_FLAG_BEIDOU_FIXED;
         if (!historical_position) status |= LOC_FLAG_GPS_FIXED;
     }
 
-    uint32_t lat_deg = (uint32_t)(fabs(g->lat) * 1e6);
-    uint32_t lon_deg = (uint32_t)(fabs(g->lon) * 1e6);
+    /* 1e-7 -> 1e-6 degrees, truncated like the former magnitude * 1e6. */
+    uint32_t lat_deg = (g->lat_e7 < 0 ? 0U - (uint32_t)g->lat_e7 : (uint32_t)g->lat_e7) / 10U;
+    uint32_t lon_deg = (g->lon_e7 < 0 ? 0U - (uint32_t)g->lon_e7 : (uint32_t)g->lon_e7) / 10U;
     uint16_t speed   = (uint16_t)(g->speed_kmh * 10);
     uint16_t heading = (uint16_t)g->heading;
     uint16_t alt     = (uint16_t)g->altitude_m;
@@ -741,10 +745,22 @@ static uint16_t encode_location_base(const gps_data_t *g, uint8_t *body,
     return p;
 }
 
+static __attribute__((noinline)) uint16_t encode_odometer(uint8_t *body, uint32_t metres)
+{
+    uint32_t odometer = metres / 100U;
+    body[0] = 0x01U; body[1] = 4U;
+    body[2] = (uint8_t)(odometer >> 24); body[3] = (uint8_t)(odometer >> 16);
+    body[4] = (uint8_t)(odometer >> 8); body[5] = (uint8_t)odometer;
+    return 6U;
+}
+
 static uint16_t encode_location_compact(const gps_data_t *g,
-                                        uint8_t body[BLIND_ZONE_LOCATION_MAX])
+                                        uint8_t body[BLIND_ZONE_LOCATION_MAX], uint32_t mileage_m)
 {
     uint16_t p = encode_location_base(g, body, s_alarm_flags, hw_acc_is_on(), false);
+    /* Capture-time 0.1 km odometer. The existing 40-byte record envelope
+     * already has room; legacy 34-byte records remain readable unchanged. */
+    p += encode_odometer(body + p, mileage_m);
     /* 附加信息项 0x31: GNSS定位卫星数(1字节) */
     body[p++] = 0x31;
     body[p++] = 0x01;
@@ -767,33 +783,43 @@ static __attribute__((noinline)) uint16_t clamp_voltage_units(float volts, float
     return (uint16_t)scaled;
 }
 
-static __attribute__((noinline)) uint16_t coordinate_extension_tail(double coordinate)
+/* Digits 1e-7..1e-9 of the degree value. Coordinates carry 1e-7 resolution,
+ * so the two lowest digits are zero. */
+static __attribute__((noinline)) uint16_t coordinate_extension_tail(int32_t coordinate_e7)
 {
-    double magnitude = fabs(coordinate);
-    uint32_t degrees;
-    double low_scaled;
-    if (!(magnitude <= 180.0)) return 0U;
-    degrees = (uint32_t)magnitude;
-    low_scaled = magnitude * 1000000000.0 -
-                 (double)degrees * 1000000000.0;
-    return (uint16_t)(((uint32_t)low_scaled) % 1000U);
+    uint32_t magnitude = coordinate_e7 < 0 ? 0U - (uint32_t)coordinate_e7 : (uint32_t)coordinate_e7;
+    if (magnitude > (uint32_t)GPS_LON_E7_MAX) return 0U;
+    return (uint16_t)((magnitude % 10U) * 100U);
 }
 
 static uint16_t altitude_extension_tail(float altitude)
 {
-    double scaled = fabs((double)altitude) * 1000.0;
-    if (!(scaled < 4294967296.0)) return 0U;
-    return (uint16_t)(((uint32_t)scaled) % 1000U);
+    /* Exact floor(|alt| * 1000) % 1000 without soft-double: IEEE binary32
+     * |x| * 1000 = significand * 125 * 2^(exponent-147). The 24-bit
+     * significand times 125 fits uint32_t. NaN/Inf and >= 2^32 give 0. */
+    uint32_t bits, scaled, exponent, shift;
+    memcpy(&bits, &altitude, sizeof(bits));
+    exponent = (bits >> 23) & 255U;
+    if (exponent == 255U || exponent == 0U) return 0U;
+    scaled = ((bits & 0x7fffffU) | 0x800000U) * 125U;
+    if (exponent < 147U) {
+        shift = 147U - exponent;
+        scaled = shift >= 32U ? 0U : scaled >> shift;
+    } else {
+        shift = exponent - 147U;
+        if (shift >= 32U || scaled > (UINT32_MAX >> shift)) return 0U;
+        scaled <<= shift;
+    }
+    return (uint16_t)(scaled % 1000U);
 }
 
 static uint16_t encode_location_online(const gps_data_t *g,
                                        uint8_t body[JT808_LOCATION_ONLINE_MAX],
                                        uint32_t alarm_bits,
-                                       bool historical_position)
+                                       bool historical_position, uint32_t mileage_m)
 {
     uint16_t p = encode_location_base(g, body, alarm_bits, jt808_get_logical_acc(),
                                       historical_position);
-    uint32_t odometer = cfg_get()->mileage_m / 100U;
     uint16_t speed = g->speed_kmh <= 0.0f ? 0U :
                      g->speed_kmh >= 6553.5f ? 65535U :
                      (uint16_t)(g->speed_kmh * 10.0f);
@@ -802,17 +828,15 @@ static uint16_t encode_location_online(const gps_data_t *g,
     uint16_t bat_01v = (uint16_t)(bat_mv / 100U);
     uint16_t bat_pct = bat_mv <= 3300U ? 0U : bat_mv >= 4200U ? 100U :
         (uint16_t)(((uint32_t)(bat_mv - 3300U) * 100U) / 900U);
-    uint16_t lat_tail = coordinate_extension_tail(g->lat);
-    uint16_t lon_tail = coordinate_extension_tail(g->lon);
+    uint16_t lat_tail = coordinate_extension_tail(g->lat_e7);
+    uint16_t lon_tail = coordinate_extension_tail(g->lon_e7);
     uint16_t alt_tail = altitude_extension_tail(g->altitude_m);
     uint16_t hdop_x10 = g->hdop <= 0.0f ? 0U :
                         g->hdop >= 99.9f ? 999U :
                         (uint16_t)(g->hdop * 10.0f + 0.5f);
 
     /* Append the complete online profile directly after the shared body. */
-    body[p++]=0x01U; body[p++]=0x04U;
-    body[p++]=(uint8_t)(odometer>>24); body[p++]=(uint8_t)(odometer>>16);
-    body[p++]=(uint8_t)(odometer>>8); body[p++]=(uint8_t)odometer;
+    p += encode_odometer(body + p, mileage_m);
     body[p++]=0x03U; body[p++]=0x02U;
     body[p++]=(uint8_t)(speed>>8); body[p++]=(uint8_t)speed;
     body[p++]=0x30U; body[p++]=0x01U; body[p++]=(uint8_t)ec800m_get_csq();
@@ -843,7 +867,7 @@ int jt808_send_location_to(uint8_t channel, const gps_data_t *snapshot)
         return -1;
     gps_data_t report;
     gps_report_filter_copy(snapshot, &report, TICK_MS());
-    length = encode_location_online(&report, body, s_alarm_flags, false);
+    length = encode_location_online(&report, body, s_alarm_flags, false, cfg_get()->mileage_m);
     if (!frame_init(&frame)) return -1;
     if (!build_header(&frame, MSG_LOCATION_REPORT, length)) { frame_release(); return -1; }
     frame_bytes(&frame, body, length);
@@ -873,11 +897,11 @@ int jt808_send_location(void)
 
     if (!jt808_location_snapshot_valid(&snapshot, TICK_MS())) return -1;
     record.event_id = blind_zone_allocate_event_id();
-    record.length = (uint8_t)encode_location_compact(&snapshot, record.location);
+    record.length = (uint8_t)encode_location_compact(&snapshot, record.location, cfg_get()->mileage_m);
     if (!frame_init(&f)) return -1;
     {
         uint16_t online_length = encode_location_online(&snapshot, online_body,
-                                                         s_alarm_flags, false);
+                                                         s_alarm_flags, false, cfg_get()->mileage_m);
         if (!build_header(&f, MSG_LOCATION_REPORT, online_length)) { frame_release(); return -1; }
         frame_bytes(&f, online_body, online_length);
     }
@@ -955,7 +979,7 @@ static int send_location_work_mode(uint32_t alarm_bits,
     DBG_PRINTF_VERBOSE("[808] 0200 acc=%u alarm=0x%08lx hist=%u\r\n",
                (unsigned)jt808_get_logical_acc(),
                (unsigned long)alarm_bits, (unsigned)historical_position);
-    length = encode_location_online(&snapshot, body, alarm_bits, historical_position);
+    length = encode_location_online(&snapshot, body, alarm_bits, historical_position, cfg_get()->mileage_m);
     result = -1;
     if (jt808_is_online() && frame_init(&frame)) {
         if (build_header(&frame, MSG_LOCATION_REPORT, length)) {
@@ -980,7 +1004,7 @@ static int send_location_work_mode(uint32_t alarm_bits,
         memset(&s_append_pending_record, 0, sizeof s_append_pending_record);
         s_append_pending_record.event_id = blind_zone_allocate_event_id();
         if (s_append_pending_record.event_id == 0U) return -2;
-        s_append_pending_record.length = 34U;
+        s_append_pending_record.length = 34U; /* base + complete 0x01 mileage TLV */
         memcpy(s_append_pending_record.location, body, 34U);
         s_append_pending = 2U;
         s_append_report_id = report_id;
@@ -1023,7 +1047,7 @@ void jt808_set_terminal_profile(const char *model, const char *plate)
     }
 }
 
-static int send_location_only(uint16_t message_id)
+static int send_location_only(uint16_t request_serial)
 {
     uint8_t body[JT808_LOCATION_ONLINE_MAX];
     frame_t frame;
@@ -1033,9 +1057,10 @@ static int send_location_only(uint16_t message_id)
     if (!jt808_is_online()) return -1;
     bool historical = !jt808_location_snapshot_valid(&snapshot, TICK_MS());
     if (historical && !gps_get_last_trusted_location(&snapshot)) gps_get_unfixed_report(&snapshot);
-    length = encode_location_online(&snapshot, body, s_alarm_flags, historical);
+    length = encode_location_online(&snapshot, body, s_alarm_flags, historical, cfg_get()->mileage_m);
     if (!frame_init(&frame)) return -1;
-    if (!build_header(&frame, message_id, length)) { frame_release(); return -1; }
+    if (!build_header(&frame, MSG_LOCATION_QUERY_RESP, length + 2U)) { frame_release(); return -1; }
+    frame_u16(&frame, request_serial);
     frame_bytes(&frame, body, length);
     return finish_frame_channel(&frame, s_response_channel);
 }
@@ -1127,8 +1152,12 @@ static void process_location_timer(uint32_t now)
         sample.heading_deg = g->heading;
         sample.speed_kmh = g->speed_kmh;
         sample.sample_ms = g->heading_update_ms;
+        /* Parked weak-signal fixes carry a few km/h of false speed and a
+         * random course; without this gate every heading jump looks like a
+         * turn and floods 0x0200 far faster than the configured interval. */
         sample.valid = valid && cfg_get()->anglerep_en != 0U &&
-                       g->speed_kmh >= (float)cfg_get()->anglerep_speed;
+                       g->speed_kmh >= (float)cfg_get()->anglerep_speed &&
+                       gps_report_filter_heading_trusted();
         sample.heading_fresh = sample.valid && g->heading_update_ms != 0U &&
                                g->heading_update_ms != s_corner_last_heading_ms &&
                                !corner_append_blocked;
@@ -1147,12 +1176,12 @@ static void process_location_timer(uint32_t now)
                 for (j = 0U; motion_corner_pending_candidates != NULL &&
                             j < motion_corner_pending_candidates(&s_motion_corner); ++j)
                     if (s_motion_corner.candidates[j].sample.sample_ms ==
-                        s_corner_snapshot_ms[i]) referenced = true;
+                        s_corner_snapshots[i].heading_update_ms) referenced = true;
                 if (!referenced) { slot = i; found = true; break; }
             }
             if (found) {
                 s_corner_snapshots[slot] = snapshot;
-                s_corner_snapshot_ms[slot] = sample.sample_ms;
+                s_corner_mileage_m[slot] = cfg_get()->mileage_m;
             }
             /* A full candidate queue rejects new candidates itself, but still
              * needs fresh headings to confirm or cancel the turn. Freezing
@@ -1164,13 +1193,15 @@ static void process_location_timer(uint32_t now)
         if (event.report_due) {
             motion_corner_candidate_t candidate;
             gps_data_t cached = snapshot;
+            uint32_t cached_mileage_m = cfg_get()->mileage_m;
             bool have = motion_corner_peek_candidate != NULL &&
                         motion_corner_peek_candidate(&s_motion_corner, &candidate);
             if (have) {
                 uint8_t i;
                 for (i = 0U; i < MOTION_CORNER_CANDIDATE_CAPACITY; ++i)
-                    if (s_corner_snapshot_ms[i] == candidate.sample.sample_ms) {
+                    if (s_corner_snapshots[i].heading_update_ms == candidate.sample.sample_ms) {
                         cached = s_corner_snapshots[i];
+                        cached_mileage_m = s_corner_mileage_m[i];
                         break;
                     }
             }
@@ -1178,7 +1209,7 @@ static void process_location_timer(uint32_t now)
                 uint8_t body[JT808_LOCATION_ONLINE_MAX];
                 frame_t frame;
                 uint16_t length = encode_location_online(&cached, body,
-                                                         s_alarm_flags, false);
+                                                         s_alarm_flags, false, cached_mileage_m);
                 bool sent = false;
                 if (frame_init(&frame)) {
                     if (build_header(&frame, MSG_LOCATION_REPORT, length)) {
@@ -1195,7 +1226,7 @@ static void process_location_timer(uint32_t now)
                     blind_zone_record_t record;
                     record.event_id = blind_zone_allocate_event_id();
                     if (record.event_id == 0U) return;
-                    record.length = (uint8_t)encode_location_compact(&cached, record.location);
+                    record.length = (uint8_t)encode_location_compact(&cached, record.location, cached_mileage_m);
                     {
                         blind_zone_result_t stored = blind_zone_append(&record);
                         if (stored == BLIND_ZONE_OK) {
@@ -1391,7 +1422,7 @@ static void __attribute__((noinline)) process_frame(
     uint16_t body_len   = body_prop & 0x03FF;
     uint16_t serial_no  = ((uint16_t)frame[10] << 8) | frame[11];
     const uint8_t *body = &frame[12];
-    if ((body_prop & 0x2000U) != 0U || body_len != flen - 13U) {
+    if ((body_prop & 0xfc00U) != 0U || body_len != flen - 13U) {
         dbg_printf("[808-RX] ch=%u drop=LENGTH body=%u frame=%u\r\n",
                    channel, body_len, (unsigned int)(flen - 13U));
         return;
@@ -1448,9 +1479,10 @@ static void __attribute__((noinline)) process_frame(
             jt808_session_consume_register(session);
             dbg_printf("[808] ch%u REGISTER_RESP result=%u\r\n", channel, result);
             if (result == 0) {
-                uint8_t code_len = (uint8_t)(body_len - 3U);
+                uint16_t code_len = body_len - 3U;
                 if (pending == NULL || code_len == 0U ||
-                    code_len >= sizeof(pending->code)) {
+                    code_len >= sizeof(pending->code) ||
+                    memchr(body + 3U, 0, code_len) != NULL) {
                     jt808_session_reject_or_timeout(session, TICK_MS());
                     break;
                 }
@@ -1484,7 +1516,8 @@ static void __attribute__((noinline)) process_frame(
 
     case MSG_QUERY_TERMINAL_INFO:   /* 0x8107 query terminal attributes */
         s_response_channel = channel;
-        jt808_params_handle_info_query(serial_no);
+        if (body_len == 0U) jt808_params_handle_info_query(serial_no);
+        else jt808_send_general_resp(serial_no, msg_id, 2U);
         break;
 
     case MSG_TEXT_MESSAGE:          /* 0x8300 text delivery */
@@ -1492,12 +1525,14 @@ static void __attribute__((noinline)) process_frame(
         break;
 
     case MSG_SET_POLYGON_AREA:      /* 0x8604 set polygon geofence */
+        s_response_channel = channel;
         geofence_handle_jt808(body, body_len, serial_no);
         break;
 
     case MSG_LOCATION_QUERY:
         s_response_channel = channel;
-        (void)send_location_only(MSG_LOCATION_QUERY_RESP);
+        if (body_len == 0U) (void)send_location_only(serial_no);
+        else jt808_send_general_resp(serial_no, msg_id, 2U);
         break;
 
     case MSG_TERMINAL_CTRL:
@@ -1565,13 +1600,14 @@ void jt808_on_recv(uint8_t ch, const uint8_t *data, uint16_t len)
     for (uint16_t i = 0; i < len; i++) {
         uint8_t b = data[i];
         if (b == FRAME_FLAG) {
-            if (rx->in_frame && rx->pos > 0U) {
+            if (rx->in_frame && rx->pos > 0U && rx->pos <= JT808_RX_MAX) {
                 process_frame(ch, generation, rx->raw, rx->pos);
             }
             rx->in_frame = true;
             rx->pos = 0U;
         } else if (rx->in_frame) {
             if (rx->pos < JT808_RX_MAX) rx->raw[rx->pos++] = b;
+            else rx->pos = JT808_RX_MAX + 1U; /* poison until next delimiter */
         }
     }
 }
@@ -1599,7 +1635,7 @@ void jt808_init(const jt808_terminal_t *info)
     blind_zone_replay_reset();
     corner_init_safe(&s_motion_corner);
     s_corner_append_pending = false;
-    memset(s_corner_snapshot_ms, 0, sizeof(s_corner_snapshot_ms));
+    memset(s_corner_snapshots, 0, sizeof(s_corner_snapshots));
     s_corner_last_heading_ms = 0U;
     /* restore auth code from flash so reconnects skip re-registration */
     if (info->auth_code[0])

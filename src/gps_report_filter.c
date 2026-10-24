@@ -12,6 +12,10 @@
 #define REPORT_ACCEL_LSB_PER_G   1024u
 #define REPORT_FIX_HOLD_MS       10000u
 #define REPORT_WEAK_SPEED_KMH    3.0f
+/* G452 weak-signal stationary entry: quiet sensor + 20 m cluster for 30 s.
+ * A vehicle above ~2.4 km/h leaves a 20 m circle within 30 s. */
+#define REPORT_WEAK_CLUSTER_M2   400.0f
+#define REPORT_WEAK_ENTRY_MAX_KMH 30.0f
 
 typedef enum {
     REPORT_UNKNOWN = 0,
@@ -31,11 +35,11 @@ static struct {
     uint8_t blockers;
     int16_t acceleration[REPORT_WINDOW_COUNT][3];
     /* Candidate samples and locked anchor have disjoint lifetimes.
-     * 1e-7 degree samples preserve centimetre precision without 80 B doubles. */
+     * 1e-7 degree samples preserve centimetre precision. */
     union {
         struct { int32_t lat[REPORT_WINDOW_COUNT], lon[REPORT_WINDOW_COUNT]; } fixes;
         struct {
-            double lat, lon;
+            int32_t lat, lon;
             int32_t ref_lat, ref_lon;
             float distance, heading;
             uint32_t started;
@@ -46,6 +50,9 @@ static struct {
     float travel_m;
     uint32_t motion_ms;
     bool motion_pending;
+    /* Set by confirmed motion (trajectory, sensor or good-quality speed);
+     * cleared when a new stationary candidate starts or evidence is lost. */
+    bool driving;
     /* Five-entry ring and evidence flags fit in one byte; no persisted ABI. */
     uint8_t accel_count : 3;
     uint8_t accel_next : 3;
@@ -55,26 +62,28 @@ static struct {
 
 static bool holding(void) { return s_report.state >= REPORT_LOCKED; }
 
+/* G452 weak-RF screen: a fresh GSV average below 30 dB-Hz is weak even with
+ * many satellites and low HDOP (field: 9-11 sats, HDOP 1.1, CN0 14-15). */
+#define REPORT_WEAK_CN0          30u
+#define REPORT_CN0_MIN_SATS      4u
+
 static bool quality_good(const gps_data_t *g)
 {
-    return gps_quality_fix_fresh() && g->satellites >= 6u &&
-           g->hdop > 0.0f && g->hdop <= 2.5f;
+    gps_quality_t q;
+    if (!gps_quality_fix_fresh() || g->satellites < 6u ||
+        !(g->hdop > 0.0f) || g->hdop > 2.5f) return false;
+    return !(gps_get_quality(&q) && q.satellites >= REPORT_CN0_MIN_SATS &&
+             q.average != 0u && q.average < REPORT_WEAK_CN0);
 }
 
-/* Local classification only; never project output coordinates.
- * cos(lat) = sin(pi/2-|lat|), degree-7 Taylor on [0,pi/2].
- * Absolute truncation error <= (pi/2)^9/9! < 0.000161. */
+/* Local classification only; never project output coordinates. Integer
+ * differences keep full 1e-7 deg resolution before the float scale. */
 static float offset_m(const gps_data_t *g, int32_t lat, int32_t lon,
                       float *north, float *east)
 {
-    float x = (90.0f - fabsf((float)lat / 10000000.0f)) * 0.01745329252f;
-    float z = x*x;
-    float scale = x + x*z*(-1.0f/6.0f + z*(1.0f/120.0f - z/5040.0f));
-    double delta = g->lon - (double)lon / 10000000.0;
-    if (delta > 180.0) delta -= 360.0;
-    if (delta < -180.0) delta += 360.0;
-    *north = (float)(g->lat - (double)lat / 10000000.0) * 111319.5f;
-    *east = (float)delta * (111319.5f * scale);
+    *north = (float)(g->lat_e7 - lat) * 0.01113195f;
+    *east = (float)gps_lon_delta_e7(lon, g->lon_e7) *
+            (0.01113195f * gps_cos_lat_e7(lat));
     return *north * *north + *east * *east;
 }
 
@@ -89,8 +98,8 @@ static bool suspect_motion(const gps_data_t *g, uint32_t now, uint32_t dt)
         return false;
     }
     if (s_report.state == REPORT_LOCKED) {
-        s_report.position.anchor.ref_lat = (int32_t)(g->lat * 10000000.0);
-        s_report.position.anchor.ref_lon = (int32_t)(g->lon * 10000000.0);
+        s_report.position.anchor.ref_lat = g->lat_e7;
+        s_report.position.anchor.ref_lon = g->lon_e7;
         s_report.position.anchor.distance = 0.0f;
         s_report.position.anchor.heading = g->heading;
         s_report.position.anchor.started = now;
@@ -126,8 +135,23 @@ bool gps_report_filter_motion_pending(uint32_t now_ms)
 
 void gps_report_filter_motion_ack(void) { s_report.motion_pending = false; }
 
+static uint32_t acceleration_span(void);
+bool gps_report_filter_heading_trusted(void)
+{
+    const device_config_t *config = cfg_get();
+    if (config == NULL || config->stopdrift_en == 0u) return true;
+    /* Confirmed driving: a coherent trajectory or a moving sensor released the
+     * anchor and no new stationary lock has formed since. */
+    if (s_report.state == REPORT_MOVING && s_report.driving) return true;
+    if (s_report.accel_count < REPORT_WINDOW_COUNT) return quality_good(gps_get_data());
+    return acceleration_span() * 1000u >
+               (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G ||
+           quality_good(gps_get_data());
+}
+
 static void confirm_motion(uint32_t now)
 {
+    s_report.driving = true;
     if (holding()) {
         s_report.motion_ms = now;
         s_report.motion_pending = true;
@@ -143,7 +167,7 @@ static bool report_enabled(void)
 static bool report_fix_fresh(const gps_data_t *gps, uint32_t now_ms)
 {
     return (gps != NULL && gps->valid && gps_is_valid()) &&
-           fabs(gps->lat) <= 90.0 && fabs(gps->lon) <= 180.0 &&
+           gps_coord_in_range(gps) &&
            isfinite(gps->speed_kmh) && gps->speed_kmh >= 0.0f &&
            now_ms - gps->last_update_ms <= REPORT_FIX_MAX_AGE_MS &&
            now_ms - gps->heading_update_ms <= REPORT_FIX_MAX_AGE_MS;
@@ -161,6 +185,7 @@ static void clear_candidate(report_state_t state)
 static void invalidate_evidence(void)
 {
     s_report.motion_pending = false;
+    s_report.driving = false;
     clear_candidate(REPORT_UNKNOWN);
     s_report.accel_count = 0u;
     s_report.accel_next = 0u;
@@ -215,7 +240,7 @@ void gps_report_filter_get_diag(gps_report_filter_diag_t *out, uint32_t now_ms)
 }
 
 /* Shared by latitude/longitude; inlining duplicates the 64-bit arithmetic. */
-static __attribute__((noinline)) double trimmed_mean(const int32_t *values)
+static __attribute__((noinline)) int32_t trimmed_mean(const int32_t *values)
 {
     const int64_t half_turn = 1800000000LL;
     int64_t origin = values[0];
@@ -233,11 +258,11 @@ static __attribute__((noinline)) double trimmed_mean(const int32_t *values)
         if (value > high) high = value;
     }
     /* At most five unwrapped e7 samples: int32 could overflow.
-     * Normalize the retained sum before a single double conversion. */
+     * Normalize the retained sum, then round the three-sample mean. */
     sum -= low + high;
     if (sum > 3 * half_turn) sum -= 6 * half_turn;
     else if (sum < -3 * half_turn) sum += 6 * half_turn;
-    return (double)sum / 30000000.0;
+    return (int32_t)(sum >= 0 ? (sum + 1) / 3 : -((-sum + 1) / 3));
 }
 
 void gps_report_filter_process(uint32_t now_ms)
@@ -300,8 +325,13 @@ void gps_report_filter_process(uint32_t now_ms)
     /* Only an established stationary anchor may reject weak low-speed
      * evidence. Never use this exception to lock a vehicle already creeping.
      * Missing/invalid DOP is not evidence of a high-quality speed solution. */
-    bool weak_speed = holding() &&
-        span_milli_lsb <= (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G &&
+    bool quiet_sensor = s_report.accel_count == REPORT_WINDOW_COUNT &&
+        span_milli_lsb <= (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G;
+    bool quiet_anchor = holding() && quiet_sensor;
+    /* Before a lock, weak-fix speed with a quiet sensor is not a reason to
+     * restart the candidate: the 20 m cluster and 30 s window decide. */
+    bool weak_quiet_candidate = !holding() && quiet_sensor && !quality_good(gps);
+    bool weak_speed = quiet_anchor &&
         gps->speed_kmh <= REPORT_WEAK_SPEED_KMH &&
         !quality_good(gps);
 
@@ -318,7 +348,11 @@ void gps_report_filter_process(uint32_t now_ms)
         }
         s_report.have_rmc = true;
         s_report.last_rmc_ms = gps->heading_update_ms;
-        if (!weak_speed && gps->speed_kmh >= s_config.move_speed_kmh) {
+        /* G452 field rule: once anchored with a quiet sensor, receiver SOG is
+         * not motion evidence by itself. Parked multipath reports 2..10 km/h
+         * for minutes; only the coherent trajectory below may release it. */
+        if (!weak_speed && !quiet_anchor && !weak_quiet_candidate &&
+            gps->speed_kmh >= s_config.move_speed_kmh) {
             if (s_report.move_count < REPORT_MOVE_FIXES) s_report.move_count++;
         } else {
             s_report.move_count = 0u;
@@ -328,6 +362,7 @@ void gps_report_filter_process(uint32_t now_ms)
     /* Distinct RMC confirmation, independent of main-loop call frequency. */
     if (s_report.move_count >= REPORT_MOVE_FIXES) {
         s_report.blockers |= GPS_REPORT_BLOCK_SPEED;
+        s_report.driving = true;
         confirm_motion(now_ms);
         clear_candidate(REPORT_MOVING);
         return;
@@ -343,10 +378,15 @@ void gps_report_filter_process(uint32_t now_ms)
         s_report.candidate_ms = now_ms; /* locked: last fresh fix observation */
         return;
     }
+    /* Strong fixes keep the original low-speed entry. Weak fixes (G452 rule)
+     * may enter on a quiet sensor alone: parked multipath reports 2..13 km/h
+     * indefinitely, so speed can never settle. The cluster radius below and
+     * the 30 s quiet window keep a genuinely moving vehicle out. */
+    bool weak_entry = !quality_good(gps) || gps->speed_kmh > s_config.stop_speed_kmh;
     if (s_report.accel_count < REPORT_WINDOW_COUNT ||
-        !quality_good(gps) ||
+        gps->satellites < 4u || !(gps->hdop > 0.0f) || gps->fix_quality == 0u ||
         span_milli_lsb > (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G ||
-        gps->speed_kmh > s_config.stop_speed_kmh) {
+        gps->speed_kmh > REPORT_WEAK_ENTRY_MAX_KMH) {
         if (span_milli_lsb > (uint32_t)s_config.stable_accel_mg * REPORT_ACCEL_LSB_PER_G)
             s_report.blockers |= GPS_REPORT_BLOCK_UNSTABLE;
         if (gps->speed_kmh > s_config.stop_speed_kmh)
@@ -357,25 +397,28 @@ void gps_report_filter_process(uint32_t now_ms)
     if (s_report.state != REPORT_CANDIDATE) {
         clear_candidate(REPORT_CANDIDATE);
         s_report.candidate_ms = now_ms;
+        s_report.driving = false;
     }
     if (new_rmc) {
         float north, east;
+        /* 8 m (64 m^2) for strong entry, G452's 20 m cluster for weak entry. */
         if (s_report.fix_count &&
             offset_m(gps, s_report.position.fixes.lat[0],
-                     s_report.position.fixes.lon[0], &north, &east) > 64.0f) {
+                     s_report.position.fixes.lon[0], &north, &east) >
+                (weak_entry ? REPORT_WEAK_CLUSTER_M2 : 64.0f)) {
             clear_candidate(REPORT_CANDIDATE);
             s_report.candidate_ms = now_ms;
         }
-        s_report.position.fixes.lat[s_report.fix_next] = (int32_t)(gps->lat * 10000000.0);
-        s_report.position.fixes.lon[s_report.fix_next] = (int32_t)(gps->lon * 10000000.0);
+        s_report.position.fixes.lat[s_report.fix_next] = gps->lat_e7;
+        s_report.position.fixes.lon[s_report.fix_next] = gps->lon_e7;
         s_report.fix_next++;
         if (s_report.fix_next == REPORT_WINDOW_COUNT) s_report.fix_next = 1u;
         if (s_report.fix_count < REPORT_WINDOW_COUNT) s_report.fix_count++;
     }
     if (s_report.fix_count == REPORT_WINDOW_COUNT &&
         now_ms - s_report.candidate_ms >= s_config.stationary_ms) {
-        double lat = trimmed_mean(s_report.position.fixes.lat);
-        double lon = trimmed_mean(s_report.position.fixes.lon);
+        int32_t lat = trimmed_mean(s_report.position.fixes.lat);
+        int32_t lon = trimmed_mean(s_report.position.fixes.lon);
         s_report.position.anchor.lat = lat;
         s_report.position.anchor.lon = lon;
         s_report.state = REPORT_LOCKED;
@@ -390,8 +433,8 @@ bool gps_report_filter_copy(const gps_data_t *raw, gps_data_t *out, uint32_t now
     if (!report_enabled() || !holding() ||
         !report_fix_fresh(raw, now_ms) || !s_report.have_poll ||
         now_ms - s_report.last_poll_ms > REPORT_ACCEL_GAP_MS) return false;
-    out->lat = s_report.position.anchor.lat;
-    out->lon = s_report.position.anchor.lon;
+    out->lat_e7 = s_report.position.anchor.lat;
+    out->lon_e7 = s_report.position.anchor.lon;
     out->speed_kmh = 0.0f;
     out->heading = 0.0f;
     return true;

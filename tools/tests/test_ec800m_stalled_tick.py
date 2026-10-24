@@ -73,6 +73,13 @@ int main(int argc,char **argv){
         assert(!ec800m_is_alive(10U));
     }else if(!strcmp(argv[1],"rx_stuck")){
         host_rx_stuck=SET;assert(!ec800m_is_alive(10U));
+    }else if(!strcmp(argv[1],"udp")){
+        s_state=EC800M_STATE_READY;host_tx_stuck=SET;
+        const uint8_t tx='X';
+        assert(ec800m_udp_txn("127.0.0.1",1234,&tx,1,NULL,0,100)==-1);
+        assert(s_udp.state==UDP_TXN_IDLE && s_tcp[EC800M_CH_OTA].state==TCP_STATE_CLOSED);
+        assert(s_tcp_generation[EC800M_CH_OTA]>=2);
+        assert(s_failed_open_close_mask & (1U<<EC800M_CH_OTA));
     }else if(!strcmp(argv[1],"tx_stuck")){
         host_tx_stuck=RESET;assert(!usart_send_buf((const uint8_t *)"AT",2U));
     }else assert(0);
@@ -108,7 +115,7 @@ def main():
                         "-I", str(p), "-I", str(ROOT / "include"), "-I", str(ROOT / "src"),
                         str(p / "h.c"), str(ROOT / "src/ec800m_at_response.c"),
                         "-Wl,--gc-sections", "-o", str(exe)], check=True, timeout=60)
-        for case in ("response", "prompt", "drain", "flush", "qird", "alive", "alive_dma", "alive_echo", "rx_stuck", "tx_stuck"):
+        for case in ("response", "prompt", "drain", "flush", "qird", "alive", "alive_dma", "alive_echo", "rx_stuck", "tx_stuck", "udp"):
             try:
                 run = subprocess.run([str(exe), case], capture_output=True, text=True, timeout=15)
                 if run.returncode:

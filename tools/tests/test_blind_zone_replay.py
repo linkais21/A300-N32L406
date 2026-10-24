@@ -75,6 +75,7 @@ static device_config_t s_config;
 fota_state_t fota_get_state(void) { return FOTA_STATE_IDLE; }
 void gps_get_unfixed_report(gps_data_t *out) { memset(out, 0, sizeof(*out)); }
 bool gps_report_filter_motion_pending(uint32_t now) { (void)now; return false; }
+bool gps_report_filter_heading_trusted(void) { return true; }
 void gps_report_filter_motion_ack(void) {}
 bool at_config_execute_text_response(const uint8_t *text, uint16_t len,
     at_config_text_ack_fn ack, at_config_text_reply_fn reply, void *ctx)
@@ -351,8 +352,8 @@ int main(void)
     memset(&terminal, 0, sizeof(terminal));
     strcpy(terminal.auth_code, "AUTH");
     memset(&s_gps, 0, sizeof(s_gps));
-    s_gps.lat = 22.543096;
-    s_gps.lon = 114.057865;
+    s_gps.lat_e7 = 225430960;
+    s_gps.lon_e7 = 1140578650;
     s_gps.altitude_m = 12.0f;
     s_gps.heading = 91.0f;
     s_gps.speed_kmh = 35.0f;
@@ -388,7 +389,7 @@ int main(void)
     s_tcp_online = false;
     s_gps.last_update_ms = g_tick_ms;
     assert(jt808_send_location() == -2);
-    s_gps.lat += 1.0;
+    s_gps.lat_e7 += 10000000;
     assert(jt808_send_location() == 0);
     assert(s_queue_count == 1U && s_append_script_index == 2U);
     s_queue_count = 0U; s_queue_sequence = 1U;
@@ -400,7 +401,7 @@ int main(void)
     s_append_script_count = 3U; s_append_script_index = 0U;
     s_gps.last_update_ms = g_tick_ms;
     assert(jt808_send_location() == -2);
-    s_gps.lon += 1.0;
+    s_gps.lon_e7 += 10000000;
     assert(jt808_send_location() == -2);
     assert(jt808_send_location() == 0);
     assert(s_queue_count == 1U && s_append_script_index == 3U);
@@ -413,7 +414,11 @@ int main(void)
     s_gps.last_update_ms = g_tick_ms;
     assert(jt808_send_location() == 0); /* accepted by durable offline storage */
     assert(s_append_count == 1U && s_queue_count == 1U);
-    assert(s_queue[0].length == 34U);
+    assert(s_queue[0].length == 40U);
+    assert(s_queue[0].location[28] == 0x01U && s_queue[0].location[29] == 4U);
+    uint32_t saved_mileage = s_config.mileage_m / 100U;
+    assert((((uint32_t)s_queue[0].location[30]<<24) | ((uint32_t)s_queue[0].location[31]<<16) | ((uint32_t)s_queue[0].location[32]<<8) | s_queue[0].location[33]) == saved_mileage);
+    s_config.mileage_m += 80000U; /* replay may never borrow live mileage */
     g_tick_ms += 60001U;
     s_gps.last_update_ms = g_tick_ms;
     jt808_process();

@@ -84,7 +84,7 @@ require("send_location_work_mode(alarm_bits, historical_position, report_id, tru
 wrapper = function_body("send_location_work_mode")
 require(re.search(
     r"encode_location_online\s*\(\s*&snapshot\s*,\s*body\s*,\s*alarm_bits\s*,"
-    r"\s*historical_position\s*\)", wrapper) is not None,
+    r"\s*historical_position\s*,\s*cfg_get\(\)\s*->\s*mileage_m\s*\)", wrapper) is not None,
     "work-mode report bypasses the complete online builder")
 require("JT808_LOCATION_ONLINE_MAX" in wrapper,
         "work-mode report buffer does not cover the complete extension profile")

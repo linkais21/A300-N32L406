@@ -1,0 +1,64 @@
+{
+  "status": "TEST_ONLY_PENDING_HIL",
+  "formal_release": false,
+  "production_merge": false,
+  "rtk_included": false,
+  "baseline_version": "V3.094",
+  "version_counter": 3094,
+  "app_origin": "0x08006000",
+  "app_budget_bytes": 106496,
+  "baseline_app_bytes": 106336,
+  "optimized_app_bytes": 106236,
+  "saved_bytes": 100,
+  "remaining_bytes": 260,
+  "target_headroom_bytes": 4096,
+  "target_met": false,
+  "static_ram_bytes": 15964,
+  "heap_reservation_bytes": 1024,
+  "boot_main_stack_bytes": 2812,
+  "nested_exception_bytes": 584,
+  "runtime_gap_bytes": 4192,
+  "ram_budget_unchanged": true,
+  "changed_source_files": [
+    "src/at_config.c",
+    "src/ec800m.c",
+    "src/f39_reply.c"
+  ],
+  "test_fixture_changes": [
+    "tools/tests/test_jt808_boot_terminal_info.py",
+    "tools/tests/test_jt808_first_location.py",
+    "tools/tests/test_jt808_nofix_clock.py",
+    "tools/tests/test_jt808_params_wire.py",
+    "tools/tests/test_jt808_text_command.py",
+    "tools/tests/test_release_identity_contract.py",
+    "tools/tests/test_work_mode_jt808_contract.py"
+  ],
+  "host_tests_passed": 78,
+  "differential_executions_per_version": 16904,
+  "production_changed_by_task": false,
+  "production_concurrent_changes": [
+    "tools/tests/test_work_mode_jt808_contract.py"
+  ],
+  "firmware_files": {
+    "A300-406-V3.094-common-path-TEST-App.bin": {
+      "bytes": 106236,
+      "sha256": "f250984af81fa31a2efb80c22c3b08f1cad79c586553884137e74b3e6ec73caa"
+    },
+    "A300-406-V3.094-common-path-TEST-App.elf": {
+      "bytes": 1474504,
+      "sha256": "7390e0d2541859d2e15bbabc6ef550e10daae49e27a1bfe0eb0153435a2b090e"
+    },
+    "A300-406-V3.094-common-path-TEST-App.hex": {
+      "bytes": 298883,
+      "sha256": "be35bc7f8f29a01edb499ab4b4fc9b98955585af5461a98881d16c0bf50aeaeb"
+    },
+    "A300-406-V3.094-common-path-TEST-App.map": {
+      "bytes": 673049,
+      "sha256": "d4c54ea61c36a696507a6c3dc23ef830c13c91c514928bf772c997d7bfed3fba"
+    },
+    "A300-406-V3.094-common-path-TEST-OTA-UNSIGNED.bin": {
+      "bytes": 106268,
+      "sha256": "070dac22e2dd708912107a97abc8fd559aad39520035edde4f83e81826809a85"
+    }
+  }
+}

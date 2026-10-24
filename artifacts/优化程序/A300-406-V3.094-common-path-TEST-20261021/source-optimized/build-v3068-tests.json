@@ -1,0 +1,142 @@
+[
+  {
+    "test": "release_identity_contract",
+    "exit_code": 1,
+    "output": "Traceback (most recent call last):\n  File \"D:\\A300_406_tools\\A300_406\\A300-first\\tools\\tests\\test_release_identity_contract.py\", line 59, in <module>\n    assert guard.CANONICAL_IDENTITY_FILE_SHA256[\"include/build_version.h\"] == guard.canonical_file_digest(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<2 lines>...\n    )\n    ^\nAssertionError\n"
+  },
+  {
+    "test": "platform_trust_anchor",
+    "exit_code": 0,
+    "output": "test_platform_trust_anchor: PASS (real platform signature, tamper rejection, 32/64-bit)\n"
+  },
+  {
+    "test": "a300_ota_image",
+    "exit_code": 0,
+    "output": "test_a300_ota_image: PASS\n"
+  },
+  {
+    "test": "dev_release_manifest",
+    "exit_code": 0,
+    "output": "test_dev_release_manifest: PASS\n"
+  },
+  {
+    "test": "dev_signed_package",
+    "exit_code": 0,
+    "output": "test_dev_signed_package: PASS\n"
+  },
+  {
+    "test": "fota_package",
+    "exit_code": 0,
+    "output": "test_fota_package: PASS\n"
+  },
+  {
+    "test": "factory_init_artifact",
+    "exit_code": 0,
+    "output": "test_factory_init_artifact: PASS\n"
+  },
+  {
+    "test": "bootloader_artifacts",
+    "exit_code": 0,
+    "output": "test_bootloader_artifacts: PASS\n"
+  },
+  {
+    "test": "bootloader_factory_init",
+    "exit_code": 0,
+    "output": "test_bootloader_factory_init: PASS\n"
+  },
+  {
+    "test": "boot_resume_integrity",
+    "exit_code": 0,
+    "output": "prefix: PASS\nread: PASS\nfinal: PASS\ncomplete: PASS\n"
+  },
+  {
+    "test": "boot_install_powercut_c",
+    "exit_code": 0,
+    "output": "install C: 2048 bytes, 208 cuts including torn erase/program/BCR/full readback PASS\ninstall C: 2049 bytes, 245 cuts including torn erase/program/BCR/full readback PASS\ninstall C: 4097 bytes, 417 cuts including torn erase/program/BCR/full readback PASS\ninstall C: 106496 bytes, 353 cuts including torn erase/program/BCR/full readback PASS\n"
+  },
+  {
+    "test": "ext_flash_layout",
+    "exit_code": 0,
+    "output": "checkpoint layout: fixed slots and 4 KiB isolation PASS\ntest_ext_flash_layout: PASS\n"
+  },
+  {
+    "test": "feature_guards",
+    "exit_code": 0,
+    "output": "test_feature_guards: PASS\n"
+  },
+  {
+    "test": "cfg_query_f39",
+    "exit_code": 0,
+    "output": "cfg query F39 integration: PASS\n"
+  },
+  {
+    "test": "cfg_query_pass",
+    "exit_code": 0,
+    "output": "cfg query Pass: PASS (11 scenarios)\n"
+  },
+  {
+    "test": "cfg_query_lifetime",
+    "exit_code": 0,
+    "output": "cfg query lifetime: PASS (5 scenarios)\n"
+  },
+  {
+    "test": "cfg_query_contract",
+    "exit_code": 0,
+    "output": "cfg query contract: PASS\n"
+  },
+  {
+    "test": "text_ack_order",
+    "exit_code": 0,
+    "output": "test_at_config_serial_f39: PASS\n"
+  },
+  {
+    "test": "f39_config",
+    "exit_code": 0,
+    "output": "test_f39_config: C99 -Wall -Wextra -Werror PASS\ntest_f39_config: PASS\n"
+  },
+  {
+    "test": "f39_dualset",
+    "exit_code": 0,
+    "output": "test_f39_dualset: C99 -Wall -Wextra -Werror PASS\ntest_f39_dualset: PASS\n"
+  },
+  {
+    "test": "f39_parser",
+    "exit_code": 0,
+    "output": "test_f39_parser: C harness PASS\ntest_f39_parser: PASS\n"
+  },
+  {
+    "test": "f39_actions",
+    "exit_code": 0,
+    "output": "test_f39_actions: PASS\n"
+  },
+  {
+    "test": "f39_end_to_end",
+    "exit_code": 0,
+    "output": "PASS\nPASS\n"
+  },
+  {
+    "test": "at_config_serial_f39",
+    "exit_code": 0,
+    "output": "test_at_config_serial_f39: PASS\n"
+  },
+  {
+    "test": "at_config_handoff",
+    "exit_code": 0,
+    "output": "at_config handoff: PASS (busy, partial drop, 256 copy interleavings, boundaries; O0/Os+LTO)\n"
+  },
+  {
+    "test": "ec800m_udp_transaction",
+    "exit_code": 0,
+    "output": "UDP production transaction: PASS\n"
+  },
+  {
+    "test": "ec800m_udp_wire",
+    "exit_code": 0,
+    "output": "UDP full UART/URC/QIRD: PASS\n"
+  },
+  {
+    "test": "ec800m_udp_async_contract",
+    "exit_code": 0,
+    "output": "ec800m udp async contract: PASS\n"
+  }
+]

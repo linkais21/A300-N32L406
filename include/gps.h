@@ -4,9 +4,15 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/* Fixed-point degrees: 1e-7 deg (~1.1 cm). The FPU is single precision, so
+ * coordinates stay integer end to end and no soft-double code is linked. */
+#define GPS_E7_PER_DEG   10000000L
+#define GPS_LAT_E7_MAX   (90L * GPS_E7_PER_DEG)
+#define GPS_LON_E7_MAX   (180L * GPS_E7_PER_DEG)
+
 typedef struct {
-    double   lat;           /* degrees, positive=N */
-    double   lon;           /* degrees, positive=E */
+    int32_t  lat_e7;        /* 1e-7 degrees, positive=N */
+    int32_t  lon_e7;        /* 1e-7 degrees, positive=E */
     float    speed_kmh;
     float    heading;       /* degrees true */
     float    altitude_m;    /* GGA f[9]: antenna height above MSL, metres */
@@ -100,5 +106,35 @@ void gps_rx_isr(uint8_t byte);
 void gps_send_cmd(const char *cmd);
 int gps_send_raw(const uint8_t *data, uint32_t len);
 typedef gps_data_t gps_context_t;
+
+/* True when both coordinates are inside the geographic range. */
+static inline bool gps_coord_in_range(const gps_data_t *g)
+{
+    return g->lat_e7 >= -GPS_LAT_E7_MAX && g->lat_e7 <= GPS_LAT_E7_MAX &&
+           g->lon_e7 >= -GPS_LON_E7_MAX && g->lon_e7 <= GPS_LON_E7_MAX;
+}
+
+/* Signed longitude difference b-a in 1e-7 deg, wrapped across +/-180. */
+static inline int32_t gps_lon_delta_e7(int32_t a, int32_t b)
+{
+    int64_t d = (int64_t)b - a;
+    if (d > GPS_LON_E7_MAX) d -= 2 * (int64_t)GPS_LON_E7_MAX;
+    else if (d < -GPS_LON_E7_MAX) d += 2 * (int64_t)GPS_LON_E7_MAX;
+    return (int32_t)d;
+}
+
+/* Metres per 1e-7 degree of latitude on a 6371 km sphere. */
+#define GPS_M_PER_E7  0.0111194926f
+
+/* cos(lat) = sin(pi/2-|lat|), degree-9 Taylor on [0, pi/2].
+ * Truncation error <= (pi/2)^11/11! < 3.6e-6; local metre projections only. */
+static inline float gps_cos_lat_e7(int32_t lat_e7)
+{
+    int32_t a = lat_e7 < 0 ? -lat_e7 : lat_e7;
+    float x = (float)(GPS_LAT_E7_MAX - a) * 1.745329252e-9f;
+    float z = x * x;
+    return x + x * z * (-1.0f / 6.0f + z * (1.0f / 120.0f +
+           z * (-1.0f / 5040.0f + z * (1.0f / 362880.0f))));
+}
 
 #endif

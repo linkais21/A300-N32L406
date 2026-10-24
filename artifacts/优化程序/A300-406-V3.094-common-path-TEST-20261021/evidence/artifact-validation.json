@@ -1,0 +1,11 @@
+{
+  "hex_bin_equal": true,
+  "hex_min": "0x8006000",
+  "hex_max": "0x801fefb",
+  "hex_bytes": 106228,
+  "initial_sp": "0x20006000",
+  "reset_vector": "0x801cce1",
+  "ota_header_bytes": 32,
+  "ota_body_equal": true,
+  "ota_platform_signature_present": false
+}

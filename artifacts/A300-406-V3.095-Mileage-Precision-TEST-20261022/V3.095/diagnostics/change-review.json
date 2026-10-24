@@ -1,0 +1,53 @@
+{
+  "review_type": "scoped self-review against saved start-of-task inputs",
+  "changed_existing_source_files": [
+    "include/build_version.h",
+    "include/config.h",
+    "release_identity.json",
+    "src/mileage.c",
+    "tools/release_guard.py",
+    "tools/tests/test_mileage_quantization.py",
+    "tools/tests/test_motion_corner_policy.py",
+    "tools/tests/test_release_identity_contract.py"
+  ],
+  "new_regression": "tools/tests/test_mileage_fractional.py",
+  "production_behavior_change": "src/mileage.c only; accepted-distance millimetre carry and no zero-metre dirty writes",
+  "checks": {
+    "millimetre_sum_max": 1000998,
+    "uint32_sum_safe": true,
+    "remainder_range_mm": [
+      0,
+      999
+    ],
+    "accepted_distance_bounds_unchanged": true,
+    "rejected_fixes_earn_nothing": true,
+    "stationary_baseline_reset_preserved": true,
+    "earned_fraction_retained_across_stops": true,
+    "no_fraction_only_flash_write": true,
+    "no_flash_or_protocol_format_change": true,
+    "whole_metre_flush_scheduler_unchanged": true,
+    "old_packages_unchanged": 19
+  },
+  "hardware_hil": "pending",
+  "limitations": [
+    "Less than one metre remainder is volatile across reset.",
+    "Existing whole-metre unsaved mileage loss across power loss remains.",
+    "Previous undercount cannot be reconstructed.",
+    "Independent matching-image road reference required."
+  ],
+  "blocking_findings": [],
+  "test_fixture_repair": "test_motion_corner_policy.py: include stddef.h only for NULL; assertions unchanged.",
+  "final_host_results": {
+    "passed": 77,
+    "failed": 0,
+    "skipped": 0,
+    "initial_failure_resolution": "verification-resolution.json"
+  },
+  "resource_measurements": {
+    "app_bytes": 106368,
+    "flash_remaining_bytes": 128,
+    "static_ram_bytes": 15968,
+    "runtime_gap_bytes": 4188,
+    "minimum_runtime_gap_bytes": 4096
+  }
+}

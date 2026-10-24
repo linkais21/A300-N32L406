@@ -12,6 +12,7 @@ HARNESS = r'''
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <math.h>
 #include "overspeed_policy.h"
 
 int main(void)
@@ -67,6 +68,21 @@ int main(void)
     assert(overspeed_policy_step(&policy, (UINT32_MAX/1000U)*1000U, true, true, 130.0f, 120U, UINT32_MAX/1000U));
     overspeed_policy_init(&policy);
     assert(!overspeed_policy_step(&policy, 0U, true, true, 130.0f, 120U, UINT32_MAX));
+    assert(!overspeed_warning_active(true,true,true,89.9f,100U,100U));
+    assert(overspeed_warning_active(true,true,true,90.0f,100U,100U));
+    assert(overspeed_warning_active(true,true,true,120.0f,100U,100U));
+    assert(!overspeed_warning_active(false,true,true,120.0f,100U,100U));
+    assert(!overspeed_warning_active(true,false,true,120.0f,100U,100U));
+    assert(!overspeed_warning_active(true,true,false,120.0f,100U,100U));
+    assert(!overspeed_warning_active(true,true,true,99.9f,100U,0U));
+    assert(overspeed_warning_active(true,true,true,100.0f,100U,0U));
+    assert(!overspeed_warning_active(true,true,true,0.0f,100U,65535U));
+    assert(overspeed_warning_active(true,true,true,0.1f,100U,65535U));
+    assert(!overspeed_warning_active(true,true,true,NAN,100U,100U));
+    assert(!overspeed_warning_active(true,true,true,INFINITY,100U,100U));
+    assert(!overspeed_warning_active(true,true,true,-1.0f,100U,100U));
+    assert(!overspeed_warning_active(true,true,true,100.0f,19U,100U));
+    assert(!overspeed_warning_active(true,true,true,220.0f,201U,100U));
     return 0;
 }
 '''

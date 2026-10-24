@@ -7,7 +7,7 @@
 #include "f39_config_adapter.h"
 
 #define F39_REPLY_MAX_LENGTH 256U
-#define F39_RESET_DELAY_MS   100U
+#define F39_RESET_DELAY_MS   200U /* spec: reset ~200 ms after the reply */
 #define F39_VERSION_MAX_LENGTH 63U
 #define F39_IMEI_MAX_LENGTH    15U
 #define F39_ICCID_MAX_LENGTH   20U

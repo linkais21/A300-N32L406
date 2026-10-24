@@ -35,7 +35,6 @@
 #include <string.h>
 
 /* ── Terminal info loaded from flash at runtime ───────────────────────────── */
-static jt808_terminal_t s_terminal;
 static overspeed_policy_t s_overspeed_policy;
 static volatile bool s_iwdg_started;
 void sms_command_execute(const char *from, const char *text)
@@ -83,12 +82,23 @@ static void early_debug_uart_init(void)
     USART_Enable(DBG_UART, ENABLE);
 }
 
-void hardfault_capture(uint32_t *stacked)
+void hardfault_capture(uint32_t *stacked, uint32_t exc_return)
     __attribute__((used, noinline, noreturn));
-void hardfault_capture(uint32_t *stacked)
+void hardfault_capture(uint32_t *stacked, uint32_t exc_return)
 {
-    uint32_t pc = stacked != NULL ? stacked[6] : 0U;
-    uint32_t lr = stacked != NULL ? stacked[5] : 0U;
+    uintptr_t base = (uintptr_t)stacked;
+    /* M4F EXC_RETURN bit 4 selects a basic or extended (18 FP words) frame.
+     * Do integer bounds checks before forming/dereferencing a frame pointer.
+     * A stacking/unstacking fault makes even an in-range frame unreliable. */
+    uint32_t fp_words = (exc_return & 0x10U) ? 0U : 18U;
+    uint32_t pc = 0U, lr = 0U;
+    if ((base & 3U) == 0U && base >= 0x20000000U &&
+        base <= 0x20006000U - (fp_words + 8U) * sizeof(uint32_t) &&
+        (SCB->CFSR & 0x3838U) == 0U) {
+        stacked += fp_words;
+        pc = stacked[6];
+        lr = stacked[5];
+    }
     reset_diag_record_fault(pc, lr, SCB->CFSR, SCB->HFSR);
     if (!s_iwdg_started)
         NVIC_SystemReset();
@@ -106,6 +116,7 @@ void HardFault_Handler(void)
         "ite eq\n"
         "mrseq r0, msp\n"
         "mrsne r0, psp\n"
+        "mov r1, lr\n"
         "b hardfault_capture\n");
 }
 
@@ -201,21 +212,22 @@ static const char *work_mode_state_name(work_mode_state_t state)
  * never touches position, fix validity, or sleep/wake state. */
 static void ntp_resync_process(void)
 {
-    static uint32_t next_due_ms = 0;
+    static uint32_t next_due_s = 0;
+    uint32_t now_s = work_mode_sleep_monotonic_s();
     ec800m_time_t t;
 
-    if (!ec800m_is_ready() || (int32_t)(TICK_MS() - next_due_ms) < 0) return;
+    if (!ec800m_is_ready() || (int32_t)(now_s - next_due_s) < 0) return;
 
     if (ec800m_ntp_sync(&t) && t.valid) {
         gps_apply_ntp_utc(t.year, t.month, t.day, t.hour, t.minute, t.second);
-        next_due_ms = TICK_MS() + NTP_RESYNC_INTERVAL_MS;
+        next_due_s = work_mode_sleep_monotonic_s() + NTP_RESYNC_INTERVAL_MS / 1000U;
         dbg_printf("[NTP] synced %04u-%02u-%02u %02u:%02u:%02u UTC\r\n",
                    t.year, t.month, t.day, t.hour, t.minute, t.second);
     } else {
         /* A silent failure branch made it impossible to tell from a field log
          * whether the sync ran at all, timed out, or failed to parse.  Report
          * the attempt and the retry backoff so the next capture is decisive. */
-        next_due_ms = TICK_MS() + NTP_RETRY_INTERVAL_MS;
+        next_due_s = work_mode_sleep_monotonic_s() + NTP_RETRY_INTERVAL_MS / 1000U;
         dbg_printf("[NTP] sync failed valid=%u retry_in=%us\r\n",
                    (unsigned)t.valid,
                    (unsigned)(NTP_RETRY_INTERVAL_MS / 1000UL));
@@ -274,6 +286,15 @@ static void scan_alarms(void)
         const gps_data_t *speed_gps = gps_get_data();
         uint32_t now_ms = TICK_MS();
         bool fresh_fix = jt808_location_snapshot_valid(speed_gps, now_ms);
+        static bool warning_previous;
+        bool warning = overspeed_warning_active(cfg_get()->speed_warning_valid == 1U,
+                                                 work_mode_state() == WORK_MODE_REALTIME,
+                                                 fresh_fix, speed_gps->speed_kmh,
+                                                 cfg_get()->speed_limit_kmh,
+                                                 cfg_speed_warning_delta_x10(cfg_get()));
+        if (warning && !warning_previous)
+            work_mode_notify_alarm(ALM_OVERSPEED_WARNING);
+        warning_previous = warning;
         if (overspeed_policy_step(&s_overspeed_policy, now_ms,
                                   work_mode_state() == WORK_MODE_REALTIME,
                                   fresh_fix, speed_gps->speed_kmh,
@@ -506,8 +527,8 @@ void work_mode_process(void)
         dbg_printf("[GPS-INTEGRITY] speed=%u.%u lat_e7=%ld lon_e7=%ld GNSS_Q=%u(%s) valid=%u sats=%u\r\n",
                    (unsigned)g->speed_kmh,
                    (unsigned)((uint16_t)(g->speed_kmh * 10.0f) % 10U),
-                   (long)(g->lat * 10000000.0),
-                   (long)(g->lon * 10000000.0),
+                   (long)g->lat_e7,
+                   (long)g->lon_e7,
                    (unsigned)g->fix_quality, quality,
                    (unsigned)g->valid, (unsigned)g->satellites);
         {
@@ -746,6 +767,7 @@ static void boot_init(void)
     cfg_query_init();
 
     /* ── 5. Build JT808 terminal info from flash config ─────────────────── */
+    jt808_terminal_t s_terminal;
     memset(&s_terminal, 0, sizeof(s_terminal));
     memcpy(s_terminal.manufacturer_id, FW_MANUFACTURER_ID_STR, 5U);
     strncpy(s_terminal.terminal_model,

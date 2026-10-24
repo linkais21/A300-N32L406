@@ -1,0 +1,97 @@
+--- a/tools/tests/test_jt808_boot_terminal_info.py
++++ b/tools/tests/test_jt808_boot_terminal_info.py
+@@ -112,12 +112,12 @@
+         temp = Path(directory)
+         harness = temp / "h.c"
+         binary = temp / "h.exe"
+-        harness.write_text(source + '\n#include "' + (ROOT/'tools/tests/jt808_host_support.h').as_posix() + '"\n', encoding="ascii")
++        harness.write_text(source + '\n#include "' + (ROOT/'tools/tests/jt808_host_support.h').as_posix() + '"\n', encoding="utf-8")
+         (temp / "n32l40x.h").write_text(
+             "#ifndef N32L40X_H\n#define N32L40X_H\n"
+             "#define GPIOA ((void*)0)\n#define GPIO_PIN_12 12U\n#define Bit_RESET 0\n"
+             "int GPIO_ReadInputDataBit(void*,unsigned);\n#endif\n",
+-            encoding="ascii",
++            encoding="utf-8",
+         )
+         command = [
+             cc, "-std=c99", "-Wall", "-Wextra", "-Werror",
+--- a/tools/tests/test_jt808_first_location.py
++++ b/tools/tests/test_jt808_first_location.py
+@@ -84,8 +84,8 @@
+         "bool gps_get_last_trusted(gps_data_t *out) { *out=gps; return true; }",
+     )
+     with tempfile.TemporaryDirectory(prefix="jt808_location_") as directory:
+-        t=Path(directory);h=t/"h.c";b=t/"h.exe";h.write_text(source,encoding="ascii")
+-        (t/"n32l40x.h").write_text("#ifndef N32L40X_H\n#define N32L40X_H\n#define GPIOA ((void*)0)\n#define GPIO_PIN_12 12U\n#define Bit_RESET 0\nint GPIO_ReadInputDataBit(void*,unsigned);\n#endif\n",encoding="ascii")
++        t=Path(directory);h=t/"h.c";b=t/"h.exe";h.write_text(source,encoding="utf-8")
++        (t/"n32l40x.h").write_text("#ifndef N32L40X_H\n#define N32L40X_H\n#define GPIOA ((void*)0)\n#define GPIO_PIN_12 12U\n#define Bit_RESET 0\nint GPIO_ReadInputDataBit(void*,unsigned);\n#endif\n",encoding="utf-8")
+         cmd=[cc,"-std=c99","-Wall","-Wextra","-Werror","-I",str(t),"-I",str(ROOT/"include"),str(h),str(ROOT / "src/plate_encoding.c"), str(ROOT/"src/jt808.c"),str(ROOT/"src/jt808_session.c"),str(ROOT/"src/terminal_identity.c"),"-lm","-o",str(b)]
+         x=subprocess.run(cmd,cwd=ROOT,capture_output=True,text=True)
+         if x.returncode: print(x.stdout+x.stderr,end="");return x.returncode
+--- a/tools/tests/test_jt808_nofix_clock.py
++++ b/tools/tests/test_jt808_nofix_clock.py
+@@ -92,9 +92,9 @@
+                          if not line.startswith('int dbg_printf('))
+     with tempfile.TemporaryDirectory(prefix='jt808_nofix_') as td:
+         d=Path(td)
+-        (d/'h.c').write_text(source+'\n#include "n32l40x.h"\n'+hardware+MAIN, encoding='ascii')
+-        (d/'n32l40x.h').write_text(gps_fixture.N32, encoding='ascii')
+-        (d/'hw_init.h').write_text('#include <stdbool.h>\nvoid delay_ms(uint32_t);\nbool hw_acc_is_on(void);\n', encoding='ascii')
++        (d/'h.c').write_text(source+'\n#include "n32l40x.h"\n'+hardware+MAIN, encoding='utf-8')
++        (d/'n32l40x.h').write_text(gps_fixture.N32, encoding='utf-8')
++        (d/'hw_init.h').write_text('#include <stdbool.h>\nvoid delay_ms(uint32_t);\nbool hw_acc_is_on(void);\n', encoding='utf-8')
+         # jt808.c needs the normal debug macros; gps.c also uses this header.
+         sources=['gps.c','jt808.c','jt808_session.c','terminal_identity.c','plate_encoding.c']
+         subprocess.run([dual.compiler(),'-std=c99','-Wall','-Wextra','-Werror',
+--- a/tools/tests/test_jt808_params_wire.py
++++ b/tools/tests/test_jt808_params_wire.py
+@@ -176,7 +176,7 @@
+ }
+ '''
+     with tempfile.TemporaryDirectory() as d:
+-        p=Path(d);(p/'h.c').write_text(source + '\n#include "' + (ROOT/'tools/tests/jt808_host_support.h').as_posix() + '"\n',encoding='ascii')
++        p=Path(d);(p/'h.c').write_text(source + '\n#include "' + (ROOT/'tools/tests/jt808_host_support.h').as_posix() + '"\n',encoding='utf-8')
+         (p/'n32l40x.h').write_text('#pragma once\n#define GPIOA ((void*)0)\n#define GPIO_PIN_2 2U\n#define GPIO_PIN_12 12U\n#define Bit_RESET 0\nint GPIO_ReadInputDataBit(void*,unsigned);\n')
+         cmd=[dual.compiler(),'-std=c99','-Wall','-Wextra','-Werror','-I',str(p),'-I',str(ROOT/'include'),str(p/'h.c')]
+         jt_source=ROOT/'src/jt808.c'
+--- a/tools/tests/test_jt808_text_command.py
++++ b/tools/tests/test_jt808_text_command.py
+@@ -155,13 +155,13 @@
+         t = Path(directory)
+         h = t / "h.c"
+         b = t / "h.exe"
+-        h.write_text(source + '\n#include "' + (ROOT/'tools/tests/jt808_host_support.h').as_posix() + '"\n', encoding="ascii")
++        h.write_text(source + '\n#include "' + (ROOT/'tools/tests/jt808_host_support.h').as_posix() + '"\n', encoding="utf-8")
+         (t / "n32l40x.h").write_text(
+             "#ifndef N32L40X_H\n#define N32L40X_H\n"
+             "#define GPIOA ((void*)0)\n#define GPIO_PIN_12 12U\n"
+             "#define Bit_RESET 0\n"
+             "int GPIO_ReadInputDataBit(void*,unsigned);\n#endif\n",
+-            encoding="ascii",
++            encoding="utf-8",
+         )
+         cmd = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror",
+                "-I", str(t), "-I", str(ROOT / "include"), str(h),
+--- a/tools/tests/test_release_identity_contract.py
++++ b/tools/tests/test_release_identity_contract.py
+@@ -5,7 +5,8 @@
+ from pathlib import Path
+ 
+ ROOT = Path(__file__).resolve().parents[2]
+-WORKSPACE = ROOT.parent
++import os
++WORKSPACE = Path(os.environ.get("A300_VALIDATION_WORKSPACE", ROOT.parent))
+ CONTRACT_PATH = ROOT / "release_identity.json"
+ 
+ contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+--- a/tools/tests/test_work_mode_jt808_contract.py
++++ b/tools/tests/test_work_mode_jt808_contract.py
+@@ -84,7 +84,7 @@
+ wrapper = function_body("send_location_work_mode")
+ require(re.search(
+     r"encode_location_online\s*\(\s*&snapshot\s*,\s*body\s*,\s*alarm_bits\s*,"
+-    r"\s*historical_position\s*\)", wrapper) is not None,
++    r"\s*historical_position\s*,\s*cfg_get\(\)\s*->\s*mileage_m\s*\)", wrapper) is not None,
+     "work-mode report bypasses the complete online builder")
+ require("JT808_LOCATION_ONLINE_MAX" in wrapper,
+         "work-mode report buffer does not cover the complete extension profile")

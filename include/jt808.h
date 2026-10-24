@@ -40,6 +40,7 @@
 /* Alarm flags */
 #define ALM_EMERGENCY_SOS   (1u << 0)
 #define ALM_OVERSPEED       (1u << 1)
+#define ALM_OVERSPEED_WARNING (1u << 13)
 #define ALM_FATIGUE_DRIVING (1u << 2)
 #define ALM_GNSS_FAULT      (1u << 4)
 #define ALM_FUEL_CUTOFF     (1u << 9)
